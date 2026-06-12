@@ -1,0 +1,29 @@
+{
+  "name": "@oneworks/agent-avatar-assets",
+  "type": "module",
+  "version": "0.1.0-alpha.0",
+  "private": true,
+  "description": "OneWorks pixel-rect agent avatar previews and SVG assets",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/oneworks-ai/agent-avatar.git"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json --noEmit --pretty false && vite build",
+    "dev": "vite",
+    "preview": "vite preview",
+    "typecheck": "tsc -p tsconfig.json --noEmit --pretty false"
+  },
+  "dependencies": {
+    "@oneworks/agent-avatar": "workspace:*",
+    "@oneworks/route-layout": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/react": "^18.3.12",
+    "@types/react-dom": "^18.3.2",
+    "@vitejs/plugin-react": "^5.1.2",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "vite": "^5.4.8"
+  }
+}

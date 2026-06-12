@@ -1,0 +1,84 @@
+name: Deploy Agent Avatar
+
+on:
+  workflow_dispatch:
+    inputs:
+      source_ref:
+        default: main
+        description: app repository ref to build.
+        required: false
+        type: string
+      source_sha:
+        description: app repository commit SHA to build. Takes precedence over source_ref.
+        required: false
+        type: string
+
+permissions:
+  contents: read
+  id-token: write
+  pages: write
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
+
+concurrency:
+  group: deploy-agent-avatar-pages
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    name: build-and-deploy-pages
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+
+    steps:
+      - name: Resolve app ref
+        id: app-ref
+        shell: bash
+        env:
+          SOURCE_REF: ${{ inputs.source_ref }}
+          SOURCE_SHA: ${{ inputs.source_sha }}
+        run: |
+          set -euo pipefail
+          ref="${SOURCE_SHA:-${SOURCE_REF:-main}}"
+          echo "ref=${ref}" >> "$GITHUB_OUTPUT"
+
+      - name: Checkout app repository
+        uses: actions/checkout@v4
+        with:
+          repository: oneworks-ai/app
+          ref: ${{ steps.app-ref.outputs.ref }}
+          submodules: recursive
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10.28.0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: .node-version
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build avatar site
+        env:
+          ONEWORKS_AGENT_AVATAR_BASE: /agent-avatar/
+        run: pnpm -C assets/agent-avatar build
+
+      - name: Configure Pages
+        uses: actions/configure-pages@v5
+
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: assets/agent-avatar/dist
+
+      - name: Deploy Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
