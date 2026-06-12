@@ -4,7 +4,7 @@ import react from '@vitejs/plugin-react'
 import { defineConfig } from 'vite'
 
 export default defineConfig({
-  base: process.env.ONEWORKS_AGENT_AVATAR_BASE ?? '/',
+  base: process.env.ONEWORKS_AVATAR_BASE ?? '/',
   plugins: [react()],
   root: fileURLToPath(new URL('.', import.meta.url)),
   resolve: {

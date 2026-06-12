@@ -1,4 +1,4 @@
-name: Deploy Agent Avatar
+name: Deploy Avatar
 
 on:
   workflow_dispatch:
@@ -22,7 +22,7 @@ env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
 
 concurrency:
-  group: deploy-agent-avatar-pages
+  group: deploy-avatar-pages
   cancel-in-progress: true
 
 jobs:
@@ -68,8 +68,8 @@ jobs:
 
       - name: Build avatar site
         env:
-          ONEWORKS_AGENT_AVATAR_BASE: /agent-avatar/
-        run: pnpm -C assets/agent-avatar build
+          ONEWORKS_AVATAR_BASE: /avatar/
+        run: pnpm -C assets/avatar build
 
       - name: Configure Pages
         uses: actions/configure-pages@v5
@@ -77,7 +77,7 @@ jobs:
       - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@v3
         with:
-          path: assets/agent-avatar/dist
+          path: assets/avatar/dist
 
       - name: Deploy Pages
         id: deployment

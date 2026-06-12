@@ -23,7 +23,7 @@ button {
   font: inherit;
 }
 
-.agent-avatar-app {
+.avatar-app {
   min-height: 100vh;
   background: linear-gradient(
     180deg,
@@ -125,11 +125,11 @@ button {
   &__eye-grid {
     display: contents;
 
-    > .agent-avatar-app__part-row:first-child {
+    > .avatar-app__part-row:first-child {
       grid-column: 1 / span 4;
     }
 
-    > .agent-avatar-app__part-row:last-child {
+    > .avatar-app__part-row:last-child {
       grid-column: 5 / span 4;
     }
   }
@@ -464,7 +464,7 @@ button {
 }
 
 @media (max-width: 840px) {
-  .agent-avatar-app {
+  .avatar-app {
     &__workspace {
       grid-template-columns: 1fr;
     }
@@ -492,7 +492,7 @@ button {
 }
 
 @media (max-width: 520px) {
-  .agent-avatar-app {
+  .avatar-app {
     &__stage,
     &__controls {
       padding: 16px;

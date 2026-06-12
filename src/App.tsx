@@ -3,28 +3,28 @@ import './App.scss'
 import { useEffect, useMemo, useState } from 'react'
 
 import {
-  AGENT_AVATAR_EYES,
-  AGENT_AVATAR_MOUTHS,
-  AGENT_AVATAR_PALETTES,
-  AGENT_AVATAR_PRESETS,
-  createAgentAvatarDataUri,
-  createAgentAvatarSvg,
-  getAgentAvatarPalette,
-  isSupportedAgentAvatarEmoticon
-} from '@oneworks/agent-avatar'
-import type { AgentAvatarBackgroundStyle, AgentAvatarPart, AgentAvatarSlot } from '@oneworks/agent-avatar'
+  AVATAR_EYES,
+  AVATAR_MOUTHS,
+  AVATAR_PALETTES,
+  AVATAR_PRESETS,
+  createAvatarDataUri,
+  createAvatarSvg,
+  getAvatarPalette,
+  isSupportedAvatarEmoticon
+} from '@oneworks/avatar'
+import type { AvatarBackgroundStyle, AvatarPart, AvatarSlot } from '@oneworks/avatar'
 
 const EXPORT_SIZES = [128, 256, 512] as const
-const INITIAL_EMOTICON = AGENT_AVATAR_PRESETS[0]?.emoticon ?? '0w0'
+const INITIAL_EMOTICON = AVATAR_PRESETS[0]?.emoticon ?? '0w0'
 const INITIAL_PARTS = Array.from(INITIAL_EMOTICON)
-const COMMON_AVATAR_PRESETS = AGENT_AVATAR_PRESETS.slice(0, 18)
+const COMMON_AVATAR_PRESETS = AVATAR_PRESETS.slice(0, 18)
 const DEFAULT_PALETTE_COUNT = 16
-const DEFAULT_PALETTE_ID = AGENT_AVATAR_PALETTES[0]?.id ?? ''
-const DEFAULT_BACKGROUND_STYLE: AgentAvatarBackgroundStyle = 'solid'
+const DEFAULT_PALETTE_ID = AVATAR_PALETTES[0]?.id ?? ''
+const DEFAULT_BACKGROUND_STYLE: AvatarBackgroundStyle = 'solid'
 const DEFAULT_EXPORT_SIZE: (typeof EXPORT_SIZES)[number] = 256
 
-interface AgentAvatarQueryConfig {
-  readonly backgroundStyle: AgentAvatarBackgroundStyle
+interface AvatarQueryConfig {
+  readonly backgroundStyle: AvatarBackgroundStyle
   readonly exportSize: (typeof EXPORT_SIZES)[number]
   readonly linkEyes: boolean
   readonly leftEye: string
@@ -35,7 +35,7 @@ interface AgentAvatarQueryConfig {
   readonly showShadow: boolean
 }
 
-const isAgentAvatarBackgroundStyle = (value: string | null): value is AgentAvatarBackgroundStyle => {
+const isAvatarBackgroundStyle = (value: string | null): value is AvatarBackgroundStyle => {
   return value === 'solid' || value === 'gradient'
 }
 
@@ -55,20 +55,20 @@ const parseLinkEyes = (value: string | null, leftEye: string, rightEye: string) 
 }
 
 const getPresetIdForConfig = (emoticon: string, paletteId: string) => {
-  return AGENT_AVATAR_PRESETS.find(preset => preset.emoticon === emoticon && preset.paletteId === paletteId)?.id ?? ''
+  return AVATAR_PRESETS.find(preset => preset.emoticon === emoticon && preset.paletteId === paletteId)?.id ?? ''
 }
 
-const getInitialQueryConfig = (): AgentAvatarQueryConfig => {
+const getInitialQueryConfig = (): AvatarQueryConfig => {
   const params = typeof window === 'undefined' ? new URLSearchParams() : new URLSearchParams(window.location.search)
   const queryFace = params.get('face') ?? ''
-  const emoticon = isSupportedAgentAvatarEmoticon(queryFace) ? queryFace : INITIAL_EMOTICON
+  const emoticon = isSupportedAvatarEmoticon(queryFace) ? queryFace : INITIAL_EMOTICON
   const parts = Array.from(emoticon)
   const queryPaletteId = params.get('palette') ?? ''
-  const selectedPaletteId = AGENT_AVATAR_PALETTES.some(palette => palette.id === queryPaletteId)
+  const selectedPaletteId = AVATAR_PALETTES.some(palette => palette.id === queryPaletteId)
     ? queryPaletteId
     : DEFAULT_PALETTE_ID
   const queryBackgroundStyle = params.get('bg')
-  const backgroundStyle = isAgentAvatarBackgroundStyle(queryBackgroundStyle)
+  const backgroundStyle = isAvatarBackgroundStyle(queryBackgroundStyle)
     ? queryBackgroundStyle
     : DEFAULT_BACKGROUND_STYLE
   const leftEye = parts[0] ?? INITIAL_PARTS[0] ?? '0'
@@ -103,7 +103,7 @@ const downloadTextFile = (filename: string, content: string) => {
 
 interface PartPickerProps {
   readonly label: string
-  readonly options: readonly AgentAvatarPart[]
+  readonly options: readonly AvatarPart[]
   readonly previewForGlyph: (glyph: string) => PartPreview
   readonly value: string
   readonly onChange: (glyph: string) => void
@@ -116,15 +116,15 @@ interface PartPreview {
 
 function PartPicker({ label, onChange, options, previewForGlyph, value }: PartPickerProps) {
   return (
-    <div className='agent-avatar-app__part-row'>
-      <span className='agent-avatar-app__part-row-label'>{label}</span>
-      <div className='agent-avatar-app__part-options'>
+    <div className='avatar-app__part-row'>
+      <span className='avatar-app__part-row-label'>{label}</span>
+      <div className='avatar-app__part-options'>
         {options.map((part) => {
           const preview = previewForGlyph(part.glyph)
           return (
             <button
               key={part.id}
-              className='agent-avatar-app__part-option'
+              className='avatar-app__part-option'
               type='button'
               aria-label={`${label} ${part.label}: ${preview.emoticon}`}
               aria-pressed={part.glyph === value}
@@ -148,30 +148,30 @@ function App() {
   const [linkEyes, setLinkEyes] = useState(initialConfig.linkEyes)
   const [selectedPaletteId, setSelectedPaletteId] = useState(initialConfig.selectedPaletteId)
   const [showMorePalettes, setShowMorePalettes] = useState(() => {
-    return AGENT_AVATAR_PALETTES.findIndex(palette => palette.id === initialConfig.selectedPaletteId) >=
+    return AVATAR_PALETTES.findIndex(palette => palette.id === initialConfig.selectedPaletteId) >=
       DEFAULT_PALETTE_COUNT
   })
-  const [backgroundStyle, setBackgroundStyle] = useState<AgentAvatarBackgroundStyle>(initialConfig.backgroundStyle)
+  const [backgroundStyle, setBackgroundStyle] = useState<AvatarBackgroundStyle>(initialConfig.backgroundStyle)
   const [showShadow, setShowShadow] = useState(initialConfig.showShadow)
   const [exportSize, setExportSize] = useState<(typeof EXPORT_SIZES)[number]>(initialConfig.exportSize)
   const [copyState, setCopyState] = useState<'idle' | 'copied'>('idle')
 
-  const selectedPalette = getAgentAvatarPalette(selectedPaletteId)
+  const selectedPalette = getAvatarPalette(selectedPaletteId)
   const previewEmoticon = `${leftEye}${mouth}${rightEye}`
   const previewSvg = useMemo(() => {
-    return createAgentAvatarSvg({
+    return createAvatarSvg({
       backgroundStyle,
       emoticon: previewEmoticon,
       palette: selectedPalette,
       showShadow,
       size: exportSize,
-      title: `OneWorks ${previewEmoticon} agent avatar`
+      title: `OneWorks ${previewEmoticon} avatar`
     })
   }, [backgroundStyle, exportSize, previewEmoticon, selectedPalette, showShadow])
   const visiblePalettes = useMemo(() => {
-    return showMorePalettes ? AGENT_AVATAR_PALETTES : AGENT_AVATAR_PALETTES.slice(0, DEFAULT_PALETTE_COUNT)
+    return showMorePalettes ? AVATAR_PALETTES : AVATAR_PALETTES.slice(0, DEFAULT_PALETTE_COUNT)
   }, [showMorePalettes])
-  const hiddenPaletteCount = Math.max(AGENT_AVATAR_PALETTES.length - DEFAULT_PALETTE_COUNT, 0)
+  const hiddenPaletteCount = Math.max(AVATAR_PALETTES.length - DEFAULT_PALETTE_COUNT, 0)
 
   useEffect(() => {
     const params = new URLSearchParams()
@@ -190,17 +190,17 @@ function App() {
     window.history.replaceState(null, '', nextUrl)
   }, [backgroundStyle, exportSize, linkEyes, previewEmoticon, selectedPalette.id, showShadow])
   const previewUri = useMemo(() => {
-    return createAgentAvatarDataUri({
+    return createAvatarDataUri({
       backgroundStyle,
       emoticon: previewEmoticon,
       palette: selectedPalette,
       showShadow,
       size: exportSize,
-      title: `OneWorks ${previewEmoticon} agent avatar`
+      title: `OneWorks ${previewEmoticon} avatar`
     })
   }, [backgroundStyle, exportSize, previewEmoticon, selectedPalette, showShadow])
 
-  const updatePart = (slot: AgentAvatarSlot, glyph: string) => {
+  const updatePart = (slot: AvatarSlot, glyph: string) => {
     const nextLeftEye = slot === 'left' || (slot === 'right' && linkEyes) ? glyph : leftEye
     const nextMouth = slot === 'mouth' ? glyph : mouth
     const nextRightEye = slot === 'right' || (slot === 'left' && linkEyes) ? glyph : rightEye
@@ -212,7 +212,7 @@ function App() {
   }
 
   const handlePresetSelect = (presetId: string) => {
-    const preset = AGENT_AVATAR_PRESETS.find(item => item.id === presetId)
+    const preset = AVATAR_PRESETS.find(item => item.id === presetId)
     if (preset == null) return
     const parts = Array.from(preset.emoticon)
     setSelectedPresetId(preset.id)
@@ -234,7 +234,7 @@ function App() {
     downloadTextFile(`oneworks-agent-${previewEmoticon}-${exportSize}.svg`, previewSvg)
   }
 
-  const getPartPreviewEmoticon = (slot: AgentAvatarSlot, glyph: string) => {
+  const getPartPreviewEmoticon = (slot: AvatarSlot, glyph: string) => {
     const nextLeftEye = slot === 'left' || (slot === 'right' && linkEyes) ? glyph : leftEye
     const nextMouth = slot === 'mouth' ? glyph : mouth
     const nextRightEye = slot === 'right' || (slot === 'left' && linkEyes) ? glyph : rightEye
@@ -242,14 +242,14 @@ function App() {
   }
 
   const getPartPreview = (
-    slot: AgentAvatarSlot,
+    slot: AvatarSlot,
     glyph: string,
-    highlightSlot: AgentAvatarSlot | readonly AgentAvatarSlot[] = slot
+    highlightSlot: AvatarSlot | readonly AvatarSlot[] = slot
   ): PartPreview => {
     const emoticon = getPartPreviewEmoticon(slot, glyph)
     return {
       emoticon,
-      uri: createAgentAvatarDataUri({
+      uri: createAvatarDataUri({
         backgroundStyle,
         dimInactiveGlyphs: true,
         emoticon,
@@ -257,37 +257,37 @@ function App() {
         palette: selectedPalette,
         showShadow,
         size: 128,
-        title: `OneWorks ${emoticon} agent avatar`
+        title: `OneWorks ${emoticon} avatar`
       })
     }
   }
 
   return (
-    <main className='agent-avatar-app'>
-      <section className='agent-avatar-app__workspace'>
-        <section className='agent-avatar-app__stage' aria-label='Selected avatar'>
-          <div className='agent-avatar-app__stage-preview'>
-            <div className='agent-avatar-app__preview-art agent-avatar-app__preview-art--hero'>
+    <main className='avatar-app'>
+      <section className='avatar-app__workspace'>
+        <section className='avatar-app__stage' aria-label='Selected avatar'>
+          <div className='avatar-app__stage-preview'>
+            <div className='avatar-app__preview-art avatar-app__preview-art--hero'>
               <img src={previewUri} alt={`${previewEmoticon} avatar preview`} />
             </div>
           </div>
 
-          <section className='agent-avatar-app__common' aria-label='Common avatars'>
-            <div className='agent-avatar-app__common-list'>
+          <section className='avatar-app__common' aria-label='Common avatars'>
+            <div className='avatar-app__common-list'>
               {COMMON_AVATAR_PRESETS.map((preset) => {
-                const palette = getAgentAvatarPalette(preset.paletteId)
-                const uri = createAgentAvatarDataUri({
+                const palette = getAvatarPalette(preset.paletteId)
+                const uri = createAvatarDataUri({
                   backgroundStyle,
                   emoticon: preset.emoticon,
                   palette,
                   showShadow,
                   size: 256,
-                  title: `OneWorks ${preset.emoticon} agent avatar`
+                  title: `OneWorks ${preset.emoticon} avatar`
                 })
                 return (
                   <button
                     key={preset.id}
-                    className='agent-avatar-app__common-card'
+                    className='avatar-app__common-card'
                     type='button'
                     aria-label={`Use ${preset.emoticon}`}
                     aria-pressed={preset.id === selectedPresetId}
@@ -301,13 +301,13 @@ function App() {
           </section>
         </section>
 
-        <aside className='agent-avatar-app__controls' aria-label='Avatar controls'>
-          <div className='agent-avatar-app__field-group'>
-            <span className='agent-avatar-app__label'>Build</span>
-            <div className='agent-avatar-app__toggle-row'>
-              <span className='agent-avatar-app__toggle-label'>Match eyes</span>
+        <aside className='avatar-app__controls' aria-label='Avatar controls'>
+          <div className='avatar-app__field-group'>
+            <span className='avatar-app__label'>Build</span>
+            <div className='avatar-app__toggle-row'>
+              <span className='avatar-app__toggle-label'>Match eyes</span>
               <button
-                className='agent-avatar-app__switch'
+                className='avatar-app__switch'
                 type='button'
                 role='switch'
                 aria-label='Match eyes'
@@ -327,29 +327,29 @@ function App() {
                 <span />
               </button>
             </div>
-            <div className='agent-avatar-app__part-builder'>
+            <div className='avatar-app__part-builder'>
               {linkEyes
                 ? (
                   <PartPicker
                     label='Eyes'
-                    options={AGENT_AVATAR_EYES}
+                    options={AVATAR_EYES}
                     previewForGlyph={glyph => getPartPreview('left', glyph, ['left', 'right'])}
                     value={leftEye}
                     onChange={glyph => updatePart('left', glyph)}
                   />
                 )
                 : (
-                  <div className='agent-avatar-app__eye-grid'>
+                  <div className='avatar-app__eye-grid'>
                     <PartPicker
                       label='Left eye'
-                      options={AGENT_AVATAR_EYES}
+                      options={AVATAR_EYES}
                       previewForGlyph={glyph => getPartPreview('left', glyph)}
                       value={leftEye}
                       onChange={glyph => updatePart('left', glyph)}
                     />
                     <PartPicker
                       label='Right eye'
-                      options={AGENT_AVATAR_EYES}
+                      options={AVATAR_EYES}
                       previewForGlyph={glyph => getPartPreview('right', glyph)}
                       value={rightEye}
                       onChange={glyph => updatePart('right', glyph)}
@@ -358,7 +358,7 @@ function App() {
                 )}
               <PartPicker
                 label='Mouth / Nose'
-                options={AGENT_AVATAR_MOUTHS}
+                options={AVATAR_MOUTHS}
                 previewForGlyph={glyph => getPartPreview('mouth', glyph)}
                 value={mouth}
                 onChange={glyph => updatePart('mouth', glyph)}
@@ -366,13 +366,13 @@ function App() {
             </div>
           </div>
 
-          <div className='agent-avatar-app__field-group'>
-            <span className='agent-avatar-app__label'>Palette</span>
-            <div className='agent-avatar-app__swatches'>
+          <div className='avatar-app__field-group'>
+            <span className='avatar-app__label'>Palette</span>
+            <div className='avatar-app__swatches'>
               {visiblePalettes.map((palette) => (
                 <button
                   key={palette.id}
-                  className='agent-avatar-app__swatch'
+                  className='avatar-app__swatch'
                   type='button'
                   aria-label={palette.name}
                   aria-pressed={palette.id === selectedPalette.id}
@@ -393,7 +393,7 @@ function App() {
             {hiddenPaletteCount > 0
               ? (
                 <button
-                  className='agent-avatar-app__palette-more'
+                  className='avatar-app__palette-more'
                   type='button'
                   aria-expanded={showMorePalettes}
                   onClick={() => setShowMorePalettes(value => !value)}
@@ -404,13 +404,13 @@ function App() {
               : null}
           </div>
 
-          <div className='agent-avatar-app__field-group'>
-            <span className='agent-avatar-app__label'>Background</span>
-            <div className='agent-avatar-app__segments' style={{ '--segment-count': 2 } as React.CSSProperties}>
-              {(['solid', 'gradient'] satisfies AgentAvatarBackgroundStyle[]).map(style => (
+          <div className='avatar-app__field-group'>
+            <span className='avatar-app__label'>Background</span>
+            <div className='avatar-app__segments' style={{ '--segment-count': 2 } as React.CSSProperties}>
+              {(['solid', 'gradient'] satisfies AvatarBackgroundStyle[]).map(style => (
                 <button
                   key={style}
-                  className='agent-avatar-app__segment'
+                  className='avatar-app__segment'
                   type='button'
                   aria-pressed={style === backgroundStyle}
                   onClick={() => {
@@ -424,12 +424,12 @@ function App() {
             </div>
           </div>
 
-          <div className='agent-avatar-app__field-group'>
-            <span className='agent-avatar-app__label'>Effects</span>
-            <div className='agent-avatar-app__toggle-row'>
-              <span className='agent-avatar-app__toggle-label'>Pixel shadow</span>
+          <div className='avatar-app__field-group'>
+            <span className='avatar-app__label'>Effects</span>
+            <div className='avatar-app__toggle-row'>
+              <span className='avatar-app__toggle-label'>Pixel shadow</span>
               <button
-                className='agent-avatar-app__switch'
+                className='avatar-app__switch'
                 type='button'
                 role='switch'
                 aria-label='Pixel shadow'
@@ -444,13 +444,13 @@ function App() {
             </div>
           </div>
 
-          <div className='agent-avatar-app__field-group'>
-            <span className='agent-avatar-app__label'>Export</span>
-            <div className='agent-avatar-app__segments'>
+          <div className='avatar-app__field-group'>
+            <span className='avatar-app__label'>Export</span>
+            <div className='avatar-app__segments'>
               {EXPORT_SIZES.map(size => (
                 <button
                   key={size}
-                  className='agent-avatar-app__segment'
+                  className='avatar-app__segment'
                   type='button'
                   aria-pressed={size === exportSize}
                   onClick={() => setExportSize(size)}
@@ -461,21 +461,21 @@ function App() {
             </div>
           </div>
 
-          <div className='agent-avatar-app__commands'>
+          <div className='avatar-app__commands'>
             <button
-              className='agent-avatar-app__command'
+              className='avatar-app__command'
               type='button'
               onClick={handleCopy}
             >
-              <span className='agent-avatar-app__copy-icon' aria-hidden='true' />
+              <span className='avatar-app__copy-icon' aria-hidden='true' />
               {copyState === 'copied' ? 'Copied' : 'Copy SVG'}
             </button>
             <button
-              className='agent-avatar-app__command'
+              className='avatar-app__command'
               type='button'
               onClick={handleDownload}
             >
-              <span className='agent-avatar-app__download-icon' aria-hidden='true' />
+              <span className='avatar-app__download-icon' aria-hidden='true' />
               Download
             </button>
           </div>
