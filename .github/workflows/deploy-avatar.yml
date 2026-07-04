@@ -26,13 +26,10 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  deploy:
-    name: build-and-deploy-pages
+  build:
+    name: build-avatar-pages
     runs-on: ubuntu-latest
     timeout-minutes: 30
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
 
     steps:
       - name: Resolve app ref
@@ -46,12 +43,16 @@ jobs:
           ref="${SOURCE_SHA:-${SOURCE_REF:-main}}"
           echo "ref=${ref}" >> "$GITHUB_OUTPUT"
 
-      - name: Checkout app repository
+      - name: Checkout avatar repository
+        uses: actions/checkout@v4
+
+      - name: Checkout app package metadata
         uses: actions/checkout@v4
         with:
           repository: oneworks-ai/app
           ref: ${{ steps.app-ref.outputs.ref }}
-          submodules: recursive
+          path: app-source
+          submodules: false
 
       - name: Setup pnpm
         uses: pnpm/action-setup@v4
@@ -61,15 +62,34 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version-file: .node-version
+          node-version-file: app-source/.node-version
+
+      - name: Report OneWorks package versions
+        id: package-versions
+        shell: bash
+        run: |
+          set -euo pipefail
+          node <<'NODE' >> "$GITHUB_OUTPUT"
+          const fs = require('node:fs')
+          const path = require('node:path')
+
+          const readPackageVersion = (packagePath) => {
+            const manifestPath = path.join('app-source', packagePath, 'package.json')
+            return JSON.parse(fs.readFileSync(manifestPath, 'utf8')).version
+          }
+
+          console.log(`avatar=${readPackageVersion('packages/avatar')}`)
+          console.log(`route_layout=${readPackageVersion('packages/route-layout')}`)
+          NODE
 
       - name: Install dependencies
-        run: pnpm install --frozen-lockfile
+        run: pnpm install --no-frozen-lockfile
 
       - name: Build avatar site
         env:
           ONEWORKS_AVATAR_BASE: /avatar/
-        run: pnpm -C assets/avatar build
+          ONEWORKS_APP_SOURCE_DIR: app-source
+        run: pnpm build:app-source
 
       - name: Configure Pages
         uses: actions/configure-pages@v5
@@ -77,8 +97,19 @@ jobs:
       - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@v3
         with:
-          path: assets/avatar/dist
+          path: dist
 
+  deploy:
+    name: deploy-pages
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    needs: build
+    if: github.ref == 'refs/heads/main'
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+
+    steps:
       - name: Deploy Pages
         id: deployment
         uses: actions/deploy-pages@v4

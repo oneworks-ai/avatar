@@ -1,2 +1,5 @@
+app-source
+app-source/
 dist/
+dist-types/
 node_modules/

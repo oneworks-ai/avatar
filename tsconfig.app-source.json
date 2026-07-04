@@ -1,0 +1,14 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "rootDir": ".",
+    "paths": {
+      "@oneworks/avatar": [
+        "./app-source/packages/avatar/src/index.ts"
+      ],
+      "@oneworks/avatar/*": [
+        "./app-source/packages/avatar/src/*.ts"
+      ]
+    }
+  }
+}

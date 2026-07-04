@@ -9,14 +9,17 @@
     "url": "https://github.com/oneworks-ai/avatar.git"
   },
   "scripts": {
-    "build": "tsc -p tsconfig.json --noEmit --pretty false && vite build",
+    "build": "pnpm build:app-source",
+    "build:app-source": "tsc -p tsconfig.app-source.json --noEmit --pretty false && vite build",
+    "build:npm": "tsc -p tsconfig.json --noEmit --pretty false && vite build",
     "dev": "vite",
     "preview": "vite preview",
-    "typecheck": "tsc -p tsconfig.json --noEmit --pretty false"
+    "typecheck": "tsc -p tsconfig.app-source.json --noEmit --pretty false",
+    "typecheck:npm": "tsc -p tsconfig.json --noEmit --pretty false"
   },
   "dependencies": {
-    "@oneworks/avatar": "workspace:*",
-    "@oneworks/route-layout": "workspace:*"
+    "@oneworks/avatar": "beta",
+    "@oneworks/route-layout": "beta"
   },
   "devDependencies": {
     "@types/react": "^18.3.12",
@@ -24,6 +27,8 @@
     "@vitejs/plugin-react": "^5.1.2",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
+    "sass": "^1.97.2",
+    "typescript": "^5.9.3",
     "vite": "^5.4.8"
   }
 }
