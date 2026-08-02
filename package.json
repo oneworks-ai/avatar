@@ -2,6 +2,7 @@
   "name": "@oneworks/avatar-assets",
   "type": "module",
   "version": "0.1.0-alpha.0",
+  "packageManager": "pnpm@11.7.0",
   "private": true,
   "description": "OneWorks pixel-rect avatar previews and SVG assets",
   "repository": {
