@@ -5,8 +5,14 @@ import type { AvatarFaceStyle } from './avatarGeometry'
 
 const SAVED_ANIMATIONS_STORAGE_KEY = 'oneworks-avatar-saved-animations-v1'
 const MAX_SAVED_ANIMATIONS = 12
+export const DEFAULT_AVATAR_ANIMATION_FRAME_DURATION_MS = 800
+export const DEFAULT_AVATAR_ANIMATION_EASING: AvatarAnimationEasing = 'ease-in-out'
+export const MIN_AVATAR_ANIMATION_FRAME_DURATION_MS = 100
+export const MAX_AVATAR_ANIMATION_FRAME_DURATION_MS = 8000
 
 export interface AvatarAnimationKeyframe {
+  readonly durationMs: number
+  readonly easing: AvatarAnimationEasing
   readonly faceStyle: AvatarFaceStyle
   readonly offset?: number
   readonly pitch: number
@@ -19,11 +25,45 @@ export interface AvatarAnimationKeyframe {
 
 export interface SavedAvatarAnimation {
   readonly createdAt: number
-  readonly durationMs: number
   readonly id: string
   readonly keyframes: readonly AvatarAnimationKeyframe[]
-  readonly version: 1
+  readonly lockStartPosition: boolean
+  readonly name: string
+  readonly playbackMode: AvatarAnimationPlaybackMode
+  readonly startFrameIndex: number
+  readonly version: 3
 }
+
+type StoredAvatarAnimationKeyframe = Omit<AvatarAnimationKeyframe, 'durationMs' | 'easing'> & {
+  readonly durationMs?: number
+  readonly easing?: AvatarAnimationEasing
+}
+
+interface LegacyStoredAvatarAnimation {
+  readonly createdAt: number
+  readonly durationMs: number
+  readonly easing?: AvatarAnimationEasing
+  readonly id: string
+  readonly keyframes: readonly StoredAvatarAnimationKeyframe[]
+  readonly lockStartPosition?: boolean
+  readonly name?: string
+  readonly playbackMode?: AvatarAnimationPlaybackMode
+  readonly startFrameIndex?: number
+  readonly version: 1 | 2
+}
+
+interface StoredAvatarAnimationV3 {
+  readonly createdAt: number
+  readonly id: string
+  readonly keyframes: readonly AvatarAnimationKeyframe[]
+  readonly lockStartPosition: boolean
+  readonly name: string
+  readonly playbackMode: AvatarAnimationPlaybackMode
+  readonly startFrameIndex: number
+  readonly version: 3
+}
+
+type StoredAvatarAnimation = LegacyStoredAvatarAnimation | StoredAvatarAnimationV3
 
 export type AvatarAnimationPresetId =
   | 'blink'
@@ -146,6 +186,78 @@ export const resolveAvatarAnimationSegment = (
   }
 }
 
+export interface AvatarAnimationTimedSegment extends AvatarAnimationSegment {
+  readonly easing: AvatarAnimationEasing
+  readonly finished: boolean
+  readonly totalDurationMs: number
+}
+
+export const resolveAvatarAnimationTimedSegment = (
+  keyframes: readonly AvatarAnimationKeyframe[],
+  elapsedMs: number,
+  mode: AvatarAnimationPlaybackMode
+): AvatarAnimationTimedSegment => {
+  if (keyframes.length < 2) {
+    return {
+      easing: keyframes[0]?.easing ?? DEFAULT_AVATAR_ANIMATION_EASING,
+      finished: true,
+      fromIndex: 0,
+      progress: 0,
+      toIndex: 0,
+      totalDurationMs: 0
+    }
+  }
+
+  const destinationIndices = keyframes.slice(1).map((_, index) => index + 1)
+  if (mode === 'loop') destinationIndices.push(0)
+  const totalDurationMs = destinationIndices.reduce((total, index) => {
+    return total + keyframes[index]!.durationMs
+  }, 0)
+  const clampedElapsed = Math.max(elapsedMs, 0)
+  const finished = mode === 'once' && clampedElapsed >= totalDurationMs
+  if (finished) {
+    const lastIndex = keyframes.length - 1
+    return {
+      easing: keyframes[lastIndex]!.easing,
+      finished: true,
+      fromIndex: lastIndex,
+      progress: 1,
+      toIndex: lastIndex,
+      totalDurationMs
+    }
+  }
+
+  const timelineElapsed = mode === 'loop' && totalDurationMs > 0
+    ? clampedElapsed % totalDurationMs
+    : Math.min(clampedElapsed, totalDurationMs)
+  let segmentStartedAt = 0
+  for (const toIndex of destinationIndices) {
+    const to = keyframes[toIndex]!
+    const segmentEndsAt = segmentStartedAt + to.durationMs
+    if (timelineElapsed < segmentEndsAt || toIndex === destinationIndices.at(-1)) {
+      const fromIndex = toIndex === 0 ? keyframes.length - 1 : toIndex - 1
+      return {
+        easing: to.easing,
+        finished: false,
+        fromIndex,
+        progress: Math.min(Math.max((timelineElapsed - segmentStartedAt) / to.durationMs, 0), 1),
+        toIndex,
+        totalDurationMs
+      }
+    }
+    segmentStartedAt = segmentEndsAt
+  }
+
+  return {
+    easing: DEFAULT_AVATAR_ANIMATION_EASING,
+    finished: mode === 'once',
+    fromIndex: 0,
+    progress: 0,
+    toIndex: 0,
+    totalDurationMs
+  }
+}
+
 export const AVATAR_ANIMATION_PRESETS: readonly AvatarAnimationPreset[] = [
   { description: 'Breathing, a soft glance, and one quick blink.', durationMs: 7200, id: 'idle', label: 'Idle' },
   { description: 'A compact close, hold, and open eye beat.', durationMs: 1050, id: 'blink', label: 'Blink' },
@@ -200,6 +312,23 @@ const isFiniteNumber = (value: unknown): value is number => {
   return typeof value === 'number' && Number.isFinite(value)
 }
 
+const isAvatarAnimationEasing = (value: unknown): value is AvatarAnimationEasing => {
+  return value === 'linear' || value === 'ease-in' || value === 'ease-out' || value === 'ease-in-out'
+}
+
+const isAvatarAnimationFrameDuration = (value: unknown): value is number => {
+  return isFiniteNumber(value) &&
+    value >= MIN_AVATAR_ANIMATION_FRAME_DURATION_MS &&
+    value <= MAX_AVATAR_ANIMATION_FRAME_DURATION_MS
+}
+
+export const clampAvatarAnimationFrameDuration = (durationMs: number) => {
+  return Math.min(
+    Math.max(Math.round(durationMs), MIN_AVATAR_ANIMATION_FRAME_DURATION_MS),
+    MAX_AVATAR_ANIMATION_FRAME_DURATION_MS
+  )
+}
+
 const isAvatarFaceStyle = (value: unknown): value is AvatarFaceStyle => {
   if (!isRecord(value)) return false
   return numericFaceStyleKeys.every(key => isFiniteNumber(value[key])) &&
@@ -210,9 +339,11 @@ const isAvatarFaceStyle = (value: unknown): value is AvatarFaceStyle => {
     (value.noseShape === 'ellipse' || value.noseShape === 'inverted-triangle' || value.noseShape === 'rounded')
 }
 
-const isAvatarAnimationKeyframe = (value: unknown): value is AvatarAnimationKeyframe => {
+const isStoredAvatarAnimationKeyframe = (value: unknown): value is StoredAvatarAnimationKeyframe => {
   if (!isRecord(value)) return false
-  return isAvatarFaceStyle(value.faceStyle) &&
+  return (value.durationMs == null || isAvatarAnimationFrameDuration(value.durationMs)) &&
+    (value.easing == null || isAvatarAnimationEasing(value.easing)) &&
+    isAvatarFaceStyle(value.faceStyle) &&
     (value.offset == null || (isFiniteNumber(value.offset) && value.offset >= 0 && value.offset <= 1)) &&
     isFiniteNumber(value.pitch) &&
     isFiniteNumber(value.positionX) &&
@@ -226,17 +357,167 @@ const isAvatarAnimationKeyframe = (value: unknown): value is AvatarAnimationKeyf
     isFiniteNumber(value.yaw)
 }
 
-const isSavedAvatarAnimation = (value: unknown): value is SavedAvatarAnimation => {
+const isAvatarAnimationKeyframe = (value: unknown): value is AvatarAnimationKeyframe => {
+  return isStoredAvatarAnimationKeyframe(value) &&
+    isAvatarAnimationFrameDuration(value.durationMs) &&
+    isAvatarAnimationEasing(value.easing)
+}
+
+const resolveLegacyKeyframeOffsets = (keyframes: readonly StoredAvatarAnimationKeyframe[]) => {
+  if (keyframes.length < 2) return keyframes.map(() => 0)
+  const lastIndex = keyframes.length - 1
+  return keyframes.reduce<number[]>((resolvedOffsets, keyframe, index) => {
+    const fallback = index / lastIndex
+    const requestedOffset = index === 0
+      ? 0
+      : index === lastIndex
+      ? 1
+      : Math.min(Math.max(keyframe.offset ?? fallback, 0), 1)
+    resolvedOffsets.push(Math.max(requestedOffset, resolvedOffsets.at(-1) ?? 0))
+    return resolvedOffsets
+  }, [])
+}
+
+export const normalizeAvatarAnimationKeyframes = (
+  keyframes: readonly StoredAvatarAnimationKeyframe[],
+  legacyDurationMs?: number,
+  legacyEasing: AvatarAnimationEasing = DEFAULT_AVATAR_ANIMATION_EASING
+): AvatarAnimationKeyframe[] => {
+  const offsets = resolveLegacyKeyframeOffsets(keyframes)
+  const fallbackTotalDuration = isFiniteNumber(legacyDurationMs)
+    ? Math.max(legacyDurationMs, MIN_AVATAR_ANIMATION_FRAME_DURATION_MS)
+    : DEFAULT_AVATAR_ANIMATION_FRAME_DURATION_MS * Math.max(keyframes.length - 1, 1)
+
+  return keyframes.map((keyframe, index) => {
+    const { durationMs, easing, offset: _offset, ...frame } = keyframe
+    const previousOffset = offsets[Math.max(index - 1, 0)] ?? 0
+    const currentOffset = offsets[index] ?? previousOffset
+    const legacySegmentDuration = index === 0
+      ? MIN_AVATAR_ANIMATION_FRAME_DURATION_MS
+      : fallbackTotalDuration * Math.max(currentOffset - previousOffset, 0)
+    return {
+      ...frame,
+      durationMs: isAvatarAnimationFrameDuration(durationMs)
+        ? durationMs
+        : clampAvatarAnimationFrameDuration(
+          legacySegmentDuration > 0 ? legacySegmentDuration : DEFAULT_AVATAR_ANIMATION_FRAME_DURATION_MS
+        ),
+      easing: isAvatarAnimationEasing(easing) ? easing : legacyEasing,
+      faceStyle: { ...DEFAULT_AVATAR_FACE_STYLE, ...frame.faceStyle }
+    }
+  })
+}
+
+const isStoredAvatarAnimation = (value: unknown): value is StoredAvatarAnimation => {
   if (!isRecord(value)) return false
-  return value.version === 1 &&
-    typeof value.id === 'string' &&
+  const hasCommonShape = typeof value.id === 'string' &&
     isFiniteNumber(value.createdAt) &&
-    isFiniteNumber(value.durationMs) &&
-    value.durationMs >= 200 &&
-    value.durationMs <= 30_000 &&
     Array.isArray(value.keyframes) &&
     value.keyframes.length >= 2 &&
-    value.keyframes.every(isAvatarAnimationKeyframe)
+    value.keyframes.every(isStoredAvatarAnimationKeyframe)
+  if (!hasCommonShape) return false
+  if (value.version === 3) {
+    return typeof value.name === 'string' &&
+      typeof value.lockStartPosition === 'boolean' &&
+      (value.playbackMode === 'once' || value.playbackMode === 'loop') &&
+      isFiniteNumber(value.startFrameIndex) &&
+      Array.isArray(value.keyframes) &&
+      value.keyframes.every(isAvatarAnimationKeyframe)
+  }
+  return (value.version === 1 || value.version === 2) &&
+    isFiniteNumber(value.durationMs) &&
+    value.durationMs >= 200 &&
+    value.durationMs <= 30_000
+}
+
+interface SharedAvatarAnimationPayloadV1 {
+  readonly d: number
+  readonly e: AvatarAnimationEasing
+  readonly k: readonly StoredAvatarAnimationKeyframe[]
+  readonly l: boolean
+  readonly n: string
+  readonly p: AvatarAnimationPlaybackMode
+  readonly s: number
+  readonly v: 1
+}
+
+interface SharedAvatarAnimationPayloadV2 {
+  readonly k: readonly AvatarAnimationKeyframe[]
+  readonly l: boolean
+  readonly n: string
+  readonly p: AvatarAnimationPlaybackMode
+  readonly s: number
+  readonly v: 2
+}
+
+const hasSharedAvatarAnimationShape = (value: Record<string, unknown>) => {
+  return typeof value.n === 'string' &&
+    value.n.trim().length > 0 &&
+    value.n.length <= 40 &&
+    (value.p === 'once' || value.p === 'loop') &&
+    typeof value.l === 'boolean' &&
+    isFiniteNumber(value.s) &&
+    Array.isArray(value.k) &&
+    value.k.length >= 2 &&
+    value.k.length <= 32
+}
+
+const isSharedAvatarAnimationPayloadV1 = (value: unknown): value is SharedAvatarAnimationPayloadV1 => {
+  if (!isRecord(value)) return false
+  return hasSharedAvatarAnimationShape(value) &&
+    Array.isArray(value.k) &&
+    value.v === 1 &&
+    isFiniteNumber(value.d) &&
+    value.d >= 200 &&
+    value.d <= 30_000 &&
+    isAvatarAnimationEasing(value.e) &&
+    value.k.every(isStoredAvatarAnimationKeyframe)
+}
+
+const isSharedAvatarAnimationPayloadV2 = (value: unknown): value is SharedAvatarAnimationPayloadV2 => {
+  if (!isRecord(value)) return false
+  return hasSharedAvatarAnimationShape(value) &&
+    Array.isArray(value.k) &&
+    value.v === 2 &&
+    value.k.every(isAvatarAnimationKeyframe)
+}
+
+export const serializeSharedAvatarAnimation = (animation: SavedAvatarAnimation) => {
+  const payload: SharedAvatarAnimationPayloadV2 = {
+    k: animation.keyframes.map(({ screenshot: _screenshot, thumbnailFrame: _thumbnailFrame, ...keyframe }) => ({
+      ...keyframe,
+      faceStyle: { ...keyframe.faceStyle }
+    })),
+    l: animation.lockStartPosition,
+    n: animation.name.trim() || 'Untitled animation',
+    p: animation.playbackMode,
+    s: Math.min(Math.max(Math.round(animation.startFrameIndex), 0), animation.keyframes.length - 1),
+    v: 2
+  }
+  return JSON.stringify(payload)
+}
+
+export const deserializeSharedAvatarAnimation = (serialized: string | null): SavedAvatarAnimation | null => {
+  if (serialized == null || serialized.length > 64_000) return null
+  try {
+    const payload = JSON.parse(serialized) as unknown
+    if (!isSharedAvatarAnimationPayloadV1(payload) && !isSharedAvatarAnimationPayloadV2(payload)) return null
+    const keyframes = payload.v === 1
+      ? normalizeAvatarAnimationKeyframes(payload.k, payload.d, payload.e)
+      : normalizeAvatarAnimationKeyframes(payload.k)
+    return {
+      createdAt: 0,
+      id: 'shared',
+      keyframes,
+      lockStartPosition: payload.l,
+      name: payload.n.trim(),
+      playbackMode: payload.p,
+      startFrameIndex: Math.min(Math.max(Math.round(payload.s), 0), payload.k.length - 1),
+      version: 3
+    }
+  } catch {
+    return null
+  }
 }
 
 export const loadSavedAvatarAnimations = (): SavedAvatarAnimation[] => {
@@ -245,15 +526,31 @@ export const loadSavedAvatarAnimations = (): SavedAvatarAnimation[] => {
     const stored = JSON.parse(window.localStorage.getItem(SAVED_ANIMATIONS_STORAGE_KEY) ?? '[]') as unknown
     return Array.isArray(stored)
       ? stored
-        .filter(isSavedAvatarAnimation)
+        .filter(isStoredAvatarAnimation)
         .slice(0, MAX_SAVED_ANIMATIONS)
-        .map(animation => ({
-          ...animation,
-          keyframes: animation.keyframes.map(keyframe => ({
-            ...keyframe,
-            faceStyle: { ...DEFAULT_AVATAR_FACE_STYLE, ...keyframe.faceStyle }
-          }))
-        }))
+        .map((animation, index) => {
+          const legacyDurationMs = animation.version === 3 ? undefined : animation.durationMs
+          const legacyEasing = animation.version === 3 || !isAvatarAnimationEasing(animation.easing)
+            ? DEFAULT_AVATAR_ANIMATION_EASING
+            : animation.easing
+          return {
+            createdAt: animation.createdAt,
+            id: animation.id,
+            keyframes: normalizeAvatarAnimationKeyframes(animation.keyframes, legacyDurationMs, legacyEasing),
+            lockStartPosition: animation.lockStartPosition === true,
+            name: typeof animation.name === 'string' && animation.name.trim().length > 0
+              ? animation.name.trim()
+              : `Saved ${Math.max(stored.length - index, 1)}`,
+            playbackMode: animation.playbackMode === 'once' ? 'once' : 'loop',
+            startFrameIndex: isFiniteNumber(animation.startFrameIndex)
+              ? Math.min(
+                Math.max(Math.round(animation.startFrameIndex), 0),
+                animation.keyframes.length - 1
+              )
+              : 0,
+            version: 3 as const
+          }
+        })
       : []
   } catch {
     return []
@@ -277,6 +574,8 @@ export const createAvatarAnimationKeyframe = (
   faceStyle: AvatarFaceStyle,
   screenshot?: string
 ): AvatarAnimationKeyframe => ({
+  durationMs: DEFAULT_AVATAR_ANIMATION_FRAME_DURATION_MS,
+  easing: DEFAULT_AVATAR_ANIMATION_EASING,
   faceStyle: { ...faceStyle },
   pitch: viewState.pitch,
   positionX: viewState.positionX,
@@ -300,7 +599,7 @@ const createRelativePresetFrame = (
   viewState: AvatarViewState,
   faceStyle: AvatarFaceStyle,
   frame: AvatarPresetFrame = {}
-): AvatarAnimationKeyframe => ({
+): StoredAvatarAnimationKeyframe => ({
   faceStyle: { ...faceStyle, ...frame.faceStyle },
   ...(frame.offset == null ? {} : { offset: frame.offset }),
   pitch: viewState.pitch + (frame.pitch ?? 0),
@@ -313,7 +612,7 @@ const buildPresetFrames = (
   id: AvatarAnimationPresetId,
   viewState: AvatarViewState,
   faceStyle: AvatarFaceStyle
-): readonly AvatarAnimationKeyframe[] => {
+): readonly StoredAvatarAnimationKeyframe[] => {
   const closedEyeHeight = clampPresetValue(faceStyle.height * .16, 7, 14)
   const relaxedEyeHeight = clampPresetValue(faceStyle.height * .78, 18, 104)
   const focusedEyeHeight = clampPresetValue(faceStyle.height * .58, 14, 88)
@@ -700,7 +999,11 @@ export const resolveAvatarAnimationPreset = (
   faceStyle: AvatarFaceStyle
 ): ResolvedAvatarAnimationPreset => ({
   ...preset,
-  keyframes: buildPresetFrames(preset.id, viewState, faceStyle)
+  keyframes: normalizeAvatarAnimationKeyframes(
+    buildPresetFrames(preset.id, viewState, faceStyle),
+    preset.durationMs,
+    DEFAULT_AVATAR_ANIMATION_EASING
+  )
 })
 
 const interpolate = (from: number, to: number, progress: number) => from + (to - from) * progress
@@ -714,33 +1017,35 @@ export const interpolateAvatarAnimationKeyframes = (
   const fromFaceStyle = resolveAvatarFaceStyle(from.faceStyle)
   const toFaceStyle = resolveAvatarFaceStyle(to.faceStyle)
   return {
+    durationMs: to.durationMs,
+    easing: to.easing,
     faceStyle: {
-    eyeRoundness: interpolate(from.faceStyle.eyeRoundness, to.faceStyle.eyeRoundness, progress),
-    eyeShape: selectDiscrete(from.faceStyle.eyeShape, to.faceStyle.eyeShape, progress),
-    gap: interpolate(from.faceStyle.gap, to.faceStyle.gap, progress),
-    height: interpolate(from.faceStyle.height, to.faceStyle.height, progress),
-    leftEyeRotation: interpolate(fromFaceStyle.leftEyeRotation, toFaceStyle.leftEyeRotation, progress),
-    mouthCurve: interpolate(from.faceStyle.mouthCurve, to.faceStyle.mouthCurve, progress),
-    mouthEnabled: selectDiscrete(from.faceStyle.mouthEnabled, to.faceStyle.mouthEnabled, progress),
-    mouthHeight: interpolate(from.faceStyle.mouthHeight, to.faceStyle.mouthHeight, progress),
-    mouthRotation: interpolate(from.faceStyle.mouthRotation, to.faceStyle.mouthRotation, progress),
-    mouthWidth: interpolate(from.faceStyle.mouthWidth, to.faceStyle.mouthWidth, progress),
-    mouthY: interpolate(from.faceStyle.mouthY, to.faceStyle.mouthY, progress),
-    noseEnabled: selectDiscrete(from.faceStyle.noseEnabled, to.faceStyle.noseEnabled, progress),
-    noseHeight: interpolate(from.faceStyle.noseHeight, to.faceStyle.noseHeight, progress),
-    noseRotation: interpolate(from.faceStyle.noseRotation, to.faceStyle.noseRotation, progress),
-    noseShape: selectDiscrete(from.faceStyle.noseShape, to.faceStyle.noseShape, progress),
-    noseWidth: interpolate(from.faceStyle.noseWidth, to.faceStyle.noseWidth, progress),
-    noseY: interpolate(from.faceStyle.noseY, to.faceStyle.noseY, progress),
-    rotation: interpolate(from.faceStyle.rotation, to.faceStyle.rotation, progress),
-    rightEyeRotation: interpolate(fromFaceStyle.rightEyeRotation, toFaceStyle.rightEyeRotation, progress),
-    width: interpolate(from.faceStyle.width, to.faceStyle.width, progress)
-  },
-  pitch: interpolate(from.pitch, to.pitch, progress),
-  positionX: interpolate(from.positionX, to.positionX, progress),
-  positionY: interpolate(from.positionY, to.positionY, progress),
-  screenshot: selectDiscrete(from.screenshot, to.screenshot, progress),
-  thumbnailFrame: selectDiscrete(from.thumbnailFrame, to.thumbnailFrame, progress),
+      eyeRoundness: interpolate(from.faceStyle.eyeRoundness, to.faceStyle.eyeRoundness, progress),
+      eyeShape: selectDiscrete(from.faceStyle.eyeShape, to.faceStyle.eyeShape, progress),
+      gap: interpolate(from.faceStyle.gap, to.faceStyle.gap, progress),
+      height: interpolate(from.faceStyle.height, to.faceStyle.height, progress),
+      leftEyeRotation: interpolate(fromFaceStyle.leftEyeRotation, toFaceStyle.leftEyeRotation, progress),
+      mouthCurve: interpolate(from.faceStyle.mouthCurve, to.faceStyle.mouthCurve, progress),
+      mouthEnabled: selectDiscrete(from.faceStyle.mouthEnabled, to.faceStyle.mouthEnabled, progress),
+      mouthHeight: interpolate(from.faceStyle.mouthHeight, to.faceStyle.mouthHeight, progress),
+      mouthRotation: interpolate(from.faceStyle.mouthRotation, to.faceStyle.mouthRotation, progress),
+      mouthWidth: interpolate(from.faceStyle.mouthWidth, to.faceStyle.mouthWidth, progress),
+      mouthY: interpolate(from.faceStyle.mouthY, to.faceStyle.mouthY, progress),
+      noseEnabled: selectDiscrete(from.faceStyle.noseEnabled, to.faceStyle.noseEnabled, progress),
+      noseHeight: interpolate(from.faceStyle.noseHeight, to.faceStyle.noseHeight, progress),
+      noseRotation: interpolate(from.faceStyle.noseRotation, to.faceStyle.noseRotation, progress),
+      noseShape: selectDiscrete(from.faceStyle.noseShape, to.faceStyle.noseShape, progress),
+      noseWidth: interpolate(from.faceStyle.noseWidth, to.faceStyle.noseWidth, progress),
+      noseY: interpolate(from.faceStyle.noseY, to.faceStyle.noseY, progress),
+      rotation: interpolate(from.faceStyle.rotation, to.faceStyle.rotation, progress),
+      rightEyeRotation: interpolate(fromFaceStyle.rightEyeRotation, toFaceStyle.rightEyeRotation, progress),
+      width: interpolate(from.faceStyle.width, to.faceStyle.width, progress)
+    },
+    pitch: interpolate(from.pitch, to.pitch, progress),
+    positionX: interpolate(from.positionX, to.positionX, progress),
+    positionY: interpolate(from.positionY, to.positionY, progress),
+    screenshot: selectDiscrete(from.screenshot, to.screenshot, progress),
+    thumbnailFrame: selectDiscrete(from.thumbnailFrame, to.thumbnailFrame, progress),
     yaw: interpolate(from.yaw, to.yaw, progress)
   }
 }

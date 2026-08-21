@@ -53,6 +53,17 @@ export const prependSavedAvatarPreset = (
   preset: SavedAvatarPreset
 ) => [preset, ...presets].slice(0, MAX_SAVED_PRESETS)
 
+export const serializeAvatarSvg = (sourceSvg: SVGSVGElement, size: number) => {
+  const clonedSvg = sourceSvg.cloneNode(true) as SVGSVGElement
+  clonedSvg.setAttribute('xmlns', 'http://www.w3.org/2000/svg')
+  clonedSvg.setAttribute('width', String(size))
+  clonedSvg.setAttribute('height', String(size))
+  clonedSvg.removeAttribute('aria-label')
+  clonedSvg.removeAttribute('role')
+  clonedSvg.removeAttribute('tabindex')
+  return new XMLSerializer().serializeToString(clonedSvg)
+}
+
 const addFramePath = (context: CanvasRenderingContext2D, frame: AvatarCameraFrame) => {
   const size = SCREENSHOT_SIZE
   context.beginPath()
@@ -80,12 +91,7 @@ export const captureAvatarScreenshot = async (
   sourceSvg: SVGSVGElement,
   options: AvatarScreenshotOptions = {}
 ) => {
-  const clonedSvg = sourceSvg.cloneNode(true) as SVGSVGElement
-  clonedSvg.setAttribute('xmlns', 'http://www.w3.org/2000/svg')
-  clonedSvg.setAttribute('width', String(SCREENSHOT_SIZE))
-  clonedSvg.setAttribute('height', String(SCREENSHOT_SIZE))
-
-  const svgSource = new XMLSerializer().serializeToString(clonedSvg)
+  const svgSource = serializeAvatarSvg(sourceSvg, SCREENSHOT_SIZE)
   const sourceUrl = URL.createObjectURL(new Blob([svgSource], { type: 'image/svg+xml;charset=utf-8' }))
   try {
     const image = new Image()

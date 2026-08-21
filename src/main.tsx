@@ -2,6 +2,7 @@ import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 
 import App from './App'
+import { AvatarLocaleProvider } from './avatarLocale'
 
 document.documentElement.classList.toggle(
   'dark',
@@ -10,6 +11,8 @@ document.documentElement.classList.toggle(
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
-    <App />
+    <AvatarLocaleProvider>
+      <App />
+    </AvatarLocaleProvider>
   </StrictMode>
 )

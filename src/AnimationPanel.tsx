@@ -1,6 +1,6 @@
 import './AnimationPanel.scss'
 
-import { useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import type { CSSProperties, KeyboardEvent, PointerEvent, ReactNode } from 'react'
 
 import type {
@@ -10,41 +10,59 @@ import type {
   AvatarAnimationPreset,
   SavedAvatarAnimation
 } from './avatarAnimations'
+import { useAvatarLocale } from './avatarLocale'
 
 interface AnimationPanelProps {
   readonly activeKeyframeIndex: number | null
+  readonly animationName: string
   readonly animationPresets: readonly AvatarAnimationPreset[]
-  readonly durationMs: number
-  readonly easing: AvatarAnimationEasing
   readonly isCapturingKeyframe: boolean
   readonly isPlaying: boolean
+  readonly interactionControls?: ReactNode
   readonly keyframes: readonly AvatarAnimationKeyframe[]
+  readonly lockStartPosition: boolean
   readonly onAddKeyframe: () => void
-  readonly onDurationChange: (durationMs: number) => void
-  readonly onEasingChange: (easing: AvatarAnimationEasing) => void
+  readonly onAnimationNameChange: (name: string) => void
+  readonly onKeyframeDeselect: () => void
+  readonly onKeyframeDurationChange: (index: number, durationMs: number) => void
+  readonly onKeyframeEasingChange: (index: number, easing: AvatarAnimationEasing) => void
   readonly onKeyframeRemove: (index: number) => void
   readonly onKeyframeSelect: (index: number) => void
+  readonly onLockStartPositionChange: (lockStartPosition: boolean) => void
+  readonly onInteractionControlsDockChange: (docked: boolean) => void
+  readonly onClose: () => void
   readonly onPlay: () => void
   readonly onPlaybackModeChange: (mode: AvatarAnimationPlaybackMode) => void
   readonly onPresetSelect: (preset: AvatarAnimationPreset) => boolean
+  readonly onSavedAnimationRemove: (animation: SavedAvatarAnimation) => void
   readonly onSavedAnimationSelect: (animation: SavedAvatarAnimation) => boolean
   readonly onSave: () => void
+  readonly onStartFrameChange: (index: number) => void
   readonly onStop: () => void
   readonly playbackMode: AvatarAnimationPlaybackMode
   readonly renderKeyframePreview: (keyframe: AvatarAnimationKeyframe) => ReactNode
   readonly renderPresetPreview: (preset: AvatarAnimationPreset) => ReactNode
+  readonly requiresReplacementConfirmation: boolean
   readonly savedAnimations: readonly SavedAvatarAnimation[]
+  readonly selectedLibraryId: string | null
+  readonly selectedKeyframeIndex: number | null
+  readonly startFrameIndex: number
 }
 
 type AnimationPanelTab = 'create' | 'playback'
+type PendingAnimationAction =
+  | { readonly animation: SavedAvatarAnimation; readonly type: 'remove-saved' }
+  | { readonly animation: SavedAvatarAnimation; readonly type: 'replace-saved' }
+  | { readonly preset: AvatarAnimationPreset; readonly type: 'replace-preset' }
 
 const DEFAULT_PANEL_HEIGHT = 244
 const MIN_PANEL_HEIGHT = 180
+const MIN_STAGE_HEIGHT = 96
 
 const clampPanelHeight = (height: number) => {
   const viewportLimit = typeof window === 'undefined'
-    ? 640
-    : Math.max(MIN_PANEL_HEIGHT, Math.round(window.innerHeight * .72))
+    ? 720
+    : Math.max(MIN_PANEL_HEIGHT, Math.round(window.innerHeight - MIN_STAGE_HEIGHT))
   return Math.min(Math.max(height, MIN_PANEL_HEIGHT), viewportLimit)
 }
 
@@ -76,38 +94,110 @@ function PlayIcon({ playing }: { readonly playing: boolean }) {
 
 export function AnimationPanel({
   activeKeyframeIndex,
+  animationName,
   animationPresets,
-  durationMs,
-  easing,
   isCapturingKeyframe,
   isPlaying,
+  interactionControls,
   keyframes,
+  lockStartPosition,
   onAddKeyframe,
-  onDurationChange,
-  onEasingChange,
+  onAnimationNameChange,
+  onKeyframeDeselect,
+  onKeyframeDurationChange,
+  onKeyframeEasingChange,
   onKeyframeRemove,
   onKeyframeSelect,
+  onLockStartPositionChange,
+  onInteractionControlsDockChange,
+  onClose,
   onPlay,
   onPlaybackModeChange,
   onPresetSelect,
+  onSavedAnimationRemove,
   onSavedAnimationSelect,
   onSave,
+  onStartFrameChange,
   onStop,
   playbackMode,
   renderKeyframePreview,
   renderPresetPreview,
-  savedAnimations
+  requiresReplacementConfirmation,
+  savedAnimations,
+  selectedLibraryId,
+  selectedKeyframeIndex,
+  startFrameIndex
 }: AnimationPanelProps) {
+  const { t } = useAvatarLocale()
   const [activeTab, setActiveTab] = useState<AnimationPanelTab>('create')
   const [panelHeight, setPanelHeight] = useState(DEFAULT_PANEL_HEIGHT)
+  const [pendingAction, setPendingAction] = useState<PendingAnimationAction | null>(null)
   const [resizing, setResizing] = useState(false)
-  const [selectedLibraryId, setSelectedLibraryId] = useState<string | null>(null)
+  const confirmActionRef = useRef<HTMLButtonElement>(null)
+  const panelRef = useRef<HTMLElement>(null)
   const resizeStartRef = useRef<{ height: number; pointerY: number } | null>(null)
   const settingsOpen = activeTab === 'create' || selectedLibraryId != null
+  const selectedKeyframe = selectedKeyframeIndex == null ? null : keyframes[selectedKeyframeIndex] ?? null
+  const createTabLabel = selectedLibraryId == null
+    ? t('Create')
+    : `${t('Editing')} ${animationName.trim() || t('Untitled animation')}`
+
+  useEffect(() => {
+    if (pendingAction != null) confirmActionRef.current?.focus()
+  }, [pendingAction])
+
+  useEffect(() => {
+    const panel = panelRef.current
+    if (panel == null) return
+
+    const updateDockedState = () => {
+      onInteractionControlsDockChange(panel.getBoundingClientRect().height > window.innerHeight * .4)
+    }
+    const resizeObserver = typeof ResizeObserver === 'undefined'
+      ? null
+      : new ResizeObserver(updateDockedState)
+    resizeObserver?.observe(panel)
+    window.addEventListener('resize', updateDockedState)
+    updateDockedState()
+    return () => {
+      resizeObserver?.disconnect()
+      window.removeEventListener('resize', updateDockedState)
+    }
+  }, [onInteractionControlsDockChange])
+
+  useEffect(() => {
+    return () => onInteractionControlsDockChange(false)
+  }, [onInteractionControlsDockChange])
 
   const changeTab = (tab: AnimationPanelTab) => {
     if (tab === 'create' && activeTab !== 'create') onStop()
+    setPendingAction(null)
     setActiveTab(tab)
+  }
+
+  const requestPresetSelection = (preset: AvatarAnimationPreset) => {
+    if (requiresReplacementConfirmation) {
+      setPendingAction({ preset, type: 'replace-preset' })
+      return
+    }
+    onPresetSelect(preset)
+  }
+
+  const requestSavedAnimationSelection = (animation: SavedAvatarAnimation) => {
+    if (requiresReplacementConfirmation) {
+      setPendingAction({ animation, type: 'replace-saved' })
+      return
+    }
+    onSavedAnimationSelect(animation)
+  }
+
+  const confirmPendingAction = () => {
+    const action = pendingAction
+    setPendingAction(null)
+    if (action == null) return
+    if (action.type === 'replace-preset') onPresetSelect(action.preset)
+    else if (action.type === 'replace-saved') onSavedAnimationSelect(action.animation)
+    else onSavedAnimationRemove(action.animation)
   }
 
   const handleResizeStart = (event: PointerEvent<HTMLDivElement>) => {
@@ -139,9 +229,10 @@ export function AnimationPanel({
 
   return (
     <section
+      ref={panelRef}
       id='avatar-animation-panel'
       className='avatar-animation-panel'
-      aria-label='Animation editor'
+      aria-label={t('Animation editor')}
       data-resizing={resizing}
       style={{ '--avatar-animation-height': `${panelHeight}px` } as CSSProperties}
     >
@@ -162,29 +253,46 @@ export function AnimationPanel({
         onPointerUp={handleResizeEnd}
       />
       <div className='avatar-animation-panel__header'>
-        <div className='avatar-animation-panel__tabs' role='tablist' aria-label='Animation mode'>
+        <div className='avatar-animation-panel__header-leading'>
           <button
-            id='avatar-animation-tab-create'
+            className='avatar-animation-panel__close'
             type='button'
-            role='tab'
-            aria-controls='avatar-animation-panel-create'
-            aria-selected={activeTab === 'create'}
-            onClick={() => changeTab('create')}
-          >
-            <CreateIcon />
-            <span>Create</span>
-          </button>
-          <button
-            id='avatar-animation-tab-playback'
-            type='button'
-            role='tab'
-            aria-controls='avatar-animation-panel-playback'
-            aria-selected={activeTab === 'playback'}
-            onClick={() => changeTab('playback')}
+            aria-controls='avatar-animation-panel'
+            aria-expanded='true'
+            aria-label='Close animation editor'
+            title='Close animation editor'
+            onClick={onClose}
           >
             <PlaybackIcon />
-            <span>Playback</span>
           </button>
+          {interactionControls}
+          <div className='avatar-animation-panel__tabs' role='tablist' aria-label={t('Animation mode')}>
+            <button
+              id='avatar-animation-tab-create'
+              type='button'
+              role='tab'
+              aria-controls='avatar-animation-panel-create'
+              aria-selected={activeTab === 'create'}
+              aria-label={createTabLabel}
+              title={createTabLabel}
+              onClick={() => changeTab('create')}
+            >
+              <CreateIcon />
+              <span className='avatar-animation-panel__tab-label'>{createTabLabel}</span>
+            </button>
+            <button
+              id='avatar-animation-tab-playback'
+              type='button'
+              role='tab'
+              aria-controls='avatar-animation-panel-playback'
+              aria-selected={activeTab === 'playback'}
+              aria-label={t('Playback')}
+              onClick={() => changeTab('playback')}
+            >
+              <PlaybackIcon />
+              <span>{t('Playback')}</span>
+            </button>
+          </div>
         </div>
         <div className='avatar-animation-panel__actions'>
           <button
@@ -197,25 +305,18 @@ export function AnimationPanel({
           >
             <PlayIcon playing={isPlaying} />
           </button>
-          {activeTab === 'create'
-            ? (
-              <button
-                type='button'
-                aria-label='Save animation'
-                title='Save animation'
-                disabled={keyframes.length < 2 || isCapturingKeyframe}
-                onClick={() => {
-                  onSave()
-                  setActiveTab('playback')
-                }}
-              >
-                <svg viewBox='0 0 20 20' aria-hidden='true'>
-                  <path d='M4 3h9l3 3v11H4Z' />
-                  <path d='M7 3v5h6V3M7 17v-5h6v5' />
-                </svg>
-              </button>
-            )
-            : null}
+          <button
+            type='button'
+            aria-label='Save animation'
+            title='Save animation'
+            disabled={keyframes.length < 2 || isCapturingKeyframe}
+            onClick={onSave}
+          >
+            <svg viewBox='0 0 20 20' aria-hidden='true'>
+              <path d='M4 3h9l3 3v11H4Z' />
+              <path d='M7 3v5h6V3M7 17v-5h6v5' />
+            </svg>
+          </button>
         </div>
       </div>
 
@@ -225,6 +326,11 @@ export function AnimationPanel({
           className='avatar-animation-panel__content'
           role='tabpanel'
           aria-labelledby={`avatar-animation-tab-${activeTab}`}
+          onClick={event => {
+            const target = event.target
+            if (target instanceof Element && target.closest('button, input, select, textarea, label, a')) return
+            onKeyframeDeselect()
+          }}
         >
           {activeTab === 'create'
             ? (
@@ -277,7 +383,7 @@ export function AnimationPanel({
             : (
               <div className='avatar-animation-panel__library' aria-label='Animation library'>
                 {animationPresets.map(preset => {
-                  const libraryId = `preset-${preset.id}`
+                  const libraryId = `preset:${preset.id}`
                   return (
                     <button
                       key={libraryId}
@@ -286,9 +392,7 @@ export function AnimationPanel({
                       aria-label={`Play ${preset.label} animation preset`}
                       aria-pressed={selectedLibraryId === libraryId}
                       title={preset.description}
-                      onClick={() => {
-                        if (onPresetSelect(preset)) setSelectedLibraryId(libraryId)
-                      }}
+                      onClick={() => requestPresetSelection(preset)}
                     >
                       <span className='avatar-animation-panel__library-preview' aria-hidden='true'>
                         {renderPresetPreview(preset)}
@@ -297,28 +401,41 @@ export function AnimationPanel({
                     </button>
                   )
                 })}
-                {savedAnimations.map((animation, index) => {
-                  const previewKeyframe = animation.keyframes[Math.floor(animation.keyframes.length / 2)]
-                  const libraryId = `saved-${animation.id}`
+                {savedAnimations.map(animation => {
+                  const previewKeyframe = animation.keyframes[animation.startFrameIndex]
+                  const libraryId = `saved:${animation.id}`
                   return (
-                    <button
+                    <div
                       key={libraryId}
-                      className='avatar-animation-panel__library-item'
-                      type='button'
-                      aria-label={`Play saved animation ${savedAnimations.length - index}`}
-                      aria-pressed={selectedLibraryId === libraryId}
-                      title={`Play ${animation.keyframes.length} keyframes`}
-                      onClick={() => {
-                        if (onSavedAnimationSelect(animation)) setSelectedLibraryId(libraryId)
-                      }}
+                      className='avatar-animation-panel__library-item-wrapper'
                     >
-                      <span className='avatar-animation-panel__library-preview' aria-hidden='true'>
-                        {previewKeyframe == null ? null : renderKeyframePreview(previewKeyframe)}
-                      </span>
-                      <span className='avatar-animation-panel__library-name'>
-                        Saved {savedAnimations.length - index}
-                      </span>
-                    </button>
+                      <button
+                        className='avatar-animation-panel__library-item'
+                        type='button'
+                        aria-label={`Play ${animation.name}`}
+                        aria-pressed={selectedLibraryId === libraryId}
+                        title={`${animation.name} · ${animation.keyframes.length} keyframes`}
+                        onClick={() => requestSavedAnimationSelection(animation)}
+                      >
+                        <span className='avatar-animation-panel__library-preview' aria-hidden='true'>
+                          {previewKeyframe == null ? null : renderKeyframePreview(previewKeyframe)}
+                        </span>
+                        <span className='avatar-animation-panel__library-name'>
+                          {animation.name}
+                        </span>
+                      </button>
+                      <button
+                        className='avatar-animation-panel__library-delete'
+                        type='button'
+                        aria-label={`Delete ${animation.name}`}
+                        title={`Delete ${animation.name}`}
+                        onClick={() => setPendingAction({ animation, type: 'remove-saved' })}
+                      >
+                        <svg viewBox='0 0 20 20' aria-hidden='true'>
+                          <path d='M4 6h12M8 3h4l1 3H7Zm-2 3v7m4-7v7m4-7v7M6 6l1 11h6l1-11' />
+                        </svg>
+                      </button>
+                    </div>
                   )
                 })}
               </div>
@@ -327,69 +444,203 @@ export function AnimationPanel({
 
         {settingsOpen
           ? (
-            <aside className='avatar-animation-panel__settings' aria-label='Animation settings'>
+            <aside
+              className='avatar-animation-panel__settings'
+              aria-label={selectedKeyframe == null
+                ? 'Animation group settings'
+                : `Keyframe ${selectedKeyframeIndex! + 1} settings`}
+            >
               {activeTab === 'playback'
                 ? (
                   <div className='avatar-animation-panel__settings-frames' aria-label='Selected animation frames'>
                     {keyframes.map((keyframe, index) => (
-                      <span key={index} className='avatar-animation-panel__settings-frame'>
+                      <button
+                        key={index}
+                        className='avatar-animation-panel__settings-frame'
+                        type='button'
+                        aria-label={`Edit keyframe ${index + 1}`}
+                        aria-pressed={selectedKeyframeIndex === index}
+                        onClick={() => onKeyframeSelect(index)}
+                      >
                         {keyframe.screenshot == null
                           ? renderKeyframePreview(keyframe)
                           : <img src={keyframe.screenshot} alt='' aria-hidden='true' />}
                         <span>{index + 1}</span>
-                      </span>
+                      </button>
                     ))}
                   </div>
                 )
                 : null}
 
-              <label className='avatar-animation-panel__duration'>
-                <span>Duration</span>
-                <input
-                  type='range'
-                  aria-label='Animation duration'
-                  min='400'
-                  max='8000'
-                  step='100'
-                  value={durationMs}
-                  onChange={event => onDurationChange(Number(event.currentTarget.value))}
-                />
-                <output>{(durationMs / 1000).toFixed(1)}s</output>
-              </label>
-
-              <div className='avatar-animation-panel__setting-row'>
-                <span>Playback</span>
-                <div className='avatar-animation-panel__segments' role='group' aria-label='Playback behavior'>
-                  {(['once', 'loop'] satisfies AvatarAnimationPlaybackMode[]).map(mode => (
-                    <button
-                      key={mode}
-                      type='button'
-                      aria-pressed={playbackMode === mode}
-                      onClick={() => onPlaybackModeChange(mode)}
-                    >
-                      {mode === 'once' ? 'Once' : 'Loop'}
-                    </button>
-                  ))}
-                </div>
+              <div className='avatar-animation-panel__settings-title'>
+                {selectedKeyframe == null ? t('Animation group') : `${t('Frame')} ${selectedKeyframeIndex! + 1}`}
               </div>
 
-              <label className='avatar-animation-panel__setting-row'>
-                <span>Easing</span>
-                <select
-                  aria-label='Animation easing'
-                  value={easing}
-                  onChange={event => onEasingChange(event.currentTarget.value as AvatarAnimationEasing)}
-                >
-                  <option value='linear'>Linear</option>
-                  <option value='ease-in'>Ease in</option>
-                  <option value='ease-out'>Ease out</option>
-                  <option value='ease-in-out'>Ease in / out</option>
-                </select>
-              </label>
+              {selectedKeyframe == null
+                ? (
+                  <>
+                    <label className='avatar-animation-panel__group-name'>
+                      <span>{t('Name')}</span>
+                      <input
+                        type='text'
+                        aria-label={t('Animation name')}
+                        maxLength={40}
+                        value={animationName}
+                        onChange={event => onAnimationNameChange(event.currentTarget.value)}
+                      />
+                    </label>
+
+                    <div className='avatar-animation-panel__setting-row'>
+                      <span>{t('Position')}</span>
+                      <button
+                        className='avatar-animation-panel__lock-toggle'
+                        type='button'
+                        aria-pressed={lockStartPosition}
+                        onClick={() => onLockStartPositionChange(!lockStartPosition)}
+                      >
+                        {lockStartPosition ? t('Fixed position') : t('Current position')}
+                      </button>
+                    </div>
+
+                    {keyframes.length > 0
+                      ? (
+                        <div className='avatar-animation-panel__start-frame-setting'>
+                          <span>{t('First frame')}</span>
+                          <div
+                            className='avatar-animation-panel__start-frames'
+                            role='group'
+                            aria-label={t('First frame')}
+                          >
+                            {keyframes.map((keyframe, index) => (
+                              <button
+                                key={index}
+                                type='button'
+                                aria-label={`Start animation at keyframe ${index + 1}`}
+                                aria-pressed={startFrameIndex === index}
+                                onClick={() => onStartFrameChange(index)}
+                              >
+                                {keyframe.screenshot == null
+                                  ? renderKeyframePreview(keyframe)
+                                  : <img src={keyframe.screenshot} alt='' aria-hidden='true' />}
+                                <span>{index + 1}</span>
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+                      )
+                      : null}
+
+                    <div className='avatar-animation-panel__setting-row'>
+                      <span>{t('Playback')}</span>
+                      <div className='avatar-animation-panel__segments' role='group' aria-label='Playback behavior'>
+                        {(['once', 'loop'] satisfies AvatarAnimationPlaybackMode[]).map(mode => (
+                          <button
+                            key={mode}
+                            type='button'
+                            aria-pressed={playbackMode === mode}
+                            onClick={() => onPlaybackModeChange(mode)}
+                          >
+                            {t(mode === 'once' ? 'Once' : 'Loop')}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  </>
+                )
+                : (
+                  <>
+                    <label className='avatar-animation-panel__duration'>
+                      <span>{t('Duration')}</span>
+                      <input
+                        type='range'
+                        aria-label={`Keyframe ${selectedKeyframeIndex! + 1} transition duration`}
+                        min='100'
+                        max='8000'
+                        step='100'
+                        value={selectedKeyframe.durationMs}
+                        onChange={event =>
+                          onKeyframeDurationChange(
+                            selectedKeyframeIndex!,
+                            Number(event.currentTarget.value)
+                          )}
+                      />
+                      <output>{(selectedKeyframe.durationMs / 1000).toFixed(1)}s</output>
+                    </label>
+
+                    <label className='avatar-animation-panel__setting-row'>
+                      <span>{t('Easing')}</span>
+                      <select
+                        aria-label={`Keyframe ${selectedKeyframeIndex! + 1} easing`}
+                        value={selectedKeyframe.easing}
+                        onChange={event =>
+                          onKeyframeEasingChange(
+                            selectedKeyframeIndex!,
+                            event.currentTarget.value as AvatarAnimationEasing
+                          )}
+                      >
+                        <option value='linear'>Linear</option>
+                        <option value='ease-in'>Ease in</option>
+                        <option value='ease-out'>Ease out</option>
+                        <option value='ease-in-out'>Ease in / out</option>
+                      </select>
+                    </label>
+
+                    <p className='avatar-animation-panel__timing-help'>
+                      {playbackMode === 'once' && selectedKeyframeIndex === startFrameIndex
+                        ? 'Once starts here immediately. This timing is used when Loop returns to this frame.'
+                        : 'Transition time and easing from the previous frame into this frame.'}
+                    </p>
+                  </>
+                )}
             </aside>
           )
           : null}
       </div>
+      {pendingAction == null
+        ? null
+        : (
+          <div
+            className='avatar-animation-panel__confirmation-backdrop'
+            role='presentation'
+            onKeyDown={event => {
+              if (event.key !== 'Escape') return
+              event.stopPropagation()
+              setPendingAction(null)
+            }}
+          >
+            <div
+              className='avatar-animation-panel__confirmation'
+              role='alertdialog'
+              aria-labelledby='avatar-animation-confirmation-title'
+              aria-describedby='avatar-animation-confirmation-description'
+              aria-modal='true'
+            >
+              <div id='avatar-animation-confirmation-title' className='avatar-animation-panel__confirmation-title'>
+                {pendingAction.type === 'remove-saved' ? 'Delete saved animation?' : 'Replace current animation?'}
+              </div>
+              <p id='avatar-animation-confirmation-description'>
+                {pendingAction.type === 'remove-saved'
+                  ? `Delete “${pendingAction.animation.name}” from this browser? Its open keyframes will remain as an unsaved draft.`
+                  : `Load “${
+                    pendingAction.type === 'replace-preset'
+                      ? pendingAction.preset.label
+                      : pendingAction.animation.name
+                  }” and discard the keyframes currently in Create?`}
+              </p>
+              <div className='avatar-animation-panel__confirmation-actions'>
+                <button type='button' onClick={() => setPendingAction(null)}>Cancel</button>
+                <button
+                  ref={confirmActionRef}
+                  type='button'
+                  data-danger={pendingAction.type === 'remove-saved'}
+                  onClick={confirmPendingAction}
+                >
+                  {pendingAction.type === 'remove-saved' ? 'Delete' : 'Replace'}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
     </section>
   )
 }

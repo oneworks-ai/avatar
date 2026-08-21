@@ -1,68 +1,30 @@
 import { describe, expect, it } from 'vitest'
 
-import { DEFAULT_AVATAR_FACE_STYLE, projectDefaultFace } from '../src/avatarGeometry'
+import { AVATAR_GRID_DENSITY, buildAvatarBodyGeometry, resolveAvatarSurfaceShadeOpacity } from '../src/avatarGeometry'
 
-const parsePathPoints = (path: string) => {
-  const coordinates = [...path.matchAll(/-?\d+(?:\.\d+)?/g)].map(match => Number(match[0]))
-  return Array.from({ length: coordinates.length / 2 }, (_, index) => ({
-    x: coordinates[index * 2]!,
-    y: coordinates[index * 2 + 1]!
-  }))
-}
+const POSE = { pitch: -.35, yaw: .4 }
+const LIGHT = { azimuth: -92, elevation: 64 }
 
-describe('avatar face surface projection', () => {
-  it('tessellates a rounded eye edge so the projected outline follows the sphere', () => {
-    const face = projectDefaultFace(
-      { pitch: 0, yaw: -1 },
-      'sphere',
-      { ...DEFAULT_AVATAR_FACE_STYLE, height: 96, width: 28 }
-    )
-    const points = parsePathPoints(face.eyes[0]!.path)
-
-    expect(points).toHaveLength(64)
-
-    const edgeTop = points[8]!
-    const edgeMiddle = points[12]!
-    const edgeBottom = points[16]!
-    const straightChordMiddleX = (edgeTop.x + edgeBottom.x) / 2
-
-    expect(Math.abs(edgeMiddle.x - straightChordMiddleX)).toBeGreaterThan(2)
+describe('avatar surface lighting', () => {
+  it('uses stronger near shadows and attenuates all contrast with distance', () => {
+    expect(resolveAvatarSurfaceShadeOpacity(-1, 0)).toBeCloseTo(.96)
+    expect(resolveAvatarSurfaceShadeOpacity(1, 0)).toBeCloseTo(.38)
+    expect(resolveAvatarSurfaceShadeOpacity(-.25, 0)).toBeGreaterThan(.38)
+    expect(resolveAvatarSurfaceShadeOpacity(-1, 50)).toBeCloseTo(.48)
+    expect(resolveAvatarSurfaceShadeOpacity(-1, 100)).toBe(0)
+    expect(resolveAvatarSurfaceShadeOpacity(1, 100)).toBe(0)
   })
 
-  it('adds an independent tilt to each eye on top of the overall rotation', () => {
-    const base = projectDefaultFace(
-      { pitch: 0, yaw: 0 },
-      'sphere',
-      DEFAULT_AVATAR_FACE_STYLE
-    )
-    const tilted = projectDefaultFace(
-      { pitch: 0, yaw: 0 },
-      'sphere',
-      {
-        ...DEFAULT_AVATAR_FACE_STYLE,
-        leftEyeRotation: -24,
-        rotation: 8,
-        rightEyeRotation: 18
-      }
-    )
+  it('changes cell density without changing the high-resolution silhouette', () => {
+    const low = buildAvatarBodyGeometry('sphere', POSE, LIGHT, AVATAR_GRID_DENSITY.min)
+    const original = buildAvatarBodyGeometry('sphere', POSE, LIGHT)
+    const explicitDefault = buildAvatarBodyGeometry('sphere', POSE, LIGHT, AVATAR_GRID_DENSITY.default)
+    const high = buildAvatarBodyGeometry('sphere', POSE, LIGHT, AVATAR_GRID_DENSITY.max)
 
-    expect(tilted.eyes[0]?.path).not.toBe(base.eyes[0]?.path)
-    expect(tilted.eyes[1]?.path).not.toBe(base.eyes[1]?.path)
-    expect(tilted.eyes[0]?.path).not.toBe(tilted.eyes[1]?.path)
-  })
-
-  it('keeps the eyes renderable when hot state contains invalid new tilt fields', () => {
-    const face = projectDefaultFace(
-      { pitch: .43, yaw: .39 },
-      'sphere',
-      {
-        ...DEFAULT_AVATAR_FACE_STYLE,
-        leftEyeRotation: Number.NaN,
-        rightEyeRotation: Number.NaN
-      }
-    )
-
-    expect(face.eyes).toHaveLength(2)
-    expect(face.eyes.every(eye => !eye.path.includes('NaN'))).toBe(true)
+    expect(low.cells.length).toBeLessThan(original.cells.length)
+    expect(high.cells.length).toBeGreaterThan(original.cells.length)
+    expect(explicitDefault.cells.length).toBe(original.cells.length)
+    expect(low.outlinePath).toBe(original.outlinePath)
+    expect(high.outlinePath).toBe(original.outlinePath)
   })
 })

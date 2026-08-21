@@ -9,7 +9,8 @@ import {
   AVATAR_BODY_SHAPES,
   buildAvatarBodyGeometry,
   projectDefaultFace,
-  resolveAvatarFaceStyle
+  resolveAvatarFaceStyle,
+  resolveAvatarSurfaceShadeOpacity
 } from './avatarGeometry'
 import type {
   AvatarBodyShape,
@@ -22,6 +23,19 @@ import type {
 export { AVATAR_BODY_SHAPES }
 export type { AvatarBodyShape }
 export type AvatarInteractionMode = 'move' | 'rotate'
+
+export interface AvatarDropShadowStyle {
+  readonly direction: number
+  readonly distance: number
+  readonly opacity: number
+  readonly softness: number
+}
+
+export interface AvatarOutlineStyle {
+  readonly color: string
+  readonly opacity: number
+  readonly width: number
+}
 
 export interface AvatarViewState {
   readonly pitch: number
@@ -46,17 +60,23 @@ export const DEFAULT_AVATAR_VIEW_STATE: AvatarViewState = {
 }
 
 interface InteractiveAvatarProps {
+  readonly avatarOutlineStyle?: AvatarOutlineStyle
+  readonly avatarShadowStyle?: AvatarDropShadowStyle
   readonly backgroundStyle: AvatarBackgroundStyle
   readonly bodyShape: AvatarBodyShape
   readonly faceStyleTransitionsEnabled?: boolean
   readonly faceStyle: AvatarFaceStyle
+  readonly gridDensity?: number
   readonly interactive?: boolean
   readonly interactionMode: AvatarInteractionMode
+  readonly lightDistance?: number
   readonly lightDirection: AvatarLightDirection
   readonly onViewStateChange: (state: AvatarViewState) => void
   readonly palette: AvatarPalette
   readonly shadowStyle: AvatarFaceShadowStyle
   readonly showLight: boolean
+  readonly showOutline?: boolean
+  readonly showAvatarShadow?: boolean
   readonly showShadow: boolean
   readonly viewState: AvatarViewState
 }
@@ -164,17 +184,23 @@ const useAnimatedFaceStyle = (target: AvatarFaceStyle, transitionsEnabled: boole
 }
 
 export function InteractiveAvatar({
+  avatarOutlineStyle,
+  avatarShadowStyle,
   backgroundStyle,
   bodyShape,
   faceStyleTransitionsEnabled = true,
   faceStyle,
+  gridDensity,
   interactive = true,
   interactionMode,
+  lightDistance = 0,
   lightDirection,
   onViewStateChange,
   palette,
   shadowStyle,
   showLight,
+  showOutline = false,
+  showAvatarShadow = false,
   showShadow,
   viewState
 }: InteractiveAvatarProps) {
@@ -196,8 +222,8 @@ export function InteractiveAvatar({
   const id = rawId.replaceAll(':', '')
   const animatedFaceStyle = useAnimatedFaceStyle(faceStyle, faceStyleTransitionsEnabled)
   const bodyGeometry = useMemo(
-    () => buildAvatarBodyGeometry(bodyShape, pose, lightDirection),
-    [bodyShape, lightDirection, pose]
+    () => buildAvatarBodyGeometry(bodyShape, pose, lightDirection, gridDensity),
+    [bodyShape, gridDensity, lightDirection, pose]
   )
   const face = useMemo(
     () => projectDefaultFace(pose, bodyShape, animatedFaceStyle),
@@ -215,6 +241,8 @@ export function InteractiveAvatar({
     return shadowStyle.opacity / 100 * surfaceDepth ** 2
   }
   const shadowFilter = shadowStyle.softness > 0 ? `url(#${id}-face-shadow-blur)` : undefined
+  const avatarShadowDirection = (avatarShadowStyle?.direction ?? 0) * Math.PI / 180
+  const avatarShadowDistance = avatarShadowStyle?.distance ?? 0
 
   useEffect(() => {
     poseRef.current = pose
@@ -399,9 +427,19 @@ export function InteractiveAvatar({
           <filter id={`${id}-face-shadow-blur`} x='-50%' y='-50%' width='200%' height='200%'>
             <feGaussianBlur stdDeviation={shadowStyle.softness} />
           </filter>
+          <filter id={`${id}-avatar-shadow`} x='-100%' y='-100%' width='300%' height='300%'>
+            <feDropShadow
+              dx={Math.cos(avatarShadowDirection) * avatarShadowDistance}
+              dy={Math.sin(avatarShadowDirection) * avatarShadowDistance}
+              stdDeviation={(avatarShadowStyle?.softness ?? 0) / 2}
+              floodColor={palette.shadow}
+              floodOpacity={(avatarShadowStyle?.opacity ?? 0) / 100}
+            />
+          </filter>
         </defs>
 
         <g
+          filter={showAvatarShadow ? `url(#${id}-avatar-shadow)` : undefined}
           transform={`translate(${position.x} ${position.y}) translate(${VIEW_SIZE / 2} ${
             VIEW_SIZE / 2
           }) scale(${avatarScale}) translate(${-VIEW_SIZE / 2} ${-VIEW_SIZE / 2})`}
@@ -414,7 +452,7 @@ export function InteractiveAvatar({
                   key={cell.id}
                   points={cell.points}
                   fill={cell.shade >= 0 ? palette.gradient[0] : palette.shadow}
-                  fillOpacity={Math.abs(cell.shade) * (cell.shade >= 0 ? 0.34 : 0.48)}
+                  fillOpacity={resolveAvatarSurfaceShadeOpacity(cell.shade, lightDistance)}
                 />
               ))
               : null}
@@ -488,14 +526,31 @@ export function InteractiveAvatar({
               )
               : null}
           </g>
-          <path
-            d={bodyGeometry.outlinePath}
-            fill='none'
-            stroke='#fff'
-            strokeOpacity='.14'
-            strokeWidth='1.5'
-            strokeLinejoin='round'
-          />
+          {showOutline && avatarOutlineStyle != null && avatarOutlineStyle.width > 0
+            ? (
+              <path
+                data-avatar-outline='true'
+                d={bodyGeometry.outlinePath}
+                fill='none'
+                stroke={avatarOutlineStyle.color}
+                strokeOpacity={avatarOutlineStyle.opacity / 100}
+                strokeWidth={avatarOutlineStyle.width}
+                strokeLinejoin='round'
+              />
+            )
+            : null}
+          {showOutline
+            ? null
+            : (
+              <path
+                d={bodyGeometry.outlinePath}
+                fill='none'
+                stroke='#fff'
+                strokeOpacity='.14'
+                strokeWidth='1.5'
+                strokeLinejoin='round'
+              />
+            )}
         </g>
       </svg>
     </div>

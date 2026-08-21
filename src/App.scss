@@ -37,7 +37,7 @@ select {
     min-height: 100vh;
     grid-template-columns:
       minmax(0, 1fr)
-      min(var(--avatar-controls-width, 420px), calc(100vw - 360px));
+      min(var(--avatar-controls-width, 420px), calc(100vw - 160px));
     grid-template-rows: minmax(0, 1fr);
   }
 
@@ -78,6 +78,7 @@ select {
   &__stage {
     position: relative;
     display: grid;
+    container: avatar-stage / inline-size;
     grid-column: 1;
     grid-row: 1;
     min-width: 0;
@@ -125,6 +126,7 @@ select {
   &__camera-toggle,
   &__controls-toggle,
   &__github-link,
+  &__language-toggle,
   &__save-preset,
   &__theme-toggle,
   &__animation-toggle {
@@ -189,14 +191,8 @@ select {
   &__animation-toggle {
     position: absolute;
     z-index: 3;
-    right: 16px;
+    left: 16px;
     bottom: 16px;
-
-    &[aria-expanded='true'] {
-      border-color: var(--primary-color);
-      background: var(--primary-soft-bg);
-      color: var(--primary-text-color);
-    }
   }
 
   &__stage-preview {
@@ -222,7 +218,8 @@ select {
     transition:
       background-color .18s ease,
       border-color .18s ease,
-      border-radius .18s ease;
+      border-radius .18s ease,
+      box-shadow .18s ease;
 
     &--hero {
       max-width: none;
@@ -232,6 +229,7 @@ select {
   &__stage[data-camera-mode='true'] &__preview-art {
     border-color: var(--border-color);
     background: var(--avatar-camera-background);
+    box-shadow: var(--avatar-frame-shadow);
     overflow: hidden;
   }
 
@@ -247,7 +245,7 @@ select {
   &__interaction-mode {
     position: absolute;
     bottom: 16px;
-    left: 16px;
+    left: 66px;
     display: grid;
     grid-template-columns: 1fr 1fr;
     border: 1px solid var(--border-color);
@@ -255,6 +253,21 @@ select {
     padding: 3px;
     background: color-mix(in srgb, var(--bg-color) 90%, transparent);
     backdrop-filter: blur(12px);
+    transition: left .16s ease;
+  }
+
+  &__workspace[data-animation-open='true'] &__interaction-mode {
+    left: 16px;
+  }
+
+  &__interaction-mode--docked {
+    position: static;
+    flex: 0 0 auto;
+    height: 34px;
+  }
+
+  &__interaction-mode--docked &__interaction-mode-option {
+    height: 26px;
   }
 
   &__interaction-mode-option {
@@ -285,6 +298,103 @@ select {
     &[aria-pressed='true'] {
       background: var(--primary-soft-bg);
       color: var(--primary-text-color);
+    }
+
+    &:focus-visible {
+      outline: 2px solid var(--primary-color);
+      outline-offset: -2px;
+    }
+  }
+}
+
+.avatar-language-switcher {
+  position: relative;
+  display: flex;
+  flex: 0 0 auto;
+
+  &__dialog {
+    position: absolute;
+    z-index: 20;
+    top: calc(100% + 8px);
+    right: 0;
+    width: 236px;
+    padding: 8px;
+    border: 1px solid var(--border-color);
+    border-radius: 12px;
+    background: color-mix(in srgb, var(--bg-color) 96%, transparent);
+    box-shadow: 0 16px 42px color-mix(in srgb, black 34%, transparent);
+    backdrop-filter: blur(22px) saturate(145%);
+    -webkit-backdrop-filter: blur(22px) saturate(145%);
+  }
+
+  &__title {
+    display: block;
+    padding: 6px 8px 10px;
+    color: var(--sub-text-color);
+    font-size: 12px;
+    font-weight: 700;
+    letter-spacing: .04em;
+    text-transform: uppercase;
+  }
+
+  &__options {
+    display: grid;
+    gap: 4px;
+  }
+
+  &__option {
+    display: flex;
+    width: 100%;
+    min-height: 52px;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    border: 0;
+    border-radius: 8px;
+    padding: 8px 10px;
+    background: transparent;
+    color: var(--text-color);
+    cursor: pointer;
+    text-align: left;
+
+    > span {
+      display: grid;
+      gap: 2px;
+    }
+
+    strong {
+      font-size: 14px;
+      font-weight: 700;
+    }
+
+    small {
+      color: var(--sub-text-color);
+      font-size: 11px;
+    }
+
+    svg {
+      width: 18px;
+      height: 18px;
+      flex: 0 0 auto;
+      fill: none;
+      stroke: currentColor;
+      stroke-linecap: round;
+      stroke-linejoin: round;
+      stroke-width: 1.8;
+      opacity: 0;
+    }
+
+    &:hover {
+      background: color-mix(in srgb, var(--text-color) 7%, transparent);
+    }
+
+    &[aria-checked='true'] {
+      background: var(--primary-soft-bg);
+      color: var(--primary-text-color);
+
+      svg {
+        opacity: 1;
+      }
     }
 
     &:focus-visible {

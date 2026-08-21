@@ -11,6 +11,12 @@ export interface AvatarLightDirection {
   readonly elevation: number
 }
 
+export const AVATAR_GRID_DENSITY = {
+  default: 100,
+  max: 400,
+  min: 25
+} as const
+
 export interface AvatarFaceShadowStyle {
   readonly direction: number
   readonly distance: number
@@ -138,8 +144,8 @@ interface Vec3 extends Vec2 {
 const VIEW_SIZE = 420
 const CENTER_X = VIEW_SIZE / 2
 const CENTER_Y = 202
-const LATITUDE_STEPS = 14
-const LONGITUDE_STEPS = 28
+const BASE_LATITUDE_STEPS = 14
+const BASE_LONGITUDE_STEPS = 28
 const OUTLINE_LATITUDE_STEPS = 28
 const OUTLINE_LONGITUDE_STEPS = 72
 const NORMAL_DELTA = 0.006
@@ -473,7 +479,8 @@ const getFaceNormal = (spec: ShapeSpec, point: Vec2): Vec3 => {
 export const buildAvatarBodyGeometry = (
   bodyShape: AvatarBodyShape,
   pose: AvatarPose,
-  lightDirection: AvatarLightDirection
+  lightDirection: AvatarLightDirection,
+  gridDensity: number = AVATAR_GRID_DENSITY.default
 ): BodyGeometry => {
   const spec = SHAPE_SPECS[bodyShape]
   const vertices: Vec2[] = []
@@ -485,6 +492,9 @@ export const buildAvatarBodyGeometry = (
     y: -Math.sin(elevation),
     z: Math.cos(elevation) * Math.cos(azimuth)
   })
+  const densityScale = clamp(gridDensity, AVATAR_GRID_DENSITY.min, AVATAR_GRID_DENSITY.max) / 100
+  const latitudeSteps = Math.max(Math.round(BASE_LATITUDE_STEPS * densityScale), 4)
+  const longitudeSteps = Math.max(Math.round(BASE_LONGITUDE_STEPS * densityScale), 8)
 
   for (let latitudeIndex = 0; latitudeIndex <= OUTLINE_LATITUDE_STEPS; latitudeIndex += 1) {
     const latitude = -Math.PI / 2 + latitudeIndex / OUTLINE_LATITUDE_STEPS * Math.PI
@@ -494,12 +504,12 @@ export const buildAvatarBodyGeometry = (
     }
   }
 
-  for (let latitudeIndex = 0; latitudeIndex < LATITUDE_STEPS; latitudeIndex += 1) {
-    const latitudeStart = -Math.PI / 2 + latitudeIndex / LATITUDE_STEPS * Math.PI
-    const latitudeEnd = -Math.PI / 2 + (latitudeIndex + 1) / LATITUDE_STEPS * Math.PI
-    for (let longitudeIndex = 0; longitudeIndex < LONGITUDE_STEPS; longitudeIndex += 1) {
-      const longitudeStart = -Math.PI + longitudeIndex / LONGITUDE_STEPS * Math.PI * 2
-      const longitudeEnd = -Math.PI + (longitudeIndex + 1) / LONGITUDE_STEPS * Math.PI * 2
+  for (let latitudeIndex = 0; latitudeIndex < latitudeSteps; latitudeIndex += 1) {
+    const latitudeStart = -Math.PI / 2 + latitudeIndex / latitudeSteps * Math.PI
+    const latitudeEnd = -Math.PI / 2 + (latitudeIndex + 1) / latitudeSteps * Math.PI
+    for (let longitudeIndex = 0; longitudeIndex < longitudeSteps; longitudeIndex += 1) {
+      const longitudeStart = -Math.PI + longitudeIndex / longitudeSteps * Math.PI * 2
+      const longitudeEnd = -Math.PI + (longitudeIndex + 1) / longitudeSteps * Math.PI * 2
       const normal = rotate(
         getSurfaceNormal(spec, (longitudeStart + longitudeEnd) / 2, (latitudeStart + latitudeEnd) / 2),
         pose
@@ -536,6 +546,13 @@ export const buildAvatarBodyGeometry = (
     cells: cells.sort((left, right) => left.depth - right.depth),
     outlinePath
   }
+}
+
+export const resolveAvatarSurfaceShadeOpacity = (shade: number, lightDistance: number) => {
+  const lightStrength = 1 - clamp(lightDistance, 0, 100) / 100
+  const normalizedShade = Math.abs(clamp(shade, -1, 1))
+  const contrast = shade >= 0 ? normalizedShade * 0.38 : normalizedShade ** 0.65 * 0.96
+  return contrast * lightStrength
 }
 
 export const projectDefaultFace = (

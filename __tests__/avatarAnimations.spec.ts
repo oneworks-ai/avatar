@@ -3,12 +3,16 @@ import { describe, expect, it } from 'vitest'
 import {
   AVATAR_ANIMATION_PRESETS,
   applyAvatarAnimationTransformAnchor,
-  createAvatarAnimationTransformAnchor,
   createAvatarAnimationKeyframe,
+  createAvatarAnimationTransformAnchor,
+  deserializeSharedAvatarAnimation,
   easeAvatarAnimationProgress,
   interpolateAvatarAnimationKeyframes,
+  normalizeAvatarAnimationKeyframes,
   resolveAvatarAnimationPreset,
   resolveAvatarAnimationSegment,
+  resolveAvatarAnimationTimedSegment,
+  serializeSharedAvatarAnimation,
   shouldConfirmAnimationReplacement
 } from '../src/avatarAnimations'
 import { DEFAULT_AVATAR_FACE_STYLE } from '../src/avatarGeometry'
@@ -98,6 +102,8 @@ describe('avatar animation keyframes', () => {
     )
 
     expect(keyframe).toEqual({
+      durationMs: 800,
+      easing: 'ease-in-out',
       faceStyle: DEFAULT_AVATAR_FACE_STYLE,
       pitch: .5,
       positionX: 20,
@@ -187,7 +193,8 @@ describe('avatar animation keyframes', () => {
     expect(AVATAR_ANIMATION_PRESETS).toHaveLength(16)
     expect(resolved.keyframes).toHaveLength(6)
     expect(resolved.keyframes[0]).toMatchObject({ pitch: .4, positionX: 18, positionY: -12, yaw: -.3 })
-    expect(resolved.keyframes[1]?.offset).toBe(.18)
+    expect(resolved.keyframes[1]?.durationMs).toBe(1116)
+    expect(resolved.keyframes[1]?.easing).toBe('ease-in-out')
     expect(resolved.keyframes[1]?.pitch).toBeCloseTo(.29)
     expect(resolved.keyframes[1]?.positionX).toBe(21)
     expect(resolved.keyframes[1]?.positionY).toBe(-16)
@@ -198,16 +205,14 @@ describe('avatar animation keyframes', () => {
     expect(resolved.keyframes.every(keyframe => !('screenshot' in keyframe))).toBe(true)
   })
 
-  it('keeps every built-in timeline ordered and returns to the current pose', () => {
+  it('gives every built-in frame transition timing and returns to the current pose', () => {
     const viewState = { pitch: .2, positionX: 12, positionY: -7, scale: 1.4, yaw: -.3 }
 
     for (const preset of AVATAR_ANIMATION_PRESETS) {
       const resolved = resolveAvatarAnimationPreset(preset, viewState, DEFAULT_AVATAR_FACE_STYLE)
-      const offsets = resolved.keyframes.map(keyframe => keyframe.offset)
-
-      expect(offsets[0]).toBe(0)
-      expect(offsets.at(-1)).toBe(1)
-      expect(offsets.every((offset, index) => index === 0 || offset! >= offsets[index - 1]!)).toBe(true)
+      expect(resolved.keyframes.every(keyframe => keyframe.durationMs >= 100)).toBe(true)
+      expect(resolved.keyframes.every(keyframe => keyframe.easing === 'ease-in-out')).toBe(true)
+      expect(resolved.keyframes.every(keyframe => keyframe.offset == null)).toBe(true)
       expect(resolved.keyframes.at(-1)).toMatchObject({
         pitch: viewState.pitch,
         positionX: viewState.positionX,
@@ -215,5 +220,86 @@ describe('avatar animation keyframes', () => {
         yaw: viewState.yaw
       })
     }
+  })
+
+  it('uses each destination frame timing and easing, including the loop return', () => {
+    const base = createAvatarAnimationKeyframe(
+      { pitch: 0, positionX: 0, positionY: 0, scale: 1, yaw: 0 },
+      DEFAULT_AVATAR_FACE_STYLE
+    )
+    const keyframes = [
+      { ...base, durationMs: 300, easing: 'ease-out' as const },
+      { ...base, durationMs: 200, easing: 'linear' as const, positionX: 20 },
+      { ...base, durationMs: 400, easing: 'ease-in' as const, positionX: 40 }
+    ]
+
+    expect(resolveAvatarAnimationTimedSegment(keyframes, 100, 'once')).toMatchObject({
+      easing: 'linear',
+      fromIndex: 0,
+      progress: .5,
+      toIndex: 1,
+      totalDurationMs: 600
+    })
+    expect(resolveAvatarAnimationTimedSegment(keyframes, 300, 'once')).toMatchObject({
+      easing: 'ease-in',
+      fromIndex: 1,
+      progress: .25,
+      toIndex: 2
+    })
+    expect(resolveAvatarAnimationTimedSegment(keyframes, 750, 'loop')).toMatchObject({
+      easing: 'ease-out',
+      fromIndex: 2,
+      progress: .5,
+      toIndex: 0,
+      totalDurationMs: 900
+    })
+  })
+
+  it('migrates legacy total duration and offsets into frame transition timing', () => {
+    const base = createAvatarAnimationKeyframe(
+      { pitch: 0, positionX: 0, positionY: 0, scale: 1, yaw: 0 },
+      DEFAULT_AVATAR_FACE_STYLE
+    )
+    const legacyFrames = [
+      { ...base, durationMs: undefined, easing: undefined, offset: 0 },
+      { ...base, durationMs: undefined, easing: undefined, offset: .25 },
+      { ...base, durationMs: undefined, easing: undefined, offset: 1 }
+    ]
+    const normalized = normalizeAvatarAnimationKeyframes(legacyFrames, 2000, 'ease-out')
+
+    expect(normalized.map(frame => frame.durationMs)).toEqual([100, 500, 1500])
+    expect(normalized.every(frame => frame.easing === 'ease-out')).toBe(true)
+    expect(normalized.every(frame => frame.offset == null)).toBe(true)
+  })
+
+  it('keeps legacy shared URLs readable and writes the per-frame payload format', () => {
+    const base = createAvatarAnimationKeyframe(
+      { pitch: 0, positionX: 0, positionY: 0, scale: 1, yaw: 0 },
+      DEFAULT_AVATAR_FACE_STYLE
+    )
+    const { durationMs: _durationMs, easing: _easing, ...legacyBase } = base
+    const legacyPayload = JSON.stringify({
+      d: 2400,
+      e: 'ease-out',
+      k: [
+        { ...legacyBase, offset: 0 },
+        { ...legacyBase, offset: 1, positionX: 40 }
+      ],
+      l: false,
+      n: 'Legacy',
+      p: 'loop',
+      s: 0,
+      v: 1
+    })
+    const migrated = deserializeSharedAvatarAnimation(legacyPayload)
+
+    expect(migrated?.version).toBe(3)
+    expect(migrated?.keyframes.map(frame => frame.durationMs)).toEqual([100, 2400])
+    expect(migrated?.keyframes.every(frame => frame.easing === 'ease-out')).toBe(true)
+    if (migrated == null) return
+
+    const serialized = serializeSharedAvatarAnimation(migrated)
+    expect(JSON.parse(serialized)).toMatchObject({ v: 2 })
+    expect(deserializeSharedAvatarAnimation(serialized)).toEqual(migrated)
   })
 })

@@ -2,12 +2,13 @@ import './AvatarControls.scss'
 
 import type { AvatarBackgroundStyle, AvatarPalette } from '@oneworks/avatar'
 import { useRef, useState } from 'react'
-import type { CSSProperties, KeyboardEvent, PointerEvent } from 'react'
+import type { CSSProperties, KeyboardEvent, PointerEvent, ReactNode } from 'react'
 
 import { AVATAR_BODY_SHAPES } from './InteractiveAvatar'
-import type { AvatarBodyShape } from './InteractiveAvatar'
+import type { AvatarBodyShape, AvatarDropShadowStyle, AvatarOutlineStyle } from './InteractiveAvatar'
 import { DEFAULT_AVATAR_FACE_STYLE } from './avatarGeometry'
 import type { AvatarEyeShape, AvatarFaceShadowStyle, AvatarFaceStyle, AvatarNoseShape } from './avatarGeometry'
+import { useAvatarLocale } from './avatarLocale'
 import type { SavedAvatarPreset } from './savedAvatarPresets'
 
 export type AvatarControlTab = 'body' | 'build' | 'effects' | 'style'
@@ -18,12 +19,15 @@ type ControlIconName =
   | 'background'
   | 'camera'
   | 'eyes'
+  | 'gradient'
   | 'history'
   | 'light'
   | 'mouth'
   | 'nose'
+  | 'outline'
   | 'palette'
   | 'shadow'
+  | 'solid'
 type GeometricShapeIconName = 'circle' | 'ellipse' | 'inverted-triangle' | 'rounded' | 'square'
 
 interface GeometricShapeOption<T extends string> {
@@ -34,6 +38,8 @@ interface GeometricShapeOption<T extends string> {
 
 interface AvatarControlsProps {
   readonly activeTab: AvatarControlTab
+  readonly avatarShadowStyle: AvatarDropShadowStyle
+  readonly avatarOutlineStyle: AvatarOutlineStyle
   readonly backgroundStyle: AvatarBackgroundStyle
   readonly bodyShape: AvatarBodyShape
   readonly cameraBackground: string
@@ -41,29 +47,46 @@ interface AvatarControlsProps {
   readonly controlsWidth: number
   readonly faceStyle: AvatarFaceStyle
   readonly faceShadowStyle: AvatarFaceShadowStyle
+  readonly frameShadowStyle: AvatarDropShadowStyle
+  readonly gridDensity: number
+  readonly headerActions: ReactNode
   readonly hiddenPaletteCount: number
   readonly lightAzimuth: number
+  readonly lightDistance: number
   readonly lightElevation: number
   readonly onBackgroundStyleChange: (style: AvatarBackgroundStyle) => void
+  readonly onAvatarShadowStyleChange: (style: Partial<AvatarDropShadowStyle>) => void
+  readonly onAvatarOutlineStyleChange: (style: Partial<AvatarOutlineStyle>) => void
   readonly onBodyShapeChange: (shape: AvatarBodyShape) => void
   readonly onCameraBackgroundChange: (color: string) => void
   readonly onCameraFrameChange: (frame: AvatarCameraFrame) => void
+  readonly onCollapse: () => void
   readonly onControlsWidthChange: (width: number) => void
   readonly onFaceStyleChange: (style: Partial<AvatarFaceStyle>) => void
   readonly onFaceShadowStyleChange: (style: Partial<AvatarFaceShadowStyle>) => void
+  readonly onFrameShadowStyleChange: (style: Partial<AvatarDropShadowStyle>) => void
+  readonly onGridDensityChange: (value: number) => void
   readonly onLightAzimuthChange: (value: number) => void
+  readonly onLightDistanceChange: (value: number) => void
   readonly onLightElevationChange: (value: number) => void
   readonly onPaletteChange: (paletteId: string) => void
   readonly onResetFace: () => void
   readonly onSavedPresetSelect: (preset: SavedAvatarPreset) => void
+  readonly onSavedPresetRemove: (presetId: string) => void
   readonly onShowMorePalettesChange: () => void
   readonly onTabChange: (tab: AvatarControlTab) => void
   readonly onToggleLight: () => void
+  readonly onToggleAvatarShadow: () => void
+  readonly onToggleOutline: () => void
+  readonly onToggleFrameShadow: () => void
   readonly onToggleShadow: () => void
   readonly selectedPalette: AvatarPalette
   readonly selectedSavedPresetId: string | null
   readonly savedPresets: readonly SavedAvatarPreset[]
   readonly showLight: boolean
+  readonly showAvatarShadow: boolean
+  readonly showOutline: boolean
+  readonly showFrameShadow: boolean
   readonly showMorePalettes: boolean
   readonly showShadow: boolean
   readonly visiblePalettes: readonly AvatarPalette[]
@@ -71,11 +94,12 @@ interface AvatarControlsProps {
 
 const DEFAULT_CONTROLS_WIDTH = 420
 const MIN_CONTROLS_WIDTH = 300
+const MIN_STAGE_WIDTH = 160
 
 const clampControlsWidth = (width: number) => {
   const viewportLimit = typeof window === 'undefined'
-    ? 620
-    : Math.max(MIN_CONTROLS_WIDTH, Math.min(620, window.innerWidth - 360))
+    ? 960
+    : Math.max(MIN_CONTROLS_WIDTH, window.innerWidth - MIN_STAGE_WIDTH)
   return Math.min(Math.max(width, MIN_CONTROLS_WIDTH), viewportLimit)
 }
 
@@ -180,11 +204,30 @@ function ControlIcon({ name }: { readonly name: ControlIconName }) {
           </>
         )
         : null}
+      {name === 'outline'
+        ? (
+          <>
+            <path d='M4 4h10v10H4Z' />
+            <path d='M7 7h9v9H7Z' />
+          </>
+        )
+        : null}
       {name === 'background'
         ? (
           <>
             <rect x='3' y='4' width='14' height='12' rx='2' />
             <path d='m4 15 5-5 3 3 4-4' />
+          </>
+        )
+        : null}
+      {name === 'solid'
+        ? <rect x='3' y='3' width='14' height='14' rx='2' />
+        : null}
+      {name === 'gradient'
+        ? (
+          <>
+            <rect x='3' y='3' width='14' height='14' rx='2' />
+            <path d='M4.5 15.5 15.5 4.5' />
           </>
         )
         : null}
@@ -239,8 +282,9 @@ function GeometricShapePicker<T extends string>({ ariaLabel, onChange, options, 
   readonly options: readonly GeometricShapeOption<T>[]
   readonly value: T
 }) {
+  const { t } = useAvatarLocale()
   return (
-    <div className='avatar-controls__shape-options' role='radiogroup' aria-label={ariaLabel}>
+    <div className='avatar-controls__shape-options' role='radiogroup' aria-label={t(ariaLabel)}>
       {options.map(option => (
         <button
           key={option.id}
@@ -251,7 +295,7 @@ function GeometricShapePicker<T extends string>({ ariaLabel, onChange, options, 
           onClick={() => onChange(option.id)}
         >
           <GeometricShapeIcon shape={option.icon} />
-          <span>{option.label}</span>
+          <span>{t(option.label)}</span>
         </button>
       ))}
     </div>
@@ -264,17 +308,18 @@ function ToggleRow({ checked, icon, label, onChange }: {
   readonly label: string
   readonly onChange: () => void
 }) {
+  const { t } = useAvatarLocale()
   return (
     <div className='avatar-controls__toggle-row'>
       <span className='avatar-controls__toggle-label'>
         <ControlIcon name={icon} />
-        {label}
+        {t(label)}
       </span>
       <button
         className='avatar-controls__switch'
         type='button'
         role='switch'
-        aria-label={label}
+        aria-label={t(label)}
         aria-checked={checked}
         onClick={onChange}
       >
@@ -293,15 +338,16 @@ function ValueSlider({ ariaLabel, label, max, min, onChange, suffix = '', value 
   readonly suffix?: string
   readonly value: number
 }) {
+  const { t } = useAvatarLocale()
   return (
     <label className='avatar-controls__value-slider'>
       <span>
-        {label}
+        {t(label)}
         <output>{Math.round(value)}{suffix}</output>
       </span>
       <input
         type='range'
-        aria-label={ariaLabel}
+        aria-label={t(ariaLabel)}
         min={min}
         max={max}
         step='1'
@@ -314,6 +360,8 @@ function ValueSlider({ ariaLabel, label, max, min, onChange, suffix = '', value 
 
 export function AvatarControls({
   activeTab,
+  avatarOutlineStyle,
+  avatarShadowStyle,
   backgroundStyle,
   bodyShape,
   cameraBackground,
@@ -321,33 +369,51 @@ export function AvatarControls({
   controlsWidth,
   faceStyle,
   faceShadowStyle,
+  frameShadowStyle,
+  gridDensity,
+  headerActions,
   hiddenPaletteCount,
   lightAzimuth,
+  lightDistance,
   lightElevation,
   onBackgroundStyleChange,
+  onAvatarOutlineStyleChange,
+  onAvatarShadowStyleChange,
   onBodyShapeChange,
   onCameraBackgroundChange,
   onCameraFrameChange,
+  onCollapse,
   onControlsWidthChange,
   onFaceStyleChange,
   onFaceShadowStyleChange,
+  onFrameShadowStyleChange,
+  onGridDensityChange,
   onLightAzimuthChange,
+  onLightDistanceChange,
   onLightElevationChange,
   onPaletteChange,
   onResetFace,
   onSavedPresetSelect,
+  onSavedPresetRemove,
   onShowMorePalettesChange,
   onTabChange,
   onToggleLight,
+  onToggleOutline,
+  onToggleAvatarShadow,
+  onToggleFrameShadow,
   onToggleShadow,
   selectedPalette,
   selectedSavedPresetId,
   savedPresets,
   showLight,
+  showOutline,
+  showAvatarShadow,
+  showFrameShadow,
   showMorePalettes,
   showShadow,
   visiblePalettes
 }: AvatarControlsProps) {
+  const { t } = useAvatarLocale()
   const [activeFacePart, setActiveFacePart] = useState<AvatarFacePart>('eyes')
   const [resizing, setResizing] = useState(false)
   const resizeStartRef = useRef<{ pointerX: number; width: number } | null>(null)
@@ -383,7 +449,7 @@ export function AvatarControls({
   }
 
   return (
-    <aside id='avatar-controls' className='avatar-controls' aria-label='Avatar controls' data-resizing={resizing}>
+    <aside id='avatar-controls' className='avatar-controls' aria-label={t('Avatar controls')} data-resizing={resizing}>
       <div
         className='avatar-controls__resize-handle'
         role='separator'
@@ -400,22 +466,43 @@ export function AvatarControls({
         onPointerMove={handleResizeMove}
         onPointerUp={handleResizeEnd}
       />
-      <div className='avatar-controls__tabs' role='tablist' aria-label='Avatar settings'>
-        {CONTROL_TABS.map(tab => (
-          <button
-            key={tab.id}
-            id={`avatar-controls-tab-${tab.id}`}
-            className='avatar-controls__tab'
-            type='button'
-            role='tab'
-            aria-controls={`avatar-controls-panel-${tab.id}`}
-            aria-selected={activeTab === tab.id}
-            onClick={() => onTabChange(tab.id)}
-          >
-            <ControlIcon name={tab.id} />
-            {tab.label}
-          </button>
-        ))}
+      <div className='avatar-controls__header'>
+        <button
+          className='avatar-controls__collapse'
+          type='button'
+          aria-controls='avatar-controls'
+          aria-expanded='true'
+          aria-label={t('Hide controls sidebar')}
+          title={t('Hide controls')}
+          onClick={onCollapse}
+        >
+          <svg viewBox='0 0 20 20' aria-hidden='true'>
+            <rect x='2.5' y='3' width='15' height='14' rx='1.5' />
+            <path d='M13 3v14M6.7 7.2 9.5 10l-2.8 2.8' />
+          </svg>
+        </button>
+        <div className='avatar-controls__tabs' role='tablist' aria-label={t('Avatar settings')}>
+          {CONTROL_TABS.map(tab => (
+            <button
+              key={tab.id}
+              id={`avatar-controls-tab-${tab.id}`}
+              className='avatar-controls__tab'
+              type='button'
+              role='tab'
+              aria-controls={`avatar-controls-panel-${tab.id}`}
+              aria-selected={activeTab === tab.id}
+              aria-label={t(tab.label)}
+              title={t(tab.label)}
+              onClick={() => onTabChange(tab.id)}
+            >
+              <ControlIcon name={tab.id} />
+              <span className='avatar-controls__tab-label'>{t(tab.label)}</span>
+            </button>
+          ))}
+        </div>
+        <div className='avatar-controls__header-actions'>
+          {headerActions}
+        </div>
       </div>
 
       <div
@@ -430,7 +517,7 @@ export function AvatarControls({
               <section className='avatar-controls__saved-presets' aria-label='Saved presets'>
                 <span className='avatar-controls__label'>
                   <ControlIcon name='history' />
-                  Saved presets
+                  {t('Saved presets')}
                 </span>
                 {savedPresets.length > 0
                   ? (
@@ -439,35 +526,47 @@ export function AvatarControls({
                         const savedAt = new Date(preset.createdAt)
                         const savedFrame = getSavedPresetFrame(preset.query)
                         return (
-                          <button
-                            key={preset.id}
-                            className='avatar-controls__saved-preset'
-                            type='button'
-                            aria-label={`Restore preset saved ${savedAt.toLocaleString()}`}
-                            aria-pressed={preset.id === selectedSavedPresetId}
-                            data-frame={savedFrame}
-                            onClick={() => onSavedPresetSelect(preset)}
-                          >
-                            <img src={preset.screenshot} alt='' aria-hidden='true' />
-                          </button>
+                          <div key={preset.id} className='avatar-controls__saved-preset-item'>
+                            <button
+                              className='avatar-controls__saved-preset'
+                              type='button'
+                              aria-label={`Restore preset saved ${savedAt.toLocaleString()}`}
+                              aria-pressed={preset.id === selectedSavedPresetId}
+                              data-frame={savedFrame}
+                              onClick={() => onSavedPresetSelect(preset)}
+                            >
+                              <img src={preset.screenshot} alt='' aria-hidden='true' />
+                            </button>
+                            <button
+                              className='avatar-controls__saved-preset-remove'
+                              type='button'
+                              aria-label={`Remove preset saved ${savedAt.toLocaleString()}`}
+                              title='Remove preset'
+                              onClick={() => onSavedPresetRemove(preset.id)}
+                            >
+                              <svg viewBox='0 0 16 16' aria-hidden='true'>
+                                <path d='m4.5 4.5 7 7m0-7-7 7' />
+                              </svg>
+                            </button>
+                          </div>
                         )
                       })}
                     </div>
                   )
-                  : <p className='avatar-controls__saved-preset-empty'>Save a look to build your history.</p>}
+                  : <p className='avatar-controls__saved-preset-empty'>{t('Save a look to build your history.')}</p>}
               </section>
 
               <div className='avatar-controls__field-group'>
                 <span className='avatar-controls__label'>
                   <ControlIcon name='eyes' />
-                  Face
+                  {t('Face')}
                 </span>
                 <button
                   className='avatar-controls__face-option'
                   type='button'
-                  aria-label='Reset default face'
+                  aria-label={t('Reset default face')}
                   aria-pressed={isDefaultFace}
-                  title='Default face'
+                  title={t('Default face')}
                   onClick={onResetFace}
                 >
                   <svg viewBox='0 0 96 72' aria-hidden='true'>
@@ -478,7 +577,7 @@ export function AvatarControls({
                 <div
                   className='avatar-controls__segments avatar-controls__face-tabs'
                   role='tablist'
-                  aria-label='Face parts'
+                  aria-label={t('Face parts')}
                 >
                   {(['eyes', 'nose', 'mouth'] satisfies AvatarFacePart[]).map(part => (
                     <button
@@ -489,8 +588,8 @@ export function AvatarControls({
                       aria-selected={activeFacePart === part}
                       onClick={() => setActiveFacePart(part)}
                     >
-                      {part[0]?.toUpperCase()}
-                      {part.slice(1)}
+                      <ControlIcon name={part} />
+                      {t(`${part[0]?.toUpperCase()}${part.slice(1)}`)}
                     </button>
                   ))}
                 </div>
@@ -677,9 +776,9 @@ export function AvatarControls({
                               onChange={mouthCurve => onFaceStyleChange({ mouthCurve })}
                             />
                             <div className='avatar-controls__curve-scale' aria-hidden='true'>
-                              <span>Frown</span>
-                              <span>Flat</span>
-                              <span>Smile</span>
+                              <span>{t('Frown')}</span>
+                              <span>{t('Flat')}</span>
+                              <span>{t('Smile')}</span>
                             </div>
                           </div>
                         )
@@ -698,7 +797,7 @@ export function AvatarControls({
               <div className='avatar-controls__field-group'>
                 <span className='avatar-controls__label'>
                   <ControlIcon name='palette' />
-                  Palette
+                  {t('Palette')}
                 </span>
                 <div className='avatar-controls__swatches'>
                   {visiblePalettes.map((palette) => (
@@ -727,7 +826,7 @@ export function AvatarControls({
                       aria-expanded={showMorePalettes}
                       onClick={onShowMorePalettesChange}
                     >
-                      {showMorePalettes ? 'Less' : `More ${hiddenPaletteCount}`}
+                      {showMorePalettes ? t('Less') : `${t('More')} ${hiddenPaletteCount}`}
                     </button>
                   )
                   : null}
@@ -736,7 +835,7 @@ export function AvatarControls({
               <div className='avatar-controls__field-group'>
                 <span className='avatar-controls__label'>
                   <ControlIcon name='background' />
-                  Background
+                  {t('Background')}
                 </span>
                 <div className='avatar-controls__segments'>
                   {(['solid', 'gradient'] satisfies AvatarBackgroundStyle[]).map(style => (
@@ -747,7 +846,8 @@ export function AvatarControls({
                       aria-pressed={style === backgroundStyle}
                       onClick={() => onBackgroundStyleChange(style)}
                     >
-                      {style === 'solid' ? 'Solid' : 'Gradient'}
+                      <ControlIcon name={style} />
+                      {t(style === 'solid' ? 'Solid' : 'Gradient')}
                     </button>
                   ))}
                 </div>
@@ -756,7 +856,7 @@ export function AvatarControls({
               <div className='avatar-controls__field-group'>
                 <span className='avatar-controls__label'>
                   <ControlIcon name='camera' />
-                  Camera frame
+                  {t('Camera frame')}
                 </span>
                 <GeometricShapePicker
                   ariaLabel='Camera frame shape'
@@ -769,7 +869,7 @@ export function AvatarControls({
               <div className='avatar-controls__field-group'>
                 <span className='avatar-controls__label'>
                   <ControlIcon name='background' />
-                  Camera background
+                  {t('Camera background')}
                 </span>
                 <div className='avatar-controls__camera-background'>
                   <label className='avatar-controls__color-input'>
@@ -811,7 +911,7 @@ export function AvatarControls({
                   onClick={() => onBodyShapeChange(shape)}
                 >
                   <BodyShapeIcon shape={shape} />
-                  <span>{BODY_SHAPE_LABELS[shape]}</span>
+                  <span>{t(BODY_SHAPE_LABELS[shape])}</span>
                 </button>
               ))}
             </div>
@@ -842,6 +942,126 @@ export function AvatarControls({
                       suffix='°'
                       value={lightElevation}
                       onChange={onLightElevationChange}
+                    />
+                    <div>
+                      <ValueSlider
+                        ariaLabel='Light distance'
+                        label='Distance'
+                        min={0}
+                        max={100}
+                        suffix='%'
+                        value={lightDistance}
+                        onChange={onLightDistanceChange}
+                      />
+                      <div className='avatar-controls__value-scale' aria-hidden='true'>
+                        <span>{t('Near')}</span>
+                        <span>{t('Far')}</span>
+                      </div>
+                    </div>
+                    <div>
+                      <ValueSlider
+                        ariaLabel='Surface grid density'
+                        label='Grid density'
+                        min={25}
+                        max={400}
+                        suffix='%'
+                        value={gridDensity}
+                        onChange={onGridDensityChange}
+                      />
+                      <div className='avatar-controls__value-scale' aria-hidden='true'>
+                        <span>{t('Low')}</span>
+                        <span>{t('High')}</span>
+                      </div>
+                    </div>
+                  </div>
+                )
+                : null}
+              <ToggleRow
+                checked={showAvatarShadow}
+                icon='shadow'
+                label='Avatar shadow'
+                onChange={onToggleAvatarShadow}
+              />
+              {showAvatarShadow
+                ? (
+                  <div className='avatar-controls__parameter-controls'>
+                    <ValueSlider
+                      ariaLabel='Avatar shadow direction'
+                      label='Direction'
+                      min={-180}
+                      max={180}
+                      suffix='°'
+                      value={avatarShadowStyle.direction}
+                      onChange={direction => onAvatarShadowStyleChange({ direction })}
+                    />
+                    <ValueSlider
+                      ariaLabel='Avatar shadow distance'
+                      label='Distance'
+                      min={0}
+                      max={40}
+                      suffix='px'
+                      value={avatarShadowStyle.distance}
+                      onChange={distance => onAvatarShadowStyleChange({ distance })}
+                    />
+                    <ValueSlider
+                      ariaLabel='Avatar shadow softness'
+                      label='Softness'
+                      min={0}
+                      max={40}
+                      suffix='px'
+                      value={avatarShadowStyle.softness}
+                      onChange={softness => onAvatarShadowStyleChange({ softness })}
+                    />
+                    <ValueSlider
+                      ariaLabel='Avatar shadow opacity'
+                      label='Opacity'
+                      min={0}
+                      max={100}
+                      suffix='%'
+                      value={avatarShadowStyle.opacity}
+                      onChange={opacity => onAvatarShadowStyleChange({ opacity })}
+                    />
+                  </div>
+                )
+                : null}
+              <ToggleRow
+                checked={showOutline}
+                icon='outline'
+                label='Avatar outline'
+                onChange={onToggleOutline}
+              />
+              {showOutline
+                ? (
+                  <div className='avatar-controls__parameter-controls'>
+                    <label className='avatar-controls__color-control'>
+                      <span>{t('Color')}</span>
+                      <span>
+                        <input
+                          type='color'
+                          aria-label='Avatar outline color'
+                          value={avatarOutlineStyle.color}
+                          onChange={event => onAvatarOutlineStyleChange({ color: event.currentTarget.value })}
+                        />
+                        <output>{avatarOutlineStyle.color.toUpperCase()}</output>
+                      </span>
+                    </label>
+                    <ValueSlider
+                      ariaLabel='Avatar outline width'
+                      label='Width'
+                      min={1}
+                      max={20}
+                      suffix='px'
+                      value={avatarOutlineStyle.width}
+                      onChange={width => onAvatarOutlineStyleChange({ width })}
+                    />
+                    <ValueSlider
+                      ariaLabel='Avatar outline opacity'
+                      label='Opacity'
+                      min={0}
+                      max={100}
+                      suffix='%'
+                      value={avatarOutlineStyle.opacity}
+                      onChange={opacity => onAvatarOutlineStyleChange({ opacity })}
                     />
                   </div>
                 )
@@ -885,6 +1105,54 @@ export function AvatarControls({
                       suffix='%'
                       value={faceShadowStyle.opacity}
                       onChange={opacity => onFaceShadowStyleChange({ opacity })}
+                    />
+                  </div>
+                )
+                : null}
+              <ToggleRow
+                checked={showFrameShadow}
+                icon='shadow'
+                label='Frame shadow'
+                onChange={onToggleFrameShadow}
+              />
+              {showFrameShadow
+                ? (
+                  <div className='avatar-controls__parameter-controls'>
+                    <ValueSlider
+                      ariaLabel='Frame shadow direction'
+                      label='Direction'
+                      min={-180}
+                      max={180}
+                      suffix='°'
+                      value={frameShadowStyle.direction}
+                      onChange={direction => onFrameShadowStyleChange({ direction })}
+                    />
+                    <ValueSlider
+                      ariaLabel='Frame shadow distance'
+                      label='Distance'
+                      min={0}
+                      max={40}
+                      suffix='px'
+                      value={frameShadowStyle.distance}
+                      onChange={distance => onFrameShadowStyleChange({ distance })}
+                    />
+                    <ValueSlider
+                      ariaLabel='Frame shadow softness'
+                      label='Softness'
+                      min={0}
+                      max={48}
+                      suffix='px'
+                      value={frameShadowStyle.softness}
+                      onChange={softness => onFrameShadowStyleChange({ softness })}
+                    />
+                    <ValueSlider
+                      ariaLabel='Frame shadow opacity'
+                      label='Opacity'
+                      min={0}
+                      max={100}
+                      suffix='%'
+                      value={frameShadowStyle.opacity}
+                      onChange={opacity => onFrameShadowStyleChange({ opacity })}
                     />
                   </div>
                 )
