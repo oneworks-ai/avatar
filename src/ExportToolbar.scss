@@ -1,0 +1,56 @@
+.avatar-export-toolbar {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  padding: 4px;
+  background: color-mix(in srgb, var(--bg-color) 90%, transparent);
+  backdrop-filter: blur(12px);
+
+  &__size,
+  &__action {
+    height: 32px;
+    border: 0;
+    border-radius: 6px;
+    background: transparent;
+    color: var(--sub-text-color);
+  }
+
+  &__size {
+    min-width: 62px;
+    padding: 0 24px 0 8px;
+    cursor: pointer;
+    font-size: 12px;
+    font-weight: 700;
+  }
+
+  &__action {
+    display: inline-grid;
+    width: 32px;
+    place-items: center;
+    cursor: pointer;
+
+    &:hover,
+    &:focus-visible,
+    &[data-copied='true'] {
+      color: var(--primary-color);
+    }
+
+    &:focus-visible {
+      outline: 2px solid var(--primary-color);
+      outline-offset: -2px;
+    }
+  }
+
+  &__icon {
+    display: block;
+    width: 16px;
+    height: 16px;
+    fill: none;
+    stroke: currentColor;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+    stroke-width: 1.5;
+  }
+}
