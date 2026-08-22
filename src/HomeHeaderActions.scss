@@ -1,0 +1,132 @@
+.avatar-home__header-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+
+  .avatar-app__github-link,
+  .avatar-app__language-toggle,
+  .avatar-app__theme-toggle {
+    display: inline-grid;
+    width: 42px;
+    height: 42px;
+    place-items: center;
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    background: color-mix(in srgb, var(--bg-color) 90%, transparent);
+    color: var(--sub-text-color);
+    backdrop-filter: blur(12px);
+    cursor: pointer;
+
+    svg {
+      width: 18px;
+      height: 18px;
+      fill: none;
+      stroke: currentColor;
+      stroke-linecap: round;
+      stroke-linejoin: round;
+      stroke-width: 1.5;
+    }
+
+    &:focus-visible {
+      outline: 2px solid var(--primary-color);
+      outline-offset: -2px;
+    }
+  }
+
+  .avatar-app__github-link {
+    text-decoration: none;
+
+    svg {
+      fill: currentColor;
+      stroke: none;
+    }
+  }
+
+  .avatar-language-switcher {
+    position: relative;
+    display: flex;
+    flex: 0 0 auto;
+
+    &__dialog {
+      position: absolute;
+      z-index: 20;
+      top: calc(100% + 8px);
+      right: 0;
+      width: 236px;
+      padding: 8px;
+      border: 1px solid var(--border-color);
+      border-radius: 12px;
+      background: color-mix(in srgb, var(--bg-color) 96%, transparent);
+      box-shadow: 0 16px 42px color-mix(in srgb, black 34%, transparent);
+      backdrop-filter: blur(22px) saturate(145%);
+    }
+
+    &__title {
+      display: block;
+      padding: 6px 8px 10px;
+      color: var(--sub-text-color);
+      font-size: 12px;
+      font-weight: 700;
+      letter-spacing: .04em;
+      text-transform: uppercase;
+    }
+
+    &__options {
+      display: grid;
+      gap: 4px;
+    }
+
+    &__option {
+      display: flex;
+      width: 100%;
+      min-height: 52px;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      border: 0;
+      border-radius: 8px;
+      padding: 8px 10px;
+      background: transparent;
+      color: var(--text-color);
+      cursor: pointer;
+      text-align: left;
+
+      > span {
+        display: grid;
+        gap: 2px;
+      }
+
+      strong {
+        font-size: 14px;
+        font-weight: 700;
+      }
+
+      small {
+        color: var(--sub-text-color);
+        font-size: 11px;
+      }
+
+      svg {
+        width: 18px;
+        height: 18px;
+        fill: none;
+        stroke: currentColor;
+        stroke-width: 1.8;
+        opacity: 0;
+      }
+
+      &:hover {
+        background: color-mix(in srgb, var(--text-color) 7%, transparent);
+      }
+
+      &[aria-checked='true'] {
+        background: var(--primary-soft-bg);
+        color: var(--primary-text-color);
+
+        svg {
+          opacity: 1;
+        }
+      }
+    }
+  }
+}

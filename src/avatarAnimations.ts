@@ -675,7 +675,6 @@ const buildPresetFrames = (
     width: wideEyeWidth
   }
   const surprisedFace: Partial<AvatarFaceStyle> = {
-    eyeShape: 'ellipse',
     gap: clampPresetValue(faceStyle.gap + 10, 0, 100),
     height: wideEyeHeight,
     mouthCurve: 0,
@@ -808,7 +807,6 @@ const buildPresetFrames = (
       { offset: 0 },
       {
         faceStyle: {
-          eyeShape: 'ellipse',
           gap: clampPresetValue(faceStyle.gap + 10, 0, 100),
           height: wideEyeHeight,
           leftEyeRotation: clampPresetValue(faceStyle.leftEyeRotation - 12, -90, 90),
@@ -827,7 +825,6 @@ const buildPresetFrames = (
       },
       {
         faceStyle: {
-          eyeShape: 'ellipse',
           gap: clampPresetValue(faceStyle.gap + 8, 0, 100),
           height: clampPresetValue(wideEyeHeight * .93, 28, 112),
           leftEyeRotation: clampPresetValue(faceStyle.leftEyeRotation + 5, -90, 90),

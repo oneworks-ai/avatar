@@ -9,6 +9,7 @@ import {
   getAvatarEntityPresetScene,
   hasMultipleAvatarEntityMaterials
 } from '../src/avatarEntityPresets'
+import { DEFAULT_AVATAR_FACE_STYLE } from '../src/avatarGeometry'
 
 describe('built-in entity preset scenes', () => {
   it('gives every built-in entity a distinct complete camera composition', () => {
@@ -141,21 +142,28 @@ describe('built-in entity preset scenes', () => {
     })
   })
 
-  it('uses the dog nose and the authored low mouth on the rabbit', () => {
-    const dog = getAvatarEntityPresetFaceStyle('dog')!
+  it('uses the clean large-eye face on the rabbit', () => {
     const rabbit = getAvatarEntityPresetFaceStyle('rabbit')!
 
     expect(rabbit).toMatchObject({
-      mouthCurve: 3.891481414151281,
-      mouthEnabled: true,
-      mouthHeight: 14.108518585848719,
-      mouthWidth: 17.722037041846338,
-      mouthY: 71,
-      noseEnabled: true,
-      noseHeight: dog.noseHeight,
-      noseShape: dog.noseShape,
-      noseWidth: dog.noseWidth,
-      noseY: 35
+      gap: 40,
+      height: 64,
+      leftEyeRotation: 0,
+      mouthEnabled: false,
+      noseEnabled: false,
+      rightEyeRotation: 0,
+      width: 28
     })
+  })
+
+  it('keeps every built-in entity on the large default eye size', () => {
+    const presets = ['cloud', 'sun', 'cat', 'dog', 'bear', 'rabbit'] as const
+
+    for (const preset of presets) {
+      expect(getAvatarEntityPresetFaceStyle(preset)).toMatchObject({
+        height: DEFAULT_AVATAR_FACE_STYLE.height,
+        width: DEFAULT_AVATAR_FACE_STYLE.width
+      })
+    }
   })
 })

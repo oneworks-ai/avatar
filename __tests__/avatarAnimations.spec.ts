@@ -224,6 +224,23 @@ describe('avatar animation keyframes', () => {
     expect(winkFrame?.faceStyle.mouthEnabled).toBe(true)
   })
 
+  it('keeps the current long-bar eye shape across every built-in animation', () => {
+    const sourceFace = { ...DEFAULT_AVATAR_FACE_STYLE, eyeShape: 'rounded' as const }
+
+    for (const preset of AVATAR_ANIMATION_PRESETS) {
+      const resolved = resolveAvatarAnimationPreset(
+        preset,
+        { pitch: 0, positionX: 0, positionY: 0, scale: 1, yaw: 0 },
+        sourceFace
+      )
+
+      expect(
+        resolved.keyframes.every(keyframe => keyframe.faceStyle.eyeShape === 'rounded'),
+        `${preset.id} should preserve rounded eyes`
+      ).toBe(true)
+    }
+  })
+
   it('gives every built-in frame transition timing and returns to the current pose', () => {
     const viewState = { pitch: .2, positionX: 12, positionY: -7, scale: 1.4, yaw: -.3 }
 

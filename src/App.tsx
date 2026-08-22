@@ -81,6 +81,7 @@ import {
   serializeAvatarSvg
 } from './savedAvatarPresets'
 import type { SavedAvatarPreset } from './savedAvatarPresets'
+import { LAST_EDITOR_QUERY_STORAGE_KEY } from './avatarHome'
 
 const INITIAL_EMOTICON = AVATAR_PRESETS[0]?.emoticon ?? '0w0'
 const INITIAL_PARTS = Array.from(INITIAL_EMOTICON)
@@ -401,7 +402,38 @@ const parseQueryConfig = (params: URLSearchParams): AvatarQueryConfig => {
 
 const getInitialQueryConfig = () => {
   const params = typeof window === 'undefined' ? new URLSearchParams() : new URLSearchParams(window.location.search)
-  return parseQueryConfig(params)
+  const config = parseQueryConfig(params)
+  if (!params.has('template')) return config
+
+  const preset = parseAvatarEntityPreset(params.get('template'))
+  const scene = getAvatarEntityPresetScene(preset)
+  const faceStyle = getAvatarEntityPresetFaceStyle(preset)
+  if (preset === 'custom' || scene == null || faceStyle == null) return config
+
+  return {
+    ...config,
+    animationOpen: false,
+    avatarOutlineStyle: scene.avatarOutlineStyle,
+    avatarShadowStyle: scene.avatarShadowStyle,
+    backgroundStyle: scene.backgroundStyle,
+    bodyShape: 'sphere' as const,
+    cameraBackground: scene.cameraBackground,
+    cameraFrame: scene.cameraFrame,
+    cameraMode: scene.cameraMode,
+    controlsCollapsed: false,
+    entityParts: createAvatarEntityParts(preset),
+    entityPreset: preset,
+    faceStyle,
+    frameShadowStyle: scene.frameShadowStyle,
+    interactionMode: scene.interactionMode,
+    selectedPaletteId: scene.paletteId,
+    showAvatarShadow: scene.showAvatarShadow,
+    showFrameShadow: scene.showFrameShadow,
+    showLight: scene.showLight,
+    showOutline: scene.showOutline,
+    showShadow: scene.showShadow,
+    viewState: scene.viewState
+  }
 }
 
 const downloadTextFile = (filename: string, content: string) => {
@@ -414,7 +446,11 @@ const downloadTextFile = (filename: string, content: string) => {
   URL.revokeObjectURL(url)
 }
 
-function App() {
+interface AppProps {
+  readonly onHome?: () => void
+}
+
+function App({ onHome }: AppProps) {
   const { t } = useAvatarLocale()
   const [initialConfig] = useState(getInitialQueryConfig)
   const [activeTab, setActiveTab] = useState<AvatarControlTab>('build')
@@ -681,6 +717,11 @@ function App() {
     }
 
     const nextSearch = `?${params.toString()}`
+    try {
+      window.localStorage.setItem(LAST_EDITOR_QUERY_STORAGE_KEY, nextSearch)
+    } catch {
+      // Some embedded and private browsing contexts disable local storage.
+    }
     if (window.location.search === nextSearch) return
 
     if (!applyingUndoRef.current) {
@@ -1627,8 +1668,28 @@ function App() {
             '--avatar-frame-shadow': frameShadow
           } as CSSProperties}
         >
-          {!stageNarrow || controlsCollapsed
-            ? <div className='avatar-app__camera-tools'>{renderCameraToggle()}</div>
+          {onHome != null || !stageNarrow || controlsCollapsed
+            ? (
+              <div className='avatar-app__camera-tools'>
+                {onHome == null
+                  ? null
+                  : (
+                    <button
+                      className='avatar-app__home-link'
+                      type='button'
+                      aria-label='Home'
+                      title='Home'
+                      onClick={onHome}
+                    >
+                      <svg viewBox='0 0 20 20' aria-hidden='true'>
+                        <path d='m3 9 7-6 7 6v8H5V9' />
+                        <path d='M8 17v-5h4v5' />
+                      </svg>
+                    </button>
+                  )}
+                {!stageNarrow || controlsCollapsed ? renderCameraToggle() : null}
+              </div>
+            )
             : null}
           <div className='avatar-app__stage-actions'>
             {cameraMode

@@ -1,0 +1,17 @@
+.avatar-home-renderer {
+  width: 100%;
+  height: 100%;
+  background: var(--avatar-home-renderer-background);
+  box-shadow: var(--avatar-home-renderer-shadow);
+  overflow: hidden;
+
+  .interactive-avatar {
+    width: 100%;
+    height: 100%;
+  }
+
+  .interactive-avatar__canvas {
+    cursor: inherit;
+    pointer-events: none;
+  }
+}

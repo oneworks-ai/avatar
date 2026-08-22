@@ -52,23 +52,19 @@ const SUN_MATERIAL = {
 
 const CLOUD_FACE_STYLE: AvatarFaceStyle = {
   ...DEFAULT_AVATAR_FACE_STYLE,
-  gap: 36,
-  height: 54,
-  width: 24
+  gap: 36
 }
 
 const SUN_FACE_STYLE: AvatarFaceStyle = {
   ...DEFAULT_AVATAR_FACE_STYLE,
   gap: 42,
-  height: 34,
   leftEyeRotation: -5,
   mouthCurve: 24,
   mouthEnabled: true,
   mouthHeight: 6,
   mouthWidth: 30,
   mouthY: 48,
-  rightEyeRotation: 5,
-  width: 19
+  rightEyeRotation: 5
 }
 
 const CAT_MATERIAL = {
@@ -81,15 +77,13 @@ const CAT_MATERIAL = {
 const CAT_FACE_STYLE: AvatarFaceStyle = {
   ...DEFAULT_AVATAR_FACE_STYLE,
   gap: 42,
-  height: 28,
   leftEyeRotation: -10,
   noseEnabled: true,
   noseHeight: 11,
   noseShape: 'ellipse',
   noseWidth: 16,
   noseY: 22,
-  rightEyeRotation: 10,
-  width: 16
+  rightEyeRotation: 10
 }
 
 const DOG_MATERIAL = {
@@ -123,7 +117,6 @@ const BEAR_ACCENT_MATERIAL = {
 const BEAR_FACE_STYLE: AvatarFaceStyle = {
   ...DEFAULT_AVATAR_FACE_STYLE,
   gap: 50,
-  height: 26,
   leftEyeRotation: 5,
   mouthEnabled: false,
   noseEnabled: true,
@@ -131,8 +124,7 @@ const BEAR_FACE_STYLE: AvatarFaceStyle = {
   noseShape: 'ellipse',
   noseWidth: 29,
   noseY: 28,
-  rightEyeRotation: -5,
-  width: 15
+  rightEyeRotation: -5
 } as const
 
 const DOG_FACE_STYLE: AvatarFaceStyle = {
@@ -347,21 +339,11 @@ const RABBIT_MATERIAL = {
 
 const RABBIT_FACE_STYLE: AvatarFaceStyle = {
   ...DEFAULT_AVATAR_FACE_STYLE,
-  gap: 48,
-  height: 21,
-  leftEyeRotation: 2,
-  mouthCurve: 3.891481414151281,
-  mouthEnabled: true,
-  mouthHeight: 14.108518585848719,
-  mouthWidth: 17.722037041846338,
-  mouthY: 71,
-  noseEnabled: true,
-  noseHeight: 14,
-  noseShape: 'inverted-triangle',
-  noseWidth: 18,
-  noseY: 35,
-  rightEyeRotation: -2,
-  width: 12
+  gap: 40,
+  leftEyeRotation: 0,
+  mouthEnabled: false,
+  noseEnabled: false,
+  rightEyeRotation: 0
 } as const
 
 const CLOUD_PARTS: readonly AvatarEntityPart[] = [
