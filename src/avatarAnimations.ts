@@ -1,5 +1,7 @@
 import type { AvatarCameraFrame } from './AvatarControls'
 import type { AvatarViewState } from './InteractiveAvatar'
+import { interpolateAvatarColorGrade, resolveAvatarColorGrade } from './avatarColorGrade'
+import type { AvatarColorGrade } from './avatarColorGrade'
 import { DEFAULT_AVATAR_FACE_STYLE, resolveAvatarFaceStyle } from './avatarGeometry'
 import type { AvatarFaceStyle } from './avatarGeometry'
 
@@ -11,6 +13,7 @@ export const MIN_AVATAR_ANIMATION_FRAME_DURATION_MS = 100
 export const MAX_AVATAR_ANIMATION_FRAME_DURATION_MS = 8000
 
 export interface AvatarAnimationKeyframe {
+  readonly colorGrade?: AvatarColorGrade
   readonly durationMs: number
   readonly easing: AvatarAnimationEasing
   readonly faceStyle: AvatarFaceStyle
@@ -66,6 +69,7 @@ interface StoredAvatarAnimationV3 {
 type StoredAvatarAnimation = LegacyStoredAvatarAnimation | StoredAvatarAnimationV3
 
 export type AvatarAnimationPresetId =
+  | 'angry'
   | 'blink'
   | 'bored'
   | 'celebrate'
@@ -77,9 +81,11 @@ export type AvatarAnimationPresetId =
   | 'listening'
   | 'nod'
   | 'playful'
+  | 'petrified'
   | 'sad'
   | 'searching'
   | 'surprised'
+  | 'shocked'
   | 'thinking'
   | 'working'
 
@@ -276,6 +282,9 @@ export const AVATAR_ANIMATION_PRESETS: readonly AvatarAnimationPreset[] = [
   { description: 'A fast recoil into a wide-eyed reaction.', durationMs: 2600, id: 'surprised', label: 'Surprised' },
   { description: 'Heavy eyelids and a slow unimpressed drift.', durationMs: 6100, id: 'bored', label: 'Bored' },
   { description: 'A lowered posture with a soft frown.', durationMs: 5800, id: 'sad', label: 'Sad' },
+  { description: 'A hot red flare with a sharp, trembling glare.', durationMs: 3200, id: 'angry', label: 'Angry' },
+  { description: 'A bright flash and a full-body startled recoil.', durationMs: 2800, id: 'shocked', label: 'Shocked' },
+  { description: 'Color drains away as the whole character freezes.', durationMs: 4300, id: 'petrified', label: 'Petrified' },
   { description: 'Closed smiling eyes with a rhythmic laugh.', durationMs: 3900, id: 'laughing', label: 'Laughing' },
   { description: 'A cheeky side tilt and crooked smile.', durationMs: 4200, id: 'playful', label: 'Playful' },
   { description: 'Quick happy hops with a bright expression.', durationMs: 3500, id: 'excited', label: 'Excited' },
@@ -335,14 +344,30 @@ const isAvatarFaceStyle = (value: unknown): value is AvatarFaceStyle => {
     optionalNumericFaceStyleKeys.every(key => value[key] == null || isFiniteNumber(value[key])) &&
     (value.eyeShape === 'ellipse' || value.eyeShape === 'rounded') &&
     typeof value.mouthEnabled === 'boolean' &&
+    (value.mouthShape == null ||
+      value.mouthShape === 'curve' ||
+      value.mouthShape === 'ellipse' ||
+      value.mouthShape === 'rounded' ||
+      value.mouthShape === 'rounded-triangle') &&
     typeof value.noseEnabled === 'boolean' &&
     (value.noseShape === 'ellipse' || value.noseShape === 'inverted-triangle' || value.noseShape === 'rounded')
+}
+
+const isAvatarColorGrade = (value: unknown): value is AvatarColorGrade => {
+  if (!isRecord(value)) return false
+  return isFiniteNumber(value.brightness) && value.brightness >= .35 && value.brightness <= 1.8 &&
+    isFiniteNumber(value.saturation) && value.saturation >= 0 && value.saturation <= 2 &&
+    isFiniteNumber(value.tintAmount) && value.tintAmount >= 0 && value.tintAmount <= 1 &&
+    isFiniteNumber(value.tintB) && value.tintB >= 0 && value.tintB <= 255 &&
+    isFiniteNumber(value.tintG) && value.tintG >= 0 && value.tintG <= 255 &&
+    isFiniteNumber(value.tintR) && value.tintR >= 0 && value.tintR <= 255
 }
 
 const isStoredAvatarAnimationKeyframe = (value: unknown): value is StoredAvatarAnimationKeyframe => {
   if (!isRecord(value)) return false
   return (value.durationMs == null || isAvatarAnimationFrameDuration(value.durationMs)) &&
     (value.easing == null || isAvatarAnimationEasing(value.easing)) &&
+    (value.colorGrade == null || isAvatarColorGrade(value.colorGrade)) &&
     isAvatarFaceStyle(value.faceStyle) &&
     (value.offset == null || (isFiniteNumber(value.offset) && value.offset >= 0 && value.offset <= 1)) &&
     isFiniteNumber(value.pitch) &&
@@ -572,8 +597,10 @@ export const prependSavedAvatarAnimation = (
 export const createAvatarAnimationKeyframe = (
   viewState: AvatarViewState,
   faceStyle: AvatarFaceStyle,
-  screenshot?: string
+  screenshot?: string,
+  colorGrade?: AvatarColorGrade
 ): AvatarAnimationKeyframe => ({
+  colorGrade: resolveAvatarColorGrade(colorGrade),
   durationMs: DEFAULT_AVATAR_ANIMATION_FRAME_DURATION_MS,
   easing: DEFAULT_AVATAR_ANIMATION_EASING,
   faceStyle: { ...faceStyle },
@@ -585,6 +612,7 @@ export const createAvatarAnimationKeyframe = (
 })
 
 interface AvatarPresetFrame {
+  readonly colorGrade?: Partial<AvatarColorGrade>
   readonly faceStyle?: Partial<AvatarFaceStyle>
   readonly offset?: number
   readonly pitch?: number
@@ -600,6 +628,7 @@ const createRelativePresetFrame = (
   faceStyle: AvatarFaceStyle,
   frame: AvatarPresetFrame = {}
 ): StoredAvatarAnimationKeyframe => ({
+  colorGrade: resolveAvatarColorGrade(frame.colorGrade),
   faceStyle: { ...faceStyle, ...frame.faceStyle },
   ...(frame.offset == null ? {} : { offset: frame.offset }),
   pitch: viewState.pitch + (frame.pitch ?? 0),
@@ -668,8 +697,60 @@ const buildPresetFrames = (
     mouthWidth: clampPresetValue(Math.max(faceStyle.mouthWidth, 74), 24, 100),
     rotation: 0
   }
+  const angryFace: Partial<AvatarFaceStyle> = {
+    gap: clampPresetValue(faceStyle.gap + 6, 0, 100),
+    height: clampPresetValue(faceStyle.height * .58, 12, 74),
+    leftEyeRotation: clampPresetValue(faceStyle.leftEyeRotation - 18, -90, 90),
+    mouthCurve: -88,
+    mouthEnabled: true,
+    mouthWidth: clampPresetValue(Math.max(faceStyle.mouthWidth, 64), 24, 100),
+    rightEyeRotation: clampPresetValue(faceStyle.rightEyeRotation + 18, -90, 90),
+    width: clampPresetValue(faceStyle.width * 1.08, 12, 76)
+  }
+
+  const redHotGrade: Partial<AvatarColorGrade> = {
+    brightness: 1.08,
+    saturation: 1.55,
+    tintAmount: .68,
+    tintB: 22,
+    tintG: 43,
+    tintR: 255
+  }
+  const shockedGrade: Partial<AvatarColorGrade> = {
+    brightness: 1.34,
+    saturation: .72,
+    tintAmount: .48,
+    tintB: 255,
+    tintG: 242,
+    tintR: 218
+  }
+  const petrifiedGrade: Partial<AvatarColorGrade> = {
+    brightness: .76,
+    saturation: 0,
+    tintAmount: .38,
+    tintB: 117,
+    tintG: 112,
+    tintR: 102
+  }
+  const sadGrade: Partial<AvatarColorGrade> = {
+    brightness: .84,
+    saturation: .56,
+    tintAmount: .28,
+    tintB: 226,
+    tintG: 146,
+    tintR: 74
+  }
 
   const framesByPreset: Readonly<Record<AvatarAnimationPresetId, readonly AvatarPresetFrame[]>> = {
+    angry: [
+      { offset: 0 },
+      { colorGrade: { ...redHotGrade, tintAmount: .32 }, faceStyle: angryFace, offset: .15, pitch: -.03, positionX: -4, yaw: -.05 },
+      { colorGrade: redHotGrade, faceStyle: angryFace, offset: .32, pitch: .04, positionX: 6, positionY: -4, yaw: .06 },
+      { colorGrade: { ...redHotGrade, brightness: 1.18, tintAmount: .82 }, faceStyle: angryFace, offset: .49, pitch: -.04, positionX: -6, yaw: -.07 },
+      { colorGrade: redHotGrade, faceStyle: angryFace, offset: .66, pitch: .04, positionX: 5, positionY: -3, yaw: .06 },
+      { colorGrade: { ...redHotGrade, tintAmount: .38 }, faceStyle: angryFace, offset: .84, pitch: -.02, positionX: -2 },
+      { offset: 1 }
+    ],
     blink: [
       { offset: 0 },
       { faceStyle: { height: relaxedEyeHeight }, offset: .24 },
@@ -903,10 +984,27 @@ const buildPresetFrames = (
     ],
     sad: [
       { offset: 0 },
-      { faceStyle: sadFace, offset: .22, pitch: .1, positionY: 6, yaw: -.06 },
-      { faceStyle: { ...sadFace, height: closedEyeHeight * 1.5 }, offset: .48, pitch: .12, positionY: 8 },
-      { faceStyle: sadFace, offset: .56, pitch: .11, positionY: 7, yaw: .04 },
-      { faceStyle: sadFace, offset: .8, pitch: .08, positionY: 5, yaw: -.03 },
+      { colorGrade: { ...sadGrade, tintAmount: .16 }, faceStyle: sadFace, offset: .22, pitch: .1, positionY: 6, yaw: -.06 },
+      { colorGrade: sadGrade, faceStyle: { ...sadFace, height: closedEyeHeight * 1.5 }, offset: .48, pitch: .12, positionY: 8 },
+      { colorGrade: sadGrade, faceStyle: sadFace, offset: .56, pitch: .11, positionY: 7, yaw: .04 },
+      { colorGrade: { ...sadGrade, tintAmount: .18 }, faceStyle: sadFace, offset: .8, pitch: .08, positionY: 5, yaw: -.03 },
+      { offset: 1 }
+    ],
+    shocked: [
+      { offset: 0 },
+      { colorGrade: { ...shockedGrade, tintAmount: .2 }, faceStyle: { height: closedEyeHeight }, offset: .14, pitch: .04 },
+      { colorGrade: shockedGrade, faceStyle: surprisedFace, offset: .27, pitch: -.18, positionY: -20, yaw: -.05 },
+      { colorGrade: { ...shockedGrade, brightness: 1.5, tintAmount: .65 }, faceStyle: surprisedFace, offset: .42, pitch: -.14, positionY: -15, yaw: .06 },
+      { colorGrade: shockedGrade, faceStyle: surprisedFace, offset: .7, pitch: -.1, positionY: -10 },
+      { colorGrade: { ...shockedGrade, tintAmount: .18 }, faceStyle: { ...surprisedFace, height: wideEyeHeight * .9 }, offset: .86, positionY: -4 },
+      { offset: 1 }
+    ],
+    petrified: [
+      { offset: 0 },
+      { colorGrade: { ...petrifiedGrade, saturation: .55, tintAmount: .16 }, faceStyle: surprisedFace, offset: .2, pitch: -.05, positionY: -4 },
+      { colorGrade: petrifiedGrade, faceStyle: { ...surprisedFace, mouthHeight: 13, mouthWidth: 13 }, offset: .44, pitch: -.08, positionY: -7 },
+      { colorGrade: { ...petrifiedGrade, brightness: .66, tintAmount: .52 }, faceStyle: { ...surprisedFace, mouthHeight: 12, mouthWidth: 12 }, offset: .72, pitch: -.08, positionY: -7 },
+      { colorGrade: petrifiedGrade, faceStyle: surprisedFace, offset: .88, pitch: -.05, positionY: -4 },
       { offset: 1 }
     ],
     searching: [
@@ -1017,6 +1115,7 @@ export const interpolateAvatarAnimationKeyframes = (
   const fromFaceStyle = resolveAvatarFaceStyle(from.faceStyle)
   const toFaceStyle = resolveAvatarFaceStyle(to.faceStyle)
   return {
+    colorGrade: interpolateAvatarColorGrade(from.colorGrade, to.colorGrade, progress),
     durationMs: to.durationMs,
     easing: to.easing,
     faceStyle: {
@@ -1029,6 +1128,7 @@ export const interpolateAvatarAnimationKeyframes = (
       mouthEnabled: selectDiscrete(from.faceStyle.mouthEnabled, to.faceStyle.mouthEnabled, progress),
       mouthHeight: interpolate(from.faceStyle.mouthHeight, to.faceStyle.mouthHeight, progress),
       mouthRotation: interpolate(from.faceStyle.mouthRotation, to.faceStyle.mouthRotation, progress),
+      mouthShape: selectDiscrete(fromFaceStyle.mouthShape, toFaceStyle.mouthShape, progress),
       mouthWidth: interpolate(from.faceStyle.mouthWidth, to.faceStyle.mouthWidth, progress),
       mouthY: interpolate(from.faceStyle.mouthY, to.faceStyle.mouthY, progress),
       noseEnabled: selectDiscrete(from.faceStyle.noseEnabled, to.faceStyle.noseEnabled, progress),

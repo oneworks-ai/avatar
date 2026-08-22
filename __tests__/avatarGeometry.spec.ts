@@ -27,4 +27,39 @@ describe('avatar surface lighting', () => {
     expect(low.outlinePath).toBe(original.outlinePath)
     expect(high.outlinePath).toBe(original.outlinePath)
   })
+
+  it('builds a reusable rounded trapezoid body geometry', () => {
+    const geometry = buildAvatarBodyGeometry('trapezoid', { pitch: 0, yaw: 0 }, LIGHT, 100, { roundness: 78 })
+
+    expect(geometry.cells.length).toBeGreaterThan(0)
+    expect(geometry.outlinePath).toContain('M ')
+  })
+
+  it('builds a reusable tapered teardrop body geometry', () => {
+    const geometry = buildAvatarBodyGeometry('teardrop', { pitch: 0, yaw: 0 }, LIGHT, 100, {
+      occlusionAmount: 42,
+      occlusionPole: 'bottom'
+    })
+    const ellipse = buildAvatarBodyGeometry('ellipse', { pitch: 0, yaw: 0 }, LIGHT)
+
+    expect(geometry.cells.length).toBeGreaterThan(0)
+    expect(geometry.outlinePath).toContain('M ')
+    expect(geometry.occlusionPath).toContain('M ')
+    expect(geometry.outlinePath).not.toBe(ellipse.outlinePath)
+  })
+
+  it('scales multipart geometry in local X, Y, and Z axes before rotation', () => {
+    const shallow = buildAvatarBodyGeometry('teardrop', { pitch: 0, yaw: Math.PI / 2 }, LIGHT, 100, {
+      scaleX: .3,
+      scaleY: .4,
+      scaleZ: .1
+    })
+    const deep = buildAvatarBodyGeometry('teardrop', { pitch: 0, yaw: Math.PI / 2 }, LIGHT, 100, {
+      scaleX: .3,
+      scaleY: .4,
+      scaleZ: .5
+    })
+
+    expect(deep.outlinePath).not.toBe(shallow.outlinePath)
+  })
 })

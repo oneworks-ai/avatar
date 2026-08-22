@@ -1,14 +1,26 @@
 import './AvatarControls.scss'
 
 import type { AvatarBackgroundStyle, AvatarPalette } from '@oneworks/avatar'
-import { useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import type { CSSProperties, KeyboardEvent, PointerEvent, ReactNode } from 'react'
 
-import { AVATAR_BODY_SHAPES } from './InteractiveAvatar'
+import { AVATAR_BODY_SHAPES, EntityPresetPreview } from './InteractiveAvatar'
 import type { AvatarBodyShape, AvatarDropShadowStyle, AvatarOutlineStyle } from './InteractiveAvatar'
 import { DEFAULT_AVATAR_FACE_STYLE } from './avatarGeometry'
-import type { AvatarEyeShape, AvatarFaceShadowStyle, AvatarFaceStyle, AvatarNoseShape } from './avatarGeometry'
+import type {
+  AvatarEyeShape,
+  AvatarFaceShadowStyle,
+  AvatarFaceStyle,
+  AvatarMouthShape,
+  AvatarNoseShape
+} from './avatarGeometry'
 import { useAvatarLocale } from './avatarLocale'
+import {
+  AVATAR_BUILT_IN_ENTITY_PRESETS,
+  hasMultipleAvatarEntityMaterials,
+  resolveAvatarEntityPartScaleZ
+} from './avatarEntityPresets'
+import type { AvatarEntityPart, AvatarEntityPreset } from './avatarEntityPresets'
 import type { SavedAvatarPreset } from './savedAvatarPresets'
 
 export type AvatarControlTab = 'body' | 'build' | 'effects' | 'style'
@@ -28,7 +40,7 @@ type ControlIconName =
   | 'palette'
   | 'shadow'
   | 'solid'
-type GeometricShapeIconName = 'circle' | 'ellipse' | 'inverted-triangle' | 'rounded' | 'square'
+type GeometricShapeIconName = 'circle' | 'curve' | 'ellipse' | 'inverted-triangle' | 'rounded' | 'square'
 
 interface GeometricShapeOption<T extends string> {
   readonly icon: GeometricShapeIconName
@@ -45,6 +57,8 @@ interface AvatarControlsProps {
   readonly cameraBackground: string
   readonly cameraFrame: AvatarCameraFrame
   readonly controlsWidth: number
+  readonly entityParts: readonly AvatarEntityPart[]
+  readonly entityPreset: AvatarEntityPreset
   readonly faceStyle: AvatarFaceStyle
   readonly faceShadowStyle: AvatarFaceShadowStyle
   readonly frameShadowStyle: AvatarDropShadowStyle
@@ -70,6 +84,8 @@ interface AvatarControlsProps {
   readonly onLightDistanceChange: (value: number) => void
   readonly onLightElevationChange: (value: number) => void
   readonly onPaletteChange: (paletteId: string) => void
+  readonly onEntityPresetChange: (preset: AvatarEntityPreset) => void
+  readonly onEntityPartChange: (id: string, part: Partial<AvatarEntityPart>) => void
   readonly onResetFace: () => void
   readonly onSavedPresetSelect: (preset: SavedAvatarPreset) => void
   readonly onSavedPresetRemove: (presetId: string) => void
@@ -81,6 +97,7 @@ interface AvatarControlsProps {
   readonly onToggleFrameShadow: () => void
   readonly onToggleShadow: () => void
   readonly selectedPalette: AvatarPalette
+  readonly selectedEntityPartId: string | null
   readonly selectedSavedPresetId: string | null
   readonly savedPresets: readonly SavedAvatarPreset[]
   readonly showLight: boolean
@@ -112,11 +129,25 @@ const CONTROL_TABS: readonly { id: AvatarControlTab; label: string }[] = [
 
 const BODY_SHAPE_LABELS: Readonly<Record<AvatarBodyShape, string>> = {
   capsule: 'Capsule',
+  cone: 'Cone',
   diamond: 'Diamond',
   ellipse: 'Ellipse',
+  frustum: 'Frustum',
+  'half-cone': 'Half cone',
   rounded: 'Rounded square',
   sphere: 'Sphere',
-  square: 'Square'
+  square: 'Square',
+  teardrop: 'Teardrop',
+  trapezoid: 'Rounded trapezoid'
+}
+
+const ENTITY_PRESET_LABELS: Readonly<Record<Exclude<AvatarEntityPreset, 'custom'>, string>> = {
+  bear: 'Bear',
+  cat: 'Cat',
+  cloud: 'Cloud',
+  dog: 'Dog',
+  rabbit: 'Rabbit',
+  sun: 'Sun'
 }
 
 const EYE_SHAPE_OPTIONS: readonly GeometricShapeOption<AvatarEyeShape>[] = [
@@ -125,9 +156,16 @@ const EYE_SHAPE_OPTIONS: readonly GeometricShapeOption<AvatarEyeShape>[] = [
 ]
 
 const NOSE_SHAPE_OPTIONS: readonly GeometricShapeOption<AvatarNoseShape>[] = [
-  { icon: 'inverted-triangle', id: 'inverted-triangle', label: 'Triangle' },
+  { icon: 'inverted-triangle', id: 'inverted-triangle', label: 'Rounded triangle' },
   { icon: 'ellipse', id: 'ellipse', label: 'Ellipse' },
   { icon: 'rounded', id: 'rounded', label: 'Rounded' }
+]
+
+const MOUTH_SHAPE_OPTIONS: readonly GeometricShapeOption<AvatarMouthShape>[] = [
+  { icon: 'curve', id: 'curve', label: 'Curve' },
+  { icon: 'ellipse', id: 'ellipse', label: 'Ellipse' },
+  { icon: 'rounded', id: 'rounded', label: 'Rounded' },
+  { icon: 'inverted-triangle', id: 'rounded-triangle', label: 'Rounded triangle' }
 ]
 
 const CAMERA_FRAME_OPTIONS: readonly GeometricShapeOption<AvatarCameraFrame>[] = [
@@ -141,7 +179,11 @@ const getSavedPresetFrame = (query: string): AvatarCameraFrame => {
   return frame === 'circle' || frame === 'square' || frame === 'rounded' ? frame : 'rounded'
 }
 
-const CAMERA_BACKGROUND_PRESETS = ['#111315', '#f2f0eb', '#24334a', '#3f201c', '#173d35', '#382641'] as const
+const CAMERA_BACKGROUND_PRESETS = [
+  '#111315', '#f2f0eb', '#24334a', '#3f201c', '#173d35', '#382641',
+  '#ff766c', '#0e4fe7', '#f2bd4f', '#7568e7', '#f6b8cf', '#56d6cc',
+  '#c9e76c', '#87bfff', '#f08c46', '#d9c8ff', '#efe5cc', '#8ec5a4'
+] as const
 
 function ControlIcon({ name }: { readonly name: ControlIconName }) {
   return (
@@ -259,7 +301,12 @@ function BodyShapeIcon({ shape }: { readonly shape: AvatarBodyShape }) {
       {shape === 'square' ? <rect x='9' y='9' width='30' height='30' /> : null}
       {shape === 'rounded' ? <rect x='9' y='9' width='30' height='30' rx='7' /> : null}
       {shape === 'capsule' ? <rect x='5' y='13' width='38' height='22' rx='11' /> : null}
+      {shape === 'teardrop' ? <path d='M24 5C19 14 12 21 12 30a12 12 0 0 0 24 0c0-9-7-16-12-25Z' /> : null}
       {shape === 'diamond' ? <path d='m24 6 18 18-18 18L6 24Z' /> : null}
+      {shape === 'trapezoid' ? <path d='M16 8h16q3 0 4 3l6 24q1 5-4 5H10q-5 0-4-5l6-24q1-3 4-3Z' /> : null}
+      {shape === 'cone' ? <path d='M24 6 40 39H8Z' /> : null}
+      {shape === 'frustum' ? <path d='M17 8h14l9 31H8Z' /> : null}
+      {shape === 'half-cone' ? <path d='M24 6v33H8Z' /> : null}
     </svg>
   )
 }
@@ -268,10 +315,11 @@ function GeometricShapeIcon({ shape }: { readonly shape: GeometricShapeIconName 
   return (
     <svg className='avatar-controls__shape-icon' viewBox='0 0 40 32' aria-hidden='true'>
       {shape === 'circle' ? <circle cx='20' cy='16' r='10' /> : null}
+      {shape === 'curve' ? <path d='M7 11q13 15 26 0' strokeLinecap='round' strokeWidth='5' /> : null}
       {shape === 'ellipse' ? <ellipse cx='20' cy='16' rx='12' ry='9' /> : null}
       {shape === 'rounded' ? <rect x='9' y='6' width='22' height='20' rx='5' /> : null}
       {shape === 'square' ? <rect x='10' y='6' width='20' height='20' /> : null}
-      {shape === 'inverted-triangle' ? <path d='M8 7h24L20 26Z' /> : null}
+      {shape === 'inverted-triangle' ? <path d='M7 9C10 3 30 3 33 9c3 6-6 17-11.5 20q-1.5 1-3 0C13 26 4 15 7 9Z' /> : null}
     </svg>
   )
 }
@@ -358,6 +406,55 @@ function ValueSlider({ ariaLabel, label, max, min, onChange, suffix = '', value 
   )
 }
 
+function NumberField({ ariaLabel, label, onChange, suffix = '', value }: {
+  readonly ariaLabel: string
+  readonly label: string
+  readonly onChange: (value: number) => void
+  readonly suffix?: string
+  readonly value: number
+}) {
+  const { t } = useAvatarLocale()
+  const [draft, setDraft] = useState(String(value))
+  useEffect(() => setDraft(String(value)), [value])
+  const commit = () => {
+    const parsed = Number(draft)
+    if (draft.trim() !== '' && Number.isFinite(parsed)) {
+      onChange(parsed)
+      setDraft(String(parsed))
+      return
+    }
+    setDraft(String(value))
+  }
+  return (
+    <label className='avatar-controls__number-field'>
+      <span>{t(label)}</span>
+      <span>
+        <input
+          type='number'
+          aria-label={t(ariaLabel)}
+          step='any'
+          value={draft}
+          onBlur={commit}
+          onChange={event => {
+            const nextDraft = event.currentTarget.value
+            setDraft(nextDraft)
+            const parsed = Number(nextDraft)
+            if (nextDraft.trim() !== '' && Number.isFinite(parsed)) onChange(parsed)
+          }}
+          onKeyDown={event => {
+            if (event.key === 'Enter') event.currentTarget.blur()
+            if (event.key === 'Escape') {
+              setDraft(String(value))
+              event.currentTarget.blur()
+            }
+          }}
+        />
+        {suffix === '' ? null : <span aria-hidden='true'>{suffix}</span>}
+      </span>
+    </label>
+  )
+}
+
 export function AvatarControls({
   activeTab,
   avatarOutlineStyle,
@@ -367,6 +464,8 @@ export function AvatarControls({
   cameraBackground,
   cameraFrame,
   controlsWidth,
+  entityParts,
+  entityPreset,
   faceStyle,
   faceShadowStyle,
   frameShadowStyle,
@@ -392,6 +491,8 @@ export function AvatarControls({
   onLightDistanceChange,
   onLightElevationChange,
   onPaletteChange,
+  onEntityPresetChange,
+  onEntityPartChange,
   onResetFace,
   onSavedPresetSelect,
   onSavedPresetRemove,
@@ -403,6 +504,7 @@ export function AvatarControls({
   onToggleFrameShadow,
   onToggleShadow,
   selectedPalette,
+  selectedEntityPartId,
   selectedSavedPresetId,
   savedPresets,
   showLight,
@@ -415,11 +517,28 @@ export function AvatarControls({
 }: AvatarControlsProps) {
   const { t } = useAvatarLocale()
   const [activeFacePart, setActiveFacePart] = useState<AvatarFacePart>('eyes')
+  const [pendingPaletteId, setPendingPaletteId] = useState<string | null>(null)
   const [resizing, setResizing] = useState(false)
+  const paletteConfirmActionRef = useRef<HTMLButtonElement>(null)
   const resizeStartRef = useRef<{ pointerX: number; width: number } | null>(null)
   const isDefaultFace = Object.entries(DEFAULT_AVATAR_FACE_STYLE).every(([key, value]) => {
     return faceStyle[key as keyof AvatarFaceStyle] === value
   })
+  const selectedEntityPart = entityParts.find(part => part.id === selectedEntityPartId)
+  const editingEntityPart = selectedEntityPart ?? entityParts.find(part => part.face)
+  const pendingPalette = visiblePalettes.find(palette => palette.id === pendingPaletteId) ?? null
+  const showOverallStyleControls = selectedEntityPart == null || selectedEntityPart.face
+
+  useEffect(() => {
+    if (pendingPalette != null) paletteConfirmActionRef.current?.focus()
+  }, [pendingPalette])
+
+  const renderEntityPresetPreview = (preset: Exclude<AvatarEntityPreset, 'custom'>) => (
+    <EntityPresetPreview
+      preset={preset}
+      lightDirection={{ azimuth: lightAzimuth, elevation: lightElevation }}
+    />
+  )
 
   const handleResizeStart = (event: PointerEvent<HTMLDivElement>) => {
     if (event.button !== 0) return
@@ -446,6 +565,20 @@ export function AvatarControls({
     if (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight') return
     event.preventDefault()
     onControlsWidthChange(clampControlsWidth(controlsWidth + (event.key === 'ArrowLeft' ? 16 : -16)))
+  }
+
+  const handlePaletteSelect = (paletteId: string) => {
+    if (hasMultipleAvatarEntityMaterials(entityParts)) {
+      setPendingPaletteId(paletteId)
+      return
+    }
+    onPaletteChange(paletteId)
+  }
+
+  const handlePaletteConfirm = () => {
+    if (pendingPalette == null) return
+    onPaletteChange(pendingPalette.id)
+    setPendingPaletteId(null)
   }
 
   return (
@@ -519,41 +652,50 @@ export function AvatarControls({
                   <ControlIcon name='history' />
                   {t('Saved presets')}
                 </span>
-                {savedPresets.length > 0
-                  ? (
-                    <div className='avatar-controls__saved-preset-list'>
-                      {savedPresets.map((preset) => {
-                        const savedAt = new Date(preset.createdAt)
-                        const savedFrame = getSavedPresetFrame(preset.query)
-                        return (
-                          <div key={preset.id} className='avatar-controls__saved-preset-item'>
-                            <button
-                              className='avatar-controls__saved-preset'
-                              type='button'
-                              aria-label={`Restore preset saved ${savedAt.toLocaleString()}`}
-                              aria-pressed={preset.id === selectedSavedPresetId}
-                              data-frame={savedFrame}
-                              onClick={() => onSavedPresetSelect(preset)}
-                            >
-                              <img src={preset.screenshot} alt='' aria-hidden='true' />
-                            </button>
-                            <button
-                              className='avatar-controls__saved-preset-remove'
-                              type='button'
-                              aria-label={`Remove preset saved ${savedAt.toLocaleString()}`}
-                              title='Remove preset'
-                              onClick={() => onSavedPresetRemove(preset.id)}
-                            >
-                              <svg viewBox='0 0 16 16' aria-hidden='true'>
-                                <path d='m4.5 4.5 7 7m0-7-7 7' />
-                              </svg>
-                            </button>
-                          </div>
-                        )
-                      })}
-                    </div>
-                  )
-                  : <p className='avatar-controls__saved-preset-empty'>{t('Save a look to build your history.')}</p>}
+                <div className='avatar-controls__saved-preset-list'>
+                  {AVATAR_BUILT_IN_ENTITY_PRESETS.map(preset => (
+                    <button
+                      key={preset}
+                      className='avatar-controls__saved-preset avatar-controls__saved-preset--entity-preset'
+                      type='button'
+                      aria-label={t(ENTITY_PRESET_LABELS[preset])}
+                      aria-pressed={entityPreset === preset}
+                      data-entity-preset={preset}
+                      onClick={() => onEntityPresetChange(preset)}
+                    >
+                      {renderEntityPresetPreview(preset)}
+                    </button>
+                  ))}
+                  {savedPresets.map((preset) => {
+                    const savedAt = new Date(preset.createdAt)
+                    const savedFrame = getSavedPresetFrame(preset.query)
+                    return (
+                      <div key={preset.id} className='avatar-controls__saved-preset-item'>
+                        <button
+                          className='avatar-controls__saved-preset'
+                          type='button'
+                          aria-label={`Restore preset saved ${savedAt.toLocaleString()}`}
+                          aria-pressed={preset.id === selectedSavedPresetId}
+                          data-frame={savedFrame}
+                          onClick={() => onSavedPresetSelect(preset)}
+                        >
+                          <img src={preset.screenshot} alt='' aria-hidden='true' />
+                        </button>
+                        <button
+                          className='avatar-controls__saved-preset-remove'
+                          type='button'
+                          aria-label={`Remove preset saved ${savedAt.toLocaleString()}`}
+                          title='Remove preset'
+                          onClick={() => onSavedPresetRemove(preset.id)}
+                        >
+                          <svg viewBox='0 0 16 16' aria-hidden='true'>
+                            <path d='m4.5 4.5 7 7m0-7-7 7' />
+                          </svg>
+                        </button>
+                      </div>
+                    )
+                  })}
+                </div>
               </section>
 
               <div className='avatar-controls__field-group'>
@@ -717,8 +859,8 @@ export function AvatarControls({
                               <ValueSlider
                                 ariaLabel='Nose rotation'
                                 label='Rotation'
-                                min={-90}
-                                max={90}
+                                min={-180}
+                                max={180}
                                 suffix='°'
                                 value={faceStyle.noseRotation}
                                 onChange={noseRotation => onFaceStyleChange({ noseRotation })}
@@ -741,46 +883,69 @@ export function AvatarControls({
                       />
                       {faceStyle.mouthEnabled
                         ? (
-                          <div className='avatar-controls__parameter-controls'>
-                            <ValueSlider
-                              ariaLabel='Mouth width'
-                              label='Width'
-                              min={16}
-                              max={100}
-                              value={faceStyle.mouthWidth}
-                              onChange={mouthWidth => onFaceStyleChange({ mouthWidth })}
+                          <>
+                            <GeometricShapePicker
+                              ariaLabel='Mouth shape'
+                              options={MOUTH_SHAPE_OPTIONS}
+                              value={faceStyle.mouthShape}
+                              onChange={mouthShape => onFaceStyleChange({ mouthShape })}
                             />
-                            <ValueSlider
-                              ariaLabel='Mouth height'
-                              label='Thickness'
-                              min={6}
-                              max={36}
-                              value={faceStyle.mouthHeight}
-                              onChange={mouthHeight => onFaceStyleChange({ mouthHeight })}
-                            />
-                            <ValueSlider
-                              ariaLabel='Mouth vertical position'
-                              label='Position Y'
-                              min={24}
-                              max={90}
-                              value={faceStyle.mouthY}
-                              onChange={mouthY => onFaceStyleChange({ mouthY })}
-                            />
-                            <ValueSlider
-                              ariaLabel='Mouth curvature from frown to smile'
-                              label='Curvature'
-                              min={-100}
-                              max={100}
-                              suffix='%'
-                              value={faceStyle.mouthCurve}
-                              onChange={mouthCurve => onFaceStyleChange({ mouthCurve })}
-                            />
-                            <div className='avatar-controls__curve-scale' aria-hidden='true'>
-                              <span>{t('Frown')}</span>
-                              <span>{t('Flat')}</span>
-                              <span>{t('Smile')}</span>
+                            <div className='avatar-controls__parameter-controls'>
+                              <ValueSlider
+                                ariaLabel='Mouth width'
+                                label='Width'
+                                min={16}
+                                max={100}
+                                value={faceStyle.mouthWidth}
+                                onChange={mouthWidth => onFaceStyleChange({ mouthWidth })}
+                              />
+                              <ValueSlider
+                                ariaLabel='Mouth height'
+                                label={faceStyle.mouthShape === 'curve' ? 'Thickness' : 'Height'}
+                                min={6}
+                                max={48}
+                                value={faceStyle.mouthHeight}
+                                onChange={mouthHeight => onFaceStyleChange({ mouthHeight })}
+                              />
+                              <ValueSlider
+                                ariaLabel='Mouth vertical position'
+                                label='Position Y'
+                                min={24}
+                                max={90}
+                                value={faceStyle.mouthY}
+                                onChange={mouthY => onFaceStyleChange({ mouthY })}
+                              />
+                              {faceStyle.mouthShape === 'curve'
+                                ? (
+                                  <>
+                                    <ValueSlider
+                                      ariaLabel='Mouth curvature from frown to smile'
+                                      label='Curvature'
+                                      min={-100}
+                                      max={100}
+                                      suffix='%'
+                                      value={faceStyle.mouthCurve}
+                                      onChange={mouthCurve => onFaceStyleChange({ mouthCurve })}
+                                    />
+                                    <div className='avatar-controls__curve-scale' aria-hidden='true'>
+                                      <span>{t('Frown')}</span>
+                                      <span>{t('Flat')}</span>
+                                      <span>{t('Smile')}</span>
+                                    </div>
+                                  </>
+                                )
+                                : null}
+                              <ValueSlider
+                                ariaLabel='Mouth rotation'
+                                label='Rotation'
+                                min={-180}
+                                max={180}
+                                suffix='°'
+                                value={faceStyle.mouthRotation}
+                                onChange={mouthRotation => onFaceStyleChange({ mouthRotation })}
+                              />
                             </div>
-                          </div>
+                          </>
                         )
                         : null}
                     </>
@@ -794,6 +959,33 @@ export function AvatarControls({
         {activeTab === 'style'
           ? (
             <>
+              {editingEntityPart == null
+                ? null
+                : (
+                  <div className='avatar-controls__field-group'>
+                    <span className='avatar-controls__label'>{t('Part material')}</span>
+                    <div className='avatar-controls__entity-colors'>
+                      {([
+                        ['baseColor', 'Base'],
+                        ['highlightColor', 'Highlight'],
+                        ['shadowColor', 'Shadow'],
+                        ['foregroundColor', 'Face']
+                      ] as const).map(([key, label]) => (
+                        <label key={key} className='avatar-controls__entity-color'>
+                          <span>{t(label)}</span>
+                          <input
+                            type='color'
+                            aria-label={t(label)}
+                            value={editingEntityPart[key]}
+                            onChange={event => onEntityPartChange(editingEntityPart.id, {
+                              [key]: event.currentTarget.value
+                            })}
+                          />
+                        </label>
+                      ))}
+                    </div>
+                  </div>
+                )}
               <div className='avatar-controls__field-group'>
                 <span className='avatar-controls__label'>
                   <ControlIcon name='palette' />
@@ -812,7 +1004,7 @@ export function AvatarControls({
                         '--avatar-bg-end': palette.gradient[1],
                         '--avatar-fg': palette.foreground
                       } as CSSProperties}
-                      onClick={() => onPaletteChange(palette.id)}
+                      onClick={() => handlePaletteSelect(palette.id)}
                     >
                       <span />
                     </button>
@@ -832,89 +1024,160 @@ export function AvatarControls({
                   : null}
               </div>
 
-              <div className='avatar-controls__field-group'>
-                <span className='avatar-controls__label'>
-                  <ControlIcon name='background' />
-                  {t('Background')}
-                </span>
-                <div className='avatar-controls__segments'>
-                  {(['solid', 'gradient'] satisfies AvatarBackgroundStyle[]).map(style => (
-                    <button
-                      key={style}
-                      className='avatar-controls__segment'
-                      type='button'
-                      aria-pressed={style === backgroundStyle}
-                      onClick={() => onBackgroundStyleChange(style)}
-                    >
-                      <ControlIcon name={style} />
-                      {t(style === 'solid' ? 'Solid' : 'Gradient')}
-                    </button>
-                  ))}
-                </div>
-              </div>
+              {showOverallStyleControls
+                ? (
+                  <>
+                    <div className='avatar-controls__field-group'>
+                      <span className='avatar-controls__label'>
+                        <ControlIcon name='background' />
+                        {t('Background')}
+                      </span>
+                      <div className='avatar-controls__segments'>
+                        {(['solid', 'gradient'] satisfies AvatarBackgroundStyle[]).map(style => (
+                          <button
+                            key={style}
+                            className='avatar-controls__segment'
+                            type='button'
+                            aria-pressed={style === backgroundStyle}
+                            onClick={() => onBackgroundStyleChange(style)}
+                          >
+                            <ControlIcon name={style} />
+                            {t(style === 'solid' ? 'Solid' : 'Gradient')}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
 
-              <div className='avatar-controls__field-group'>
-                <span className='avatar-controls__label'>
-                  <ControlIcon name='camera' />
-                  {t('Camera frame')}
-                </span>
-                <GeometricShapePicker
-                  ariaLabel='Camera frame shape'
-                  options={CAMERA_FRAME_OPTIONS}
-                  value={cameraFrame}
-                  onChange={onCameraFrameChange}
-                />
-              </div>
-
-              <div className='avatar-controls__field-group'>
-                <span className='avatar-controls__label'>
-                  <ControlIcon name='background' />
-                  {t('Camera background')}
-                </span>
-                <div className='avatar-controls__camera-background'>
-                  <label className='avatar-controls__color-input'>
-                    <input
-                      type='color'
-                      aria-label='Camera background color'
-                      value={cameraBackground}
-                      onChange={event => onCameraBackgroundChange(event.currentTarget.value)}
-                    />
-                    <output>{cameraBackground.toUpperCase()}</output>
-                  </label>
-                  <div className='avatar-controls__camera-presets' aria-label='Camera background presets'>
-                    {CAMERA_BACKGROUND_PRESETS.map(color => (
-                      <button
-                        key={color}
-                        type='button'
-                        aria-label={`Set camera background to ${color}`}
-                        aria-pressed={cameraBackground === color}
-                        style={{ '--camera-preset': color } as CSSProperties}
-                        onClick={() => onCameraBackgroundChange(color)}
+                    <div className='avatar-controls__field-group'>
+                      <span className='avatar-controls__label'>
+                        <ControlIcon name='camera' />
+                        {t('Camera frame')}
+                      </span>
+                      <GeometricShapePicker
+                        ariaLabel='Camera frame shape'
+                        options={CAMERA_FRAME_OPTIONS}
+                        value={cameraFrame}
+                        onChange={onCameraFrameChange}
                       />
-                    ))}
-                  </div>
-                </div>
-              </div>
+                    </div>
+
+                    <div className='avatar-controls__field-group'>
+                      <span className='avatar-controls__label'>
+                        <ControlIcon name='background' />
+                        {t('Camera background')}
+                      </span>
+                      <div className='avatar-controls__camera-background'>
+                        <label className='avatar-controls__color-input'>
+                          <input
+                            type='color'
+                            aria-label='Camera background color'
+                            value={cameraBackground}
+                            onChange={event => onCameraBackgroundChange(event.currentTarget.value)}
+                          />
+                          <output>{cameraBackground.toUpperCase()}</output>
+                        </label>
+                        <div className='avatar-controls__camera-presets' aria-label='Camera background presets'>
+                          {CAMERA_BACKGROUND_PRESETS.map(color => (
+                            <button
+                              key={color}
+                              type='button'
+                              aria-label={`Set camera background to ${color}`}
+                              aria-pressed={cameraBackground === color}
+                              style={{ '--camera-preset': color } as CSSProperties}
+                              onClick={() => onCameraBackgroundChange(color)}
+                            />
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+                  </>
+                )
+                : null}
             </>
           )
           : null}
 
         {activeTab === 'body'
           ? (
-            <div className='avatar-controls__body-grid'>
-              {AVATAR_BODY_SHAPES.map(shape => (
-                <button
-                  key={shape}
-                  className='avatar-controls__body-option'
-                  type='button'
-                  aria-pressed={bodyShape === shape}
-                  onClick={() => onBodyShapeChange(shape)}
-                >
-                  <BodyShapeIcon shape={shape} />
-                  <span>{t(BODY_SHAPE_LABELS[shape])}</span>
-                </button>
-              ))}
-            </div>
+            <>
+              {entityPreset === 'custom' || editingEntityPart != null
+                ? (
+                  <div className='avatar-controls__body-grid'>
+                    {AVATAR_BODY_SHAPES.map(shape => (
+                      <button
+                        key={shape}
+                        className='avatar-controls__body-option'
+                        type='button'
+                        aria-label={t(BODY_SHAPE_LABELS[shape])}
+                        aria-pressed={(editingEntityPart?.shape ?? bodyShape) === shape}
+                        title={t(BODY_SHAPE_LABELS[shape])}
+                        onClick={() => editingEntityPart == null
+                          ? onBodyShapeChange(shape)
+                          : onEntityPartChange(editingEntityPart.id, { shape })}
+                      >
+                        <BodyShapeIcon shape={shape} />
+                      </button>
+                    ))}
+                  </div>
+                )
+                : null}
+              {editingEntityPart == null
+                ? null
+                : (
+                  <div className='avatar-controls__parameter-controls'>
+                    <NumberField ariaLabel='Part position X' label='Position X' value={editingEntityPart.x} onChange={x => onEntityPartChange(editingEntityPart.id, { x })} />
+                    <NumberField ariaLabel='Part position Y' label='Position Y' value={editingEntityPart.y} onChange={y => onEntityPartChange(editingEntityPart.id, { y })} />
+                    <NumberField ariaLabel='Part position Z' label='Position Z' value={editingEntityPart.z} onChange={z => onEntityPartChange(editingEntityPart.id, { z })} />
+                    <ValueSlider ariaLabel='Part width' label='Width' min={8} max={150} suffix='%' value={editingEntityPart.scaleX * 100} onChange={value => onEntityPartChange(editingEntityPart.id, { scaleX: value / 100 })} />
+                    <ValueSlider ariaLabel='Part height' label='Height' min={8} max={150} suffix='%' value={editingEntityPart.scaleY * 100} onChange={value => onEntityPartChange(editingEntityPart.id, { scaleY: value / 100 })} />
+                    <ValueSlider ariaLabel='Part depth' label='Depth' min={8} max={150} suffix='%' value={resolveAvatarEntityPartScaleZ(editingEntityPart) * 100} onChange={value => onEntityPartChange(editingEntityPart.id, { scaleZ: value / 100 })} />
+                    <NumberField ariaLabel='Part rotation X' label='Rotation X' suffix='°' value={editingEntityPart.rotationX ?? 0} onChange={rotationX => onEntityPartChange(editingEntityPart.id, { rotationX })} />
+                    <NumberField ariaLabel='Part rotation Y' label='Rotation Y' suffix='°' value={editingEntityPart.rotationY ?? 0} onChange={rotationY => onEntityPartChange(editingEntityPart.id, { rotationY })} />
+                    <NumberField ariaLabel='Part rotation Z' label='Rotation Z' suffix='°' value={editingEntityPart.rotationZ ?? 0} onChange={rotationZ => onEntityPartChange(editingEntityPart.id, { rotationZ })} />
+                    {editingEntityPart.shape === 'cone' || editingEntityPart.shape === 'frustum' || editingEntityPart.shape === 'half-cone'
+                      ? (
+                        <>
+                          <ValueSlider
+                            ariaLabel='Part cone roundness'
+                            label='Cone roundness'
+                            min={0}
+                            max={100}
+                            suffix='%'
+                            value={editingEntityPart.roundness ?? 24}
+                            onChange={roundness => onEntityPartChange(editingEntityPart.id, { roundness })}
+                          />
+                          <NumberField
+                            ariaLabel='Part cut direction'
+                            label='Cut direction'
+                            suffix='°'
+                            value={editingEntityPart.cutAngle ?? 0}
+                            onChange={cutAngle => onEntityPartChange(editingEntityPart.id, { cutAngle })}
+                          />
+                          <ToggleRow
+                            checked={editingEntityPart.hollow ?? false}
+                            icon='body'
+                            label='Hollow'
+                            onChange={() => onEntityPartChange(editingEntityPart.id, { hollow: !(editingEntityPart.hollow ?? false) })}
+                          />
+                        </>
+                      )
+                      : null}
+                    {editingEntityPart.shape === 'trapezoid'
+                      ? (
+                        <ValueSlider
+                          ariaLabel='Part corner roundness'
+                          label='Corner roundness'
+                          min={0}
+                          max={100}
+                          suffix='%'
+                          value={editingEntityPart.roundness ?? 72}
+                          onChange={roundness => onEntityPartChange(editingEntityPart.id, { roundness })}
+                        />
+                      )
+                      : null}
+                  </div>
+                )}
+            </>
           )
           : null}
 
@@ -985,6 +1248,18 @@ export function AvatarControls({
               {showAvatarShadow
                 ? (
                   <div className='avatar-controls__parameter-controls'>
+                    <label className='avatar-controls__color-control'>
+                      <span>{t('Color')}</span>
+                      <span>
+                        <input
+                          type='color'
+                          aria-label='Avatar shadow color'
+                          value={avatarShadowStyle.color ?? '#000000'}
+                          onChange={event => onAvatarShadowStyleChange({ color: event.currentTarget.value })}
+                        />
+                        <output>{(avatarShadowStyle.color ?? '#000000').toUpperCase()}</output>
+                      </span>
+                    </label>
                     <ValueSlider
                       ariaLabel='Avatar shadow direction'
                       label='Direction'
@@ -1161,6 +1436,40 @@ export function AvatarControls({
           )
           : null}
       </div>
+      {pendingPalette == null
+        ? null
+        : (
+          <div
+            className='avatar-controls__palette-confirmation-backdrop'
+            role='presentation'
+            onKeyDown={event => {
+              if (event.key !== 'Escape') return
+              event.stopPropagation()
+              setPendingPaletteId(null)
+            }}
+          >
+            <div
+              className='avatar-controls__palette-confirmation'
+              role='alertdialog'
+              aria-labelledby='avatar-palette-confirmation-title'
+              aria-describedby='avatar-palette-confirmation-description'
+              aria-modal='true'
+            >
+              <div id='avatar-palette-confirmation-title' className='avatar-controls__palette-confirmation-title'>
+                {t('Apply palette to all parts?')}
+              </div>
+              <p id='avatar-palette-confirmation-description'>
+                {t('This entity uses multiple materials. Applying this palette will replace all part colors.')}
+              </p>
+              <div className='avatar-controls__palette-confirmation-actions'>
+                <button type='button' onClick={() => setPendingPaletteId(null)}>{t('Cancel')}</button>
+                <button ref={paletteConfirmActionRef} type='button' onClick={handlePaletteConfirm}>
+                  {t('Apply to all')}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
     </aside>
   )
 }

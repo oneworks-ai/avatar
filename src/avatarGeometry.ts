@@ -1,5 +1,33 @@
-export const AVATAR_BODY_SHAPES = ['sphere', 'ellipse', 'square', 'rounded', 'capsule', 'diamond'] as const
+export const AVATAR_BODY_SHAPES = [
+  'sphere',
+  'ellipse',
+  'square',
+  'rounded',
+  'capsule',
+  'teardrop',
+  'diamond',
+  'trapezoid',
+  'cone',
+  'frustum',
+  'half-cone'
+] as const
 export type AvatarBodyShape = (typeof AVATAR_BODY_SHAPES)[number]
+
+export interface AvatarBodyGeometryOptions {
+  readonly cutAngle?: number
+  readonly faceOffsetY?: number
+  readonly hollow?: boolean
+  readonly occlusionAmount?: number
+  readonly occlusionPole?: 'bottom' | 'top'
+  readonly rotationX?: number
+  readonly rotationY?: number
+  readonly rotationZ?: number
+  readonly roundness?: number
+  readonly scaleX?: number
+  readonly scaleY?: number
+  readonly scaleZ?: number
+  readonly topScale?: number
+}
 
 export interface AvatarPose {
   readonly pitch: number
@@ -25,6 +53,7 @@ export interface AvatarFaceShadowStyle {
 }
 
 export type AvatarEyeShape = 'ellipse' | 'rounded'
+export type AvatarMouthShape = 'curve' | 'ellipse' | 'rounded' | 'rounded-triangle'
 export type AvatarNoseShape = 'ellipse' | 'inverted-triangle' | 'rounded'
 
 export interface AvatarFaceStyle {
@@ -37,6 +66,7 @@ export interface AvatarFaceStyle {
   readonly mouthEnabled: boolean
   readonly mouthHeight: number
   readonly mouthRotation: number
+  readonly mouthShape: AvatarMouthShape
   readonly mouthWidth: number
   readonly mouthY: number
   readonly noseEnabled: boolean
@@ -60,6 +90,7 @@ export const DEFAULT_AVATAR_FACE_STYLE: AvatarFaceStyle = {
   mouthEnabled: false,
   mouthHeight: 12,
   mouthRotation: 0,
+  mouthShape: 'curve',
   mouthWidth: 52,
   mouthY: 52,
   noseEnabled: false,
@@ -67,7 +98,7 @@ export const DEFAULT_AVATAR_FACE_STYLE: AvatarFaceStyle = {
   noseRotation: 0,
   noseShape: 'inverted-triangle',
   noseWidth: 10,
-  noseY: 14,
+  noseY: 22,
   rotation: 0,
   rightEyeRotation: 0,
   width: 28
@@ -107,6 +138,8 @@ export interface BodyCell {
 
 export interface BodyGeometry {
   readonly cells: readonly BodyCell[]
+  readonly cavityPath?: string
+  readonly occlusionPath?: string
   readonly outlinePath: string
 }
 
@@ -127,6 +160,7 @@ interface ShapeSpec {
   readonly exponent: number
   readonly faceCurvature: number
   readonly faceScale: number
+  readonly profile: 'cone' | 'frustum' | 'half-cone' | 'superellipsoid' | 'teardrop' | 'trapezoid'
   readonly radiusX: number
   readonly radiusY: number
   readonly radiusZ: number
@@ -157,12 +191,17 @@ const MOUTH_CAP_STEPS = 8
 const TRIANGLE_EDGE_STEPS = 10
 
 const SHAPE_SPECS: Readonly<Record<AvatarBodyShape, ShapeSpec>> = {
-  capsule: { exponent: 0.52, faceCurvature: 0.52, faceScale: 0.52, radiusX: 150, radiusY: 109, radiusZ: 109 },
-  diamond: { exponent: 1.65, faceCurvature: 0.72, faceScale: 1.12, radiusX: 139, radiusY: 139, radiusZ: 106 },
-  ellipse: { exponent: 1, faceCurvature: 1, faceScale: 1, radiusX: 153, radiusY: 118, radiusZ: 122 },
-  rounded: { exponent: 0.5, faceCurvature: 0.55, faceScale: 0.5, radiusX: 132, radiusY: 132, radiusZ: 116 },
-  sphere: { exponent: 1, faceCurvature: 1, faceScale: 1, radiusX: 139, radiusY: 139, radiusZ: 139 },
-  square: { exponent: 0.3, faceCurvature: 0.28, faceScale: 0.38, radiusX: 132, radiusY: 132, radiusZ: 108 }
+  capsule: { exponent: 0.52, faceCurvature: 0.52, faceScale: 0.52, profile: 'superellipsoid', radiusX: 150, radiusY: 109, radiusZ: 109 },
+  cone: { exponent: 1, faceCurvature: .8, faceScale: .8, profile: 'cone', radiusX: 139, radiusY: 139, radiusZ: 124 },
+  diamond: { exponent: 1.65, faceCurvature: 0.72, faceScale: 1.12, profile: 'superellipsoid', radiusX: 139, radiusY: 139, radiusZ: 106 },
+  ellipse: { exponent: 1, faceCurvature: 1, faceScale: 1, profile: 'superellipsoid', radiusX: 153, radiusY: 118, radiusZ: 122 },
+  frustum: { exponent: 1, faceCurvature: .72, faceScale: .72, profile: 'frustum', radiusX: 139, radiusY: 139, radiusZ: 124 },
+  'half-cone': { exponent: 1, faceCurvature: .8, faceScale: .8, profile: 'half-cone', radiusX: 139, radiusY: 139, radiusZ: 124 },
+  rounded: { exponent: 0.5, faceCurvature: 0.55, faceScale: 0.5, profile: 'superellipsoid', radiusX: 132, radiusY: 132, radiusZ: 116 },
+  sphere: { exponent: 1, faceCurvature: 1, faceScale: 1, profile: 'superellipsoid', radiusX: 139, radiusY: 139, radiusZ: 139 },
+  square: { exponent: 0.3, faceCurvature: 0.28, faceScale: 0.38, profile: 'superellipsoid', radiusX: 132, radiusY: 132, radiusZ: 108 },
+  teardrop: { exponent: .78, faceCurvature: .7, faceScale: .72, profile: 'teardrop', radiusX: 132, radiusY: 148, radiusZ: 112 },
+  trapezoid: { exponent: .56, faceCurvature: .62, faceScale: .72, profile: 'trapezoid', radiusX: 142, radiusY: 132, radiusZ: 116 }
 }
 
 const clamp = (value: number, min: number, max: number) => Math.min(Math.max(value, min), max)
@@ -200,6 +239,33 @@ const rotate = (point: Vec3, pose: AvatarPose): Vec3 => {
   }
 }
 
+const rotateLocal = (point: Vec3, options: AvatarBodyGeometryOptions): Vec3 => {
+  const rotationX = (options.rotationX ?? 0) * Math.PI / 180
+  const rotationY = (options.rotationY ?? 0) * Math.PI / 180
+  const rotationZ = (options.rotationZ ?? 0) * Math.PI / 180
+  const cosX = Math.cos(rotationX)
+  const sinX = Math.sin(rotationX)
+  const xRotated = {
+    x: point.x,
+    y: point.y * cosX - point.z * sinX,
+    z: point.y * sinX + point.z * cosX
+  }
+  const cosY = Math.cos(rotationY)
+  const sinY = Math.sin(rotationY)
+  const yRotated = {
+    x: xRotated.x * cosY + xRotated.z * sinY,
+    y: xRotated.y,
+    z: -xRotated.x * sinY + xRotated.z * cosY
+  }
+  const cosZ = Math.cos(rotationZ)
+  const sinZ = Math.sin(rotationZ)
+  return {
+    x: yRotated.x * cosZ - yRotated.y * sinZ,
+    y: yRotated.x * sinZ + yRotated.y * cosZ,
+    z: yRotated.z
+  }
+}
+
 const project = (point: Vec3): Vec2 => ({
   x: CENTER_X + point.x,
   y: CENTER_Y + point.y
@@ -209,8 +275,67 @@ const getSurfacePoint = (
   spec: ShapeSpec,
   longitude: number,
   latitude: number,
-  faceCoordinates = false
+  faceCoordinates = false,
+  options: AvatarBodyGeometryOptions = {}
 ): Vec3 => {
+  if (spec.profile === 'teardrop') {
+    const scale = faceCoordinates ? spec.faceScale : 1
+    const scaledLongitude = longitude * scale
+    const scaledLatitude = latitude * scale
+    const vertical = signedPow(Math.sin(scaledLatitude), spec.exponent)
+    const progress = clamp((vertical + 1) / 2, 0, 1)
+    const latitudeRadius = Math.max(Math.cos(scaledLatitude), 0)
+    const latitudeFactor = latitudeRadius ** spec.exponent
+    const widthTaper = interpolate(.46, 1.24, progress)
+    const depthTaper = interpolate(.7, 1.12, progress)
+
+    return {
+      x: spec.radiusX * widthTaper * latitudeFactor * signedPow(Math.sin(scaledLongitude), spec.exponent),
+      y: spec.radiusY * vertical,
+      z: spec.radiusZ * depthTaper * latitudeFactor * signedPow(Math.cos(scaledLongitude), spec.exponent)
+    }
+  }
+  if (spec.profile === 'trapezoid') {
+    const scale = faceCoordinates ? spec.faceScale : 1
+    const scaledLongitude = longitude * scale
+    const scaledLatitude = latitude * scale
+    const roundness = clamp(options.roundness ?? 72, 0, 100) / 100
+    const exponent = interpolate(.34, .76, roundness)
+    const latitudeRadius = Math.max(Math.cos(scaledLatitude), 0)
+    const latitudeFactor = latitudeRadius ** exponent
+    const vertical = signedPow(Math.sin(scaledLatitude), exponent)
+    const progress = clamp((vertical + 1) / 2, 0, 1)
+    const horizontalTaper = interpolate(options.topScale ?? .82, 1.08, progress)
+    const depthTaper = interpolate(.92, 1.04, progress)
+
+    return {
+      x: spec.radiusX * horizontalTaper * latitudeFactor * signedPow(Math.sin(scaledLongitude), exponent),
+      y: spec.radiusY * vertical,
+      z: spec.radiusZ * depthTaper * latitudeFactor * signedPow(Math.cos(scaledLongitude), exponent)
+    }
+  }
+  if (spec.profile !== 'superellipsoid' && !faceCoordinates) {
+    const progress = clamp((latitude + Math.PI / 2) / Math.PI, 0, 1)
+    const roundness = clamp(options.roundness ?? 24, 0, 100) / 100
+    const easedProgress = progress * progress * (3 - 2 * progress)
+    const taperedProgress = spec.profile === 'frustum'
+      ? interpolate(progress, easedProgress, roundness * .55)
+      // A sub-linear radius profile keeps a zero-radius apex while giving
+      // the tip a continuous, rounded shoulder. A non-zero apex radius would
+      // make this a frustum and visibly cut the tip flat.
+      : progress ** interpolate(1, .56, roundness)
+    const tipRatio = spec.profile === 'frustum' ? .46 : 0
+    const ringRadius = interpolate(tipRatio, 1, taperedProgress)
+    const cutAngle = (options.cutAngle ?? 0) * Math.PI / 180
+    const sampledLongitude = spec.profile === 'half-cone'
+      ? cutAngle + longitude / 2
+      : longitude
+    return {
+      x: spec.radiusX * ringRadius * Math.sin(sampledLongitude),
+      y: spec.radiusY * (progress * 2 - 1),
+      z: spec.radiusZ * ringRadius * Math.cos(sampledLongitude)
+    }
+  }
   const scale = faceCoordinates ? spec.faceScale : 1
   const scaledLongitude = longitude * scale
   const scaledLatitude = latitude * scale
@@ -228,11 +353,12 @@ const getSurfaceNormal = (
   spec: ShapeSpec,
   longitude: number,
   latitude: number,
-  faceCoordinates = false
+  faceCoordinates = false,
+  options: AvatarBodyGeometryOptions = {}
 ): Vec3 => {
-  const center = getSurfacePoint(spec, longitude, latitude, faceCoordinates)
-  const longitudePoint = getSurfacePoint(spec, longitude + NORMAL_DELTA, latitude, faceCoordinates)
-  const latitudePoint = getSurfacePoint(spec, longitude, latitude + NORMAL_DELTA, faceCoordinates)
+  const center = getSurfacePoint(spec, longitude, latitude, faceCoordinates, options)
+  const longitudePoint = getSurfacePoint(spec, longitude + NORMAL_DELTA, latitude, faceCoordinates, options)
+  const latitudePoint = getSurfacePoint(spec, longitude, latitude + NORMAL_DELTA, faceCoordinates, options)
   return normalize(cross(subtract(longitudePoint, center), subtract(latitudePoint, center)))
 }
 
@@ -256,6 +382,87 @@ const convexHull = (points: readonly Vec2[]): Vec2[] => {
   lower.pop()
   upper.pop()
   return [...lower, ...upper]
+}
+
+const roundedPolygonPath = (points: readonly Vec2[], radius: number) => {
+  if (points.length < 3 || radius <= 0) {
+    return points.length === 0
+      ? ''
+      : `M ${points.map(point => `${point.x.toFixed(2)} ${point.y.toFixed(2)}`).join(' L ')} Z`
+  }
+
+  const corners = points.map((point, index) => {
+    const previous = points[(index + points.length - 1) % points.length]!
+    const next = points[(index + 1) % points.length]!
+    const previousLength = Math.hypot(previous.x - point.x, previous.y - point.y)
+    const nextLength = Math.hypot(next.x - point.x, next.y - point.y)
+    const trim = Math.min(radius, previousLength * .42, nextLength * .42)
+    return {
+      control: point,
+      entry: {
+        x: point.x + (previous.x - point.x) / (previousLength || 1) * trim,
+        y: point.y + (previous.y - point.y) / (previousLength || 1) * trim
+      },
+      exit: {
+        x: point.x + (next.x - point.x) / (nextLength || 1) * trim,
+        y: point.y + (next.y - point.y) / (nextLength || 1) * trim
+      }
+    }
+  })
+
+  const first = corners[0]!
+  const segments = corners.slice(1).map(corner =>
+    `L ${corner.entry.x.toFixed(2)} ${corner.entry.y.toFixed(2)} ` +
+    `Q ${corner.control.x.toFixed(2)} ${corner.control.y.toFixed(2)} ${corner.exit.x.toFixed(2)} ${corner.exit.y.toFixed(2)}`
+  )
+  segments.push(
+    `L ${first.entry.x.toFixed(2)} ${first.entry.y.toFixed(2)} ` +
+    `Q ${first.control.x.toFixed(2)} ${first.control.y.toFixed(2)} ${first.exit.x.toFixed(2)} ${first.exit.y.toFixed(2)}`
+  )
+  return `M ${first.exit.x.toFixed(2)} ${first.exit.y.toFixed(2)} ${segments.join(' ')} Z`
+}
+
+const roundedVertexPolygonPath = (
+  points: readonly Vec2[],
+  vertex: Vec2,
+  radius: number
+) => {
+  if (points.length < 3 || radius <= 0) return roundedPolygonPath(points, 0)
+  const vertexIndex = points.reduce((nearestIndex, point, index) => {
+    const nearest = points[nearestIndex]!
+    return Math.hypot(point.x - vertex.x, point.y - vertex.y) < Math.hypot(nearest.x - vertex.x, nearest.y - vertex.y)
+      ? index
+      : nearestIndex
+  }, 0)
+  const ordered = [
+    ...points.slice(vertexIndex),
+    ...points.slice(0, vertexIndex)
+  ]
+  const apex = ordered[0]!
+  const findCutIndex = (direction: 1 | -1) => {
+    for (let offset = 1; offset < ordered.length; offset += 1) {
+      const index = direction === 1 ? offset : ordered.length - offset
+      const point = ordered[index]!
+      if (Math.hypot(point.x - apex.x, point.y - apex.y) >= radius) return index
+    }
+    return direction === 1 ? 1 : ordered.length - 1
+  }
+  const nextIndex = findCutIndex(1)
+  const previousIndex = findCutIndex(-1)
+  const pointAtRadius = (point: Vec2) => {
+    const distance = Math.hypot(point.x - apex.x, point.y - apex.y) || 1
+    const scale = Math.min(radius / distance, 1)
+    return {
+      x: apex.x + (point.x - apex.x) * scale,
+      y: apex.y + (point.y - apex.y) * scale
+    }
+  }
+  const entry = pointAtRadius(ordered[previousIndex]!)
+  const exit = pointAtRadius(ordered[nextIndex]!)
+  const remainder = ordered.slice(nextIndex, previousIndex + 1)
+  return `M ${entry.x.toFixed(2)} ${entry.y.toFixed(2)} ` +
+    `Q ${apex.x.toFixed(2)} ${apex.y.toFixed(2)} ${exit.x.toFixed(2)} ${exit.y.toFixed(2)} ` +
+    `${remainder.map(point => `L ${point.x.toFixed(2)} ${point.y.toFixed(2)}`).join(' ')} Z`
 }
 
 const toPointString = (point: Vec2) => `${point.x.toFixed(2)},${point.y.toFixed(2)}`
@@ -377,32 +584,45 @@ const buildEllipseBoundary = (
   })
 }
 
-const sampleBoundaryEdge = (from: Vec2, to: Vec2) => {
-  return Array.from({ length: TRIANGLE_EDGE_STEPS }, (_, index) => {
-    const progress = index / TRIANGLE_EDGE_STEPS
-    return {
-      x: interpolate(from.x, to.x, progress),
-      y: interpolate(from.y, to.y, progress)
-    }
-  })
-}
-
-const buildInvertedTriangleBoundary = (
+const buildRoundedInvertedTriangleBoundary = (
   centerX: number,
   centerY: number,
   width: number,
   height: number,
   rotationDegrees: number
 ): Vec2[] => {
-  const points = [
-    { x: centerX - width / 2, y: centerY - height / 2 },
-    { x: centerX + width / 2, y: centerY - height / 2 },
-    { x: centerX, y: centerY + height / 2 }
+  const sampleCurve = (start: Vec2, controlA: Vec2, controlB: Vec2, end: Vec2) => (
+    Array.from({ length: TRIANGLE_EDGE_STEPS }, (_, step) => {
+      const progress = (step + 1) / TRIANGLE_EDGE_STEPS
+      const inverseProgress = 1 - progress
+      return {
+        x: inverseProgress ** 3 * start.x +
+          3 * inverseProgress ** 2 * progress * controlA.x +
+          3 * inverseProgress * progress ** 2 * controlB.x +
+          progress ** 3 * end.x,
+        y: inverseProgress ** 3 * start.y +
+          3 * inverseProgress ** 2 * progress * controlA.y +
+          3 * inverseProgress * progress ** 2 * controlB.y +
+          progress ** 3 * end.y
+      }
+    })
+  )
+  const point = (widthRatio: number, heightRatio: number): Vec2 => ({
+    x: centerX + width * widthRatio,
+    y: centerY + height * heightRatio
+  })
+  const leftShoulder = point(-.5, -.18)
+  const rightShoulder = point(.5, -.18)
+  const rightTip = point(.07, .45)
+  const leftTip = point(-.07, .45)
+  const boundary = [
+    leftShoulder,
+    ...sampleCurve(leftShoulder, point(-.45, -.5), point(.45, -.5), rightShoulder),
+    ...sampleCurve(rightShoulder, point(.5, .08), point(.18, .42), rightTip),
+    ...sampleCurve(rightTip, point(.04, .52), point(-.04, .52), leftTip),
+    ...sampleCurve(leftTip, point(-.18, .42), point(-.5, .08), leftShoulder)
   ]
-  return points.flatMap((point, index) => {
-    const nextPoint = points[(index + 1) % points.length]!
-    return sampleBoundaryEdge(point, nextPoint)
-  }).map(point => rotateFacePoint(point, centerX, centerY, rotationDegrees))
+  return boundary.map(point => rotateFacePoint(point, centerX, centerY, rotationDegrees))
 }
 
 const buildMouthBoundary = (
@@ -480,10 +700,12 @@ export const buildAvatarBodyGeometry = (
   bodyShape: AvatarBodyShape,
   pose: AvatarPose,
   lightDirection: AvatarLightDirection,
-  gridDensity: number = AVATAR_GRID_DENSITY.default
+  gridDensity: number = AVATAR_GRID_DENSITY.default,
+  options: AvatarBodyGeometryOptions = {}
 ): BodyGeometry => {
   const spec = SHAPE_SPECS[bodyShape]
   const vertices: Vec2[] = []
+  const occlusionVertices: Vec2[] = []
   const cells: BodyCell[] = []
   const azimuth = lightDirection.azimuth * Math.PI / 180
   const elevation = lightDirection.elevation * Math.PI / 180
@@ -495,12 +717,36 @@ export const buildAvatarBodyGeometry = (
   const densityScale = clamp(gridDensity, AVATAR_GRID_DENSITY.min, AVATAR_GRID_DENSITY.max) / 100
   const latitudeSteps = Math.max(Math.round(BASE_LATITUDE_STEPS * densityScale), 4)
   const longitudeSteps = Math.max(Math.round(BASE_LONGITUDE_STEPS * densityScale), 8)
+  const outlineLatitudeSteps = OUTLINE_LATITUDE_STEPS
+  const outlineLongitudeSteps = OUTLINE_LONGITUDE_STEPS
+  const scaleX = options.scaleX ?? 1
+  const scaleY = options.scaleY ?? 1
+  const scaleZ = options.scaleZ ?? 1
+  const transformPoint = (point: Vec3) => rotate(rotateLocal({
+    x: point.x * scaleX,
+    y: point.y * scaleY,
+    z: point.z * scaleZ
+  }, options), pose)
+  const transformNormal = (normal: Vec3) => rotate(rotateLocal(normalize({
+    x: normal.x / scaleX,
+    y: normal.y / scaleY,
+    z: normal.z / scaleZ
+  }), options), pose)
 
-  for (let latitudeIndex = 0; latitudeIndex <= OUTLINE_LATITUDE_STEPS; latitudeIndex += 1) {
-    const latitude = -Math.PI / 2 + latitudeIndex / OUTLINE_LATITUDE_STEPS * Math.PI
-    for (let longitudeIndex = 0; longitudeIndex <= OUTLINE_LONGITUDE_STEPS; longitudeIndex += 1) {
-      const longitude = -Math.PI + longitudeIndex / OUTLINE_LONGITUDE_STEPS * Math.PI * 2
-      vertices.push(project(rotate(getSurfacePoint(spec, longitude, latitude), pose)))
+  for (let latitudeIndex = 0; latitudeIndex <= outlineLatitudeSteps; latitudeIndex += 1) {
+    const latitude = -Math.PI / 2 + latitudeIndex / outlineLatitudeSteps * Math.PI
+    const latitudeProgress = latitudeIndex / outlineLatitudeSteps
+    for (let longitudeIndex = 0; longitudeIndex <= outlineLongitudeSteps; longitudeIndex += 1) {
+      const longitude = -Math.PI + longitudeIndex / outlineLongitudeSteps * Math.PI * 2
+      const projectedPoint = project(transformPoint(getSurfacePoint(spec, longitude, latitude, false, options)))
+      vertices.push(projectedPoint)
+      const occlusionAmount = clamp(options.occlusionAmount ?? 0, 0, 100) / 100
+      const withinOcclusionCap = options.occlusionPole === 'top'
+        ? latitudeProgress <= occlusionAmount
+        : options.occlusionPole === 'bottom'
+          ? latitudeProgress >= 1 - occlusionAmount
+          : false
+      if (withinOcclusionCap) occlusionVertices.push(projectedPoint)
     }
   }
 
@@ -510,18 +756,23 @@ export const buildAvatarBodyGeometry = (
     for (let longitudeIndex = 0; longitudeIndex < longitudeSteps; longitudeIndex += 1) {
       const longitudeStart = -Math.PI + longitudeIndex / longitudeSteps * Math.PI * 2
       const longitudeEnd = -Math.PI + (longitudeIndex + 1) / longitudeSteps * Math.PI * 2
-      const normal = rotate(
-        getSurfaceNormal(spec, (longitudeStart + longitudeEnd) / 2, (latitudeStart + latitudeEnd) / 2),
-        pose
+      const normal = transformNormal(
+        getSurfaceNormal(
+          spec,
+          (longitudeStart + longitudeEnd) / 2,
+          (latitudeStart + latitudeEnd) / 2,
+          false,
+          options
+        )
       )
       if (normal.z <= 0.015) continue
 
       const corners = [
-        getSurfacePoint(spec, longitudeStart, latitudeStart),
-        getSurfacePoint(spec, longitudeEnd, latitudeStart),
-        getSurfacePoint(spec, longitudeEnd, latitudeEnd),
-        getSurfacePoint(spec, longitudeStart, latitudeEnd)
-      ].map(point => rotate(point, pose))
+        getSurfacePoint(spec, longitudeStart, latitudeStart, false, options),
+        getSurfacePoint(spec, longitudeEnd, latitudeStart, false, options),
+        getSurfacePoint(spec, longitudeEnd, latitudeEnd, false, options),
+        getSurfacePoint(spec, longitudeStart, latitudeEnd, false, options)
+      ].map(transformPoint)
       const shade = clamp(
         normal.x * lightVector.x + normal.y * lightVector.y + normal.z * lightVector.z,
         -1,
@@ -538,12 +789,39 @@ export const buildAvatarBodyGeometry = (
   }
 
   const hull = convexHull(vertices)
-  const outlinePath = hull.length === 0
-    ? ''
-    : `M ${hull.map(point => `${point.x.toFixed(2)} ${point.y.toFixed(2)}`).join(' L ')} Z`
+  const occlusionHull = convexHull(occlusionVertices)
+  const roundness = clamp(options.roundness ?? 24, 0, 100) / 100
+  const apex = project(transformPoint(getSurfacePoint(spec, 0, -Math.PI / 2, false, options)))
+  const outlinePath = spec.profile === 'cone' || spec.profile === 'half-cone'
+    ? roundedVertexPolygonPath(hull, apex, 8 + roundness * 64)
+    : spec.profile === 'frustum'
+      ? roundedPolygonPath(hull, 4 + roundness * 22)
+      : roundedPolygonPath(hull, 0)
+  const cavityPoints = options.hollow && spec.profile !== 'superellipsoid'
+    ? Array.from({ length: outlineLongitudeSteps + 1 }, (_, index) => {
+        const longitude = -Math.PI + index / outlineLongitudeSteps * Math.PI * 2
+        return project(transformPoint(getSurfacePoint(spec, longitude, Math.PI / 2, false, options)))
+      })
+    : []
+  const cavityHull = convexHull(cavityPoints)
+  const cavityCenter = cavityHull.length === 0
+    ? null
+    : cavityHull.reduce((center, point) => ({ x: center.x + point.x, y: center.y + point.y }), { x: 0, y: 0 })
+  const cavityPath = cavityCenter == null
+    ? undefined
+    : (() => {
+        const center = { x: cavityCenter.x / cavityHull.length, y: cavityCenter.y / cavityHull.length }
+        const inset = cavityHull.map(point => ({
+          x: center.x + (point.x - center.x) * .68,
+          y: center.y + (point.y - center.y) * .68
+        }))
+        return `M ${inset.map(point => `${point.x.toFixed(2)} ${point.y.toFixed(2)}`).join(' L ')} Z`
+      })()
 
   return {
     cells: cells.sort((left, right) => left.depth - right.depth),
+    cavityPath,
+    occlusionPath: occlusionHull.length === 0 ? undefined : roundedPolygonPath(occlusionHull, 0),
     outlinePath
   }
 }
@@ -558,21 +836,35 @@ export const resolveAvatarSurfaceShadeOpacity = (shade: number, lightDistance: n
 export const projectDefaultFace = (
   pose: AvatarPose,
   bodyShape: AvatarBodyShape,
-  faceStyle: AvatarFaceStyle
+  faceStyle: AvatarFaceStyle,
+  options: AvatarBodyGeometryOptions = {}
 ): ProjectedFace => {
   const spec = SHAPE_SPECS[bodyShape]
   const resolvedFaceStyle = resolveAvatarFaceStyle(faceStyle)
-  const faceNormal = rotate({ x: 0, y: 0, z: 1 }, pose)
+  const scaleX = options.scaleX ?? 1
+  const scaleY = options.scaleY ?? 1
+  const scaleZ = options.scaleZ ?? 1
+  const transformFacePoint = (point: Vec3) => rotate(rotateLocal({
+    x: point.x * scaleX,
+    y: point.y * scaleY,
+    z: point.z * scaleZ
+  }, options), pose)
+  const transformFaceNormal = (normal: Vec3) => rotate(rotateLocal(normalize({
+    x: normal.x / scaleX,
+    y: normal.y / scaleY,
+    z: normal.z / scaleZ
+  }), options), pose)
+  const faceNormal = transformFaceNormal({ x: 0, y: 0, z: 1 })
   const projectPart = (
     id: string,
     centerX: number,
     centerY: number,
     boundary: readonly Vec2[]
   ): ProjectedEye | null => {
-    const centerNormal = rotate(getFaceNormal(spec, { x: centerX, y: centerY }), pose)
+    const centerNormal = transformFaceNormal(getFaceNormal(spec, { x: centerX, y: centerY }))
     if (centerNormal.z <= 0.015) return null
 
-    const projectedBoundary = boundary.map(point => project(rotate(getFacePoint(spec, point), pose)))
+    const projectedBoundary = boundary.map(point => project(transformFacePoint(getFacePoint(spec, point))))
     return {
       depth: clamp(centerNormal.z, 0, 1),
       id,
@@ -580,39 +872,47 @@ export const projectDefaultFace = (
     }
   }
   const eyeOffset = resolvedFaceStyle.gap / 2 + resolvedFaceStyle.width / 2
+  const faceOffsetY = options.faceOffsetY ?? 0
+  const eyeCenterY = faceOffsetY
   const eyes = [-eyeOffset, eyeOffset].flatMap((centerX, index) => {
     const eyeRotation = resolvedFaceStyle.rotation + (index === 0
       ? resolvedFaceStyle.leftEyeRotation
       : resolvedFaceStyle.rightEyeRotation)
     const boundary = resolvedFaceStyle.eyeShape === 'ellipse'
-      ? buildEllipseBoundary(centerX, 0, resolvedFaceStyle.width, resolvedFaceStyle.height, eyeRotation)
+      ? buildEllipseBoundary(centerX, eyeCenterY, resolvedFaceStyle.width, resolvedFaceStyle.height, eyeRotation)
       : buildRoundedRectangleBoundary(
         centerX,
-        0,
+        eyeCenterY,
         resolvedFaceStyle.width,
         resolvedFaceStyle.height,
         eyeRotation,
         resolvedFaceStyle.eyeRoundness
       )
-    const eye = projectPart(`eye-${index}`, centerX, 0, boundary)
+    const eye = projectPart(`eye-${index}`, centerX, eyeCenterY, boundary)
     return eye == null ? [] : [eye]
   })
-  const noseBoundary = faceStyle.noseShape === 'ellipse'
-    ? buildEllipseBoundary(0, faceStyle.noseY, faceStyle.noseWidth, faceStyle.noseHeight, faceStyle.noseRotation)
-    : faceStyle.noseShape === 'rounded'
+  const noseBoundary = resolvedFaceStyle.noseShape === 'ellipse'
+    ? buildEllipseBoundary(
+      0,
+      resolvedFaceStyle.noseY + faceOffsetY,
+      resolvedFaceStyle.noseWidth,
+      resolvedFaceStyle.noseHeight,
+      resolvedFaceStyle.noseRotation
+    )
+    : resolvedFaceStyle.noseShape === 'rounded'
     ? buildRoundedRectangleBoundary(
       0,
-      faceStyle.noseY,
-      faceStyle.noseWidth,
-      faceStyle.noseHeight,
-      faceStyle.noseRotation
+      resolvedFaceStyle.noseY + faceOffsetY,
+      resolvedFaceStyle.noseWidth,
+      resolvedFaceStyle.noseHeight,
+      resolvedFaceStyle.noseRotation
     )
-    : buildInvertedTriangleBoundary(
+    : buildRoundedInvertedTriangleBoundary(
       0,
-      faceStyle.noseY,
-      faceStyle.noseWidth,
-      faceStyle.noseHeight,
-      faceStyle.noseRotation
+      resolvedFaceStyle.noseY + faceOffsetY,
+      resolvedFaceStyle.noseWidth,
+      resolvedFaceStyle.noseHeight,
+      resolvedFaceStyle.noseRotation
     )
 
   return {
@@ -620,17 +920,41 @@ export const projectDefaultFace = (
     mouth: projectPart(
       'mouth',
       0,
-      faceStyle.mouthY,
-      buildMouthBoundary(
-        0,
-        faceStyle.mouthY,
-        faceStyle.mouthWidth,
-        faceStyle.mouthHeight,
-        faceStyle.mouthCurve,
-        faceStyle.mouthRotation
-      )
+      resolvedFaceStyle.mouthY,
+      resolvedFaceStyle.mouthShape === 'curve'
+        ? buildMouthBoundary(
+          0,
+          resolvedFaceStyle.mouthY,
+          resolvedFaceStyle.mouthWidth,
+          resolvedFaceStyle.mouthHeight,
+          resolvedFaceStyle.mouthCurve,
+          resolvedFaceStyle.mouthRotation
+        )
+        : resolvedFaceStyle.mouthShape === 'ellipse'
+        ? buildEllipseBoundary(
+          0,
+          resolvedFaceStyle.mouthY,
+          resolvedFaceStyle.mouthWidth,
+          resolvedFaceStyle.mouthHeight,
+          resolvedFaceStyle.mouthRotation
+        )
+        : resolvedFaceStyle.mouthShape === 'rounded'
+        ? buildRoundedRectangleBoundary(
+          0,
+          resolvedFaceStyle.mouthY,
+          resolvedFaceStyle.mouthWidth,
+          resolvedFaceStyle.mouthHeight,
+          resolvedFaceStyle.mouthRotation
+        )
+        : buildRoundedInvertedTriangleBoundary(
+          0,
+          resolvedFaceStyle.mouthY,
+          resolvedFaceStyle.mouthWidth,
+          resolvedFaceStyle.mouthHeight,
+          resolvedFaceStyle.mouthRotation
+        )
     ),
-    nose: projectPart('nose', 0, faceStyle.noseY, noseBoundary),
+    nose: projectPart('nose', 0, resolvedFaceStyle.noseY, noseBoundary),
     visible: faceNormal.z > 0.015
   }
 }

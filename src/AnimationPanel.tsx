@@ -348,9 +348,7 @@ export function AnimationPanel({
                       aria-pressed={activeKeyframeIndex === index}
                       onClick={() => onKeyframeSelect(index)}
                     >
-                      {keyframe.screenshot == null
-                        ? <span className='avatar-animation-panel__keyframe-fallback'>{index + 1}</span>
-                        : <img src={keyframe.screenshot} alt='' aria-hidden='true' />}
+                      {renderKeyframePreview(keyframe)}
                       <span className='avatar-animation-panel__keyframe-number'>{index + 1}</span>
                     </button>
                     <button
@@ -462,9 +460,7 @@ export function AnimationPanel({
                         aria-pressed={selectedKeyframeIndex === index}
                         onClick={() => onKeyframeSelect(index)}
                       >
-                        {keyframe.screenshot == null
-                          ? renderKeyframePreview(keyframe)
-                          : <img src={keyframe.screenshot} alt='' aria-hidden='true' />}
+                        {renderKeyframePreview(keyframe)}
                         <span>{index + 1}</span>
                       </button>
                     ))}
@@ -519,9 +515,7 @@ export function AnimationPanel({
                                 aria-pressed={startFrameIndex === index}
                                 onClick={() => onStartFrameChange(index)}
                               >
-                                {keyframe.screenshot == null
-                                  ? renderKeyframePreview(keyframe)
-                                  : <img src={keyframe.screenshot} alt='' aria-hidden='true' />}
+                                {renderKeyframePreview(keyframe)}
                                 <span>{index + 1}</span>
                               </button>
                             ))}
