@@ -118,7 +118,7 @@
     padding: 3px;
     background: var(--bg-color);
 
-    button {
+    .avatar-animation-panel__tab-button {
       display: inline-flex;
       min-width: 98px;
       height: 26px;
@@ -155,11 +155,76 @@
     }
   }
 
+  &__create-tab {
+    display: flex;
+    min-width: 98px;
+    height: 26px;
+    align-items: center;
+    overflow: hidden;
+    border-radius: 5px;
+    color: var(--sub-text-color);
+
+    &[data-selected='true'] {
+      background: var(--primary-soft-bg);
+      color: var(--primary-text-color);
+    }
+
+    .avatar-animation-panel__tab-button {
+      min-width: 0;
+      flex: 1 1 auto;
+      padding-right: 3px;
+      background: transparent;
+      color: inherit;
+
+      &[aria-selected='true'] {
+        background: transparent;
+      }
+    }
+  }
+
   &__tab-label {
     max-width: 140px;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
+  }
+
+  &__deselect-library {
+    display: inline-grid;
+    min-width: 20px;
+    width: 20px;
+    height: 20px;
+    flex: 0 0 20px;
+    place-items: center;
+    border: 0;
+    border-radius: 5px;
+    padding: 0;
+    margin-right: 3px;
+    background: transparent;
+    color: inherit;
+    cursor: pointer;
+
+    &:hover,
+    &:focus-visible {
+      outline: none;
+      background: var(--primary-soft-bg);
+      color: var(--primary-text-color);
+    }
+
+    svg {
+      width: 12px;
+      height: 12px;
+    }
+
+    svg {
+      width: 15px;
+      height: 15px;
+      fill: none;
+      stroke: currentColor;
+      stroke-linecap: round;
+      stroke-linejoin: round;
+      stroke-width: 1.45;
+    }
   }
 
   &__body {

@@ -1251,6 +1251,20 @@ function App() {
     setAnimationDraftSource(animationKeyframes.length > 0 ? 'custom' : null)
   }
 
+  const handleAnimationLibraryDeselect = () => {
+    stopAnimationPlayback()
+    setEditingSavedAnimationId(null)
+    setSelectedAnimationKey(null)
+    setSelectedAnimationKeyframe(null)
+    setActiveAnimationKeyframe(null)
+    setAnimationKeyframes([])
+    setAnimationName('Untitled animation')
+    setAnimationStartFrameIndex(0)
+    setAnimationLockStartPosition(false)
+    setAnimationPlaybackMode('once')
+    setAnimationDraftSource(null)
+  }
+
   const handlePresetAnimationSelect = (preset: AvatarAnimationPreset) => {
     stopAnimationPlayback()
     const resolvedPreset = resolveAvatarAnimationPreset(
@@ -1859,6 +1873,7 @@ function App() {
               onKeyframeEasingChange={handleAnimationKeyframeEasingChange}
               onKeyframeSelect={handleAnimationKeyframeSelect}
               onKeyframeRemove={handleRemoveAnimationKeyframe}
+              onLibraryDeselect={handleAnimationLibraryDeselect}
               onLockStartPositionChange={handleAnimationLockStartPositionChange}
               onInteractionControlsDockChange={setInteractionControlsDocked}
               onClose={() => setAnimationOpen(false)}

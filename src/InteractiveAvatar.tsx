@@ -622,6 +622,11 @@ const useAnimatedFaceStyle = (target: AvatarFaceStyle, transitionsEnabled: boole
         eyeShape: target.eyeShape,
         gap: interpolate(from.gap, target.gap, easedProgress),
         height: interpolate(from.height, target.height, easedProgress),
+        leftEyeHeight: interpolate(
+          from.leftEyeHeight ?? from.height,
+          resolvedTarget.leftEyeHeight ?? resolvedTarget.height,
+          easedProgress
+        ),
         leftEyeRotation: interpolate(from.leftEyeRotation, resolvedTarget.leftEyeRotation, easedProgress),
         mouthCurve: interpolate(from.mouthCurve, target.mouthCurve, easedProgress),
         mouthEnabled: target.mouthEnabled,
@@ -637,6 +642,11 @@ const useAnimatedFaceStyle = (target: AvatarFaceStyle, transitionsEnabled: boole
         noseWidth: interpolate(from.noseWidth, target.noseWidth, easedProgress),
         noseY: interpolate(from.noseY, target.noseY, easedProgress),
         rotation: interpolate(from.rotation, target.rotation, easedProgress),
+        rightEyeHeight: interpolate(
+          from.rightEyeHeight ?? from.height,
+          resolvedTarget.rightEyeHeight ?? resolvedTarget.height,
+          easedProgress
+        ),
         rightEyeRotation: interpolate(from.rightEyeRotation, resolvedTarget.rightEyeRotation, easedProgress),
         width: interpolate(from.width, target.width, easedProgress)
       }
@@ -655,6 +665,7 @@ const useAnimatedFaceStyle = (target: AvatarFaceStyle, transitionsEnabled: boole
     target.eyeShape,
     target.gap,
     target.height,
+    target.leftEyeHeight,
     target.leftEyeRotation,
     target.mouthCurve,
     target.mouthEnabled,
@@ -670,6 +681,7 @@ const useAnimatedFaceStyle = (target: AvatarFaceStyle, transitionsEnabled: boole
     target.noseWidth,
     target.noseY,
     target.rotation,
+    target.rightEyeHeight,
     target.rightEyeRotation,
     target.width,
     transitionsEnabled

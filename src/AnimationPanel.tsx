@@ -28,6 +28,7 @@ interface AnimationPanelProps {
   readonly onKeyframeEasingChange: (index: number, easing: AvatarAnimationEasing) => void
   readonly onKeyframeRemove: (index: number) => void
   readonly onKeyframeSelect: (index: number) => void
+  readonly onLibraryDeselect: () => void
   readonly onLockStartPositionChange: (lockStartPosition: boolean) => void
   readonly onInteractionControlsDockChange: (docked: boolean) => void
   readonly onClose: () => void
@@ -108,6 +109,7 @@ export function AnimationPanel({
   onKeyframeEasingChange,
   onKeyframeRemove,
   onKeyframeSelect,
+  onLibraryDeselect,
   onLockStartPositionChange,
   onInteractionControlsDockChange,
   onClose,
@@ -266,22 +268,53 @@ export function AnimationPanel({
             <PlaybackIcon />
           </button>
           {interactionControls}
-          <div className='avatar-animation-panel__tabs' role='tablist' aria-label={t('Animation mode')}>
-            <button
-              id='avatar-animation-tab-create'
-              type='button'
-              role='tab'
-              aria-controls='avatar-animation-panel-create'
-              aria-selected={activeTab === 'create'}
-              aria-label={createTabLabel}
-              title={createTabLabel}
-              onClick={() => changeTab('create')}
+          <div
+            className='avatar-animation-panel__tabs'
+            role='tablist'
+            aria-label={t('Animation mode')}
+            data-has-deselect={selectedLibraryId == null ? 'false' : 'true'}
+          >
+            <div
+              className='avatar-animation-panel__create-tab'
+              data-selected={activeTab === 'create' ? 'true' : 'false'}
             >
-              <CreateIcon />
-              <span className='avatar-animation-panel__tab-label'>{createTabLabel}</span>
-            </button>
+              <button
+                id='avatar-animation-tab-create'
+                className='avatar-animation-panel__tab-button'
+                type='button'
+                role='tab'
+                aria-controls='avatar-animation-panel-create'
+                aria-selected={activeTab === 'create'}
+                aria-label={createTabLabel}
+                title={createTabLabel}
+                onClick={() => changeTab('create')}
+              >
+                <CreateIcon />
+                <span className='avatar-animation-panel__tab-label'>{createTabLabel}</span>
+              </button>
+              {selectedLibraryId == null
+                ? null
+                : (
+                  <button
+                    className='avatar-animation-panel__deselect-library'
+                    type='button'
+                    aria-label={t('Exit animation group editing')}
+                    title={t('Exit animation group editing')}
+                    onClick={() => {
+                      setPendingAction(null)
+                      onLibraryDeselect()
+                    }}
+                  >
+                    <svg viewBox='0 0 20 20' aria-hidden='true'>
+                      <path d='M5 5h10v10H5Z' />
+                      <path d='m7 7 6 6m0-6-6 6' />
+                    </svg>
+                  </button>
+                )}
+            </div>
             <button
               id='avatar-animation-tab-playback'
+              className='avatar-animation-panel__tab-button'
               type='button'
               role='tab'
               aria-controls='avatar-animation-panel-playback'

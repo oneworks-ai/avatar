@@ -87,6 +87,7 @@ export type AvatarAnimationPresetId =
   | 'surprised'
   | 'shocked'
   | 'thinking'
+  | 'wink'
   | 'working'
 
 export interface AvatarAnimationPreset {
@@ -267,6 +268,7 @@ export const resolveAvatarAnimationTimedSegment = (
 export const AVATAR_ANIMATION_PRESETS: readonly AvatarAnimationPreset[] = [
   { description: 'Breathing, a soft glance, and one quick blink.', durationMs: 7200, id: 'idle', label: 'Idle' },
   { description: 'A compact close, hold, and open eye beat.', durationMs: 1050, id: 'blink', label: 'Blink' },
+  { description: 'A playful one-eyed wink with a small smile.', durationMs: 1350, id: 'wink', label: 'Wink' },
   {
     description: 'A relaxed attentive gaze with a quiet response.',
     durationMs: 5000,
@@ -309,7 +311,9 @@ const numericFaceStyleKeys = [
 ] as const satisfies readonly (keyof AvatarFaceStyle)[]
 
 const optionalNumericFaceStyleKeys = [
+  'leftEyeHeight',
   'leftEyeRotation',
+  'rightEyeHeight',
   'rightEyeRotation'
 ] as const satisfies readonly (keyof AvatarFaceStyle)[]
 
@@ -1077,6 +1081,60 @@ const buildPresetFrames = (
       { faceStyle: { height: closedEyeHeight }, offset: .88, pitch: -.04, yaw: .06 },
       { offset: 1 }
     ],
+    wink: [
+      { offset: 0 },
+      {
+        faceStyle: {
+          leftEyeHeight: relaxedEyeHeight,
+          mouthCurve: 38,
+          mouthEnabled: true,
+          mouthWidth: clampPresetValue(Math.max(faceStyle.mouthWidth, 42), 24, 100),
+          rightEyeHeight: relaxedEyeHeight
+        },
+        offset: .2,
+        yaw: -.025
+      },
+      {
+        faceStyle: {
+          leftEyeHeight: closedEyeHeight,
+          leftEyeRotation: clampPresetValue(faceStyle.leftEyeRotation - 5, -90, 90),
+          mouthCurve: 72,
+          mouthEnabled: true,
+          mouthWidth: clampPresetValue(Math.max(faceStyle.mouthWidth, 52), 24, 100),
+          rightEyeHeight: relaxedEyeHeight,
+          rightEyeRotation: clampPresetValue(faceStyle.rightEyeRotation + 3, -90, 90)
+        },
+        offset: .4,
+        pitch: -.025,
+        yaw: -.055
+      },
+      {
+        faceStyle: {
+          leftEyeHeight: closedEyeHeight,
+          leftEyeRotation: clampPresetValue(faceStyle.leftEyeRotation - 5, -90, 90),
+          mouthCurve: 72,
+          mouthEnabled: true,
+          mouthWidth: clampPresetValue(Math.max(faceStyle.mouthWidth, 52), 24, 100),
+          rightEyeHeight: relaxedEyeHeight,
+          rightEyeRotation: clampPresetValue(faceStyle.rightEyeRotation + 3, -90, 90)
+        },
+        offset: .6,
+        pitch: -.025,
+        yaw: -.055
+      },
+      {
+        faceStyle: {
+          leftEyeHeight: relaxedEyeHeight,
+          mouthCurve: 38,
+          mouthEnabled: true,
+          mouthWidth: clampPresetValue(Math.max(faceStyle.mouthWidth, 42), 24, 100),
+          rightEyeHeight: relaxedEyeHeight
+        },
+        offset: .8,
+        yaw: -.025
+      },
+      { offset: 1 }
+    ],
     working: [
       { offset: 0 },
       { faceStyle: focusedFace, offset: .18, pitch: .035, positionY: 2, yaw: -.05 },
@@ -1123,6 +1181,11 @@ export const interpolateAvatarAnimationKeyframes = (
       eyeShape: selectDiscrete(from.faceStyle.eyeShape, to.faceStyle.eyeShape, progress),
       gap: interpolate(from.faceStyle.gap, to.faceStyle.gap, progress),
       height: interpolate(from.faceStyle.height, to.faceStyle.height, progress),
+      leftEyeHeight: interpolate(
+        fromFaceStyle.leftEyeHeight ?? fromFaceStyle.height,
+        toFaceStyle.leftEyeHeight ?? toFaceStyle.height,
+        progress
+      ),
       leftEyeRotation: interpolate(fromFaceStyle.leftEyeRotation, toFaceStyle.leftEyeRotation, progress),
       mouthCurve: interpolate(from.faceStyle.mouthCurve, to.faceStyle.mouthCurve, progress),
       mouthEnabled: selectDiscrete(from.faceStyle.mouthEnabled, to.faceStyle.mouthEnabled, progress),
@@ -1138,6 +1201,11 @@ export const interpolateAvatarAnimationKeyframes = (
       noseWidth: interpolate(from.faceStyle.noseWidth, to.faceStyle.noseWidth, progress),
       noseY: interpolate(from.faceStyle.noseY, to.faceStyle.noseY, progress),
       rotation: interpolate(from.faceStyle.rotation, to.faceStyle.rotation, progress),
+      rightEyeHeight: interpolate(
+        fromFaceStyle.rightEyeHeight ?? fromFaceStyle.height,
+        toFaceStyle.rightEyeHeight ?? toFaceStyle.height,
+        progress
+      ),
       rightEyeRotation: interpolate(fromFaceStyle.rightEyeRotation, toFaceStyle.rightEyeRotation, progress),
       width: interpolate(from.faceStyle.width, to.faceStyle.width, progress)
     },

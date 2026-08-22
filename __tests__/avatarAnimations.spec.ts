@@ -15,6 +15,7 @@ import {
   serializeSharedAvatarAnimation,
   shouldConfirmAnimationReplacement
 } from '../src/avatarAnimations'
+import { DEFAULT_AVATAR_COLOR_GRADE } from '../src/avatarColorGrade'
 import { DEFAULT_AVATAR_FACE_STYLE } from '../src/avatarGeometry'
 
 describe('avatar animation keyframes', () => {
@@ -102,6 +103,7 @@ describe('avatar animation keyframes', () => {
     )
 
     expect(keyframe).toEqual({
+      colorGrade: DEFAULT_AVATAR_COLOR_GRADE,
       durationMs: 800,
       easing: 'ease-in-out',
       faceStyle: DEFAULT_AVATAR_FACE_STYLE,
@@ -190,7 +192,7 @@ describe('avatar animation keyframes', () => {
       DEFAULT_AVATAR_FACE_STYLE
     )
 
-    expect(AVATAR_ANIMATION_PRESETS).toHaveLength(16)
+    expect(AVATAR_ANIMATION_PRESETS).toHaveLength(20)
     expect(resolved.keyframes).toHaveLength(6)
     expect(resolved.keyframes[0]).toMatchObject({ pitch: .4, positionX: 18, positionY: -12, yaw: -.3 })
     expect(resolved.keyframes[1]?.durationMs).toBe(1116)
@@ -203,6 +205,23 @@ describe('avatar animation keyframes', () => {
     expect(resolved.keyframes[1]?.faceStyle.rightEyeRotation).toBe(4)
     expect(resolved.keyframes.every(keyframe => !('scale' in keyframe))).toBe(true)
     expect(resolved.keyframes.every(keyframe => !('screenshot' in keyframe))).toBe(true)
+  })
+
+  it('closes only one eye during the wink preset', () => {
+    const wink = AVATAR_ANIMATION_PRESETS.find(preset => preset.id === 'wink')
+    expect(wink).toBeDefined()
+    if (wink == null) return
+
+    const resolved = resolveAvatarAnimationPreset(
+      wink,
+      { pitch: 0, positionX: 0, positionY: 0, scale: 1, yaw: 0 },
+      DEFAULT_AVATAR_FACE_STYLE
+    )
+    const winkFrame = resolved.keyframes[2]
+
+    expect(winkFrame?.faceStyle.leftEyeHeight).toBeLessThanOrEqual(14)
+    expect(winkFrame?.faceStyle.rightEyeHeight).toBeGreaterThan(14)
+    expect(winkFrame?.faceStyle.mouthEnabled).toBe(true)
   })
 
   it('gives every built-in frame transition timing and returns to the current pose', () => {

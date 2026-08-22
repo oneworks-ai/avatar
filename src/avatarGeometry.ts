@@ -61,6 +61,7 @@ export interface AvatarFaceStyle {
   readonly eyeShape: AvatarEyeShape
   readonly gap: number
   readonly height: number
+  readonly leftEyeHeight?: number
   readonly leftEyeRotation: number
   readonly mouthCurve: number
   readonly mouthEnabled: boolean
@@ -76,6 +77,7 @@ export interface AvatarFaceStyle {
   readonly noseWidth: number
   readonly noseY: number
   readonly rotation: number
+  readonly rightEyeHeight?: number
   readonly rightEyeRotation: number
   readonly width: number
 }
@@ -875,16 +877,19 @@ export const projectDefaultFace = (
   const faceOffsetY = options.faceOffsetY ?? 0
   const eyeCenterY = faceOffsetY
   const eyes = [-eyeOffset, eyeOffset].flatMap((centerX, index) => {
+    const eyeHeight = index === 0
+      ? resolvedFaceStyle.leftEyeHeight ?? resolvedFaceStyle.height
+      : resolvedFaceStyle.rightEyeHeight ?? resolvedFaceStyle.height
     const eyeRotation = resolvedFaceStyle.rotation + (index === 0
       ? resolvedFaceStyle.leftEyeRotation
       : resolvedFaceStyle.rightEyeRotation)
     const boundary = resolvedFaceStyle.eyeShape === 'ellipse'
-      ? buildEllipseBoundary(centerX, eyeCenterY, resolvedFaceStyle.width, resolvedFaceStyle.height, eyeRotation)
+      ? buildEllipseBoundary(centerX, eyeCenterY, resolvedFaceStyle.width, eyeHeight, eyeRotation)
       : buildRoundedRectangleBoundary(
         centerX,
         eyeCenterY,
         resolvedFaceStyle.width,
-        resolvedFaceStyle.height,
+        eyeHeight,
         eyeRotation,
         resolvedFaceStyle.eyeRoundness
       )

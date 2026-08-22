@@ -6,7 +6,7 @@ import type { CSSProperties, KeyboardEvent, PointerEvent, ReactNode } from 'reac
 
 import { AVATAR_BODY_SHAPES, EntityPresetPreview } from './InteractiveAvatar'
 import type { AvatarBodyShape, AvatarDropShadowStyle, AvatarOutlineStyle } from './InteractiveAvatar'
-import { DEFAULT_AVATAR_FACE_STYLE } from './avatarGeometry'
+import { DEFAULT_AVATAR_FACE_STYLE, projectDefaultFace } from './avatarGeometry'
 import type {
   AvatarEyeShape,
   AvatarFaceShadowStyle,
@@ -16,16 +16,42 @@ import type {
 } from './avatarGeometry'
 import { useAvatarLocale } from './avatarLocale'
 import {
+  AVATAR_FACE_PRESETS,
+  DEFAULT_AVATAR_FACE_PRESET,
+  isAvatarFacePresetSelected
+} from './avatarFacePresets'
+import type { AvatarFacePreset } from './avatarFacePresets'
+import {
   AVATAR_BUILT_IN_ENTITY_PRESETS,
   hasMultipleAvatarEntityMaterials,
   resolveAvatarEntityPartScaleZ
 } from './avatarEntityPresets'
 import type { AvatarEntityPart, AvatarEntityPreset } from './avatarEntityPresets'
+import {
+  loadAvatarPresetUsage,
+  persistAvatarPresetUsage,
+  sortAvatarPresetItems,
+  touchAvatarPresetUsage
+} from './avatarPresetUsage'
 import type { SavedAvatarPreset } from './savedAvatarPresets'
 
 export type AvatarControlTab = 'body' | 'build' | 'effects' | 'style'
 export type AvatarCameraFrame = 'circle' | 'rounded' | 'square'
 type AvatarFacePart = 'eyes' | 'mouth' | 'nose'
+type AvatarPresetBrowser = 'faces' | 'saved'
+type AvatarSavedPresetItem =
+  | {
+    readonly createdAt: number
+    readonly key: string
+    readonly kind: 'entity'
+    readonly preset: Exclude<AvatarEntityPreset, 'custom'>
+  }
+  | {
+    readonly createdAt: number
+    readonly key: string
+    readonly kind: 'saved'
+    readonly preset: SavedAvatarPreset
+  }
 type ControlIconName =
   | AvatarControlTab
   | 'background'
@@ -184,6 +210,19 @@ const CAMERA_BACKGROUND_PRESETS = [
   '#ff766c', '#0e4fe7', '#f2bd4f', '#7568e7', '#f6b8cf', '#56d6cc',
   '#c9e76c', '#87bfff', '#f08c46', '#d9c8ff', '#efe5cc', '#8ec5a4'
 ] as const
+
+function FacePresetPreview({ preset }: { readonly preset: AvatarFacePreset }) {
+  const { style } = preset
+  const face = projectDefaultFace({ pitch: 0, yaw: 0 }, 'sphere', style)
+  return (
+    <svg className='avatar-controls__face-preset-preview' viewBox='135 140 150 145' aria-hidden='true'>
+      <rect className='avatar-controls__face-preset-head' x='143' y='143' width='134' height='136' rx='58' />
+      {face.eyes.map(eye => <path key={eye.id} d={eye.path} />)}
+      {style.noseEnabled && face.nose != null ? <path d={face.nose.path} /> : null}
+      {style.mouthEnabled && face.mouth != null ? <path d={face.mouth.path} /> : null}
+    </svg>
+  )
+}
 
 function ControlIcon({ name }: { readonly name: ControlIconName }) {
   return (
@@ -518,8 +557,12 @@ export function AvatarControls({
   const { t } = useAvatarLocale()
   const [activeFacePart, setActiveFacePart] = useState<AvatarFacePart>('eyes')
   const [pendingPaletteId, setPendingPaletteId] = useState<string | null>(null)
+  const [presetBrowser, setPresetBrowser] = useState<AvatarPresetBrowser | null>(null)
+  const [presetSearch, setPresetSearch] = useState('')
+  const [presetUsage, setPresetUsage] = useState(loadAvatarPresetUsage)
   const [resizing, setResizing] = useState(false)
   const paletteConfirmActionRef = useRef<HTMLButtonElement>(null)
+  const presetSearchRef = useRef<HTMLInputElement>(null)
   const resizeStartRef = useRef<{ pointerX: number; width: number } | null>(null)
   const isDefaultFace = Object.entries(DEFAULT_AVATAR_FACE_STYLE).every(([key, value]) => {
     return faceStyle[key as keyof AvatarFaceStyle] === value
@@ -528,10 +571,40 @@ export function AvatarControls({
   const editingEntityPart = selectedEntityPart ?? entityParts.find(part => part.face)
   const pendingPalette = visiblePalettes.find(palette => palette.id === pendingPaletteId) ?? null
   const showOverallStyleControls = selectedEntityPart == null || selectedEntityPart.face
+  const compactPresetCapacity = Math.max(8, Math.floor((controlsWidth - 32) / 64) * 2)
+  const facePresets = sortAvatarPresetItems(
+    [DEFAULT_AVATAR_FACE_PRESET, ...AVATAR_FACE_PRESETS],
+    preset => `face:${preset.id}`,
+    presetUsage
+  )
+  const savedPresetItems = sortAvatarPresetItems<AvatarSavedPresetItem>([
+    ...AVATAR_BUILT_IN_ENTITY_PRESETS.map(preset => ({
+      createdAt: 0,
+      key: `entity:${preset}`,
+      kind: 'entity' as const,
+      preset
+    })),
+    ...savedPresets.map(preset => ({
+      createdAt: preset.createdAt,
+      key: `saved:${preset.id}`,
+      kind: 'saved' as const,
+      preset
+    }))
+  ], item => item.key, presetUsage, item => item.createdAt)
+  const compactFacePresets = facePresets.length > compactPresetCapacity
+    ? facePresets.slice(0, compactPresetCapacity - 1)
+    : facePresets
+  const compactSavedPresetItems = savedPresetItems.length > compactPresetCapacity
+    ? savedPresetItems.slice(0, compactPresetCapacity - 1)
+    : savedPresetItems
 
   useEffect(() => {
     if (pendingPalette != null) paletteConfirmActionRef.current?.focus()
   }, [pendingPalette])
+
+  useEffect(() => {
+    if (presetBrowser != null) presetSearchRef.current?.focus()
+  }, [presetBrowser])
 
   const renderEntityPresetPreview = (preset: Exclude<AvatarEntityPreset, 'custom'>) => (
     <EntityPresetPreview
@@ -580,6 +653,132 @@ export function AvatarControls({
     onPaletteChange(pendingPalette.id)
     setPendingPaletteId(null)
   }
+
+  const markPresetUsed = (key: string) => {
+    setPresetUsage(currentUsage => {
+      const nextUsage = touchAvatarPresetUsage(currentUsage, key)
+      persistAvatarPresetUsage(nextUsage)
+      return nextUsage
+    })
+  }
+
+  const openPresetBrowser = (browser: AvatarPresetBrowser) => {
+    setPresetSearch('')
+    setPresetBrowser(browser)
+  }
+
+  const selectFacePreset = (preset: AvatarFacePreset) => {
+    markPresetUsed(`face:${preset.id}`)
+    setPresetBrowser(null)
+    if (preset.id === DEFAULT_AVATAR_FACE_PRESET.id) {
+      onResetFace()
+      return
+    }
+    onFaceStyleChange(preset.style)
+  }
+
+  const selectSavedPreset = (item: AvatarSavedPresetItem) => {
+    markPresetUsed(item.key)
+    setPresetBrowser(null)
+    if (item.kind === 'entity') {
+      onEntityPresetChange(item.preset)
+      return
+    }
+    onSavedPresetSelect(item.preset)
+  }
+
+  const renderFacePresetButton = (preset: AvatarFacePreset) => (
+    <button
+      key={preset.id}
+      className='avatar-controls__face-preset'
+      type='button'
+      aria-label={t(preset.label)}
+      aria-pressed={preset.id === DEFAULT_AVATAR_FACE_PRESET.id
+        ? isDefaultFace
+        : isAvatarFacePresetSelected(faceStyle, preset)}
+      title={t(preset.label)}
+      onClick={() => selectFacePreset(preset)}
+    >
+      <FacePresetPreview preset={preset} />
+    </button>
+  )
+
+  const renderSavedPresetItem = (item: AvatarSavedPresetItem) => {
+    if (item.kind === 'entity') {
+      return (
+        <button
+          key={item.key}
+          className='avatar-controls__saved-preset avatar-controls__saved-preset--entity-preset'
+          type='button'
+          aria-label={t(ENTITY_PRESET_LABELS[item.preset])}
+          aria-pressed={entityPreset === item.preset}
+          data-entity-preset={item.preset}
+          onClick={() => selectSavedPreset(item)}
+        >
+          {renderEntityPresetPreview(item.preset)}
+        </button>
+      )
+    }
+
+    const savedAt = new Date(item.preset.createdAt)
+    const savedFrame = getSavedPresetFrame(item.preset.query)
+    return (
+      <div key={item.key} className='avatar-controls__saved-preset-item'>
+        <button
+          className='avatar-controls__saved-preset'
+          type='button'
+          aria-label={`Restore preset saved ${savedAt.toLocaleString()}`}
+          aria-pressed={item.preset.id === selectedSavedPresetId}
+          data-frame={savedFrame}
+          onClick={() => selectSavedPreset(item)}
+        >
+          <img src={item.preset.screenshot} alt='' aria-hidden='true' />
+        </button>
+        <button
+          className='avatar-controls__saved-preset-remove'
+          type='button'
+          aria-label={`Remove preset saved ${savedAt.toLocaleString()}`}
+          title='Remove preset'
+          onClick={() => onSavedPresetRemove(item.preset.id)}
+        >
+          <svg viewBox='0 0 16 16' aria-hidden='true'>
+            <path d='m4.5 4.5 7 7m0-7-7 7' />
+          </svg>
+        </button>
+      </div>
+    )
+  }
+
+  const renderMorePresetButton = (browser: AvatarPresetBrowser) => (
+    <button
+      className='avatar-controls__preset-more'
+      type='button'
+      aria-label={t('More presets')}
+      title={t('More presets')}
+      onClick={() => openPresetBrowser(browser)}
+    >
+      <svg viewBox='0 0 24 24' aria-hidden='true'>
+        <circle cx='5' cy='12' r='1.7' />
+        <circle cx='12' cy='12' r='1.7' />
+        <circle cx='19' cy='12' r='1.7' />
+      </svg>
+    </button>
+  )
+
+  const normalizedPresetSearch = presetSearch.trim().toLocaleLowerCase()
+  const searchedFacePresets = facePresets.filter(preset => (
+    normalizedPresetSearch === '' || t(preset.label).toLocaleLowerCase().includes(normalizedPresetSearch)
+  ))
+  const searchedSavedPresetItems = savedPresetItems.filter(item => {
+    if (normalizedPresetSearch === '') return true
+    const searchableLabel = item.kind === 'entity'
+      ? t(ENTITY_PRESET_LABELS[item.preset])
+      : `${t('Saved preset')} ${new Date(item.preset.createdAt).toLocaleString()}`
+    return searchableLabel.toLocaleLowerCase().includes(normalizedPresetSearch)
+  })
+  const searchedPresetCount = presetBrowser === 'faces'
+    ? searchedFacePresets.length
+    : searchedSavedPresetItems.length
 
   return (
     <aside id='avatar-controls' className='avatar-controls' aria-label={t('Avatar controls')} data-resizing={resizing}>
@@ -653,48 +852,10 @@ export function AvatarControls({
                   {t('Saved presets')}
                 </span>
                 <div className='avatar-controls__saved-preset-list'>
-                  {AVATAR_BUILT_IN_ENTITY_PRESETS.map(preset => (
-                    <button
-                      key={preset}
-                      className='avatar-controls__saved-preset avatar-controls__saved-preset--entity-preset'
-                      type='button'
-                      aria-label={t(ENTITY_PRESET_LABELS[preset])}
-                      aria-pressed={entityPreset === preset}
-                      data-entity-preset={preset}
-                      onClick={() => onEntityPresetChange(preset)}
-                    >
-                      {renderEntityPresetPreview(preset)}
-                    </button>
-                  ))}
-                  {savedPresets.map((preset) => {
-                    const savedAt = new Date(preset.createdAt)
-                    const savedFrame = getSavedPresetFrame(preset.query)
-                    return (
-                      <div key={preset.id} className='avatar-controls__saved-preset-item'>
-                        <button
-                          className='avatar-controls__saved-preset'
-                          type='button'
-                          aria-label={`Restore preset saved ${savedAt.toLocaleString()}`}
-                          aria-pressed={preset.id === selectedSavedPresetId}
-                          data-frame={savedFrame}
-                          onClick={() => onSavedPresetSelect(preset)}
-                        >
-                          <img src={preset.screenshot} alt='' aria-hidden='true' />
-                        </button>
-                        <button
-                          className='avatar-controls__saved-preset-remove'
-                          type='button'
-                          aria-label={`Remove preset saved ${savedAt.toLocaleString()}`}
-                          title='Remove preset'
-                          onClick={() => onSavedPresetRemove(preset.id)}
-                        >
-                          <svg viewBox='0 0 16 16' aria-hidden='true'>
-                            <path d='m4.5 4.5 7 7m0-7-7 7' />
-                          </svg>
-                        </button>
-                      </div>
-                    )
-                  })}
+                  {compactSavedPresetItems.map(renderSavedPresetItem)}
+                  {savedPresetItems.length > compactPresetCapacity
+                    ? renderMorePresetButton('saved')
+                    : null}
                 </div>
               </section>
 
@@ -703,19 +864,12 @@ export function AvatarControls({
                   <ControlIcon name='eyes' />
                   {t('Face')}
                 </span>
-                <button
-                  className='avatar-controls__face-option'
-                  type='button'
-                  aria-label={t('Reset default face')}
-                  aria-pressed={isDefaultFace}
-                  title={t('Default face')}
-                  onClick={onResetFace}
-                >
-                  <svg viewBox='0 0 96 72' aria-hidden='true'>
-                    <rect x='22' y='14' width='16' height='44' rx='8' />
-                    <rect x='58' y='14' width='16' height='44' rx='8' />
-                  </svg>
-                </button>
+                <div className='avatar-controls__face-presets' role='group' aria-label={t('Face presets')}>
+                  {compactFacePresets.map(renderFacePresetButton)}
+                  {facePresets.length > compactPresetCapacity
+                    ? renderMorePresetButton('faces')
+                    : null}
+                </div>
                 <div
                   className='avatar-controls__segments avatar-controls__face-tabs'
                   role='tablist'
@@ -1436,6 +1590,73 @@ export function AvatarControls({
           )
           : null}
       </div>
+      {presetBrowser == null
+        ? null
+        : (
+          <div
+            className='avatar-controls__preset-browser-backdrop'
+            role='presentation'
+            onPointerDown={event => {
+              if (event.target !== event.currentTarget) return
+              setPresetBrowser(null)
+            }}
+            onKeyDown={event => {
+              if (event.key !== 'Escape') return
+              event.stopPropagation()
+              setPresetBrowser(null)
+            }}
+          >
+            <section
+              className='avatar-controls__preset-browser'
+              role='dialog'
+              aria-labelledby='avatar-preset-browser-title'
+              aria-modal='true'
+            >
+              <div className='avatar-controls__preset-browser-header'>
+                <h2 id='avatar-preset-browser-title'>
+                  {t(presetBrowser === 'faces' ? 'Face presets' : 'Saved presets')}
+                </h2>
+                <button
+                  type='button'
+                  aria-label={t('Close')}
+                  title={t('Close')}
+                  onClick={() => setPresetBrowser(null)}
+                >
+                  <svg viewBox='0 0 20 20' aria-hidden='true'>
+                    <path d='m5 5 10 10m0-10L5 15' />
+                  </svg>
+                </button>
+              </div>
+              <label className='avatar-controls__preset-browser-search'>
+                <svg viewBox='0 0 20 20' aria-hidden='true'>
+                  <circle cx='8.5' cy='8.5' r='5.5' />
+                  <path d='m12.5 12.5 4 4' />
+                </svg>
+                <input
+                  ref={presetSearchRef}
+                  type='search'
+                  aria-label={t('Search presets')}
+                  placeholder={t('Search presets')}
+                  value={presetSearch}
+                  onChange={event => setPresetSearch(event.currentTarget.value)}
+                />
+              </label>
+              {searchedPresetCount === 0
+                ? <p className='avatar-controls__preset-browser-empty'>{t('No presets found')}</p>
+                : (
+                  <div
+                    className='avatar-controls__preset-browser-grid'
+                    role='group'
+                    aria-label={t(presetBrowser === 'faces' ? 'Face presets' : 'Saved presets')}
+                  >
+                    {presetBrowser === 'faces'
+                      ? searchedFacePresets.map(renderFacePresetButton)
+                      : searchedSavedPresetItems.map(renderSavedPresetItem)}
+                  </div>
+                )}
+            </section>
+          </div>
+        )}
       {pendingPalette == null
         ? null
         : (

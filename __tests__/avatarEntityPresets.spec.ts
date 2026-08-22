@@ -141,12 +141,16 @@ describe('built-in entity preset scenes', () => {
     })
   })
 
-  it('uses the dog nose without a mouth on the rabbit', () => {
+  it('uses the dog nose and the authored low mouth on the rabbit', () => {
     const dog = getAvatarEntityPresetFaceStyle('dog')!
     const rabbit = getAvatarEntityPresetFaceStyle('rabbit')!
 
     expect(rabbit).toMatchObject({
-      mouthEnabled: false,
+      mouthCurve: 3.891481414151281,
+      mouthEnabled: true,
+      mouthHeight: 14.108518585848719,
+      mouthWidth: 17.722037041846338,
+      mouthY: 71,
       noseEnabled: true,
       noseHeight: dog.noseHeight,
       noseShape: dog.noseShape,
