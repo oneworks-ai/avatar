@@ -5,7 +5,7 @@
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset=".github/assets/avatar-cover-dark-en.jpg">
   <source media="(prefers-color-scheme: light)" srcset=".github/assets/avatar-cover-light-en.jpg">
-  <img alt="OneWorks Avatar — bring your avatar to life" src=".github/assets/avatar-cover-light-en.jpg" width="1600">
+  <img alt="OneWorks Avatar — four geometric 3D avatar templates" src=".github/assets/avatar-cover-light-en.jpg" width="1600">
 </picture>
 
 Create, animate, and export a geometric 3D avatar directly in your browser.
