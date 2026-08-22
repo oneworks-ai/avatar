@@ -6,6 +6,7 @@ import type { CSSProperties, KeyboardEvent, PointerEvent } from 'react'
 import { HomeHeaderActions } from './HomeHeaderActions'
 import { HOME_TEMPLATES } from './avatarHome'
 import type { HomeTemplateId } from './avatarHome'
+import { useAvatarLocale } from './avatarLocale'
 
 const HomeAvatarPreview = lazy(() => import('./HomeAvatarPreview'))
 
@@ -45,6 +46,7 @@ export const HomePage = ({
   onCreate,
   onPrepareEditor
 }: HomePageProps) => {
+  const { t } = useAvatarLocale()
   const [activeIndex, setActiveIndex] = useState(0)
   const [dragOffset, setDragOffset] = useState(0)
   const [previewReady, setPreviewReady] = useState(false)
@@ -159,7 +161,7 @@ export const HomePage = ({
   return (
     <main className='avatar-home'>
       <header className='avatar-home__header'>
-        <a className='avatar-home__brand' href='/' aria-label='OneWorks Avatar 首页'>
+        <a className='avatar-home__brand' href='/' aria-label={t('OneWorks Avatar home')}>
           <svg viewBox='0 0 32 32' aria-hidden='true'>
             <rect x='3' y='3' width='26' height='26' rx='9' />
             <rect x='9' y='11' width='4' height='10' rx='2' />
@@ -176,8 +178,8 @@ export const HomePage = ({
         <div
           className='avatar-home__carousel-shell'
           role='region'
-          aria-roledescription='carousel'
-          aria-label={`形象模板，当前为${activeTemplate.label}`}
+          aria-roledescription={t('carousel')}
+          aria-label={`${t('Avatar templates')}. ${t('Current avatar')}: ${t(activeTemplate.label)}`}
           aria-live='polite'
           tabIndex={0}
           data-dragging={dragStartXRef.current != null}
@@ -209,8 +211,8 @@ export const HomePage = ({
                   type='button'
                   aria-current={item.position === 'active' ? 'true' : undefined}
                   aria-label={item.position === 'active'
-                    ? `当前形象：${template.label}`
-                    : `切换到${template.label}`}
+                    ? `${t('Current avatar')}: ${t(template.label)}`
+                    : `${t('Switch to')} ${t(template.label)}`}
                   onPointerUp={() => {
                     if (!ignoreCardClickRef.current && item.position !== 'active') {
                       selectTemplate(item.virtualIndex)
@@ -229,15 +231,15 @@ export const HomePage = ({
           })}
         </div>
 
-        <div className='avatar-home__carousel-pagination' role='tablist' aria-label='选择形象'>
+        <div className='avatar-home__carousel-pagination' role='tablist' aria-label={t('Select avatar')}>
           {HOME_TEMPLATES.map((template, index) => (
             <button
               key={template.id}
               type='button'
               role='tab'
-              aria-label={template.label}
+              aria-label={t(template.label)}
               aria-selected={index === wrappedActiveIndex}
-              title={template.label}
+              title={t(template.label)}
               style={{ '--avatar-home-dot': template.background } as CSSProperties}
               onClick={() => selectTemplateByWrappedIndex(index)}
             />
@@ -245,7 +247,7 @@ export const HomePage = ({
         </div>
 
         <div className='avatar-home__hero-copy'>
-          <h1 id='avatar-home-title'>让形象动起来</h1>
+          <h1 id='avatar-home-title'>{t('Bring your avatar to life')}</h1>
           <div className='avatar-home__hero-actions'>
             <button
               className='avatar-home__continue'
@@ -254,7 +256,7 @@ export const HomePage = ({
               onFocus={onPrepareEditor}
               onClick={() => onCreate(activeTemplate.id)}
             >
-              开始创造
+              {t('Start creating')}
               <svg viewBox='0 0 20 20' aria-hidden='true'><path d='m7 4 6 6-6 6' /></svg>
             </button>
           </div>

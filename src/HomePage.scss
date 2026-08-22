@@ -1,7 +1,10 @@
 .avatar-home {
   --avatar-home-surface: color-mix(in srgb, var(--bg-color) 91%, var(--text-color));
   --avatar-home-strong-surface: color-mix(in srgb, var(--bg-color) 84%, var(--text-color));
+  display: flex;
   min-height: 100vh;
+  min-height: 100svh;
+  flex-direction: column;
   padding: 0 clamp(18px, 5vw, 74px) 72px;
   background:
     radial-gradient(circle at 8% 4%, color-mix(in srgb, #ff6b47 9%, transparent), transparent 27%),
@@ -13,6 +16,7 @@
     position: relative;
     z-index: 5;
     display: flex;
+    flex: 0 0 auto;
     width: min(1120px, 100%);
     min-height: 82px;
     align-items: center;
@@ -52,8 +56,11 @@
     display: flex;
     width: min(1040px, 100%);
     align-items: center;
+    justify-content: center;
+    flex: 1 0 auto;
     flex-direction: column;
-    margin: 24px auto 0;
+    margin: 0 auto;
+    padding: 24px 0;
   }
 
   &__carousel-shell {
@@ -351,7 +358,7 @@
     }
 
     &__hero {
-      margin-top: 12px;
+      padding: 20px 0;
     }
 
     &__carousel-shell {

@@ -2,6 +2,7 @@ import { lazy, Suspense, useCallback, useEffect, useState } from 'react'
 
 import { HomePage } from './HomePage'
 import { LAST_EDITOR_QUERY_STORAGE_KEY } from './avatarHome'
+import { useAvatarLocale } from './avatarLocale'
 
 const loadEditor = () => import('./App')
 const AvatarEditor = lazy(loadEditor)
@@ -19,6 +20,7 @@ const replaceLocation = (query: string, hash: string) => {
 }
 
 const Root = () => {
+  const { t } = useAvatarLocale()
   const [editorOpen, setEditorOpen] = useState(isEditorLocation)
 
   useEffect(() => {
@@ -75,7 +77,7 @@ const Root = () => {
 
   if (editorOpen) {
     return (
-      <Suspense fallback={<div className='avatar-home-loading' aria-label='正在打开编辑器'><i /><i /></div>}>
+      <Suspense fallback={<div className='avatar-home-loading' aria-label={t('Opening editor')}><i /><i /></div>}>
         <AvatarEditor onHome={openHome} />
       </Suspense>
     )
