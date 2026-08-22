@@ -78,10 +78,12 @@ import {
   loadSavedAvatarPresets,
   persistSavedAvatarPresets,
   prependSavedAvatarPreset,
+  renderAvatarPngBlob,
   serializeAvatarSvg
 } from './savedAvatarPresets'
 import type { SavedAvatarPreset } from './savedAvatarPresets'
 import { LAST_EDITOR_QUERY_STORAGE_KEY } from './avatarHome'
+import { createAvatarGif } from './avatarGifExport'
 
 const INITIAL_EMOTICON = AVATAR_PRESETS[0]?.emoticon ?? '0w0'
 const INITIAL_PARTS = Array.from(INITIAL_EMOTICON)
@@ -118,6 +120,7 @@ const DEFAULT_CONTROLS_WIDTH = 420
 const SYSTEM_DARK_MEDIA_QUERY = '(prefers-color-scheme: dark)'
 const AVATAR_GITHUB_URL = 'https://github.com/oneworks-ai/avatar'
 type SavePresetState = 'error' | 'idle' | 'saved' | 'saving'
+type GifExportState = 'error' | 'exporting' | 'idle'
 type AvatarTheme = 'dark' | 'light'
 type AvatarAnimationSelectionKey = 'shared' | `preset:${AvatarAnimationPreset['id']}` | `saved:${string}`
 
@@ -191,6 +194,7 @@ const parseExportSize = (value: string | null): ExportSize => {
 const parseShadow = (value: string | null) => value === '1' || value === 'true'
 const parseLight = (value: string | null) => value === '1' || value === 'true'
 const parseCameraBackground = (value: string | null) => {
+  if (value === 'transparent') return value
   return value != null && /^#[\da-f]{6}$/i.test(value) ? value.toLowerCase() : DEFAULT_CAMERA_BACKGROUND
 }
 const parseOutlineColor = (value: string | null) => {
@@ -436,14 +440,22 @@ const getInitialQueryConfig = () => {
   }
 }
 
-const downloadTextFile = (filename: string, content: string) => {
-  const blob = new Blob([content], { type: 'image/svg+xml;charset=utf-8' })
+const downloadBlob = (filename: string, blob: Blob) => {
   const url = URL.createObjectURL(blob)
   const link = document.createElement('a')
   link.href = url
   link.download = filename
   link.click()
-  URL.revokeObjectURL(url)
+  window.setTimeout(() => URL.revokeObjectURL(url), 0)
+}
+
+const waitForAvatarExportSvg = async (container: Element | null) => {
+  for (let attempt = 0; attempt < 60; attempt += 1) {
+    const svg = container?.querySelector<SVGSVGElement>('svg.interactive-avatar__canvas')
+    if (svg?.querySelector('path, polygon, ellipse, circle, rect') != null) return svg
+    await new Promise<void>(resolve => window.setTimeout(resolve, 16))
+  }
+  return null
 }
 
 interface AppProps {
@@ -493,6 +505,7 @@ function App({ onHome }: AppProps) {
   const [showFrameShadow, setShowFrameShadow] = useState(initialConfig.showFrameShadow)
   const [exportSize, setExportSize] = useState<ExportSize>(initialConfig.exportSize)
   const [copyState, setCopyState] = useState<'idle' | 'copied'>('idle')
+  const [gifExportState, setGifExportState] = useState<GifExportState>('idle')
   const [savePresetState, setSavePresetState] = useState<SavePresetState>('idle')
   const [savedPresets, setSavedPresets] = useState(loadSavedAvatarPresets)
   const [selectedSavedPresetId, setSelectedSavedPresetId] = useState<string | null>(null)
@@ -994,20 +1007,89 @@ function App({ onHome }: AppProps) {
   }
 
   const handleCopy = async () => {
-    const sourceSvg = avatarFrameRef.current?.querySelector('svg')
+    const sourceSvg = avatarFrameRef.current?.querySelector<SVGSVGElement>('svg.interactive-avatar__canvas')
     if (sourceSvg == null) return
-    await navigator.clipboard.writeText(serializeAvatarSvg(sourceSvg, exportSize))
+    await navigator.clipboard.writeText(serializeAvatarSvg(sourceSvg, exportSize, {
+      background: cameraBackground,
+      frame: cameraFrame
+    }))
     setCopyState('copied')
     window.setTimeout(() => setCopyState('idle'), 1400)
   }
 
   const handleDownload = () => {
-    const sourceSvg = avatarFrameRef.current?.querySelector('svg')
+    const sourceSvg = avatarFrameRef.current?.querySelector<SVGSVGElement>('svg.interactive-avatar__canvas')
     if (sourceSvg == null) return
-    downloadTextFile(
-      `oneworks-agent-${previewEmoticon}-${exportSize}.svg`,
-      serializeAvatarSvg(sourceSvg, exportSize)
+    downloadBlob(
+      `oneworks-avatar-${entityPreset}-${exportSize}.svg`,
+      new Blob([
+        serializeAvatarSvg(sourceSvg, exportSize, {
+          background: cameraBackground,
+          frame: cameraFrame
+        })
+      ], { type: 'image/svg+xml;charset=utf-8' })
     )
+  }
+
+  const handlePngDownload = async () => {
+    const sourceSvg = await waitForAvatarExportSvg(avatarFrameRef.current)
+    if (sourceSvg == null) return false
+    try {
+      const png = await renderAvatarPngBlob(sourceSvg, exportSize, {
+        background: cameraBackground,
+        frame: cameraFrame
+      })
+      downloadBlob(`oneworks-avatar-${entityPreset}-${exportSize}.png`, png)
+      return true
+    } catch (error) {
+      console.error('Unable to export avatar PNG', error)
+      return false
+    }
+  }
+
+  const handleGifDownload = async () => {
+    if (animationKeyframes.length < 2 || gifExportState === 'exporting') return false
+    stopAnimationPlayback()
+    setGifExportState('exporting')
+    try {
+      const gif = await createAvatarGif({
+        background: cameraBackground,
+        currentViewState: avatarViewState,
+        frame: cameraFrame,
+        keyframes: animationKeyframes,
+        lockStartPosition: animationLockStartPosition,
+        playbackMode: animationPlaybackMode,
+        renderProps: {
+          avatarOutlineStyle,
+          avatarShadowStyle,
+          backgroundStyle,
+          bodyShape,
+          entityParts,
+          entityPreset,
+          gridDensity,
+          lightDistance,
+          lightDirection,
+          palette: selectedPalette,
+          shadowStyle: resolvedFaceShadowStyle,
+          showAvatarShadow,
+          showLight,
+          showOutline,
+          showShadow
+        },
+        size: exportSize,
+        startFrameIndex: animationStartFrameIndex
+      })
+      downloadBlob(
+        `oneworks-avatar-${entityPreset}-${animationName.trim() || 'animation'}-${exportSize}.gif`,
+        gif
+      )
+      setGifExportState('idle')
+      return true
+    } catch (error) {
+      console.error('Unable to export avatar GIF', error)
+      setGifExportState('error')
+      return false
+    }
   }
 
   const handleSavePreset = async () => {
@@ -1661,6 +1743,7 @@ function App({ onHome }: AppProps) {
           ref={stageRef}
           className='avatar-app__stage'
           aria-label={t('Selected avatar')}
+          data-camera-background={cameraBackground === 'transparent' ? 'transparent' : 'color'}
           data-camera-mode={cameraMode}
           data-camera-frame={cameraFrame}
           style={{
@@ -1697,10 +1780,14 @@ function App({ onHome }: AppProps) {
                 <ExportToolbar
                   copyState={copyState}
                   exportSize={exportSize}
+                  gifAvailable={animationKeyframes.length >= 2}
+                  gifExportState={gifExportState}
                   onCopy={() => {
                     void handleCopy()
                   }}
                   onDownload={handleDownload}
+                  onDownloadGif={handleGifDownload}
+                  onDownloadPng={handlePngDownload}
                   onSizeChange={setExportSize}
                 />
               )

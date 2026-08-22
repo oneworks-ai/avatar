@@ -104,12 +104,24 @@
       outline: 2px solid var(--primary-color);
       outline-offset: -2px;
     }
+
+    &:disabled {
+      color: var(--placeholder-color);
+      cursor: not-allowed;
+      opacity: .52;
+    }
   }
 
   &__menu-action {
     width: 100%;
     text-align: left;
     cursor: pointer;
+
+    &:disabled {
+      color: var(--placeholder-color);
+      cursor: not-allowed;
+      opacity: .52;
+    }
 
     &:hover,
     &:focus-visible,

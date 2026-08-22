@@ -77,7 +77,7 @@ export const DEFAULT_AVATAR_VIEW_STATE: AvatarViewState = {
   yaw: 0
 }
 
-interface InteractiveAvatarProps {
+export interface InteractiveAvatarProps {
   readonly colorGrade?: AvatarColorGrade
   readonly avatarOutlineStyle?: AvatarOutlineStyle
   readonly avatarShadowStyle?: AvatarDropShadowStyle

@@ -1,0 +1,7 @@
+interface:
+  display_name: "OneWorks Avatar"
+  short_description: "Create, debug, export, and integrate 3D avatars"
+  default_prompt: "Use $oneworks-avatar to create or integrate an editable 3D avatar for my product."
+
+policy:
+  allow_implicit_invocation: true

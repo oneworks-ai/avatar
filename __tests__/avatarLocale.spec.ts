@@ -12,6 +12,8 @@ describe('avatar locale', () => {
 
   it('translates known labels and preserves unknown text', () => {
     expect(translateAvatarText('zh-Hans', 'Effects')).toBe('效果')
+    expect(translateAvatarText('zh-Hans', 'Download PNG')).toBe('下载 PNG')
+    expect(translateAvatarText('zh-Hans', 'Transparent')).toBe('透明')
     expect(translateAvatarText('en', 'Effects')).toBe('Effects')
     expect(translateAvatarText('zh-Hans', 'Custom animation name')).toBe('Custom animation name')
   })
