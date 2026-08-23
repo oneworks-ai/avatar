@@ -48,7 +48,11 @@ describe('OneWorks Avatar React rendering', () => {
           rotation: -8, shape: 'ellipse' as const, targetPartId: parts.find(part => part.face)?.id ?? null,
           width: 30, x: -48, y: 30
         }],
-        entity: { parts, preset: 'custom' as const }
+        entity: { parts, preset: 'custom' as const },
+        face: {
+          ...definition.scene.face,
+          eyeHighlight: { ...definition.scene.face.eyeHighlight, enabled: true }
+        }
       }
     }
 
@@ -62,6 +66,7 @@ describe('OneWorks Avatar React rendering', () => {
     ).toEqual(expect.arrayContaining(parts.map(part => part.id)))
     expect(host.querySelectorAll('[data-avatar-entity-part]')).toHaveLength(parts.length)
     expect(host.querySelector('[data-avatar-surface-decal="blush-left"]')).not.toBeNull()
+    expect(host.querySelectorAll('[data-avatar-eye-highlight]')).toHaveLength(2)
   })
 
   it('renders the definition camera frame shadow', () => {
