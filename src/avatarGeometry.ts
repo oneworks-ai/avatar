@@ -46,6 +46,7 @@ export const AVATAR_GRID_DENSITY = {
 } as const
 
 export interface AvatarFaceShadowStyle {
+  readonly color?: string
   readonly direction: number
   readonly distance: number
   readonly opacity: number

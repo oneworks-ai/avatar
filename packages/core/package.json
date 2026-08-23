@@ -1,0 +1,32 @@
+{
+  "name": "@oneworks/avatar-core",
+  "version": "0.1.0-alpha.0",
+  "description": "Framework-neutral OneWorks 3D Avatar definitions and animation runtime",
+  "type": "module",
+  "license": "MIT",
+  "sideEffects": false,
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/oneworks-ai/avatar.git",
+    "directory": "packages/core"
+  },
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "README.zh-Hans.md"
+  ],
+  "scripts": {
+    "build": "vite build",
+    "typecheck": "tsc -p tsconfig.json --noEmit --pretty false"
+  },
+  "publishConfig": {
+    "access": "public"
+  }
+}

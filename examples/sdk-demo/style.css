@@ -1,0 +1,89 @@
+:root {
+  color-scheme: dark;
+  font-family: Inter, ui-sans-serif, system-ui, sans-serif;
+  background: #0f1012;
+  color: #f7f7f4;
+}
+
+body {
+  margin: 0;
+}
+
+.sdk-demo {
+  display: grid;
+  min-height: 100vh;
+  grid-template-columns: minmax(280px, 360px) minmax(0, 1fr);
+  background: #0f1012;
+}
+
+.sdk-demo__preview {
+  position: relative;
+  z-index: 2;
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+  padding: 32px;
+  border-right: 1px solid #2e3034;
+  background: #15171a;
+}
+
+.sdk-demo__preview h1,
+.sdk-demo__preview p {
+  margin: 0;
+}
+
+.sdk-demo__preview h1 {
+  margin-top: 6px;
+  font-size: 30px;
+  line-height: 1.05;
+}
+
+.sdk-demo__preview p:not(.sdk-demo__eyebrow) {
+  margin-top: 12px;
+  color: #aeb2b8;
+  line-height: 1.5;
+}
+
+.sdk-demo__eyebrow {
+  color: #ff6b45;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: .12em;
+  text-transform: uppercase;
+}
+
+.sdk-demo__preview .oneworks-avatar {
+  max-width: 296px;
+  margin-inline: auto;
+}
+
+.sdk-demo button {
+  min-height: 44px;
+  border: 0;
+  border-radius: 10px;
+  background: #ff6b45;
+  color: #111315;
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.sdk-demo > .oneworks-avatar-editor {
+  height: 100vh;
+  min-height: 640px;
+}
+
+@media (max-width: 880px) {
+  .sdk-demo {
+    grid-template-columns: 1fr;
+  }
+
+  .sdk-demo__preview {
+    border-right: 0;
+    border-bottom: 1px solid #2e3034;
+  }
+
+  .sdk-demo > .oneworks-avatar-editor {
+    height: 760px;
+  }
+}

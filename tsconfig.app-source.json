@@ -8,6 +8,9 @@
       ],
       "@oneworks/avatar/*": [
         "./app-source/packages/avatar/src/*.ts"
+      ],
+      "@oneworks/avatar-core": [
+        "./packages/core/src/index.ts"
       ]
     }
   }

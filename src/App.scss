@@ -298,6 +298,21 @@
   }
 }
 
+.avatar-app[data-embedded='true'] {
+  height: 100%;
+  min-height: inherit;
+
+  .avatar-app__workspace,
+  .avatar-app__workspace[data-animation-open='true'] {
+    height: 100%;
+    min-height: inherit;
+  }
+
+  .avatar-app__stage {
+    min-height: inherit;
+  }
+}
+
 .avatar-orientation-control {
   position: absolute;
   z-index: 3;

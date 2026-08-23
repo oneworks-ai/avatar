@@ -500,10 +500,13 @@ export const serializeAvatarEntityParts = (parts: readonly AvatarEntityPart[]) =
   part.roundness ?? 24,
   part.cutAngle ?? 0,
   part.hollow ? 1 : 0,
-  null,
-  null,
+  part.face ? 1 : 0,
+  part.label,
   resolveAvatarEntityPartScaleZ(part),
-  part.topScale ?? null
+  part.topScale ?? null,
+  part.occludedByFace == null ? null : part.occludedByFace ? 1 : 0,
+  part.occlusionAmount ?? null,
+  part.occlusionPole ?? null
 ]))
 
 export const deserializeAvatarEntityParts = (
@@ -511,19 +514,42 @@ export const deserializeAvatarEntityParts = (
   preset: AvatarEntityPreset
 ): AvatarEntityPart[] => {
   const defaults = createAvatarEntityParts(preset)
-  if (value == null || defaults.length === 0) return defaults
+  if (value == null) return defaults
   try {
     const parsed: unknown = JSON.parse(value)
     if (!Array.isArray(parsed)) return defaults
-    const byId = new Map(parsed.filter(Array.isArray).map(item => [item[0], item]))
-    return defaults.map(part => {
-      const item = byId.get(part.id)
-      if (!Array.isArray(item)) return part
+    const defaultsById = new Map(defaults.map(part => [part.id, part]))
+    const parts = parsed.flatMap(item => {
+      if (!Array.isArray(item) || typeof item[0] !== 'string' || item[0].length === 0) return []
+      const fallback = defaultsById.get(item[0])
+      const shape = AVATAR_BODY_SHAPES.includes(item[1] as AvatarBodyShape)
+        ? item[1] as AvatarBodyShape
+        : fallback?.shape
+      const baseColor = isHexColor(item[7]) ? item[7] : fallback?.baseColor
+      const highlightColor = isHexColor(item[8]) ? item[8] : fallback?.highlightColor
+      const shadowColor = isHexColor(item[9]) ? item[9] : fallback?.shadowColor
+      const foregroundColor = isHexColor(item[10]) ? item[10] : fallback?.foregroundColor
+      if (
+        shape == null || baseColor == null || highlightColor == null ||
+        shadowColor == null || foregroundColor == null
+      ) return []
+      const part: AvatarEntityPart = {
+        baseColor,
+        face: item[17] === 1 ? true : item[17] === 0 ? false : fallback?.face ?? false,
+        foregroundColor,
+        highlightColor,
+        id: item[0],
+        label: typeof item[18] === 'string' ? item[18] : fallback?.label ?? item[0],
+        scaleX: finite(item[5], fallback?.scaleX ?? 1, .08, 1.5),
+        scaleY: finite(item[6], fallback?.scaleY ?? 1, .08, 1.5),
+        shadowColor,
+        shape,
+        x: finiteNumber(item[2], fallback?.x ?? 0),
+        y: finiteNumber(item[3], fallback?.y ?? 0),
+        z: finiteNumber(item[4], fallback?.z ?? 0)
+      }
       return {
         ...part,
-        baseColor: isHexColor(item[7]) ? item[7] : part.baseColor,
-        foregroundColor: isHexColor(item[10]) ? item[10] : part.foregroundColor,
-        highlightColor: isHexColor(item[8]) ? item[8] : part.highlightColor,
         hollow: item[16] === 1,
         cutAngle: finiteNumber(item[15], part.cutAngle ?? 0),
         rotationX: finiteNumber(item[11], part.rotationX ?? 0),
@@ -533,14 +559,17 @@ export const deserializeAvatarEntityParts = (
         scaleX: finite(item[5], part.scaleX, .08, 1.5),
         scaleY: finite(item[6], part.scaleY, .08, 1.5),
         scaleZ: finite(item[19], resolveAvatarEntityPartScaleZ(part), .08, 1.5),
-        shadowColor: isHexColor(item[9]) ? item[9] : part.shadowColor,
-        shape: AVATAR_BODY_SHAPES.includes(item[1] as AvatarBodyShape) ? item[1] as AvatarBodyShape : part.shape,
         topScale: finite(item[20], part.topScale ?? .82, .4, 1.2),
-        x: finiteNumber(item[2], part.x),
-        y: finiteNumber(item[3], part.y),
-        z: finiteNumber(item[4], part.z)
+        occludedByFace: item[21] === 1 ? true : item[21] === 0 ? false : fallback?.occludedByFace,
+        occlusionAmount: item[22] == null
+          ? fallback?.occlusionAmount
+          : finite(item[22], fallback?.occlusionAmount ?? 0, 0, 100),
+        occlusionPole: item[23] === 'bottom' || item[23] === 'top'
+          ? item[23]
+          : fallback?.occlusionPole
       }
     })
+    return parts.length === 0 && parsed.length > 0 ? defaults : parts
   } catch {
     return defaults
   }

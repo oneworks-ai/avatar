@@ -443,7 +443,7 @@ function EntityPresetBody({
                   key={`shadow-${eye.id}`}
                   d={eye.path}
                   transform={faceShadowTransform(eye.depth)}
-                  fill={facePart.shadowColor}
+                  fill={shadowStyle.color ?? facePart.shadowColor}
                   filter={shadowStyle.softness > 0 ? `url(#${idPrefix}-entity-face-shadow)` : undefined}
                   opacity={shadowStyle.opacity / 100 * eye.depth ** 2}
                 />
@@ -459,7 +459,7 @@ function EntityPresetBody({
                       <path
                         d={face.nose.path}
                         transform={faceShadowTransform(face.nose.depth)}
-                        fill={facePart.shadowColor}
+                        fill={shadowStyle.color ?? facePart.shadowColor}
                         filter={shadowStyle.softness > 0 ? `url(#${idPrefix}-entity-face-shadow)` : undefined}
                         opacity={shadowStyle.opacity / 100 * face.nose.depth ** 2}
                       />
@@ -477,7 +477,7 @@ function EntityPresetBody({
                       <path
                         d={face.mouth.path}
                         transform={faceShadowTransform(face.mouth.depth)}
-                        fill={facePart.shadowColor}
+                        fill={shadowStyle.color ?? facePart.shadowColor}
                         filter={shadowStyle.softness > 0 ? `url(#${idPrefix}-entity-face-shadow)` : undefined}
                         opacity={shadowStyle.opacity / 100 * face.mouth.depth ** 2}
                       />
@@ -792,6 +792,7 @@ function InteractiveAvatarComponent({
   const surfaceHighlight = applyAvatarColorGrade(palette.gradient[0], colorGrade)
   const surfaceShadow = applyAvatarColorGrade(palette.shadow, colorGrade)
   const surfaceForeground = palette.foreground
+  const faceShadowColor = shadowStyle.color ?? surfaceShadow
   const shadowDirection = shadowStyle.direction * Math.PI / 180
   const getFaceShadowTransform = (surfaceDepth: number) => {
     const projectedDistance = shadowStyle.distance * surfaceDepth
@@ -1095,7 +1096,7 @@ function InteractiveAvatarComponent({
                         key={`shadow-${eye.id}`}
                         d={eye.path}
                         transform={getFaceShadowTransform(eye.depth)}
-                        fill={surfaceShadow}
+                        fill={faceShadowColor}
                         filter={shadowFilter}
                         opacity={getFaceShadowOpacity(eye.depth)}
                       />
@@ -1125,7 +1126,7 @@ function InteractiveAvatarComponent({
                               <path
                                 d={part.path}
                                 transform={getFaceShadowTransform(part.depth)}
-                                fill={surfaceShadow}
+                                fill={faceShadowColor}
                                 filter={shadowFilter}
                                 opacity={getFaceShadowOpacity(part.depth)}
                               />

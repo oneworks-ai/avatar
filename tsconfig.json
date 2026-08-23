@@ -12,6 +12,7 @@
     "module": "ESNext",
     "moduleResolution": "bundler",
     "outDir": "./dist-types",
+    "baseUrl": ".",
     "resolveJsonModule": true,
     "rootDir": "./src",
     "skipLibCheck": true,
