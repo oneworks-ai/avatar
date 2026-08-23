@@ -12,10 +12,10 @@ export interface HomeTemplate {
 }
 
 export const HOME_TEMPLATES: readonly HomeTemplate[] = [
-  { accent: '#241f1c', background: '#0e4fe7', id: 'dog', label: '小狗' },
-  { accent: '#08090b', background: '#ff766c', id: 'cat', label: '小猫' },
-  { accent: '#9f5f48', background: '#f2bd4f', id: 'bear', label: '小熊' },
-  { accent: '#f4f0e8', background: '#f08c46', id: 'rabbit', label: '小兔' },
-  { accent: '#ffffff', background: '#87bfff', id: 'cloud', label: '云' },
-  { accent: '#eaa064', background: '#382641', id: 'sun', label: '太阳' }
+  { accent: '#241f1c', background: '#0e4fe7', id: 'dog', label: 'Dog' },
+  { accent: '#08090b', background: '#ff766c', id: 'cat', label: 'Cat' },
+  { accent: '#9f5f48', background: '#f2bd4f', id: 'bear', label: 'Bear' },
+  { accent: '#f4f0e8', background: '#f08c46', id: 'rabbit', label: 'Rabbit' },
+  { accent: '#ffffff', background: '#87bfff', id: 'cloud', label: 'Cloud' },
+  { accent: '#eaa064', background: '#382641', id: 'sun', label: 'Sun' }
 ] as const

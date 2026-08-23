@@ -12,7 +12,7 @@ export interface SavedAvatarPreset {
   readonly version: 1
 }
 
-interface AvatarScreenshotOptions {
+export interface AvatarCaptureOptions {
   readonly background?: string
   readonly frame?: AvatarCameraFrame
 }
@@ -53,7 +53,60 @@ export const prependSavedAvatarPreset = (
   preset: SavedAvatarPreset
 ) => [preset, ...presets].slice(0, MAX_SAVED_PRESETS)
 
-export const serializeAvatarSvg = (sourceSvg: SVGSVGElement, size: number) => {
+const getAvatarFramePath = (width: number, height: number, frame: AvatarCameraFrame) => {
+  if (frame === 'circle') {
+    const radius = Math.min(width, height) / 2
+    return `M ${width / 2} ${height / 2 - radius} A ${radius} ${radius} 0 1 1 ${
+      width / 2
+    } ${height / 2 + radius} A ${radius} ${radius} 0 1 1 ${width / 2} ${height / 2 - radius} Z`
+  }
+  if (frame === 'rounded') {
+    const radius = Math.min(width, height) * 18 / SCREENSHOT_SIZE
+    return `M ${radius} 0 H ${width - radius} Q ${width} 0 ${width} ${radius} V ${
+      height - radius
+    } Q ${width} ${height} ${width - radius} ${height} H ${radius} Q 0 ${height} 0 ${
+      height - radius
+    } V ${radius} Q 0 0 ${radius} 0 Z`
+  }
+  return `M 0 0 H ${width} V ${height} H 0 Z`
+}
+
+const applyAvatarCaptureFrame = (svg: SVGSVGElement, options: AvatarCaptureOptions) => {
+  if (options.background == null && options.frame == null) return
+
+  const viewBox = svg.viewBox.baseVal
+  const width = viewBox.width || Number(svg.getAttribute('width')) || SCREENSHOT_SIZE
+  const height = viewBox.height || Number(svg.getAttribute('height')) || SCREENSHOT_SIZE
+  const frame = options.frame ?? 'square'
+  const document = svg.ownerDocument
+  const namespace = 'http://www.w3.org/2000/svg'
+  const clipId = 'oneworks-avatar-export-frame'
+  const defs = document.createElementNS(namespace, 'defs')
+  const clipPath = document.createElementNS(namespace, 'clipPath')
+  const framePath = document.createElementNS(namespace, 'path')
+  const content = document.createElementNS(namespace, 'g')
+
+  clipPath.setAttribute('id', clipId)
+  framePath.setAttribute('d', getAvatarFramePath(width, height, frame))
+  clipPath.append(framePath)
+  defs.append(clipPath)
+
+  content.setAttribute('clip-path', `url(#${clipId})`)
+  if (options.background != null) {
+    const background = document.createElementNS(namespace, 'path')
+    background.setAttribute('d', getAvatarFramePath(width, height, frame))
+    background.setAttribute('fill', options.background)
+    content.append(background)
+  }
+  while (svg.firstChild != null) content.append(svg.firstChild)
+  svg.append(defs, content)
+}
+
+export const serializeAvatarSvg = (
+  sourceSvg: SVGSVGElement,
+  size: number,
+  options: AvatarCaptureOptions = {}
+) => {
   const clonedSvg = sourceSvg.cloneNode(true) as SVGSVGElement
   clonedSvg.setAttribute('xmlns', 'http://www.w3.org/2000/svg')
   clonedSvg.setAttribute('width', String(size))
@@ -61,37 +114,16 @@ export const serializeAvatarSvg = (sourceSvg: SVGSVGElement, size: number) => {
   clonedSvg.removeAttribute('aria-label')
   clonedSvg.removeAttribute('role')
   clonedSvg.removeAttribute('tabindex')
+  applyAvatarCaptureFrame(clonedSvg, options)
   return new XMLSerializer().serializeToString(clonedSvg)
 }
 
-const addFramePath = (context: CanvasRenderingContext2D, frame: AvatarCameraFrame) => {
-  const size = SCREENSHOT_SIZE
-  context.beginPath()
-  if (frame === 'circle') {
-    context.arc(size / 2, size / 2, size / 2, 0, Math.PI * 2)
-    return
-  }
-  if (frame === 'rounded') {
-    const radius = 18
-    context.moveTo(radius, 0)
-    context.lineTo(size - radius, 0)
-    context.quadraticCurveTo(size, 0, size, radius)
-    context.lineTo(size, size - radius)
-    context.quadraticCurveTo(size, size, size - radius, size)
-    context.lineTo(radius, size)
-    context.quadraticCurveTo(0, size, 0, size - radius)
-    context.lineTo(0, radius)
-    context.quadraticCurveTo(0, 0, radius, 0)
-    return
-  }
-  context.rect(0, 0, size, size)
-}
-
-export const captureAvatarScreenshot = async (
+export const renderAvatarCaptureCanvas = async (
   sourceSvg: SVGSVGElement,
-  options: AvatarScreenshotOptions = {}
+  size: number,
+  options: AvatarCaptureOptions = {}
 ) => {
-  const svgSource = serializeAvatarSvg(sourceSvg, SCREENSHOT_SIZE)
+  const svgSource = serializeAvatarSvg(sourceSvg, size, options)
   const sourceUrl = URL.createObjectURL(new Blob([svgSource], { type: 'image/svg+xml;charset=utf-8' }))
   try {
     const image = new Image()
@@ -99,24 +131,39 @@ export const captureAvatarScreenshot = async (
     await image.decode()
 
     const canvas = document.createElement('canvas')
-    canvas.width = SCREENSHOT_SIZE
-    canvas.height = SCREENSHOT_SIZE
+    canvas.width = size
+    canvas.height = size
     const context = canvas.getContext('2d')
-    if (context == null) throw new Error('Unable to create avatar screenshot canvas')
+    if (context == null) throw new Error('Unable to create avatar capture canvas')
 
-    context.save()
-    if (options.frame != null) {
-      addFramePath(context, options.frame)
-      context.clip()
-    }
-    if (options.background != null) {
-      context.fillStyle = options.background
-      context.fillRect(0, 0, SCREENSHOT_SIZE, SCREENSHOT_SIZE)
-    }
-    context.drawImage(image, 0, 0, SCREENSHOT_SIZE, SCREENSHOT_SIZE)
-    context.restore()
-    return canvas.toDataURL('image/png')
+    context.drawImage(image, 0, 0, size, size)
+    return canvas
   } finally {
     URL.revokeObjectURL(sourceUrl)
   }
+}
+
+export const renderAvatarPngBlob = async (
+  sourceSvg: SVGSVGElement,
+  size: number,
+  options: AvatarCaptureOptions = {}
+) => {
+  const canvas = await renderAvatarCaptureCanvas(sourceSvg, size, options)
+  return new Promise<Blob>((resolve, reject) => {
+    canvas.toBlob(blob => {
+      if (blob == null) {
+        reject(new Error('Unable to encode avatar PNG'))
+        return
+      }
+      resolve(blob)
+    }, 'image/png')
+  })
+}
+
+export const captureAvatarScreenshot = async (
+  sourceSvg: SVGSVGElement,
+  options: AvatarCaptureOptions = {}
+) => {
+  const canvas = await renderAvatarCaptureCanvas(sourceSvg, SCREENSHOT_SIZE, options)
+  return canvas.toDataURL('image/png')
 }

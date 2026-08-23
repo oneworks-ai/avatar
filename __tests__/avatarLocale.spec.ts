@@ -12,6 +12,11 @@ describe('avatar locale', () => {
 
   it('translates known labels and preserves unknown text', () => {
     expect(translateAvatarText('zh-Hans', 'Effects')).toBe('效果')
+    expect(translateAvatarText('zh-Hans', 'Download PNG')).toBe('下载 PNG')
+    expect(translateAvatarText('zh-Hans', 'Transparent')).toBe('透明')
+    expect(translateAvatarText('zh-Hans', 'Bring your avatar to life')).toBe('让形象动起来')
+    expect(translateAvatarText('zh-Hans', 'Start creating')).toBe('开始创造')
+    expect(translateAvatarText('zh-Hans', 'Dog')).toBe('小狗')
     expect(translateAvatarText('en', 'Effects')).toBe('Effects')
     expect(translateAvatarText('zh-Hans', 'Custom animation name')).toBe('Custom animation name')
   })

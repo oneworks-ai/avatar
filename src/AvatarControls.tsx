@@ -66,6 +66,7 @@ type ControlIconName =
   | 'palette'
   | 'shadow'
   | 'solid'
+  | 'transparent'
 type GeometricShapeIconName = 'circle' | 'curve' | 'ellipse' | 'inverted-triangle' | 'rounded' | 'square'
 
 interface GeometricShapeOption<T extends string> {
@@ -210,6 +211,7 @@ const CAMERA_BACKGROUND_PRESETS = [
   '#ff766c', '#0e4fe7', '#f2bd4f', '#7568e7', '#f6b8cf', '#56d6cc',
   '#c9e76c', '#87bfff', '#f08c46', '#d9c8ff', '#efe5cc', '#8ec5a4'
 ] as const
+const DEFAULT_CAMERA_BACKGROUND_COLOR = CAMERA_BACKGROUND_PRESETS[0]
 
 function FacePresetPreview({ preset }: { readonly preset: AvatarFacePreset }) {
   const { style } = preset
@@ -309,6 +311,14 @@ function ControlIcon({ name }: { readonly name: ControlIconName }) {
           <>
             <rect x='3' y='3' width='14' height='14' rx='2' />
             <path d='M4.5 15.5 15.5 4.5' />
+          </>
+        )
+        : null}
+      {name === 'transparent'
+        ? (
+          <>
+            <rect x='3' y='3' width='14' height='14' rx='2' />
+            <path d='M3 10h14M10 3v14M3 3l14 14M17 3 3 17' />
           </>
         )
         : null}
@@ -564,6 +574,14 @@ export function AvatarControls({
   const paletteConfirmActionRef = useRef<HTMLButtonElement>(null)
   const presetSearchRef = useRef<HTMLInputElement>(null)
   const resizeStartRef = useRef<{ pointerX: number; width: number } | null>(null)
+  const lastCameraColorRef = useRef(
+    cameraBackground === 'transparent' ? DEFAULT_CAMERA_BACKGROUND_COLOR : cameraBackground
+  )
+
+  useEffect(() => {
+    if (cameraBackground !== 'transparent') lastCameraColorRef.current = cameraBackground
+  }, [cameraBackground])
+
   const isDefaultFace = Object.entries(DEFAULT_AVATAR_FACE_STYLE).every(([key, value]) => {
     return faceStyle[key as keyof AvatarFaceStyle] === value
   })
@@ -1220,29 +1238,53 @@ export function AvatarControls({
                         <ControlIcon name='background' />
                         {t('Camera background')}
                       </span>
-                      <div className='avatar-controls__camera-background'>
-                        <label className='avatar-controls__color-input'>
-                          <input
-                            type='color'
-                            aria-label='Camera background color'
-                            value={cameraBackground}
-                            onChange={event => onCameraBackgroundChange(event.currentTarget.value)}
-                          />
-                          <output>{cameraBackground.toUpperCase()}</output>
-                        </label>
-                        <div className='avatar-controls__camera-presets' aria-label='Camera background presets'>
-                          {CAMERA_BACKGROUND_PRESETS.map(color => (
-                            <button
-                              key={color}
-                              type='button'
-                              aria-label={`Set camera background to ${color}`}
-                              aria-pressed={cameraBackground === color}
-                              style={{ '--camera-preset': color } as CSSProperties}
-                              onClick={() => onCameraBackgroundChange(color)}
-                            />
-                          ))}
-                        </div>
+                      <div className='avatar-controls__segments'>
+                        <button
+                          className='avatar-controls__segment'
+                          type='button'
+                          aria-pressed={cameraBackground !== 'transparent'}
+                          onClick={() => onCameraBackgroundChange(lastCameraColorRef.current)}
+                        >
+                          <ControlIcon name='solid' />
+                          {t('Color')}
+                        </button>
+                        <button
+                          className='avatar-controls__segment'
+                          type='button'
+                          aria-pressed={cameraBackground === 'transparent'}
+                          onClick={() => onCameraBackgroundChange('transparent')}
+                        >
+                          <ControlIcon name='transparent' />
+                          {t('Transparent')}
+                        </button>
                       </div>
+                      {cameraBackground === 'transparent'
+                        ? null
+                        : (
+                          <div className='avatar-controls__camera-background'>
+                            <label className='avatar-controls__color-input'>
+                              <input
+                                type='color'
+                                aria-label='Camera background color'
+                                value={cameraBackground}
+                                onChange={event => onCameraBackgroundChange(event.currentTarget.value)}
+                              />
+                              <output>{cameraBackground.toUpperCase()}</output>
+                            </label>
+                            <div className='avatar-controls__camera-presets' aria-label='Camera background presets'>
+                              {CAMERA_BACKGROUND_PRESETS.map(color => (
+                                <button
+                                  key={color}
+                                  type='button'
+                                  aria-label={`Set camera background to ${color}`}
+                                  aria-pressed={cameraBackground === color}
+                                  style={{ '--camera-preset': color } as CSSProperties}
+                                  onClick={() => onCameraBackgroundChange(color)}
+                                />
+                              ))}
+                            </div>
+                          </div>
+                        )}
                     </div>
                   </>
                 )

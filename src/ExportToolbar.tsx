@@ -10,16 +10,24 @@ export type ExportSize = (typeof EXPORT_SIZES)[number]
 interface ExportToolbarProps {
   readonly copyState: 'copied' | 'idle'
   readonly exportSize: ExportSize
+  readonly gifAvailable: boolean
+  readonly gifExportState: 'error' | 'exporting' | 'idle'
   readonly onCopy: () => void
   readonly onDownload: () => void
+  readonly onDownloadGif: () => Promise<boolean>
+  readonly onDownloadPng: () => Promise<boolean>
   readonly onSizeChange: (size: ExportSize) => void
 }
 
 export function ExportToolbar({
   copyState,
   exportSize,
+  gifAvailable,
+  gifExportState,
   onCopy,
   onDownload,
+  onDownloadGif,
+  onDownloadPng,
   onSizeChange
 }: ExportToolbarProps) {
   const { t } = useAvatarLocale()
@@ -109,6 +117,49 @@ export function ExportToolbar({
                 <path d='M10 3.5v9M6.8 9.5l3.2 3.2 3.2-3.2M4 16h12' />
               </svg>
               <span>{t('Download SVG')}</span>
+            </button>
+            <button
+              className='avatar-export-toolbar__menu-action'
+              type='button'
+              role='menuitem'
+              onClick={() => {
+                void onDownloadPng().then(succeeded => {
+                  if (succeeded) setOpen(false)
+                })
+              }}
+            >
+              <svg className='avatar-export-toolbar__icon' viewBox='0 0 20 20' aria-hidden='true'>
+                <rect x='3' y='4' width='14' height='12' rx='1.5' />
+                <path d='m5.5 13 2.5-2.5 2 2 1.5-1.5 3 3M6.5 7.5h.01' />
+              </svg>
+              <span>{t('Download PNG')}</span>
+            </button>
+            <button
+              className='avatar-export-toolbar__menu-action'
+              type='button'
+              role='menuitem'
+              aria-label={!gifAvailable
+                ? `${t('Download GIF')}. ${t('Select an animation first')}`
+                : undefined}
+              disabled={!gifAvailable || gifExportState === 'exporting'}
+              title={!gifAvailable ? t('Select an animation first') : undefined}
+              onClick={() => {
+                void onDownloadGif().then(succeeded => {
+                  if (succeeded) setOpen(false)
+                })
+              }}
+            >
+              <svg className='avatar-export-toolbar__icon' viewBox='0 0 20 20' aria-hidden='true'>
+                <rect x='3' y='4' width='14' height='12' rx='1.5' />
+                <path d='M6 7.5h3v5H6zM12 7.5h2.5M12 10h2M12 12.5h2.5' />
+              </svg>
+              <span aria-live='polite'>{t(
+                gifExportState === 'exporting'
+                  ? 'Exporting GIF…'
+                  : gifExportState === 'error'
+                  ? 'Retry GIF export'
+                  : 'Download GIF'
+              )}</span>
             </button>
           </div>
         )

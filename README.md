@@ -1,30 +1,29 @@
 # OneWorks Avatar
 
-Pixel-rect avatar preview and export surface for `@oneworks/avatar`.
+[English](README.md) | [简体中文](README.zh-Hans.md)
 
-## Source
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset=".github/assets/avatar-cover-dark-en.jpg">
+  <source media="(prefers-color-scheme: light)" srcset=".github/assets/avatar-cover-light-en.jpg">
+  <img alt="OneWorks Avatar — four geometric 3D avatar templates" src=".github/assets/avatar-cover-light-en.jpg" width="1600">
+</picture>
 
-The avatar renderer, glyph geometry, palettes, presets, and seed helpers are maintained in `oneworks-ai/app` under `packages/avatar`.
+Create, animate, and export a geometric 3D avatar directly in your browser.
 
-This repository is mounted back into `oneworks-ai/app` as the `assets/avatar` submodule, but it builds independently from the app root pnpm workspace. Local development and GitHub Pages builds use an `app-source` checkout or symlink so the preview is tied to the app commit being tested without running the app root install.
+## Quick start
 
-## Development
+1. Open [oneworks.cloud/avatar](https://oneworks.cloud/avatar/).
+2. Choose an avatar and customize its pose, materials, face, camera, and animation.
+3. Open the camera menu to copy SVG or download SVG, PNG, or animated GIF. Choose a transparent camera background when you need alpha.
 
-From this repository:
+## Agent Skill
+
+Install the `oneworks-avatar` skill to let an AI agent work with the real editor and its 3D scene model:
 
 ```bash
-pnpm install --no-frozen-lockfile
-ln -s /path/to/oneworks-app app-source
-ONEWORKS_APP_SOURCE_DIR=app-source pnpm dev
-ONEWORKS_APP_SOURCE_DIR=app-source pnpm build:app-source
+npx skills@latest add oneworks-ai/avatar
 ```
 
-## Deployment
+## Documentation
 
-GitHub Pages is deployed by this repository's `deploy-avatar.yml` workflow. The app repository triggers that workflow from `.github/workflows/deploy-avatar.yml` only when avatar-specific inputs change:
-
-- `assets/avatar/**`
-- `packages/avatar/**`
-- `.github/workflows/deploy-avatar.yml`
-
-The Pages build checks out this repository, checks out `oneworks-ai/app` into `app-source`, installs this repository's dependencies, builds with `ONEWORKS_APP_SOURCE_DIR=app-source pnpm build:app-source`, and publishes `dist`.
+See the [complete Avatar guide](https://oneworks.cloud/docs/en/usage/avatar) for export behavior, developer integration, runtime boundaries, local development, and deployment.
