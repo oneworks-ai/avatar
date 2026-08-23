@@ -57,11 +57,14 @@ jobs:
       - name: Test editor and runtime contracts
         run: pnpm test
 
-      - name: Typecheck app and SDK packages
-        run: pnpm typecheck && pnpm --filter './packages/*' typecheck
+      - name: Typecheck app source
+        run: pnpm typecheck
 
-      - name: Build app and SDK packages
-        run: pnpm build:app-source && pnpm build:sdk
+      - name: Build and typecheck SDK packages
+        run: pnpm typecheck:sdk
+
+      - name: Build app source
+        run: pnpm build:app-source
 
       - name: Test packed packages in a clean consumer
         run: pnpm smoke:sdk
