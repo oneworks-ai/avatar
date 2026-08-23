@@ -3,6 +3,7 @@ import {
   AVATAR_DEFINITION_VERSION,
   anchorAvatarAnimationClip,
   applyAvatarScenePatch,
+  mergeAvatarAnimationLibraries,
   parseAvatarAnimationClip
 } from '@oneworks/avatar'
 import type {
@@ -375,7 +376,7 @@ export const flattenAvatarAnimationLibraries = (
   libraries: readonly AvatarAnimationLibrary[],
   scene: AvatarScene
 ): readonly PublicAvatarAnimationEntry[] =>
-  libraries.flatMap(library => (
+  mergeAvatarAnimationLibraries(libraries).flatMap(library => (
     Object.entries(library.groups).flatMap(([groupId, group]) => (
       Object.entries(group.clips).map(([clipId, clip]) => ({
         animation: avatarAnimationClipToSavedAnimation(

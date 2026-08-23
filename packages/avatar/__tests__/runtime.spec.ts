@@ -50,7 +50,11 @@ describe('OneWorks Avatar public runtime contract', () => {
     const definition = createDefaultAvatarDefinition()
     expect(parseAvatarDefinition(serializeAvatarDefinition(definition))).toEqual(definition)
     expect(() => parseAvatarDefinition({ ...definition, version: 2 })).toThrow(TypeError)
+    expect(() => parseAvatarDefinition(Object.create(definition))).toThrow(TypeError)
+    expect(() => parseAvatarAnimationClip(Object.create(nod))).toThrow(TypeError)
     expect(() => parseAvatarDefinition({ ...definition, extra: true })).toThrow(TypeError)
+    expect(() => parseAvatarDefinition({ ...definition, animations: null })).toThrow(TypeError)
+    expect(() => parseAvatarDefinition({ ...definition, metadata: null })).toThrow(TypeError)
     expect(() => parseAvatarDefinition({
       ...definition,
       scene: { ...definition.scene, extra: true }
@@ -75,6 +79,18 @@ describe('OneWorks Avatar public runtime contract', () => {
       parseAvatarAnimationClip({
         ...nod,
         keyframes: [{ ...nod.keyframes[0], extra: true }]
+      })
+    ).toThrow(TypeError)
+    expect(() =>
+      parseAvatarAnimationClip({
+        ...nod,
+        keyframes: [{ atMs: 0, easing: null, patch: {} }]
+      })
+    ).toThrow(TypeError)
+    expect(() =>
+      parseAvatarAnimationClip({
+        ...nod,
+        keyframes: [{ atMs: 0, patch: { view: null } }]
       })
     ).toThrow(TypeError)
     expect(() =>

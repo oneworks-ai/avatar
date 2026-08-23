@@ -345,7 +345,8 @@ export const createSeededAvatarDefinition = ({
 }
 
 const isRecord = (value: unknown): value is Record<string, unknown> => (
-  typeof value === 'object' && value != null && !Array.isArray(value)
+  typeof value === 'object' && value != null && !Array.isArray(value) &&
+  (Object.getPrototypeOf(value) === Object.prototype || Object.getPrototypeOf(value) === null)
 )
 const hasOnlyKeys = (value: Record<string, unknown>, keys: readonly string[]) => (
   Object.keys(value).every(key => keys.includes(key))
@@ -356,8 +357,8 @@ const isFiniteNumber = (value: unknown): value is number => (
   typeof value === 'number' && Number.isFinite(value)
 )
 const isString = (value: unknown): value is string => typeof value === 'string'
-const isOptionalNumber = (value: unknown) => value == null || isFiniteNumber(value)
-const isOptionalString = (value: unknown) => value == null || isString(value)
+const isOptionalNumber = (value: unknown) => value === undefined || isFiniteNumber(value)
+const isOptionalString = (value: unknown) => value === undefined || isString(value)
 const isOneOf = <T extends string>(value: unknown, options: readonly T[]): value is T => (
   isString(value) && options.includes(value as T)
 )
@@ -466,10 +467,10 @@ const isAvatarEntityPart = (value: unknown): value is AvatarEntityPart => (
     'z'
   ]) && isString(value.baseColor) && isOptionalNumber(value.cutAngle) &&
   isBoolean(value.face) && isString(value.foregroundColor) && isString(value.highlightColor) &&
-  (value.hollow == null || isBoolean(value.hollow)) && isString(value.id) && isString(value.label) &&
+  (value.hollow === undefined || isBoolean(value.hollow)) && isString(value.id) && isString(value.label) &&
   isOptionalNumber(value.occlusionAmount) &&
-  (value.occludedByFace == null || isBoolean(value.occludedByFace)) &&
-  (value.occlusionPole == null || isOneOf(value.occlusionPole, ['bottom', 'top'])) &&
+  (value.occludedByFace === undefined || isBoolean(value.occludedByFace)) &&
+  (value.occlusionPole === undefined || isOneOf(value.occlusionPole, ['bottom', 'top'])) &&
   isOptionalNumber(value.rotationX) && isOptionalNumber(value.rotationY) &&
   isOptionalNumber(value.rotationZ) && isOptionalNumber(value.roundness) &&
   isFiniteNumber(value.scaleX) && isFiniteNumber(value.scaleY) &&
@@ -533,16 +534,16 @@ const isAvatarScenePatch = (value: unknown): value is AvatarScenePatch => {
   if (!isRecord(value) || Object.keys(value).some(key => !['colorGrade', 'face', 'view'].includes(key))) {
     return false
   }
-  if (value.colorGrade != null && !isPartialAvatarColorGrade(value.colorGrade)) return false
+  if (value.colorGrade !== undefined && !isPartialAvatarColorGrade(value.colorGrade)) return false
   if (
-    value.view != null && !isPartialNumberRecord(value.view, [
+    value.view !== undefined && !isPartialNumberRecord(value.view, [
       'pitch',
       'positionX',
       'positionY',
       'yaw'
     ])
   ) return false
-  if (value.face != null && !isPartialAvatarFace(value.face)) return false
+  if (value.face !== undefined && !isPartialAvatarFace(value.face)) return false
   return true
 }
 
@@ -565,7 +566,7 @@ const isAvatarAnimationClip = (value: unknown): value is AvatarAnimationClip => 
       isRecord(keyframe) && hasOnlyKeys(keyframe, ['atMs', 'easing', 'patch']) &&
       isFiniteNumber(keyframe.atMs) && keyframe.atMs >= 0 &&
       keyframe.atMs <= durationMs &&
-      (keyframe.easing == null || isOneOf(keyframe.easing, [
+      (keyframe.easing === undefined || isOneOf(keyframe.easing, [
         'ease-in',
         'ease-in-out',
         'ease-out',
@@ -611,9 +612,9 @@ export const isAvatarDefinition = (value: unknown): value is AvatarDefinition =>
     !isRecord(value) || !hasOnlyKeys(value, ['animations', 'metadata', 'scene', 'schema', 'version']) ||
     value.schema !== AVATAR_DEFINITION_SCHEMA || value.version !== 1
   ) return false
-  if (value.animations != null && !isAvatarAnimationLibrary(value.animations)) return false
+  if (value.animations !== undefined && !isAvatarAnimationLibrary(value.animations)) return false
   if (
-    value.metadata != null && (!isRecord(value.metadata) ||
+    value.metadata !== undefined && (!isRecord(value.metadata) ||
       !hasOnlyKeys(value.metadata, ['createdAt', 'id', 'name', 'updatedAt']) ||
       !isOptionalString(value.metadata.createdAt) || !isOptionalString(value.metadata.id) ||
       !isOptionalString(value.metadata.name) || !isOptionalString(value.metadata.updatedAt))

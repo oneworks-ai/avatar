@@ -112,6 +112,43 @@ describe('Avatar editor public definition bridge', () => {
     expect(entry?.animation.id).toBe('public:customer-support:support:listen')
   })
 
+  it('uses the same later-library precedence as the public renderer', () => {
+    const scene = createDefaultAvatarDefinition().scene
+    const base: AvatarAnimationLibrary = {
+      groups: {
+        support: {
+          clips: {
+            listen: {
+              anchor: 'absolute',
+              durationMs: 100,
+              keyframes: [{ atMs: 0, patch: { view: { yaw: 0 } } }],
+              label: 'Definition',
+              playback: 'once'
+            }
+          }
+        }
+      },
+      id: 'support'
+    }
+    const external: AvatarAnimationLibrary = {
+      ...base,
+      groups: {
+        support: {
+          clips: {
+            listen: {
+              ...base.groups.support!.clips.listen!,
+              label: 'External'
+            }
+          }
+        }
+      }
+    }
+
+    const entries = flattenAvatarAnimationLibraries([base, external], scene)
+    expect(entries).toHaveLength(1)
+    expect(entries[0]?.animation.name).toBe('External')
+  })
+
   it('preserves animation libraries while previewing and editing one clip', () => {
     const base = createDefaultAvatarDefinition()
     const first = {
