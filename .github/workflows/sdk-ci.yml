@@ -1,0 +1,70 @@
+name: Avatar SDK CI
+
+on:
+  pull_request:
+    paths:
+      - .github/workflows/sdk-ci.yml
+      - package.json
+      - pnpm-lock.yaml
+      - pnpm-workspace.yaml
+      - packages/**
+      - scripts/**
+      - src/**
+      - tsconfig*.json
+      - vite.config.ts
+      - vitest.config.ts
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: 'true'
+
+jobs:
+  sdk:
+    name: build-test-pack
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout Avatar repository
+        uses: actions/checkout@v4
+
+      - name: Checkout shared OneWorks sources
+        uses: actions/checkout@v4
+        with:
+          repository: oneworks-ai/app
+          path: app-source
+          submodules: false
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 11.7.0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: app-source/.node-version
+          registry-url: https://registry.npmjs.org
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Test editor and runtime contracts
+        run: pnpm test
+
+      - name: Typecheck app and SDK packages
+        run: pnpm typecheck && pnpm --filter './packages/*' typecheck
+
+      - name: Build app and SDK packages
+        run: pnpm build:app-source && pnpm build:sdk
+
+      - name: Test packed packages in a clean consumer
+        run: pnpm smoke:sdk
+
+      - name: Audit production dependencies
+        run: pnpm audit --prod --audit-level high

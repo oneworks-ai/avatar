@@ -6,6 +6,10 @@ This project is the preview/export surface for the OneWorks avatar visual system
 - `src/App.tsx`: standalone preview/export surface.
 - `src/App.scss`: page layout and interaction styling.
 - `.github/workflows/deploy-avatar.yml`: GitHub Pages deployment owned by the `oneworks-ai/avatar` repository.
+- `packages/core/`: versioned framework-neutral 3D scene definitions and animation runtime.
+- `packages/react/`: React renderer and the embeddable full editor; it is the single framework adapter allowed to import editor internals.
+- `packages/web/`: Vanilla JS mounts and opt-in custom elements built on the React adapter.
+- `packages/vue/`: Vue components built on the Vanilla JS mounts so rendering behavior remains identical across frameworks.
 - `skills/oneworks-avatar/`: installable Agent Skill for 3D authoring, debugging, export verification, and current developer-integration boundaries.
 
 The interactive preview uses geometric SVG face primitives instead of the legacy pixel emoticon glyphs. Its baseline face is a pair of rounded-rectangle eyes; keep new face work vector-native and do not replace it with web fonts, canvas text, or raster images. The legacy pixel avatar generator remains owned by `../../packages/avatar` for its package API, while this editor's Copy SVG and Download SVG actions serialize the current interactive SVG so body, pose, face, lighting, shadow, and outline appearance are preserved.

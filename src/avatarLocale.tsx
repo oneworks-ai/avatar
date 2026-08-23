@@ -209,14 +209,23 @@ interface AvatarLocaleContextValue {
 
 const AvatarLocaleContext = createContext<AvatarLocaleContextValue | null>(null)
 
-export function AvatarLocaleProvider({ children }: { readonly children: ReactNode }) {
-  const [locale, setLocale] = useState<AvatarLocale>(getInitialAvatarLocale)
+export function AvatarLocaleProvider({
+  children,
+  initialLocale,
+  persist = true
+}: {
+  readonly children: ReactNode
+  readonly initialLocale?: AvatarLocale
+  readonly persist?: boolean
+}) {
+  const [locale, setLocale] = useState<AvatarLocale>(() => initialLocale ?? getInitialAvatarLocale())
   const t = useCallback((text: string) => translateAvatarText(locale, text), [locale])
 
   useEffect(() => {
+    if (!persist) return
     document.documentElement.lang = locale
     window.localStorage.setItem(AVATAR_LOCALE_STORAGE_KEY, locale)
-  }, [locale])
+  }, [locale, persist])
 
   const value = useMemo(() => ({ locale, setLocale, t }), [locale, t])
 

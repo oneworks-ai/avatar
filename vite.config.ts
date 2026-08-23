@@ -20,6 +20,18 @@ export default defineConfig({
     : {
         alias: [
           {
+            find: /^@oneworks\/avatar-core$/,
+            replacement: path.resolve('packages/core/src/index.ts')
+          },
+          {
+            find: /^@oneworks\/avatar-react$/,
+            replacement: path.resolve('packages/react/src/index.tsx')
+          },
+          {
+            find: /^@oneworks\/avatar-react\/style\.css$/,
+            replacement: path.resolve('packages/react/src/style.scss')
+          },
+          {
             find: /^@oneworks\/avatar$/,
             replacement: path.join(appSourcePath, 'packages/avatar/src/index.ts')
           },

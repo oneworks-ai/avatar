@@ -35,12 +35,14 @@ interface AnimationPanelProps {
   readonly onPlay: () => void
   readonly onPlaybackModeChange: (mode: AvatarAnimationPlaybackMode) => void
   readonly onPresetSelect: (preset: AvatarAnimationPreset) => boolean
+  readonly onPublicAnimationSelect: (animation: SavedAvatarAnimation) => boolean
   readonly onSavedAnimationRemove: (animation: SavedAvatarAnimation) => void
   readonly onSavedAnimationSelect: (animation: SavedAvatarAnimation) => boolean
   readonly onSave: () => void
   readonly onStartFrameChange: (index: number) => void
   readonly onStop: () => void
   readonly playbackMode: AvatarAnimationPlaybackMode
+  readonly publicAnimations: readonly SavedAvatarAnimation[]
   readonly renderKeyframePreview: (keyframe: AvatarAnimationKeyframe) => ReactNode
   readonly renderPresetPreview: (preset: AvatarAnimationPreset) => ReactNode
   readonly requiresReplacementConfirmation: boolean
@@ -54,6 +56,7 @@ type AnimationPanelTab = 'create' | 'playback'
 type PendingAnimationAction =
   | { readonly animation: SavedAvatarAnimation; readonly type: 'remove-saved' }
   | { readonly animation: SavedAvatarAnimation; readonly type: 'replace-saved' }
+  | { readonly animation: SavedAvatarAnimation; readonly type: 'replace-public' }
   | { readonly preset: AvatarAnimationPreset; readonly type: 'replace-preset' }
 
 const DEFAULT_PANEL_HEIGHT = 244
@@ -116,12 +119,14 @@ export function AnimationPanel({
   onPlay,
   onPlaybackModeChange,
   onPresetSelect,
+  onPublicAnimationSelect,
   onSavedAnimationRemove,
   onSavedAnimationSelect,
   onSave,
   onStartFrameChange,
   onStop,
   playbackMode,
+  publicAnimations,
   renderKeyframePreview,
   renderPresetPreview,
   requiresReplacementConfirmation,
@@ -193,11 +198,20 @@ export function AnimationPanel({
     onSavedAnimationSelect(animation)
   }
 
+  const requestPublicAnimationSelection = (animation: SavedAvatarAnimation) => {
+    if (requiresReplacementConfirmation) {
+      setPendingAction({ animation, type: 'replace-public' })
+      return
+    }
+    onPublicAnimationSelect(animation)
+  }
+
   const confirmPendingAction = () => {
     const action = pendingAction
     setPendingAction(null)
     if (action == null) return
     if (action.type === 'replace-preset') onPresetSelect(action.preset)
+    else if (action.type === 'replace-public') onPublicAnimationSelect(action.animation)
     else if (action.type === 'replace-saved') onSavedAnimationSelect(action.animation)
     else onSavedAnimationRemove(action.animation)
   }
@@ -429,6 +443,25 @@ export function AnimationPanel({
                         {renderPresetPreview(preset)}
                       </span>
                       <span className='avatar-animation-panel__library-name'>{preset.label}</span>
+                    </button>
+                  )
+                })}
+                {publicAnimations.map(animation => {
+                  const previewKeyframe = animation.keyframes[animation.startFrameIndex]
+                  return (
+                    <button
+                      key={animation.id}
+                      className='avatar-animation-panel__library-item'
+                      type='button'
+                      aria-label={`Play ${animation.name}`}
+                      aria-pressed={selectedLibraryId === animation.id}
+                      title={`${animation.name} · ${animation.keyframes.length} keyframes`}
+                      onClick={() => requestPublicAnimationSelection(animation)}
+                    >
+                      <span className='avatar-animation-panel__library-preview' aria-hidden='true'>
+                        {previewKeyframe == null ? null : renderKeyframePreview(previewKeyframe)}
+                      </span>
+                      <span className='avatar-animation-panel__library-name'>{animation.name}</span>
                     </button>
                   )
                 })}

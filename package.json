@@ -4,7 +4,7 @@
   "version": "0.1.0-alpha.0",
   "packageManager": "pnpm@11.7.0",
   "private": true,
-  "description": "OneWorks pixel-rect avatar previews and SVG assets",
+  "description": "OneWorks geometric 3D Avatar editor, runtime, and framework adapters",
   "repository": {
     "type": "git",
     "url": "https://github.com/oneworks-ai/avatar.git"
@@ -13,24 +13,35 @@
     "build": "pnpm build:app-source",
     "build:app-source": "tsc -p tsconfig.app-source.json --noEmit --pretty false && vite build",
     "build:npm": "tsc -p tsconfig.json --noEmit --pretty false && vite build",
+    "build:sdk": "pnpm --filter './packages/*' build",
     "dev": "vite",
     "preview": "vite preview",
+    "smoke:sdk": "node scripts/smoke-sdk-packages.mjs",
+    "test": "vitest run __tests__/*.spec.ts packages/core/__tests__/*.spec.ts packages/web/__tests__/*.spec.ts",
     "typecheck": "tsc -p tsconfig.app-source.json --noEmit --pretty false",
-    "typecheck:npm": "tsc -p tsconfig.json --noEmit --pretty false"
+    "typecheck:npm": "tsc -p tsconfig.json --noEmit --pretty false",
+    "typecheck:sdk": "pnpm build:sdk && pnpm --filter './packages/*' typecheck"
   },
   "dependencies": {
     "@oneworks/avatar": "beta",
+    "@oneworks/avatar-core": "workspace:*",
     "@oneworks/route-layout": "beta",
     "gifenc": "^1.0.3"
   },
   "devDependencies": {
     "@types/react": "^18.3.12",
     "@types/react-dom": "^18.3.2",
+    "@vitejs/plugin-vue": "^5.2.4",
+    "jsdom": "^26.1.0",
     "@vitejs/plugin-react": "^5.1.2",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
     "sass": "^1.97.2",
     "typescript": "^5.9.3",
-    "vite": "^5.4.8"
+    "vite": "^5.4.8",
+    "vite-plugin-dts": "^4.5.4",
+    "vitest": "^3.2.4",
+    "vue": "^3.5.21",
+    "vue-tsc": "^2.2.12"
   }
 }

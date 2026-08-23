@@ -1,0 +1,88 @@
+@import '@oneworks/route-layout/design-tokens.css';
+
+.oneworks-avatar,
+.oneworks-avatar-editor {
+  box-sizing: border-box;
+  color: var(--text-color);
+  font-family:
+    Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont,
+    'Segoe UI', sans-serif;
+}
+
+.oneworks-avatar *,
+.oneworks-avatar-editor * {
+  box-sizing: border-box;
+}
+
+.oneworks-avatar {
+  position: relative;
+  display: block;
+  width: 100%;
+  aspect-ratio: 1;
+  overflow: hidden;
+  background: var(--oneworks-avatar-background, transparent);
+}
+
+.oneworks-avatar[data-frame='rounded'] {
+  border-radius: 12.5%;
+}
+
+.oneworks-avatar[data-frame='circle'] {
+  border-radius: 50%;
+}
+
+.oneworks-avatar > .interactive-avatar {
+  width: 100%;
+  height: 100%;
+}
+
+.oneworks-avatar-editor {
+  position: relative;
+  display: block;
+  width: 100%;
+  min-width: 0;
+  min-height: 640px;
+  overflow: hidden;
+  background: var(--bg-color);
+}
+
+.oneworks-avatar-editor > .avatar-app {
+  min-height: inherit;
+}
+
+.oneworks-avatar-editor > .avatar-app.dark {
+  --app-chrome-overlay-background: color-mix(
+    in srgb,
+    var(--bg-color) 42%,
+    transparent
+  );
+  --bg-color: #141414;
+  --sub-bg-color: #262626;
+  --sub-sub-bg-color: #303030;
+  --text-color: #ffffff;
+  --sub-text-color: #8c8c8c;
+  --sub-sub-text-color: #a5a5a5;
+  --border-color: #303030;
+  --sub-border-color: #434343;
+  --sub-sub-border-color: #595959;
+  --placeholder-color: #575859;
+  --tag-bg: #1f1f1f;
+  --tag-hover-bg: #262626;
+  --code-bg: #1e293b;
+  --code-border: #334155;
+  --star-color: #ffb81c;
+  --primary-color: #e23f12;
+  --primary-soft-bg: color-mix(
+    in srgb,
+    var(--primary-color) 12%,
+    var(--bg-color)
+  );
+  --success-color: #2dd4bf;
+  --warning-color: #f59e0b;
+  --primary-text-color: color-mix(
+    in srgb,
+    var(--primary-color) 82%,
+    var(--text-color)
+  );
+  --danger-color: #f87171;
+}
