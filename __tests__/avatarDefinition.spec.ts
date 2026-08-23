@@ -45,13 +45,18 @@ describe('Avatar editor public definition bridge', () => {
         entityPreset: preset,
         faceStyle: getAvatarEntityPresetFaceStyle(preset)!,
         frameShadowStyle: presetScene.frameShadowStyle,
+        gridDensity: presetScene.gridDensity,
         interactionMode: presetScene.interactionMode,
+        lightAzimuth: presetScene.lightAzimuth,
+        lightDistance: presetScene.lightDistance,
+        lightElevation: presetScene.lightElevation,
         paletteId: presetScene.paletteId,
         showAvatarShadow: presetScene.showAvatarShadow,
         showFrameShadow: presetScene.showFrameShadow,
         showLight: presetScene.showLight,
         showOutline: presetScene.showOutline,
         showShadow: presetScene.showShadow,
+        surfaceDecals: presetScene.surfaceDecals,
         viewState: presetScene.viewState
       })
 
@@ -140,6 +145,19 @@ describe('Avatar editor public definition bridge', () => {
         width: 30,
         x: -48,
         y: 30
+      }, {
+        color: '#d97757',
+        height: 120,
+        id: 'claude-background',
+        label: 'Official Claude Spark',
+        opacity: 100,
+        rotation: 0,
+        side: 'back',
+        shape: 'claude-spark',
+        targetPartId: customParts.find(part => part.face)?.id ?? null,
+        width: 34,
+        x: 30,
+        y: 48
       }],
       viewState: DEFAULT_AVATAR_VIEW_STATE
     })
@@ -153,7 +171,9 @@ describe('Avatar editor public definition bridge', () => {
     expect(params.get('frameShadowColor')).toBe('#654321')
     expect(params.get('eyeHighlight')).toBe('0')
     expect(params.get('decals')).toContain('blush-left')
+    expect(params.get('decals')).toContain('back')
     expect(deserializeAvatarEntityParts(params.get('entityParts'), 'custom')).toMatchObject(customParts)
+    expect(parseAvatarDefinition(definition)).toEqual(definition)
     expect(createAvatarDefinition(avatarDefinitionToState(definition), definition)).toEqual(definition)
   })
 

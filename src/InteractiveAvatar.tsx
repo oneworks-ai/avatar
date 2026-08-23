@@ -116,6 +116,7 @@ interface AvatarPosition {
 
 interface ProjectedSurfaceDecal extends AvatarSurfaceDecal {
   readonly path: string
+  readonly transform?: string
 }
 
 interface DragOrigin extends AvatarPose {
@@ -408,6 +409,7 @@ function EntityPresetBody({
                     d={decal.path}
                     fill={decal.color}
                     fillOpacity={decal.opacity / 100}
+                    transform={decal.transform}
                   />
                 ))}
               </g>
@@ -571,6 +573,24 @@ export const EntityPresetPreview = memo(function EntityPresetPreview({
     () => getAvatarEntityPresetFaceStyle(preset) ?? ENTITY_PREVIEW_FACE_STYLE,
     [preset]
   )
+  const surfaceDecals = useMemo<ProjectedSurfaceDecal[]>(() => (scene?.surfaceDecals ?? []).flatMap(decal => {
+    const targetPart = decal.targetPartId == null
+      ? parts.find(part => part.face)
+      : parts.find(part => part.id === decal.targetPartId)
+    if (targetPart == null) return []
+    const projected = projectAvatarSurfaceDecal(
+      pose,
+      targetPart.shape,
+      decal,
+      getEntityFaceGeometryOptions(targetPart, preset)
+    )
+    return projected == null ? [] : [{
+      ...decal,
+      path: projected.path,
+      targetPartId: targetPart.id,
+      ...(projected.transform == null ? {} : { transform: projected.transform })
+    }]
+  }), [parts, pose, preset, scene])
   const geometries = useMemo(
     () => buildEntityPartGeometries(parts, pose, lightDirection, 25),
     [lightDirection, parts, pose]
@@ -628,7 +648,7 @@ export const EntityPresetPreview = memo(function EntityPresetPreview({
           preset={preset}
           renderSurfaceCells={false}
           shadowStyle={DEFAULT_AVATAR_FACE_SHADOW_STYLE}
-          surfaceDecals={[]}
+          surfaceDecals={surfaceDecals}
           showGrid={false}
           showLight={scene?.showLight ?? true}
           showOutline={scene?.showOutline ?? false}
@@ -849,7 +869,11 @@ function InteractiveAvatarComponent({
     if (!usesEntityParts) {
       if (decal.targetPartId != null) return []
       const projected = projectAvatarSurfaceDecal(pose, bodyShape, decal)
-      return projected == null ? [] : [{ ...decal, path: projected.path }]
+      return projected == null ? [] : [{
+        ...decal,
+        path: projected.path,
+        ...(projected.transform == null ? {} : { transform: projected.transform })
+      }]
     }
     const targetPart = decal.targetPartId == null
       ? entityFacePart
@@ -861,7 +885,12 @@ function InteractiveAvatarComponent({
       decal,
       getEntityFaceGeometryOptions(targetPart, entityPreset)
     )
-    return projected == null ? [] : [{ ...decal, path: projected.path, targetPartId: targetPart.id }]
+    return projected == null ? [] : [{
+      ...decal,
+      path: projected.path,
+      targetPartId: targetPart.id,
+      ...(projected.transform == null ? {} : { transform: projected.transform })
+    }]
   }), [bodyShape, entityFacePart, entityPreset, pose, sourceEntityParts, surfaceDecals, usesEntityParts])
   const surfaceMid = applyAvatarColorGrade(
     backgroundStyle === 'gradient' ? palette.gradient[1] : palette.background,

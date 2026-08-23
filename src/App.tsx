@@ -693,10 +693,14 @@ const getInitialQueryConfig = (definition?: AvatarDefinition) => {
     controlsCollapsed: false,
     entityParts: createAvatarEntityParts(preset),
     entityPreset: preset,
-    surfaceDecals: [],
+    surfaceDecals: scene.surfaceDecals,
     faceStyle,
     frameShadowStyle: scene.frameShadowStyle,
+    gridDensity: scene.gridDensity,
     interactionMode: scene.interactionMode,
+    lightAzimuth: scene.lightAzimuth,
+    lightDistance: scene.lightDistance,
+    lightElevation: scene.lightElevation,
     selectedPaletteId: scene.paletteId,
     showAvatarShadow: scene.showAvatarShadow,
     showFrameShadow: scene.showFrameShadow,
@@ -1424,7 +1428,7 @@ function App({
     setEntityPreset(preset)
     setEntityParts(nextParts)
     setSelectedEntityPartId(null)
-    setSurfaceDecals([])
+    setSurfaceDecals(nextScene?.surfaceDecals ?? [])
     setSelectedSurfaceDecalId(null)
     setSelectedSavedPresetId(null)
     if (nextFaceStyle != null) {
@@ -1443,7 +1447,11 @@ function App({
       setCameraMode(nextScene.cameraMode)
       setExportSize(DEFAULT_EXPORT_SIZE)
       setFrameShadowStyle(nextScene.frameShadowStyle)
+      setGridDensity(nextScene.gridDensity)
       setInteractionMode(nextScene.interactionMode)
+      setLightAzimuth(nextScene.lightAzimuth)
+      setLightDistance(nextScene.lightDistance)
+      setLightElevation(nextScene.lightElevation)
       setSelectedPaletteId(nextScene.paletteId)
       setShowAvatarShadow(nextScene.showAvatarShadow)
       setShowFrameShadow(nextScene.showFrameShadow)
@@ -2437,8 +2445,14 @@ function App({
             setAnimationPreviewFaceStyle(DEFAULT_AVATAR_FACE_STYLE)
           }}
           onDeleteSurfaceDecal={(id) => {
-            setSurfaceDecals(current => current.filter(decal => decal.id !== id))
-            setSelectedSurfaceDecalId(current => current === id ? null : current)
+            const deletingIndex = surfaceDecals.findIndex(decal => decal.id === id)
+            const nextSurfaceDecals = surfaceDecals.filter(decal => decal.id !== id)
+            const nextSelectedDecalId = nextSurfaceDecals[
+              Math.min(Math.max(deletingIndex, 0), nextSurfaceDecals.length - 1)
+            ]?.id ?? null
+            setSurfaceDecals(nextSurfaceDecals)
+            setSelectedSurfaceDecalId(current => current === id ? nextSelectedDecalId : current)
+            setCopyState('idle')
           }}
           onSelectSurfaceDecal={setSelectedSurfaceDecalId}
           onSurfaceDecalChange={(id, patch) => {

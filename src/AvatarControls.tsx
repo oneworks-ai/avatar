@@ -186,6 +186,7 @@ const BODY_SHAPE_LABELS: Readonly<Record<AvatarBodyShape, string>> = {
 
 const ENTITY_PRESET_LABELS: Readonly<Record<Exclude<AvatarEntityPreset, 'custom'>, string>> = {
   bear: 'Bear',
+  bun: 'Bun',
   cat: 'Cat',
   cloud: 'Cloud',
   dog: 'Dog',
@@ -199,8 +200,11 @@ const EYE_SHAPE_OPTIONS: readonly GeometricShapeOption<AvatarEyeShape>[] = [
 ]
 
 const SURFACE_DECAL_SHAPE_OPTIONS: readonly GeometricShapeOption<AvatarSurfaceDecalShape>[] = [
+  { icon: 'rounded', id: 'claude-spark', label: 'Claude Spark' },
   { icon: 'ellipse', id: 'ellipse', label: 'Ellipse' },
-  { icon: 'rounded', id: 'rounded', label: 'Rounded' }
+  { icon: 'rounded', id: 'radial-pleats', label: 'Radial pleats' },
+  { icon: 'rounded', id: 'rounded', label: 'Rounded' },
+  { icon: 'inverted-triangle', id: 'rounded-triangle', label: 'Rounded triangle' }
 ]
 
 const NOSE_SHAPE_OPTIONS: readonly GeometricShapeOption<AvatarNoseShape>[] = [
@@ -1253,16 +1257,33 @@ export function AvatarControls({
                   : (
                     <div className='avatar-controls__decal-list' role='listbox' aria-label={t('Surface decals')}>
                       {surfaceDecals.map(decal => (
-                        <button
+                        <div
                           key={decal.id}
-                          type='button'
-                          role='option'
-                          aria-selected={decal.id === selectedSurfaceDecalId}
-                          onClick={() => onSelectSurfaceDecal(decal.id)}
+                          className='avatar-controls__decal-item'
+                          data-selected={decal.id === selectedSurfaceDecalId}
                         >
-                          <span style={{ background: decal.color }} />
-                          {t(decal.label)}
-                        </button>
+                          <button
+                            className='avatar-controls__decal-option'
+                            type='button'
+                            role='option'
+                            aria-selected={decal.id === selectedSurfaceDecalId}
+                            onClick={() => onSelectSurfaceDecal(decal.id)}
+                          >
+                            <span style={{ background: decal.color }} />
+                            <span className='avatar-controls__decal-label'>{t(decal.label)}</span>
+                          </button>
+                          <button
+                            className='avatar-controls__decal-remove'
+                            type='button'
+                            aria-label={`${t('Delete decal')}: ${t(decal.label)}`}
+                            title={t('Delete decal')}
+                            onClick={() => onDeleteSurfaceDecal(decal.id)}
+                          >
+                            <svg viewBox='0 0 16 16' aria-hidden='true'>
+                              <path d='m4.5 4.5 7 7m0-7-7 7' />
+                            </svg>
+                          </button>
+                        </div>
                       ))}
                     </div>
                   )}
@@ -1282,6 +1303,26 @@ export function AvatarControls({
                           {entityParts.map(part => <option key={part.id} value={part.id}>{t(part.label)}</option>)}
                         </select>
                       </label>
+                      {editingSurfaceDecal.shape === 'radial-pleats' ? null : (
+                        <label className='avatar-controls__select-field'>
+                          <span>{t('Surface side')}</span>
+                          <select
+                            value={editingSurfaceDecal.side ?? 'front'}
+                            onChange={event => onSurfaceDecalChange(editingSurfaceDecal.id, {
+                              side: event.currentTarget.value === 'back' ||
+                                event.currentTarget.value === 'left' ||
+                                event.currentTarget.value === 'right'
+                                ? event.currentTarget.value
+                                : 'front'
+                            })}
+                          >
+                            <option value='front'>{t('Front')}</option>
+                            <option value='right'>{t('Right')}</option>
+                            <option value='back'>{t('Back')}</option>
+                            <option value='left'>{t('Left')}</option>
+                          </select>
+                        </label>
+                      )}
                       <GeometricShapePicker
                         ariaLabel='Surface decal shape'
                         options={SURFACE_DECAL_SHAPE_OPTIONS}
@@ -1300,14 +1341,23 @@ export function AvatarControls({
                         />
                       </label>
                       <div className='avatar-controls__parameter-controls'>
-                        <ValueSlider ariaLabel='Decal position X' label='Position X'
-                          min={AVATAR_SURFACE_DECAL_RANGES.x.min} max={AVATAR_SURFACE_DECAL_RANGES.x.max}
-                          value={editingSurfaceDecal.x}
-                          onChange={x => onSurfaceDecalChange(editingSurfaceDecal.id, { x })} />
-                        <ValueSlider ariaLabel='Decal position Y' label='Position Y'
-                          min={AVATAR_SURFACE_DECAL_RANGES.y.min} max={AVATAR_SURFACE_DECAL_RANGES.y.max}
-                          value={editingSurfaceDecal.y}
-                          onChange={y => onSurfaceDecalChange(editingSurfaceDecal.id, { y })} />
+                        {editingSurfaceDecal.shape === 'radial-pleats' ? (
+                          <ValueSlider ariaLabel='Pleat curvature' label='Curvature'
+                            min={-60} max={60} suffix='°'
+                            value={editingSurfaceDecal.x}
+                            onChange={x => onSurfaceDecalChange(editingSurfaceDecal.id, { x })} />
+                        ) : (
+                          <>
+                            <ValueSlider ariaLabel='Decal position X' label='Position X'
+                              min={AVATAR_SURFACE_DECAL_RANGES.x.min} max={AVATAR_SURFACE_DECAL_RANGES.x.max}
+                              value={editingSurfaceDecal.x}
+                              onChange={x => onSurfaceDecalChange(editingSurfaceDecal.id, { x })} />
+                            <ValueSlider ariaLabel='Decal position Y' label='Position Y'
+                              min={AVATAR_SURFACE_DECAL_RANGES.y.min} max={AVATAR_SURFACE_DECAL_RANGES.y.max}
+                              value={editingSurfaceDecal.y}
+                              onChange={y => onSurfaceDecalChange(editingSurfaceDecal.id, { y })} />
+                          </>
+                        )}
                         <ValueSlider ariaLabel='Decal width' label='Width'
                           min={AVATAR_SURFACE_DECAL_RANGES.width.min} max={AVATAR_SURFACE_DECAL_RANGES.width.max}
                           value={editingSurfaceDecal.width}
