@@ -107,7 +107,7 @@ export const avatarDefinitionToState = (definition: AvatarDefinition): AvatarDef
     showLight: scene.lighting.enabled,
     showOutline: scene.effects.showOutline,
     showShadow: scene.effects.showFaceShadow,
-    surfaceDecals: scene.decals ?? [],
+    surfaceDecals: scene.decals,
     viewState: scene.view
   }
 }
@@ -351,7 +351,7 @@ export const avatarDefinitionToSearchParams = (definition: AvatarDefinition) => 
   if (scene.entity.parts.length > 0) {
     params.set('entityParts', serializeAvatarEntityParts(scene.entity.parts as readonly AvatarEntityPart[]))
   }
-  if (scene.decals != null && scene.decals.length > 0) {
+  if (scene.decals.length > 0) {
     params.set('decals', serializeAvatarSurfaceDecals(scene.decals))
   }
   params.set('size', String(scene.camera.size))

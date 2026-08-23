@@ -835,7 +835,9 @@ function InteractiveAvatarComponent({
       const projected = projectAvatarSurfaceDecal(pose, bodyShape, decal)
       return projected == null ? [] : [{ ...decal, path: projected.path }]
     }
-    const targetPart = sourceEntityParts.find(part => part.id === decal.targetPartId)
+    const targetPart = decal.targetPartId == null
+      ? entityFacePart
+      : sourceEntityParts.find(part => part.id === decal.targetPartId)
     if (targetPart == null) return []
     const projected = projectAvatarSurfaceDecal(
       pose,
@@ -843,8 +845,8 @@ function InteractiveAvatarComponent({
       decal,
       getEntityFaceGeometryOptions(targetPart, entityPreset)
     )
-    return projected == null ? [] : [{ ...decal, path: projected.path }]
-  }), [bodyShape, entityPreset, pose, sourceEntityParts, surfaceDecals, usesEntityParts])
+    return projected == null ? [] : [{ ...decal, path: projected.path, targetPartId: targetPart.id }]
+  }), [bodyShape, entityFacePart, entityPreset, pose, sourceEntityParts, surfaceDecals, usesEntityParts])
   const surfaceMid = applyAvatarColorGrade(
     backgroundStyle === 'gradient' ? palette.gradient[1] : palette.background,
     colorGrade

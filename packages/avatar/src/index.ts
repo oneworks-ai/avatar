@@ -170,7 +170,7 @@ export interface AvatarScene {
     readonly showFaceShadow: boolean
     readonly showOutline: boolean
   }
-  readonly decals?: readonly AvatarSurfaceDecal[]
+  readonly decals: readonly AvatarSurfaceDecal[]
   readonly entity: {
     readonly parts: readonly AvatarEntityPart[]
     readonly preset: AvatarEntityPreset
@@ -312,6 +312,7 @@ export const createDefaultAvatarDefinition = (): AvatarDefinition => ({
       showFaceShadow: false,
       showOutline: true
     },
+    decals: [],
     entity: { parts: [], preset: 'custom' },
     face: DEFAULT_AVATAR_FACE,
     interactionMode: 'rotate',
@@ -374,7 +375,9 @@ export const createSeededAvatarDefinition = ({
 const isRecord = (value: unknown): value is Record<string, unknown> => (
   typeof value === 'object' && value != null && !Array.isArray(value) &&
   (Object.getPrototypeOf(value) === Object.prototype || Object.getPrototypeOf(value) === null) &&
-  Object.values(Object.getOwnPropertyDescriptors(value)).every(descriptor => 'value' in descriptor)
+  Object.values(Object.getOwnPropertyDescriptors(value)).every(descriptor => (
+    'value' in descriptor && descriptor.enumerable
+  ))
 )
 const hasOnlyKeys = (value: Record<string, unknown>, keys: readonly string[]) => (
   Reflect.ownKeys(value).every(key => typeof key === 'string' && keys.includes(key))
@@ -451,11 +454,11 @@ const isAvatarSurfaceDecal = (value: unknown): value is AvatarSurfaceDecal => (
     'x',
     'y'
   ]) && isHexColor(value.color) && isFiniteNumber(value.height) && value.height >= 2 && value.height <= 180 &&
-  isString(value.id) && value.id.length > 0 && isString(value.label) &&
+  isString(value.id) && value.id.trim().length > 0 && isString(value.label) &&
   isFiniteNumber(value.opacity) && value.opacity >= 0 && value.opacity <= 100 &&
   isFiniteNumber(value.rotation) && value.rotation >= -180 && value.rotation <= 180 &&
   isOneOf(value.shape, ['ellipse', 'rounded']) &&
-  (value.targetPartId === null || isString(value.targetPartId)) &&
+  (value.targetPartId === null || (isString(value.targetPartId) && value.targetPartId.trim().length > 0)) &&
   isFiniteNumber(value.width) && value.width >= 2 && value.width <= 180 &&
   isFiniteNumber(value.x) && value.x >= -180 && value.x <= 180 &&
   isFiniteNumber(value.y) && value.y >= -180 && value.y <= 180
@@ -526,6 +529,7 @@ const isAvatarFace = (value: unknown): value is AvatarFace => (
     'rightEyeRotation',
     'width'
   ]) && hasOwnKeys(value, [
+    'eyeHighlight',
     'eyeRoundness',
     'eyeShape',
     'gap',
@@ -547,8 +551,7 @@ const isAvatarFace = (value: unknown): value is AvatarFace => (
     'rotation',
     'rightEyeRotation',
     'width'
-  ]) && (value.eyeHighlight === undefined || isAvatarEyeHighlight(value.eyeHighlight)) &&
-  isFiniteNumber(value.eyeRoundness) &&
+  ]) && isAvatarEyeHighlight(value.eyeHighlight) && isFiniteNumber(value.eyeRoundness) &&
   isOneOf(value.eyeShape, ['ellipse', 'rounded']) && isFiniteNumber(value.gap) &&
   isFiniteNumber(value.height) && isOptionalNumber(value.leftEyeHeight) &&
   isFiniteNumber(value.leftEyeRotation) && isFiniteNumber(value.mouthCurve) &&
@@ -606,7 +609,8 @@ const isAvatarEntityPart = (value: unknown): value is AvatarEntityPart => (
     'z'
   ]) && isString(value.baseColor) && isOptionalNumber(value.cutAngle) &&
   isBoolean(value.face) && isString(value.foregroundColor) && isString(value.highlightColor) &&
-  (value.hollow === undefined || isBoolean(value.hollow)) && isString(value.id) && isString(value.label) &&
+  (value.hollow === undefined || isBoolean(value.hollow)) && isString(value.id) && value.id.trim().length > 0 &&
+  isString(value.label) &&
   isOptionalNumber(value.occlusionAmount) &&
   (value.occludedByFace === undefined || isBoolean(value.occludedByFace)) &&
   (value.occlusionPole === undefined || isOneOf(value.occlusionPole, ['bottom', 'top'])) &&
@@ -745,12 +749,15 @@ export const parseAvatarAnimationClip = (input: unknown): AvatarAnimationClip =>
 const isAvatarAnimationLibrary = (value: unknown): value is AvatarAnimationLibrary => (
   isRecord(value) && hasOnlyKeys(value, ['groups', 'id', 'label']) &&
   hasOwnKeys(value, ['groups', 'id']) &&
-  isString(value.id) && isOptionalString(value.label) && isRecord(value.groups) &&
-  Object.values(value.groups).every(group => (
+  isString(value.id) && value.id.trim().length > 0 && isOptionalString(value.label) && isRecord(value.groups) &&
+  Object.entries(value.groups).every(([groupId, group]) => (
+    groupId.trim().length > 0 &&
     isRecord(group) && hasOnlyKeys(group, ['clips', 'defaultClip', 'label']) &&
     hasOwnKeys(group, ['clips']) &&
     isOptionalString(group.defaultClip) && isOptionalString(group.label) &&
-    isRecord(group.clips) && Object.values(group.clips).every(isAvatarAnimationClip) &&
+    isRecord(group.clips) && Object.entries(group.clips).every(([clipId, clip]) => (
+      clipId.trim().length > 0 && isAvatarAnimationClip(clip)
+    )) &&
     (group.defaultClip === undefined || Object.hasOwn(group.clips, group.defaultClip))
   ))
 )
@@ -781,6 +788,7 @@ export const isAvatarDefinition = (value: unknown): value is AvatarDefinition =>
   ]) || !hasOwnKeys(value.scene, [
     'appearance',
     'camera',
+    'decals',
     'effects',
     'entity',
     'face',
@@ -789,10 +797,14 @@ export const isAvatarDefinition = (value: unknown): value is AvatarDefinition =>
     'view'
   ])) return false
   const scene = value.scene
-  if (scene.decals !== undefined) {
-    if (!isDenseArray<AvatarSurfaceDecal>(scene.decals) || !scene.decals.every(isAvatarSurfaceDecal)) return false
-    if (new Set(scene.decals.map(decal => decal.id)).size !== scene.decals.length) return false
-  }
+  if (!isDenseArray<AvatarSurfaceDecal>(scene.decals) || !scene.decals.every(isAvatarSurfaceDecal)) return false
+  if (new Set(scene.decals.map(decal => decal.id)).size !== scene.decals.length) return false
+  const entityParts = isRecord(scene.entity) && isDenseArray<AvatarEntityPart>(scene.entity.parts)
+    ? scene.entity.parts
+    : []
+  const decalTargetsAreValid = scene.decals.every(decal => (
+    decal.targetPartId === null || entityParts.some(part => part.id === decal.targetPartId)
+  ))
   return isRecord(scene.appearance) && hasOnlyKeys(scene.appearance, [
     'backgroundStyle',
     'bodyShape',
@@ -854,6 +866,7 @@ export const isAvatarDefinition = (value: unknown): value is AvatarDefinition =>
     scene.entity.parts.every(isAvatarEntityPart) &&
     new Set(scene.entity.parts.map(part => part.id)).size === scene.entity.parts.length &&
     (scene.entity.parts.length === 0 || scene.entity.parts.filter(part => part.face).length === 1) &&
+    decalTargetsAreValid &&
     isOneOf(scene.entity.preset, ['bear', 'cat', 'cloud', 'custom', 'dog', 'rabbit', 'sun']) &&
     isAvatarFace(scene.face) && isOneOf(scene.interactionMode, ['move', 'rotate']) &&
     isRecord(scene.lighting) && hasOnlyKeys(scene.lighting, [

@@ -45,7 +45,7 @@ describe('OneWorks Avatar React rendering', () => {
         ...definition.scene,
         decals: [{
           color: '#f29a93', height: 18, id: 'blush-left', label: 'Left blush', opacity: 90,
-          rotation: -8, shape: 'ellipse' as const, targetPartId: parts.find(part => part.face)?.id ?? null,
+          rotation: -8, shape: 'ellipse' as const, targetPartId: null,
           width: 30, x: -48, y: 30
         }],
         entity: { parts, preset: 'custom' as const },

@@ -101,12 +101,62 @@ describe('OneWorks Avatar public runtime contract', () => {
     const hiddenExtra = { ...definition }
     Object.defineProperty(hiddenExtra, 'extra', { value: true })
     expect(() => parseAvatarDefinition(hiddenExtra)).toThrow(TypeError)
+    const hiddenName = { ...definition, metadata: {} }
+    Object.defineProperty(hiddenName.metadata, 'name', { value: 'Hidden' })
+    expect(() => parseAvatarDefinition(hiddenName)).toThrow(TypeError)
+    const missingHighlight = {
+      ...definition,
+      scene: { ...definition.scene, face: { ...definition.scene.face } }
+    }
+    delete (missingHighlight.scene.face as Partial<typeof missingHighlight.scene.face>).eyeHighlight
+    expect(() => parseAvatarDefinition(missingHighlight)).toThrow(TypeError)
+    const missingDecals = { ...definition, scene: { ...definition.scene } }
+    delete (missingDecals.scene as Partial<typeof missingDecals.scene>).decals
+    expect(() => parseAvatarDefinition(missingDecals)).toThrow(TypeError)
     expect(() => parseAvatarDefinition({ ...definition, [Symbol('extra')]: true })).toThrow(TypeError)
     expect(() => parseAvatarDefinition({
       ...definition,
       scene: {
         ...definition.scene,
         glyph: { leftEye: '0', linkEyes: true, mouth: 'w', rightEye: '0' }
+      }
+    })).toThrow(TypeError)
+    expect(() => parseAvatarDefinition({
+      ...definition,
+      scene: {
+        ...definition.scene,
+        decals: [{
+          color: '#f29a93',
+          height: 18,
+          id: 'missing-target',
+          label: 'Missing target',
+          opacity: 90,
+          rotation: 0,
+          shape: 'ellipse',
+          targetPartId: 'missing-part',
+          width: 30,
+          x: 0,
+          y: 0
+        }]
+      }
+    })).toThrow(TypeError)
+    expect(() => parseAvatarDefinition({
+      ...definition,
+      scene: {
+        ...definition.scene,
+        decals: [{
+          color: '#f29a93',
+          height: 18,
+          id: 'blank-target',
+          label: 'Blank target',
+          opacity: 90,
+          rotation: 0,
+          shape: 'ellipse',
+          targetPartId: ' ',
+          width: 30,
+          x: 0,
+          y: 0
+        }]
       }
     })).toThrow(TypeError)
     expect(() => parseAvatarDefinition({
@@ -131,6 +181,13 @@ describe('OneWorks Avatar public runtime contract', () => {
       y: 0,
       z: 0
     }
+    expect(() => parseAvatarDefinition({
+      ...definition,
+      scene: {
+        ...definition.scene,
+        entity: { parts: [{ ...duplicatePart, id: '' }], preset: 'custom' }
+      }
+    })).toThrow(TypeError)
     expect(() => parseAvatarDefinition({
       ...definition,
       scene: {
