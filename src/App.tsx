@@ -86,6 +86,7 @@ import type { SavedAvatarPreset } from './savedAvatarPresets'
 import { LAST_EDITOR_QUERY_STORAGE_KEY } from './avatarHome'
 import { createAvatarGif } from './avatarGifExport'
 import {
+  avatarDefinitionToState,
   avatarDefinitionToSearchParams,
   createAvatarDefinition,
   flattenAvatarAnimationLibraries
@@ -215,6 +216,9 @@ const parseAvatarShadowColor = (value: string | null) => {
     ? value.toLowerCase()
     : DEFAULT_AVATAR_SHADOW_STYLE.color
 }
+const parseOptionalShadowColor = (value: string | null) => (
+  value != null && /^#[\da-f]{6}$/i.test(value) ? value.toLowerCase() : undefined
+)
 const parseCameraFrame = (value: string | null): AvatarCameraFrame => {
   return value === 'circle' || value === 'rounded' || value === 'square' ? value : DEFAULT_CAMERA_FRAME
 }
@@ -322,6 +326,9 @@ const parseQueryConfig = (params: URLSearchParams): AvatarQueryConfig => {
       eyeShape: parseEyeShape(params.get('eyeShape')),
       gap: parseRangeValue(params.get('eyeGap'), DEFAULT_AVATAR_FACE_STYLE.gap, 0, 100),
       height: parseRangeValue(params.get('eyeH'), DEFAULT_AVATAR_FACE_STYLE.height, 20, 104),
+      leftEyeHeight: params.has('eyeLeftH')
+        ? parseRangeValue(params.get('eyeLeftH'), DEFAULT_AVATAR_FACE_STYLE.height, 20, 104)
+        : undefined,
       leftEyeRotation: parseRangeValue(
         params.get('eyeLeftRot'),
         DEFAULT_AVATAR_FACE_STYLE.leftEyeRotation,
@@ -348,9 +355,13 @@ const parseQueryConfig = (params: URLSearchParams): AvatarQueryConfig => {
         -90,
         90
       ),
+      rightEyeHeight: params.has('eyeRightH')
+        ? parseRangeValue(params.get('eyeRightH'), DEFAULT_AVATAR_FACE_STYLE.height, 20, 104)
+        : undefined,
       width: parseRangeValue(params.get('eyeW'), DEFAULT_AVATAR_FACE_STYLE.width, 12, 72)
     },
     faceShadowStyle: {
+      color: parseOptionalShadowColor(params.get('shadowColor')),
       direction: parseRangeValue(
         params.get('shadowDir'),
         DEFAULT_AVATAR_FACE_SHADOW_STYLE.direction,
@@ -362,6 +373,7 @@ const parseQueryConfig = (params: URLSearchParams): AvatarQueryConfig => {
       softness: parseRangeValue(params.get('shadowSoft'), DEFAULT_AVATAR_FACE_SHADOW_STYLE.softness, 0, 12)
     },
     frameShadowStyle: {
+      color: parseOptionalShadowColor(params.get('frameShadowColor')),
       direction: parseRangeValue(params.get('frameShadowDir'), DEFAULT_FRAME_SHADOW_STYLE.direction, -180, 180),
       distance: parseRangeValue(params.get('frameShadowDist'), DEFAULT_FRAME_SHADOW_STYLE.distance, 0, 40),
       opacity: parseRangeValue(params.get('frameShadowOpacity'), DEFAULT_FRAME_SHADOW_STYLE.opacity, 0, 100),
@@ -419,6 +431,40 @@ const getInitialQueryConfig = (definition?: AvatarDefinition) => {
     ? typeof window === 'undefined' ? new URLSearchParams() : new URLSearchParams(window.location.search)
     : avatarDefinitionToSearchParams(definition)
   const config = parseQueryConfig(params)
+  if (definition != null) {
+    const state = avatarDefinitionToState(definition)
+    return {
+      ...config,
+      avatarOutlineStyle: state.avatarOutlineStyle,
+      avatarShadowStyle: state.avatarShadowStyle,
+      backgroundStyle: state.backgroundStyle,
+      bodyShape: state.bodyShape,
+      cameraBackground: state.cameraBackground,
+      cameraFrame: state.cameraFrame,
+      entityParts: state.entityParts,
+      entityPreset: state.entityPreset,
+      exportSize: state.exportSize,
+      faceShadowStyle: state.faceShadowStyle,
+      faceStyle: state.faceStyle,
+      frameShadowStyle: state.frameShadowStyle,
+      gridDensity: state.gridDensity,
+      interactionMode: state.interactionMode,
+      leftEye: state.glyph.leftEye,
+      lightAzimuth: state.lightAzimuth,
+      lightDistance: state.lightDistance,
+      lightElevation: state.lightElevation,
+      linkEyes: state.glyph.linkEyes,
+      mouth: state.glyph.mouth,
+      rightEye: state.glyph.rightEye,
+      selectedPaletteId: state.paletteId,
+      showAvatarShadow: state.showAvatarShadow,
+      showFrameShadow: state.showFrameShadow,
+      showLight: state.showLight,
+      showOutline: state.showOutline,
+      showShadow: state.showShadow,
+      viewState: state.viewState
+    }
+  }
   if (!params.has('template')) return config
 
   const preset = parseAvatarEntityPreset(params.get('template'))
@@ -593,7 +639,9 @@ function App({
     const y = Math.sin(direction) * frameShadowStyle.distance
     return `${x.toFixed(2)}px ${
       y.toFixed(2)
-    }px ${frameShadowStyle.softness}px color-mix(in srgb, ${selectedPalette.shadow} ${frameShadowStyle.opacity}%, transparent)`
+    }px ${frameShadowStyle.softness}px color-mix(in srgb, ${
+      frameShadowStyle.color ?? selectedPalette.shadow
+    } ${frameShadowStyle.opacity}%, transparent)`
   }, [frameShadowStyle, selectedPalette.shadow, showFrameShadow])
   const previewEmoticon = `${leftEye}${mouth}${rightEye}`
   const visiblePalettes = useMemo(() => {
@@ -662,7 +710,7 @@ function App({
     lightAzimuth,
     lightDistance,
     lightElevation,
-    paletteId: selectedPalette.id,
+    paletteId: selectedPaletteId,
     showAvatarShadow,
     showFrameShadow,
     showLight,
@@ -695,7 +743,7 @@ function App({
     resolvedFaceShadowStyle,
     resolvedFaceStyle,
     rightEye,
-    selectedPalette.id,
+    selectedPaletteId,
     showAvatarShadow,
     showFrameShadow,
     showLight,
@@ -814,6 +862,12 @@ function App({
     params.set('eyeRound', String(resolvedFaceStyle.eyeRoundness))
     params.set('eyeW', String(resolvedFaceStyle.width))
     params.set('eyeH', String(resolvedFaceStyle.height))
+    if (resolvedFaceStyle.leftEyeHeight != null) {
+      params.set('eyeLeftH', String(resolvedFaceStyle.leftEyeHeight))
+    }
+    if (resolvedFaceStyle.rightEyeHeight != null) {
+      params.set('eyeRightH', String(resolvedFaceStyle.rightEyeHeight))
+    }
     params.set('eyeGap', String(resolvedFaceStyle.gap))
     params.set('eyeRot', String(resolvedFaceStyle.rotation))
     params.set('eyeLeftRot', String(resolvedFaceStyle.leftEyeRotation))
@@ -840,6 +894,9 @@ function App({
     params.set('shadowDist', String(resolvedFaceShadowStyle.distance))
     params.set('shadowOpacity', String(resolvedFaceShadowStyle.opacity))
     params.set('shadowSoft', String(resolvedFaceShadowStyle.softness))
+    if (resolvedFaceShadowStyle.color != null) {
+      params.set('shadowColor', resolvedFaceShadowStyle.color)
+    }
     params.set('avatarShadow', showAvatarShadow ? '1' : '0')
     params.set('avatarShadowColor', avatarShadowStyle.color ?? DEFAULT_AVATAR_SHADOW_STYLE.color ?? '#000000')
     params.set('avatarShadowDir', String(avatarShadowStyle.direction))
@@ -855,6 +912,7 @@ function App({
     params.set('frameShadowDist', String(frameShadowStyle.distance))
     params.set('frameShadowOpacity', String(frameShadowStyle.opacity))
     params.set('frameShadowSoft', String(frameShadowStyle.softness))
+    if (frameShadowStyle.color != null) params.set('frameShadowColor', frameShadowStyle.color)
     params.set('gridDensity', String(gridDensity))
     if (entityPreset === 'custom') {
       params.delete('entity')
@@ -1711,7 +1769,7 @@ function App({
       lightAzimuth,
       lightDistance,
       lightElevation,
-      paletteId: selectedPalette.id,
+      paletteId: selectedPaletteId,
       scale: avatarViewState.scale,
       showLight,
       showOutline,

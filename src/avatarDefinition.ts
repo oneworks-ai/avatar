@@ -68,6 +68,39 @@ export interface AvatarDefinitionState {
 
 const toPublicPart = (part: AvatarEntityPart) => ({ ...part })
 
+export const avatarDefinitionToState = (definition: AvatarDefinition): AvatarDefinitionState => {
+  const { scene } = definition
+  return {
+    animation: undefined,
+    avatarOutlineStyle: scene.effects.outline,
+    avatarShadowStyle: scene.effects.avatarShadow,
+    backgroundStyle: scene.appearance.backgroundStyle,
+    bodyShape: scene.appearance.bodyShape,
+    cameraBackground: scene.camera.background,
+    cameraFrame: scene.camera.frame,
+    colorGrade: scene.effects.colorGrade,
+    entityParts: scene.entity.parts,
+    entityPreset: scene.entity.preset,
+    exportSize: scene.camera.size,
+    faceShadowStyle: scene.effects.faceShadow,
+    faceStyle: scene.face,
+    frameShadowStyle: scene.camera.frameShadow,
+    glyph: scene.glyph,
+    gridDensity: scene.lighting.gridDensity,
+    interactionMode: scene.interactionMode,
+    lightAzimuth: scene.lighting.azimuth,
+    lightDistance: scene.lighting.distance,
+    lightElevation: scene.lighting.elevation,
+    paletteId: scene.appearance.paletteId,
+    showAvatarShadow: scene.effects.showAvatarShadow,
+    showFrameShadow: scene.camera.showFrameShadow,
+    showLight: scene.lighting.enabled,
+    showOutline: scene.effects.showOutline,
+    showShadow: scene.effects.showFaceShadow,
+    viewState: scene.view
+  }
+}
+
 export const savedAvatarAnimationToClip = (animation: SavedAvatarAnimation): AvatarAnimationClip => {
   let atMs = 0
   const keyframes = animation.keyframes.map((keyframe, index) => {
@@ -187,6 +220,8 @@ export const avatarDefinitionToSearchParams = (definition: AvatarDefinition) => 
   params.set('eyeRound', String(scene.face.eyeRoundness))
   params.set('eyeW', String(scene.face.width))
   params.set('eyeH', String(scene.face.height))
+  if (scene.face.leftEyeHeight != null) params.set('eyeLeftH', String(scene.face.leftEyeHeight))
+  if (scene.face.rightEyeHeight != null) params.set('eyeRightH', String(scene.face.rightEyeHeight))
   params.set('eyeGap', String(scene.face.gap))
   params.set('eyeRot', String(scene.face.rotation))
   params.set('eyeLeftRot', String(scene.face.leftEyeRotation))
@@ -213,6 +248,7 @@ export const avatarDefinitionToSearchParams = (definition: AvatarDefinition) => 
   params.set('shadowDist', String(scene.effects.faceShadow.distance))
   params.set('shadowOpacity', String(scene.effects.faceShadow.opacity))
   params.set('shadowSoft', String(scene.effects.faceShadow.softness))
+  if (scene.effects.faceShadow.color != null) params.set('shadowColor', scene.effects.faceShadow.color)
   setBoolean(params, 'avatarShadow', scene.effects.showAvatarShadow)
   params.set('avatarShadowColor', scene.effects.avatarShadow.color ?? '#000000')
   params.set('avatarShadowDir', String(scene.effects.avatarShadow.direction))
@@ -228,6 +264,9 @@ export const avatarDefinitionToSearchParams = (definition: AvatarDefinition) => 
   params.set('frameShadowDist', String(scene.camera.frameShadow.distance))
   params.set('frameShadowOpacity', String(scene.camera.frameShadow.opacity))
   params.set('frameShadowSoft', String(scene.camera.frameShadow.softness))
+  if (scene.camera.frameShadow.color != null) {
+    params.set('frameShadowColor', scene.camera.frameShadow.color)
+  }
   params.set('gridDensity', String(scene.lighting.gridDensity))
   params.set('entity', scene.entity.preset)
   if (scene.entity.parts.length > 0) {
