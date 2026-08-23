@@ -24,7 +24,7 @@
   },
   "dependencies": {
     "@oneworks/avatar": "beta",
-    "@oneworks/avatar-core": "workspace:*",
+    "@oneworks/avatar-core": "link:packages/core",
     "@oneworks/route-layout": "beta",
     "gifenc": "^1.0.3"
   },
