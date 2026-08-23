@@ -693,7 +693,8 @@ function App({
   ])
   const currentDefinition = useMemo(() =>
     createAvatarDefinition({
-      animation: currentDocumentAnimation,
+      animation: animationDraftSource === 'builtin' ? null : currentDocumentAnimation,
+      animationTargetKey: selectedAnimationKey,
       avatarOutlineStyle,
       avatarShadowStyle,
       backgroundStyle,
@@ -729,6 +730,7 @@ function App({
     cameraBackground,
     cameraFrame,
     avatarColorGrade,
+    animationDraftSource,
     currentDocumentAnimation,
     definition,
     entityParts,
@@ -746,6 +748,7 @@ function App({
     resolvedFaceShadowStyle,
     resolvedFaceStyle,
     rightEye,
+    selectedAnimationKey,
     selectedPaletteId,
     showAvatarShadow,
     showFrameShadow,

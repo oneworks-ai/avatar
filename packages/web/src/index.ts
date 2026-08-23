@@ -108,6 +108,7 @@ export const createAvatar = (
     destroy: () => {
       if (destroyed) return
       destroyed = true
+      resolveReady()
       handle = null
       root.unmount()
     },
@@ -171,6 +172,7 @@ export const createAvatarEditor = (
     destroy: () => {
       if (destroyed) return
       destroyed = true
+      resolveReady()
       handle = null
       root.unmount()
     },

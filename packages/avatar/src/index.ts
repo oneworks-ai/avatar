@@ -347,6 +347,9 @@ export const createSeededAvatarDefinition = ({
 const isRecord = (value: unknown): value is Record<string, unknown> => (
   typeof value === 'object' && value != null && !Array.isArray(value)
 )
+const hasOnlyKeys = (value: Record<string, unknown>, keys: readonly string[]) => (
+  Object.keys(value).every(key => keys.includes(key))
+)
 
 const isBoolean = (value: unknown): value is boolean => typeof value === 'boolean'
 const isFiniteNumber = (value: unknown): value is number => (
@@ -376,23 +379,50 @@ const isAvatarColorGrade = (value: unknown): value is AvatarColorGrade => (
 )
 
 const isAvatarShadow = (value: unknown): value is AvatarShadow => (
-  isRecord(value) && isOptionalString(value.color) && isFiniteNumber(value.direction) &&
+  isRecord(value) && hasOnlyKeys(value, ['color', 'direction', 'distance', 'opacity', 'softness']) &&
+  isOptionalString(value.color) && isFiniteNumber(value.direction) &&
   isFiniteNumber(value.distance) && isFiniteNumber(value.opacity) && isFiniteNumber(value.softness)
 )
 
 const isAvatarOutline = (value: unknown): value is AvatarOutline => (
-  isRecord(value) && isString(value.color) && isFiniteNumber(value.opacity) &&
+  isRecord(value) && hasOnlyKeys(value, ['color', 'opacity', 'width']) &&
+  isString(value.color) && isFiniteNumber(value.opacity) &&
   isFiniteNumber(value.width)
 )
 
 const isAvatarView = (value: unknown): value is AvatarView => (
-  isRecord(value) && isFiniteNumber(value.pitch) && isFiniteNumber(value.positionX) &&
+  isRecord(value) && hasOnlyKeys(value, ['pitch', 'positionX', 'positionY', 'roll', 'scale', 'yaw']) &&
+  isFiniteNumber(value.pitch) && isFiniteNumber(value.positionX) &&
   isFiniteNumber(value.positionY) && isFiniteNumber(value.roll) && isFiniteNumber(value.scale) &&
   isFiniteNumber(value.yaw)
 )
 
 const isAvatarFace = (value: unknown): value is AvatarFace => (
-  isRecord(value) && isFiniteNumber(value.eyeRoundness) &&
+  isRecord(value) && hasOnlyKeys(value, [
+    'eyeRoundness',
+    'eyeShape',
+    'gap',
+    'height',
+    'leftEyeHeight',
+    'leftEyeRotation',
+    'mouthCurve',
+    'mouthEnabled',
+    'mouthHeight',
+    'mouthRotation',
+    'mouthShape',
+    'mouthWidth',
+    'mouthY',
+    'noseEnabled',
+    'noseHeight',
+    'noseRotation',
+    'noseShape',
+    'noseWidth',
+    'noseY',
+    'rotation',
+    'rightEyeHeight',
+    'rightEyeRotation',
+    'width'
+  ]) && isFiniteNumber(value.eyeRoundness) &&
   isOneOf(value.eyeShape, ['ellipse', 'rounded']) && isFiniteNumber(value.gap) &&
   isFiniteNumber(value.height) && isOptionalNumber(value.leftEyeHeight) &&
   isFiniteNumber(value.leftEyeRotation) && isFiniteNumber(value.mouthCurve) &&
@@ -409,7 +439,32 @@ const isAvatarFace = (value: unknown): value is AvatarFace => (
 )
 
 const isAvatarEntityPart = (value: unknown): value is AvatarEntityPart => (
-  isRecord(value) && isString(value.baseColor) && isOptionalNumber(value.cutAngle) &&
+  isRecord(value) && hasOnlyKeys(value, [
+    'baseColor',
+    'cutAngle',
+    'face',
+    'foregroundColor',
+    'highlightColor',
+    'hollow',
+    'id',
+    'label',
+    'occlusionAmount',
+    'occludedByFace',
+    'occlusionPole',
+    'rotationX',
+    'rotationY',
+    'rotationZ',
+    'roundness',
+    'scaleX',
+    'scaleY',
+    'scaleZ',
+    'shadowColor',
+    'shape',
+    'topScale',
+    'x',
+    'y',
+    'z'
+  ]) && isString(value.baseColor) && isOptionalNumber(value.cutAngle) &&
   isBoolean(value.face) && isString(value.foregroundColor) && isString(value.highlightColor) &&
   (value.hollow == null || isBoolean(value.hollow)) && isString(value.id) && isString(value.label) &&
   isOptionalNumber(value.occlusionAmount) &&
@@ -493,7 +548,13 @@ const isAvatarScenePatch = (value: unknown): value is AvatarScenePatch => {
 
 const isAvatarAnimationClip = (value: unknown): value is AvatarAnimationClip => {
   if (
-    !isRecord(value) || !isOneOf(value.anchor, ['absolute', 'relative']) ||
+    !isRecord(value) || !hasOnlyKeys(value, [
+      'anchor',
+      'durationMs',
+      'keyframes',
+      'label',
+      'playback'
+    ]) || !isOneOf(value.anchor, ['absolute', 'relative']) ||
     !isFiniteNumber(value.durationMs) || value.durationMs <= 0 || !isOptionalString(value.label) ||
     !isOneOf(value.playback, ['loop', 'once']) || !Array.isArray(value.keyframes) ||
     value.keyframes.length === 0 || (value.playback === 'loop' && value.keyframes.length < 2)
@@ -501,7 +562,8 @@ const isAvatarAnimationClip = (value: unknown): value is AvatarAnimationClip => 
   const durationMs = value.durationMs
   if (
     !value.keyframes.every(keyframe => (
-      isRecord(keyframe) && isFiniteNumber(keyframe.atMs) && keyframe.atMs >= 0 &&
+      isRecord(keyframe) && hasOnlyKeys(keyframe, ['atMs', 'easing', 'patch']) &&
+      isFiniteNumber(keyframe.atMs) && keyframe.atMs >= 0 &&
       keyframe.atMs <= durationMs &&
       (keyframe.easing == null || isOneOf(keyframe.easing, [
         'ease-in',
@@ -535,24 +597,44 @@ export const parseAvatarAnimationClip = (input: unknown): AvatarAnimationClip =>
 }
 
 const isAvatarAnimationLibrary = (value: unknown): value is AvatarAnimationLibrary => (
-  isRecord(value) && isString(value.id) && isOptionalString(value.label) && isRecord(value.groups) &&
+  isRecord(value) && hasOnlyKeys(value, ['groups', 'id', 'label']) &&
+  isString(value.id) && isOptionalString(value.label) && isRecord(value.groups) &&
   Object.values(value.groups).every(group => (
-    isRecord(group) && isOptionalString(group.defaultClip) && isOptionalString(group.label) &&
+    isRecord(group) && hasOnlyKeys(group, ['clips', 'defaultClip', 'label']) &&
+    isOptionalString(group.defaultClip) && isOptionalString(group.label) &&
     isRecord(group.clips) && Object.values(group.clips).every(isAvatarAnimationClip)
   ))
 )
 
 export const isAvatarDefinition = (value: unknown): value is AvatarDefinition => {
-  if (!isRecord(value) || value.schema !== AVATAR_DEFINITION_SCHEMA || value.version !== 1) return false
+  if (
+    !isRecord(value) || !hasOnlyKeys(value, ['animations', 'metadata', 'scene', 'schema', 'version']) ||
+    value.schema !== AVATAR_DEFINITION_SCHEMA || value.version !== 1
+  ) return false
   if (value.animations != null && !isAvatarAnimationLibrary(value.animations)) return false
   if (
     value.metadata != null && (!isRecord(value.metadata) ||
+      !hasOnlyKeys(value.metadata, ['createdAt', 'id', 'name', 'updatedAt']) ||
       !isOptionalString(value.metadata.createdAt) || !isOptionalString(value.metadata.id) ||
       !isOptionalString(value.metadata.name) || !isOptionalString(value.metadata.updatedAt))
   ) return false
-  if (!isRecord(value.scene)) return false
+  if (!isRecord(value.scene) || !hasOnlyKeys(value.scene, [
+    'appearance',
+    'camera',
+    'effects',
+    'entity',
+    'face',
+    'glyph',
+    'interactionMode',
+    'lighting',
+    'view'
+  ])) return false
   const scene = value.scene
-  return isRecord(scene.appearance) &&
+  return isRecord(scene.appearance) && hasOnlyKeys(scene.appearance, [
+    'backgroundStyle',
+    'bodyShape',
+    'paletteId'
+  ]) &&
     isOneOf(scene.appearance.backgroundStyle, ['gradient', 'solid']) &&
     isOneOf(scene.appearance.bodyShape, [
       'capsule',
@@ -567,21 +649,47 @@ export const isAvatarDefinition = (value: unknown): value is AvatarDefinition =>
       'teardrop',
       'trapezoid'
     ]) && isString(scene.appearance.paletteId) &&
-    isRecord(scene.camera) && isString(scene.camera.background) &&
+    isRecord(scene.camera) && hasOnlyKeys(scene.camera, [
+      'background',
+      'frame',
+      'frameShadow',
+      'showFrameShadow',
+      'size'
+    ]) && isString(scene.camera.background) &&
     isOneOf(scene.camera.frame, ['circle', 'rounded', 'square']) &&
     isAvatarShadow(scene.camera.frameShadow) && isBoolean(scene.camera.showFrameShadow) &&
     [128, 256, 512].includes(scene.camera.size as number) &&
-    isRecord(scene.effects) && isAvatarShadow(scene.effects.avatarShadow) &&
+    isRecord(scene.effects) && hasOnlyKeys(scene.effects, [
+      'avatarShadow',
+      'colorGrade',
+      'faceShadow',
+      'outline',
+      'showAvatarShadow',
+      'showFaceShadow',
+      'showOutline'
+    ]) && isAvatarShadow(scene.effects.avatarShadow) &&
     isAvatarColorGrade(scene.effects.colorGrade) && isAvatarShadow(scene.effects.faceShadow) &&
     isAvatarOutline(scene.effects.outline) && isBoolean(scene.effects.showAvatarShadow) &&
     isBoolean(scene.effects.showFaceShadow) && isBoolean(scene.effects.showOutline) &&
-    isRecord(scene.entity) && Array.isArray(scene.entity.parts) &&
+    isRecord(scene.entity) && hasOnlyKeys(scene.entity, ['parts', 'preset']) &&
+    Array.isArray(scene.entity.parts) &&
     scene.entity.parts.every(isAvatarEntityPart) &&
     isOneOf(scene.entity.preset, ['bear', 'cat', 'cloud', 'custom', 'dog', 'rabbit', 'sun']) &&
-    isAvatarFace(scene.face) && isRecord(scene.glyph) && isString(scene.glyph.leftEye) &&
+    isAvatarFace(scene.face) && isRecord(scene.glyph) && hasOnlyKeys(scene.glyph, [
+      'leftEye',
+      'linkEyes',
+      'mouth',
+      'rightEye'
+    ]) && isString(scene.glyph.leftEye) &&
     isBoolean(scene.glyph.linkEyes) && isString(scene.glyph.mouth) &&
     isString(scene.glyph.rightEye) && isOneOf(scene.interactionMode, ['move', 'rotate']) &&
-    isRecord(scene.lighting) && isFiniteNumber(scene.lighting.azimuth) &&
+    isRecord(scene.lighting) && hasOnlyKeys(scene.lighting, [
+      'azimuth',
+      'distance',
+      'elevation',
+      'enabled',
+      'gridDensity'
+    ]) && isFiniteNumber(scene.lighting.azimuth) &&
     isFiniteNumber(scene.lighting.distance) && isFiniteNumber(scene.lighting.elevation) &&
     isBoolean(scene.lighting.enabled) && isFiniteNumber(scene.lighting.gridDensity) &&
     isAvatarView(scene.view)

@@ -10,8 +10,9 @@ import { createAvatar, createAvatarEditor } from './index'
 import type { AvatarEditorMount, AvatarEditorMountOptions, AvatarMount, AvatarMountOptions } from './index'
 
 const readBooleanAttribute = (element: Element, name: string) => element.hasAttribute(name)
+const HTMLElementBase = (globalThis.HTMLElement ?? class {}) as typeof HTMLElement
 
-export class OneWorksAvatarElement extends HTMLElement {
+export class OneWorksAvatarElement extends HTMLElementBase {
   static observedAttributes = ['autoplay', 'interactive', 'theme']
 
   #animation: AvatarAnimationClip | AvatarAnimationRef | null = null
@@ -102,7 +103,7 @@ export class OneWorksAvatarElement extends HTMLElement {
   }
 }
 
-export class OneWorksAvatarEditorElement extends HTMLElement {
+export class OneWorksAvatarEditorElement extends HTMLElementBase {
   static observedAttributes = ['locale', 'theme']
 
   #animationLibraries: readonly AvatarAnimationLibrary[] = []
@@ -167,9 +168,11 @@ export interface RegisterAvatarElementsOptions {
   readonly registry?: CustomElementRegistry
 }
 
-export const registerAvatarElements = ({
-  registry = customElements
-}: RegisterAvatarElementsOptions = {}) => {
+export const registerAvatarElements = (options: RegisterAvatarElementsOptions = {}) => {
+  const registry = options.registry ?? globalThis.customElements
+  if (registry == null) {
+    throw new Error('Custom elements are not available in this environment')
+  }
   if (registry.get('oneworks-avatar') == null) {
     registry.define('oneworks-avatar', OneWorksAvatarElement)
   }

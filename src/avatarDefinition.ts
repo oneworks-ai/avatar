@@ -29,6 +29,7 @@ import type { AvatarBodyShape, AvatarFaceShadowStyle, AvatarFaceStyle } from './
 
 export interface AvatarDefinitionState {
   readonly animation?: SavedAvatarAnimation | null
+  readonly animationTargetKey?: string | null
   readonly avatarOutlineStyle: AvatarOutlineStyle
   readonly avatarShadowStyle: AvatarDropShadowStyle
   readonly backgroundStyle: AvatarBackgroundStyle
@@ -140,13 +141,52 @@ const createEmbeddedAnimationLibrary = (animation: SavedAvatarAnimation): Avatar
   label: 'Document animations'
 })
 
+const mergeEmbeddedAnimation = (
+  previous: AvatarAnimationLibrary | undefined,
+  animation: SavedAvatarAnimation,
+  targetKey?: string | null
+): AvatarAnimationLibrary => {
+  const clip = savedAvatarAnimationToClip(animation)
+  if (previous == null) return createEmbeddedAnimationLibrary(animation)
+
+  for (const [groupId, group] of Object.entries(previous.groups)) {
+    for (const clipId of Object.keys(group.clips)) {
+      if (targetKey !== `public:${previous.id}:${groupId}:${clipId}`) continue
+      return {
+        ...previous,
+        groups: {
+          ...previous.groups,
+          [groupId]: {
+            ...group,
+            clips: { ...group.clips, [clipId]: clip }
+          }
+        }
+      }
+    }
+  }
+
+  const documentGroup = previous.groups.document
+  return {
+    ...previous,
+    groups: {
+      ...previous.groups,
+      document: {
+        ...documentGroup,
+        clips: { ...documentGroup?.clips, animation: clip },
+        defaultClip: documentGroup?.defaultClip ?? 'animation',
+        label: documentGroup?.label ?? 'Document animations'
+      }
+    }
+  }
+}
+
 export const createAvatarDefinition = (
   state: AvatarDefinitionState,
   previous?: AvatarDefinition
 ): AvatarDefinition => ({
   animations: state.animation == null
     ? previous?.animations
-    : createEmbeddedAnimationLibrary(state.animation),
+    : mergeEmbeddedAnimation(previous?.animations, state.animation, state.animationTargetKey),
   metadata: previous?.metadata,
   scene: {
     appearance: {

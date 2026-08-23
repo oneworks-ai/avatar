@@ -34,6 +34,7 @@ try {
   await mkdir(tarballDirectory, { recursive: true })
   await mkdir(path.join(consumerDirectory, 'src'), { recursive: true })
   run('pnpm', ['build:sdk'], root)
+  run('node', ['--input-type=module', '--eval', "await import('./packages/web/dist/elements.js')"], root)
   for (const packageName of packages) {
     run('pnpm', ['--filter', packageName, 'pack', '--pack-destination', tarballDirectory], root)
   }
@@ -161,6 +162,15 @@ void createAvatarEditor(document.createElement('div'), { animationLibraries: [an
 createApp(OneWorksAvatar, { animationLibraries: [animations], definition })
   .mount(document.querySelector('#vue-avatar')!)
 void OneWorksAvatarEditor
+if (false) {
+  const avatar = null! as InstanceType<typeof OneWorksAvatar>
+  avatar.pause()
+  avatar.seek(200)
+  void avatar.capture({ format: 'png', size: 256 })
+  const editor = null! as InstanceType<typeof OneWorksAvatarEditor>
+  editor.focus()
+  editor.setDefinition(editor.getDefinition())
+}
 registerAvatarElements()
 const avatarElement = document.createElement('oneworks-avatar')
 avatarElement.definition = definition

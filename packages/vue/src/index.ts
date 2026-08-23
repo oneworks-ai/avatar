@@ -34,6 +34,26 @@ export type {
 
 type AvatarAnimation = AvatarAnimationClip | AvatarAnimationRef | null
 
+export interface OneWorksAvatarHandle {
+  capture(options: AvatarCaptureOptions): ReturnType<AvatarMount['capture']>
+  getDefinition(): AvatarDefinition
+  pause(): void
+  play(
+    animation: Exclude<AvatarAnimation, null>,
+    options?: AvatarPlayOptions
+  ): ReturnType<AvatarMount['play']>
+  resume(): void
+  seek(timeMs: number): void
+  setDefinition(definition: AvatarDefinition): void
+  stop(options?: { readonly reset?: boolean }): void
+}
+
+export interface OneWorksAvatarEditorHandle {
+  focus(): void
+  getDefinition(): AvatarDefinition
+  setDefinition(definition: AvatarDefinition): void
+}
+
 const avatarProps = {
   animation: { default: null, type: Object as PropType<AvatarAnimation> },
   animationLibraries: { default: () => [], type: Array as PropType<readonly AvatarAnimationLibrary[]> },
@@ -43,8 +63,15 @@ const avatarProps = {
   theme: { default: 'system', type: String as PropType<AvatarTheme> }
 }
 
-export const OneWorksAvatar = defineComponent({
-  emits: ['animation-end', 'animation-loop', 'animation-start', 'definition-change', 'error', 'ready'],
+const oneWorksAvatarComponent = defineComponent({
+  emits: {
+    'animation-end': () => true,
+    'animation-loop': () => true,
+    'animation-start': () => true,
+    'definition-change': (_definition: AvatarDefinition) => true,
+    error: (_error: Error) => true,
+    ready: () => true
+  },
   name: 'OneWorksAvatar',
   props: avatarProps,
   setup(props, { attrs, emit, expose }) {
@@ -105,6 +132,10 @@ export const OneWorksAvatar = defineComponent({
   }
 })
 
+export const OneWorksAvatar = oneWorksAvatarComponent as typeof oneWorksAvatarComponent & {
+  new(): InstanceType<typeof oneWorksAvatarComponent> & OneWorksAvatarHandle
+}
+
 const editorProps = {
   animationLibraries: { default: () => [], type: Array as PropType<readonly AvatarAnimationLibrary[]> },
   definition: { default: undefined, type: Object as PropType<AvatarDefinition | undefined> },
@@ -112,8 +143,11 @@ const editorProps = {
   theme: { default: 'system', type: String as PropType<AvatarTheme> }
 }
 
-export const OneWorksAvatarEditor = defineComponent({
-  emits: ['definition-change', 'ready'],
+const oneWorksAvatarEditorComponent = defineComponent({
+  emits: {
+    'definition-change': (_definition: AvatarDefinition) => true,
+    ready: () => true
+  },
   name: 'OneWorksAvatarEditor',
   props: editorProps,
   setup(props, { attrs, emit, expose }) {
@@ -150,3 +184,7 @@ export const OneWorksAvatarEditor = defineComponent({
     return () => h('div', { ...attrs, ref: host })
   }
 })
+
+export const OneWorksAvatarEditor = oneWorksAvatarEditorComponent as typeof oneWorksAvatarEditorComponent & {
+  new(): InstanceType<typeof oneWorksAvatarEditorComponent> & OneWorksAvatarEditorHandle
+}

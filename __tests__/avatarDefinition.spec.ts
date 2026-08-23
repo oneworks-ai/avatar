@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
+import { createDefaultAvatarDefinition } from '@oneworks/avatar'
 import type { AvatarAnimationLibrary } from '@oneworks/avatar'
 
 import { DEFAULT_AVATAR_VIEW_STATE } from '../src/InteractiveAvatar'
@@ -109,6 +110,46 @@ describe('Avatar editor public definition bridge', () => {
     expect(entry?.animation.name).toBe('Listen')
     expect(entry?.animation.keyframes).toHaveLength(2)
     expect(entry?.animation.id).toBe('public:customer-support:support:listen')
+  })
+
+  it('preserves animation libraries while previewing and editing one clip', () => {
+    const base = createDefaultAvatarDefinition()
+    const first = {
+      anchor: 'absolute' as const,
+      durationMs: 100,
+      keyframes: [{ atMs: 0, patch: { view: { yaw: 0 } } }],
+      playback: 'once' as const
+    }
+    const library: AvatarAnimationLibrary = {
+      groups: {
+        primary: {
+          clips: { first, second: { ...first, label: 'Second' } },
+          defaultClip: 'first'
+        },
+        secondary: { clips: { third: { ...first, label: 'Third' } } }
+      },
+      id: 'custom',
+      label: 'Custom library'
+    }
+    const definition = { ...base, animations: library }
+    const state = avatarDefinitionToState(definition)
+
+    expect(createAvatarDefinition({ ...state, animation: null }, definition).animations).toEqual(library)
+
+    const animation = avatarAnimationClipToSavedAnimation('edited', {
+      ...first,
+      label: 'Edited',
+      keyframes: [{ atMs: 0, patch: { view: { yaw: .4 } } }]
+    }, definition.scene)
+    const edited = createAvatarDefinition({
+      ...state,
+      animation,
+      animationTargetKey: 'public:custom:primary:first'
+    }, definition)
+    expect(edited.animations?.groups.primary.clips.first.label).toBe('Edited')
+    expect(edited.animations?.groups.primary.clips.second.label).toBe('Second')
+    expect(edited.animations?.groups.secondary.clips.third.label).toBe('Third')
+    expect(edited.animations?.label).toBe('Custom library')
   })
 
   it('preserves a delayed first public keyframe in the editor timeline', () => {
