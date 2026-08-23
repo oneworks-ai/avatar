@@ -47,11 +47,51 @@ describe('OneWorks Avatar public runtime contract', () => {
     })).toThrow(TypeError)
     expect(() => parseAvatarDefinition({
       ...definition,
+      scene: {
+        ...definition.scene,
+        effects: {
+          ...definition.scene.effects,
+          colorGrade: { ...definition.scene.effects.colorGrade, brightness: 2 }
+        }
+      }
+    })).toThrow(TypeError)
+    expect(() => parseAvatarDefinition({
+      ...definition,
       animations: {
         groups: { broken: { clips: { nope: { durationMs: 'fast' } } } },
         id: 'broken'
       }
     })).toThrow(TypeError)
+    expect(() => parseAvatarAnimationClip({
+      anchor: 'absolute',
+      durationMs: 100,
+      keyframes: [{ atMs: 0, patch: { colorGrade: { tintAmount: 1.1 } } }],
+      playback: 'once'
+    })).toThrow(TypeError)
+    expect(() => parseAvatarAnimationClip({
+      anchor: 'absolute',
+      durationMs: 100,
+      keyframes: [{ atMs: 0, patch: { colorGrade: { tintR: 256 } } }],
+      playback: 'once'
+    })).toThrow(TypeError)
+    expect(parseAvatarAnimationClip({
+      anchor: 'absolute',
+      durationMs: 100,
+      keyframes: [{
+        atMs: 0,
+        patch: {
+          colorGrade: {
+            brightness: .35,
+            saturation: 2,
+            tintAmount: 1,
+            tintB: 0,
+            tintG: 255,
+            tintR: 255
+          }
+        }
+      }],
+      playback: 'once'
+    }).keyframes).toHaveLength(1)
     expect(() => parseAvatarDefinition({
       ...definition,
       animations: {

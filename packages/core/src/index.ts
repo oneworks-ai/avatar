@@ -2,6 +2,14 @@ export const AVATAR_DEFINITION_SCHEMA = 'oneworks.avatar' as const
 export const AVATAR_DEFINITION_VERSION = 1 as const
 export const AVATAR_ANIMATION_MIN_SEGMENT_MS = 100
 export const AVATAR_ANIMATION_MAX_SEGMENT_MS = 8000
+export const AVATAR_COLOR_GRADE_RANGES = {
+  brightness: { max: 1.8, min: .35 },
+  saturation: { max: 2, min: 0 },
+  tintAmount: { max: 1, min: 0 },
+  tintB: { max: 255, min: 0 },
+  tintG: { max: 255, min: 0 },
+  tintR: { max: 255, min: 0 }
+} as const
 
 export type AvatarBackgroundStyle = 'gradient' | 'solid'
 export type AvatarBodyShape =
@@ -293,10 +301,20 @@ const isOneOf = <T extends string>(value: unknown, options: readonly T[]): value
   isString(value) && options.includes(value as T)
 )
 
+const isAvatarColorGradeField = (key: string, value: unknown) => {
+  const range = AVATAR_COLOR_GRADE_RANGES[key as keyof AvatarColorGrade]
+  return range != null && isFiniteNumber(value) && value >= range.min && value <= range.max
+}
+
+const isPartialAvatarColorGrade = (value: unknown) => (
+  isRecord(value) && Object.entries(value).every(([key, field]) => (
+    isAvatarColorGradeField(key, field)
+  ))
+)
+
 const isAvatarColorGrade = (value: unknown): value is AvatarColorGrade => (
-  isRecord(value) && isFiniteNumber(value.brightness) && isFiniteNumber(value.saturation) &&
-  isFiniteNumber(value.tintAmount) && isFiniteNumber(value.tintB) &&
-  isFiniteNumber(value.tintG) && isFiniteNumber(value.tintR)
+  isRecord(value) && Object.keys(value).length === Object.keys(AVATAR_COLOR_GRADE_RANGES).length &&
+  Object.entries(value).every(([key, field]) => isAvatarColorGradeField(key, field))
 )
 
 const isAvatarShadow = (value: unknown): value is AvatarShadow => (
@@ -378,9 +396,7 @@ const isAvatarScenePatch = (value: unknown): value is AvatarScenePatch => {
   if (!isRecord(value) || Object.keys(value).some(key => !['colorGrade', 'face', 'view'].includes(key))) {
     return false
   }
-  if (value.colorGrade != null && !isPartialNumberRecord(value.colorGrade, [
-    'brightness', 'saturation', 'tintAmount', 'tintB', 'tintG', 'tintR'
-  ])) return false
+  if (value.colorGrade != null && !isPartialAvatarColorGrade(value.colorGrade)) return false
   if (value.view != null && !isPartialNumberRecord(value.view, [
     'pitch', 'positionX', 'positionY', 'yaw'
   ])) return false
