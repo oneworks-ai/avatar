@@ -11,7 +11,8 @@ import type {
   AvatarAnimationLibrary,
   AvatarBackgroundStyle,
   AvatarDefinition,
-  AvatarScene
+  AvatarScene,
+  AvatarScenePatch
 } from '@oneworks/avatar'
 
 import type { AvatarCameraFrame } from './AvatarControls'
@@ -120,8 +121,10 @@ export const savedAvatarAnimationToClip = (animation: SavedAvatarAnimation): Ava
       atMs,
       easing: keyframe.easing,
       patch: {
-        colorGrade: keyframe.colorGrade,
-        face: keyframe.faceStyle,
+        ...(keyframe.colorGrade == null ? {} : { colorGrade: keyframe.colorGrade }),
+        face: Object.fromEntries(
+          Object.entries(keyframe.faceStyle).filter(([, value]) => value !== undefined)
+        ) as NonNullable<AvatarScenePatch['face']>,
         view: {
           pitch: keyframe.pitch,
           positionX: keyframe.positionX,

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { createDefaultAvatarDefinition } from '@oneworks/avatar'
+import { createDefaultAvatarDefinition, parseAvatarDefinition } from '@oneworks/avatar'
 import type { AvatarAnimationLibrary } from '@oneworks/avatar'
 
 import { DEFAULT_AVATAR_VIEW_STATE } from '../src/InteractiveAvatar'
@@ -223,6 +223,23 @@ describe('Avatar editor public definition bridge', () => {
       'custom',
       'custom'
     ])
+  })
+
+  it('emits parseable animation definitions when optional eye heights are unset', () => {
+    const base = createDefaultAvatarDefinition()
+    const state = avatarDefinitionToState(base)
+    const animation = avatarAnimationClipToSavedAnimation('default-face', {
+      anchor: 'absolute',
+      durationMs: 100,
+      keyframes: [{ atMs: 0, patch: {} }],
+      playback: 'once'
+    }, base.scene)
+    const definition = createAvatarDefinition({ ...state, animation }, base)
+    const face = definition.animations?.groups.document?.clips.animation?.keyframes[0]?.patch.face
+
+    expect(face).not.toHaveProperty('leftEyeHeight')
+    expect(face).not.toHaveProperty('rightEyeHeight')
+    expect(parseAvatarDefinition(definition)).toEqual(definition)
   })
 
   it('preserves a delayed first public keyframe in the editor timeline', () => {
