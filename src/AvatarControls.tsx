@@ -34,6 +34,7 @@ import {
   touchAvatarPresetUsage
 } from './avatarPresetUsage'
 import type { SavedAvatarPreset } from './savedAvatarPresets'
+import type { AvatarSurfaceDecal, AvatarSurfaceDecalShape } from './avatarSurfaceDecals'
 
 export type AvatarControlTab = 'body' | 'build' | 'effects' | 'style'
 export type AvatarCameraFrame = 'circle' | 'rounded' | 'square'
@@ -114,6 +115,10 @@ interface AvatarControlsProps {
   readonly onEntityPresetChange: (preset: AvatarEntityPreset) => void
   readonly onEntityPartChange: (id: string, part: Partial<AvatarEntityPart>) => void
   readonly onResetFace: () => void
+  readonly onAddSurfaceDecal: () => void
+  readonly onDeleteSurfaceDecal: (id: string) => void
+  readonly onSelectSurfaceDecal: (id: string) => void
+  readonly onSurfaceDecalChange: (id: string, decal: Partial<AvatarSurfaceDecal>) => void
   readonly onSavedPresetSelect: (preset: SavedAvatarPreset) => void
   readonly onSavedPresetRemove: (presetId: string) => void
   readonly onShowMorePalettesChange: () => void
@@ -126,6 +131,7 @@ interface AvatarControlsProps {
   readonly selectedPalette: AvatarPalette
   readonly selectedEntityPartId: string | null
   readonly selectedSavedPresetId: string | null
+  readonly selectedSurfaceDecalId: string | null
   readonly savedPresets: readonly SavedAvatarPreset[]
   readonly showLight: boolean
   readonly showAvatarShadow: boolean
@@ -133,6 +139,7 @@ interface AvatarControlsProps {
   readonly showFrameShadow: boolean
   readonly showMorePalettes: boolean
   readonly showShadow: boolean
+  readonly surfaceDecals: readonly AvatarSurfaceDecal[]
   readonly visiblePalettes: readonly AvatarPalette[]
 }
 
@@ -182,6 +189,11 @@ const EYE_SHAPE_OPTIONS: readonly GeometricShapeOption<AvatarEyeShape>[] = [
   { icon: 'ellipse', id: 'ellipse', label: 'Ellipse' }
 ]
 
+const SURFACE_DECAL_SHAPE_OPTIONS: readonly GeometricShapeOption<AvatarSurfaceDecalShape>[] = [
+  { icon: 'ellipse', id: 'ellipse', label: 'Ellipse' },
+  { icon: 'rounded', id: 'rounded', label: 'Rounded' }
+]
+
 const NOSE_SHAPE_OPTIONS: readonly GeometricShapeOption<AvatarNoseShape>[] = [
   { icon: 'inverted-triangle', id: 'inverted-triangle', label: 'Rounded triangle' },
   { icon: 'ellipse', id: 'ellipse', label: 'Ellipse' },
@@ -220,6 +232,14 @@ function FacePresetPreview({ preset }: { readonly preset: AvatarFacePreset }) {
     <svg className='avatar-controls__face-preset-preview' viewBox='135 140 150 145' aria-hidden='true'>
       <rect className='avatar-controls__face-preset-head' x='143' y='143' width='134' height='136' rx='58' />
       {face.eyes.map(eye => <path key={eye.id} d={eye.path} />)}
+      {face.eyeHighlights.map(highlight => (
+        <path
+          key={highlight.id}
+          d={highlight.path}
+          fill={style.eyeHighlight.color}
+          fillOpacity={style.eyeHighlight.opacity / 100}
+        />
+      ))}
       {style.noseEnabled && face.nose != null ? <path d={face.nose.path} /> : null}
       {style.mouthEnabled && face.mouth != null ? <path d={face.mouth.path} /> : null}
     </svg>
@@ -542,6 +562,10 @@ export function AvatarControls({
   onPaletteChange,
   onEntityPresetChange,
   onEntityPartChange,
+  onAddSurfaceDecal,
+  onDeleteSurfaceDecal,
+  onSelectSurfaceDecal,
+  onSurfaceDecalChange,
   onResetFace,
   onSavedPresetSelect,
   onSavedPresetRemove,
@@ -555,6 +579,7 @@ export function AvatarControls({
   selectedPalette,
   selectedEntityPartId,
   selectedSavedPresetId,
+  selectedSurfaceDecalId,
   savedPresets,
   showLight,
   showOutline,
@@ -562,6 +587,7 @@ export function AvatarControls({
   showFrameShadow,
   showMorePalettes,
   showShadow,
+  surfaceDecals,
   visiblePalettes
 }: AvatarControlsProps) {
   const { t } = useAvatarLocale()
@@ -587,6 +613,7 @@ export function AvatarControls({
   })
   const selectedEntityPart = entityParts.find(part => part.id === selectedEntityPartId)
   const editingEntityPart = selectedEntityPart ?? entityParts.find(part => part.face)
+  const editingSurfaceDecal = surfaceDecals.find(decal => decal.id === selectedSurfaceDecalId) ?? null
   const pendingPalette = visiblePalettes.find(palette => palette.id === pendingPaletteId) ?? null
   const showOverallStyleControls = selectedEntityPart == null || selectedEntityPart.face
   const compactPresetCapacity = Math.max(8, Math.floor((controlsWidth - 32) / 64) * 2)
@@ -982,6 +1009,78 @@ export function AvatarControls({
                           onChange={rightEyeRotation => onFaceStyleChange({ rightEyeRotation })}
                         />
                       </div>
+                      <ToggleRow
+                        checked={faceStyle.eyeHighlight.enabled}
+                        icon='eyes'
+                        label='Eye highlights'
+                        onChange={() => onFaceStyleChange({
+                          eyeHighlight: {
+                            ...faceStyle.eyeHighlight,
+                            enabled: !faceStyle.eyeHighlight.enabled
+                          }
+                        })}
+                      />
+                      {faceStyle.eyeHighlight.enabled
+                        ? (
+                          <div className='avatar-controls__parameter-controls'>
+                            <label className='avatar-controls__entity-color'>
+                              <span>{t('Highlight color')}</span>
+                              <input
+                                type='color'
+                                aria-label={t('Highlight color')}
+                                value={faceStyle.eyeHighlight.color}
+                                onChange={event => onFaceStyleChange({
+                                  eyeHighlight: { ...faceStyle.eyeHighlight, color: event.currentTarget.value }
+                                })}
+                              />
+                            </label>
+                            <ValueSlider
+                              ariaLabel='Eye highlight size'
+                              label='Highlight size'
+                              min={8}
+                              max={50}
+                              suffix='%'
+                              value={faceStyle.eyeHighlight.size}
+                              onChange={size => onFaceStyleChange({
+                                eyeHighlight: { ...faceStyle.eyeHighlight, size }
+                              })}
+                            />
+                            <ValueSlider
+                              ariaLabel='Eye highlight horizontal position'
+                              label='Highlight position X'
+                              min={-35}
+                              max={35}
+                              suffix='%'
+                              value={faceStyle.eyeHighlight.offsetX}
+                              onChange={offsetX => onFaceStyleChange({
+                                eyeHighlight: { ...faceStyle.eyeHighlight, offsetX }
+                              })}
+                            />
+                            <ValueSlider
+                              ariaLabel='Eye highlight vertical position'
+                              label='Highlight position Y'
+                              min={-35}
+                              max={35}
+                              suffix='%'
+                              value={faceStyle.eyeHighlight.offsetY}
+                              onChange={offsetY => onFaceStyleChange({
+                                eyeHighlight: { ...faceStyle.eyeHighlight, offsetY }
+                              })}
+                            />
+                            <ValueSlider
+                              ariaLabel='Eye highlight opacity'
+                              label='Highlight opacity'
+                              min={0}
+                              max={100}
+                              suffix='%'
+                              value={faceStyle.eyeHighlight.opacity}
+                              onChange={opacity => onFaceStyleChange({
+                                eyeHighlight: { ...faceStyle.eyeHighlight, opacity }
+                              })}
+                            />
+                          </div>
+                        )
+                        : null}
                     </>
                   )
                   : null}
@@ -1123,6 +1222,94 @@ export function AvatarControls({
                     </>
                   )
                   : null}
+              </div>
+              <div className='avatar-controls__field-group'>
+                <div className='avatar-controls__field-header'>
+                  <span className='avatar-controls__label'>{t('Surface decals')}</span>
+                  <button className='avatar-controls__inline-action' type='button' onClick={onAddSurfaceDecal}>
+                    {t('Add decal')}
+                  </button>
+                </div>
+                {surfaceDecals.length === 0
+                  ? <p className='avatar-controls__hint'>{t('Add color shapes that follow the model surface.')}</p>
+                  : (
+                    <div className='avatar-controls__decal-list' role='listbox' aria-label={t('Surface decals')}>
+                      {surfaceDecals.map(decal => (
+                        <button
+                          key={decal.id}
+                          type='button'
+                          role='option'
+                          aria-selected={decal.id === selectedSurfaceDecalId}
+                          onClick={() => onSelectSurfaceDecal(decal.id)}
+                        >
+                          <span style={{ background: decal.color }} />
+                          {t(decal.label)}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                {editingSurfaceDecal == null
+                  ? null
+                  : (
+                    <div className='avatar-controls__decal-editor'>
+                      <label className='avatar-controls__select-field'>
+                        <span>{t('Target part')}</span>
+                        <select
+                          value={editingSurfaceDecal.targetPartId ?? ''}
+                          onChange={event => onSurfaceDecalChange(editingSurfaceDecal.id, {
+                            targetPartId: event.currentTarget.value || null
+                          })}
+                        >
+                          <option value=''>{t('Body')}</option>
+                          {entityParts.map(part => <option key={part.id} value={part.id}>{t(part.label)}</option>)}
+                        </select>
+                      </label>
+                      <GeometricShapePicker
+                        ariaLabel='Surface decal shape'
+                        options={SURFACE_DECAL_SHAPE_OPTIONS}
+                        value={editingSurfaceDecal.shape}
+                        onChange={shape => onSurfaceDecalChange(editingSurfaceDecal.id, { shape })}
+                      />
+                      <label className='avatar-controls__entity-color'>
+                        <span>{t('Color')}</span>
+                        <input
+                          type='color'
+                          aria-label={t('Color')}
+                          value={editingSurfaceDecal.color}
+                          onChange={event => onSurfaceDecalChange(editingSurfaceDecal.id, {
+                            color: event.currentTarget.value
+                          })}
+                        />
+                      </label>
+                      <div className='avatar-controls__parameter-controls'>
+                        <ValueSlider ariaLabel='Decal position X' label='Position X' min={-180} max={180}
+                          value={editingSurfaceDecal.x}
+                          onChange={x => onSurfaceDecalChange(editingSurfaceDecal.id, { x })} />
+                        <ValueSlider ariaLabel='Decal position Y' label='Position Y' min={-180} max={180}
+                          value={editingSurfaceDecal.y}
+                          onChange={y => onSurfaceDecalChange(editingSurfaceDecal.id, { y })} />
+                        <ValueSlider ariaLabel='Decal width' label='Width' min={2} max={180}
+                          value={editingSurfaceDecal.width}
+                          onChange={width => onSurfaceDecalChange(editingSurfaceDecal.id, { width })} />
+                        <ValueSlider ariaLabel='Decal height' label='Height' min={2} max={180}
+                          value={editingSurfaceDecal.height}
+                          onChange={height => onSurfaceDecalChange(editingSurfaceDecal.id, { height })} />
+                        <ValueSlider ariaLabel='Decal rotation' label='Rotation' min={-180} max={180} suffix='°'
+                          value={editingSurfaceDecal.rotation}
+                          onChange={rotation => onSurfaceDecalChange(editingSurfaceDecal.id, { rotation })} />
+                        <ValueSlider ariaLabel='Decal opacity' label='Opacity' min={0} max={100} suffix='%'
+                          value={editingSurfaceDecal.opacity}
+                          onChange={opacity => onSurfaceDecalChange(editingSurfaceDecal.id, { opacity })} />
+                      </div>
+                      <button
+                        className='avatar-controls__danger-action'
+                        type='button'
+                        onClick={() => onDeleteSurfaceDecal(editingSurfaceDecal.id)}
+                      >
+                        {t('Delete decal')}
+                      </button>
+                    </div>
+                  )}
               </div>
             </>
           )

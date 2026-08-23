@@ -22,6 +22,7 @@ import type {
 import App from '../../../src/App'
 import { InteractiveAvatar } from '../../../src/InteractiveAvatar'
 import type { AvatarViewState } from '../../../src/InteractiveAvatar'
+import { resolveAvatarFaceStyle } from '../../../src/avatarGeometry'
 import { AvatarLocaleProvider } from '../../../src/avatarLocale'
 import { renderAvatarPngBlob, serializeAvatarSvg } from '../../../src/savedAvatarPresets'
 
@@ -226,7 +227,14 @@ export const Avatar = forwardRef<AvatarHandle, AvatarProps>(function Avatar({
       if (svg == null) throw new Error('Avatar is not ready to capture')
       const captureOptions = {
         background: options.background ?? renderDefinition.scene.camera.background,
-        frame: options.frame ?? renderDefinition.scene.camera.frame
+        frame: options.frame ?? renderDefinition.scene.camera.frame,
+        frameShadow: {
+          ...renderDefinition.scene.camera.frameShadow,
+          color: renderDefinition.scene.camera.frameShadow.color ?? getAvatarPalette(
+            renderDefinition.scene.appearance.paletteId
+          ).shadow
+        },
+        showFrameShadow: renderDefinition.scene.camera.showFrameShadow
       }
       if (options.format === 'png') return renderAvatarPngBlob(svg, options.size, captureOptions)
       return new Blob([serializeAvatarSvg(svg, options.size, captureOptions)], {
@@ -270,10 +278,19 @@ export const Avatar = forwardRef<AvatarHandle, AvatarProps>(function Avatar({
   const scene = renderDefinition.scene
   const palette = getAvatarPalette(scene.appearance.paletteId)
   const resolvedTheme = theme === 'system' ? systemTheme : theme
+  const frameShadowDirection = scene.camera.frameShadow.direction * Math.PI / 180
+  const frameShadow = scene.camera.showFrameShadow
+    ? `${(Math.cos(frameShadowDirection) * scene.camera.frameShadow.distance).toFixed(2)}px ${
+      (Math.sin(frameShadowDirection) * scene.camera.frameShadow.distance).toFixed(2)
+    }px ${scene.camera.frameShadow.softness}px color-mix(in srgb, ${
+      scene.camera.frameShadow.color ?? palette.shadow
+    } ${scene.camera.frameShadow.opacity}%, transparent)`
+    : 'none'
   const mergedStyle = {
     '--oneworks-avatar-background': scene.camera.background === 'transparent'
       ? 'transparent'
       : scene.camera.background,
+    boxShadow: frameShadow,
     ...style
   } as CSSProperties
 
@@ -294,7 +311,7 @@ export const Avatar = forwardRef<AvatarHandle, AvatarProps>(function Avatar({
         colorGrade={scene.effects.colorGrade}
         entityParts={scene.entity.parts}
         entityPreset={scene.entity.preset}
-        faceStyle={scene.face}
+        faceStyle={resolveAvatarFaceStyle(scene.face)}
         gridDensity={scene.lighting.gridDensity}
         interactive={interactive}
         interactionMode={scene.interactionMode}
@@ -310,6 +327,7 @@ export const Avatar = forwardRef<AvatarHandle, AvatarProps>(function Avatar({
         showLight={scene.lighting.enabled}
         showOutline={scene.effects.showOutline}
         showShadow={scene.effects.showFaceShadow}
+        surfaceDecals={scene.decals}
         viewState={scene.view}
       />
     </div>

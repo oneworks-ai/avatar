@@ -299,6 +299,98 @@
     gap: 8px;
   }
 
+  &__field-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+  }
+
+  &__inline-action,
+  &__danger-action {
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    padding: 7px 10px;
+    background: var(--bg-color);
+    color: var(--text-color);
+    font: inherit;
+    cursor: pointer;
+  }
+
+  &__inline-action {
+    color: var(--primary-text-color);
+  }
+
+  &__danger-action {
+    width: 100%;
+    color: #e7594f;
+  }
+
+  &__hint {
+    margin: 0;
+    color: var(--sub-text-color);
+    font-size: 12px;
+    line-height: 1.5;
+  }
+
+  &__decal-list {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 6px;
+
+    button {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      min-width: 0;
+      border: 1px solid var(--border-color);
+      border-radius: 8px;
+      padding: 8px;
+      overflow: hidden;
+      background: var(--bg-color);
+      color: var(--sub-text-color);
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      cursor: pointer;
+
+      &[aria-selected='true'] {
+        border-color: var(--primary-color);
+        background: var(--primary-soft-bg);
+        color: var(--primary-text-color);
+      }
+
+      > span {
+        flex: 0 0 auto;
+        width: 14px;
+        height: 14px;
+        border: 1px solid rgb(127 127 127 / 35%);
+        border-radius: 50%;
+      }
+    }
+  }
+
+  &__decal-editor {
+    display: grid;
+    gap: 10px;
+  }
+
+  &__select-field {
+    display: grid;
+    gap: 6px;
+    color: var(--sub-text-color);
+    font-size: 12px;
+
+    select {
+      width: 100%;
+      border: 1px solid var(--border-color);
+      border-radius: 8px;
+      padding: 8px 10px;
+      background: var(--bg-color);
+      color: var(--text-color);
+      font: inherit;
+    }
+  }
+
   &__entity-color {
     display: flex;
     min-width: 0;

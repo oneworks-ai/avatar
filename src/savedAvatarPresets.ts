@@ -1,4 +1,5 @@
 import type { AvatarCameraFrame } from './AvatarControls'
+import type { AvatarDropShadowStyle } from './InteractiveAvatar'
 
 const SAVED_PRESETS_STORAGE_KEY = 'oneworks-avatar-saved-presets-v1'
 const MAX_SAVED_PRESETS = 12
@@ -15,6 +16,8 @@ export interface SavedAvatarPreset {
 export interface AvatarCaptureOptions {
   readonly background?: string
   readonly frame?: AvatarCameraFrame
+  readonly frameShadow?: AvatarDropShadowStyle
+  readonly showFrameShadow?: boolean
 }
 
 const isSavedAvatarPreset = (value: unknown): value is SavedAvatarPreset => {
@@ -81,6 +84,7 @@ const applyAvatarCaptureFrame = (svg: SVGSVGElement, options: AvatarCaptureOptio
   const document = svg.ownerDocument
   const namespace = 'http://www.w3.org/2000/svg'
   const clipId = 'oneworks-avatar-export-frame'
+  const shadowFilterId = 'oneworks-avatar-export-frame-shadow'
   const defs = document.createElementNS(namespace, 'defs')
   const clipPath = document.createElementNS(namespace, 'clipPath')
   const framePath = document.createElementNS(namespace, 'path')
@@ -91,6 +95,41 @@ const applyAvatarCaptureFrame = (svg: SVGSVGElement, options: AvatarCaptureOptio
   clipPath.append(framePath)
   defs.append(clipPath)
 
+  let shadowPath: SVGPathElement | null = null
+  if (options.showFrameShadow && options.frameShadow != null) {
+    const direction = options.frameShadow.direction * Math.PI / 180
+    const filter = document.createElementNS(namespace, 'filter')
+    const blur = document.createElementNS(namespace, 'feGaussianBlur')
+    const offset = document.createElementNS(namespace, 'feOffset')
+    const flood = document.createElementNS(namespace, 'feFlood')
+    const composite = document.createElementNS(namespace, 'feComposite')
+    filter.setAttribute('id', shadowFilterId)
+    filter.setAttribute('x', '-50%')
+    filter.setAttribute('y', '-50%')
+    filter.setAttribute('width', '200%')
+    filter.setAttribute('height', '200%')
+    blur.setAttribute('in', 'SourceAlpha')
+    blur.setAttribute('stdDeviation', String(options.frameShadow.softness / 2))
+    blur.setAttribute('result', 'blur')
+    offset.setAttribute('in', 'blur')
+    offset.setAttribute('dx', String(Math.cos(direction) * options.frameShadow.distance))
+    offset.setAttribute('dy', String(Math.sin(direction) * options.frameShadow.distance))
+    offset.setAttribute('result', 'offset')
+    flood.setAttribute('flood-color', options.frameShadow.color ?? '#000000')
+    flood.setAttribute('flood-opacity', String(options.frameShadow.opacity / 100))
+    flood.setAttribute('result', 'color')
+    composite.setAttribute('in', 'color')
+    composite.setAttribute('in2', 'offset')
+    composite.setAttribute('operator', 'in')
+    filter.append(blur, offset, flood, composite)
+    defs.append(filter)
+
+    shadowPath = document.createElementNS(namespace, 'path')
+    shadowPath.setAttribute('d', getAvatarFramePath(width, height, frame))
+    shadowPath.setAttribute('fill', '#000000')
+    shadowPath.setAttribute('filter', `url(#${shadowFilterId})`)
+  }
+
   content.setAttribute('clip-path', `url(#${clipId})`)
   if (options.background != null) {
     const background = document.createElementNS(namespace, 'path')
@@ -99,7 +138,9 @@ const applyAvatarCaptureFrame = (svg: SVGSVGElement, options: AvatarCaptureOptio
     content.append(background)
   }
   while (svg.firstChild != null) content.append(svg.firstChild)
-  svg.append(defs, content)
+  svg.append(defs)
+  if (shadowPath != null) svg.append(shadowPath)
+  svg.append(content)
 }
 
 export const serializeAvatarSvg = (

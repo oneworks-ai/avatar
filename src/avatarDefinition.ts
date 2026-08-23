@@ -26,10 +26,21 @@ import type { AvatarAnimationKeyframe, AvatarAnimationPlaybackMode, SavedAvatarA
 import type { AvatarColorGrade } from './avatarColorGrade'
 import { serializeAvatarEntityParts } from './avatarEntityPresets'
 import type { AvatarEntityPart, AvatarEntityPreset } from './avatarEntityPresets'
+import { resolveAvatarFaceStyle } from './avatarGeometry'
 import type { AvatarBodyShape, AvatarFaceShadowStyle, AvatarFaceStyle } from './avatarGeometry'
+import { serializeAvatarSurfaceDecals } from './avatarSurfaceDecals'
+import type { AvatarSurfaceDecal } from './avatarSurfaceDecals'
+
+const DEFAULT_EDITOR_GLYPH = {
+  leftEye: '0',
+  linkEyes: true,
+  mouth: 'w',
+  rightEye: '0'
+} as const
 
 export interface AvatarDefinitionState {
   readonly animation?: SavedAvatarAnimation | null
+  readonly animationLibraryIds?: readonly string[]
   readonly animationTargetKey?: string | null
   readonly avatarOutlineStyle: AvatarOutlineStyle
   readonly avatarShadowStyle: AvatarDropShadowStyle
@@ -61,6 +72,7 @@ export interface AvatarDefinitionState {
   readonly showLight: boolean
   readonly showOutline: boolean
   readonly showShadow: boolean
+  readonly surfaceDecals?: readonly AvatarSurfaceDecal[]
   readonly viewState: AvatarViewState
 }
 
@@ -81,9 +93,9 @@ export const avatarDefinitionToState = (definition: AvatarDefinition): AvatarDef
     entityPreset: scene.entity.preset,
     exportSize: scene.camera.size,
     faceShadowStyle: scene.effects.faceShadow,
-    faceStyle: scene.face,
+    faceStyle: resolveAvatarFaceStyle(scene.face),
     frameShadowStyle: scene.camera.frameShadow,
-    glyph: scene.glyph,
+    glyph: DEFAULT_EDITOR_GLYPH,
     gridDensity: scene.lighting.gridDensity,
     interactionMode: scene.interactionMode,
     lightAzimuth: scene.lighting.azimuth,
@@ -95,6 +107,7 @@ export const avatarDefinitionToState = (definition: AvatarDefinition): AvatarDef
     showLight: scene.lighting.enabled,
     showOutline: scene.effects.showOutline,
     showShadow: scene.effects.showFaceShadow,
+    surfaceDecals: scene.decals ?? [],
     viewState: scene.view
   }
 }
@@ -130,7 +143,10 @@ export const savedAvatarAnimationToClip = (animation: SavedAvatarAnimation): Ava
   }
 }
 
-const createEmbeddedAnimationLibrary = (animation: SavedAvatarAnimation): AvatarAnimationLibrary => ({
+const createEmbeddedAnimationLibrary = (
+  animation: SavedAvatarAnimation,
+  id = 'document'
+): AvatarAnimationLibrary => ({
   groups: {
     document: {
       clips: { animation: savedAvatarAnimationToClip(animation) },
@@ -138,17 +154,30 @@ const createEmbeddedAnimationLibrary = (animation: SavedAvatarAnimation): Avatar
       label: 'Document animations'
     }
   },
-  id: 'document',
+  id,
   label: 'Document animations'
 })
 
 const mergeEmbeddedAnimation = (
   previous: AvatarAnimationLibrary | undefined,
   animation: SavedAvatarAnimation,
-  targetKey?: string | null
+  targetKey?: string | null,
+  reservedLibraryIds: readonly string[] = []
 ): AvatarAnimationLibrary => {
   const clip = savedAvatarAnimationToClip(animation)
-  if (previous == null) return createEmbeddedAnimationLibrary(animation)
+  const reservedIds = new Set(reservedLibraryIds)
+  const uniqueDocumentId = () => {
+    let id = 'document'
+    let suffix = 2
+    while (reservedIds.has(id)) id = `document-${suffix++}`
+    return id
+  }
+  if (previous == null) return createEmbeddedAnimationLibrary(animation, uniqueDocumentId())
+
+  if (reservedIds.has(previous.id)) {
+    const renamed = { ...previous, id: uniqueDocumentId() }
+    return mergeEmbeddedAnimation(renamed, animation, null, reservedLibraryIds)
+  }
 
   for (const [groupId, group] of Object.entries(previous.groups)) {
     for (const clipId of Object.keys(group.clips)) {
@@ -187,7 +216,12 @@ export const createAvatarDefinition = (
 ): AvatarDefinition => ({
   animations: state.animation == null
     ? previous?.animations
-    : mergeEmbeddedAnimation(previous?.animations, state.animation, state.animationTargetKey),
+    : mergeEmbeddedAnimation(
+      previous?.animations,
+      state.animation,
+      state.animationTargetKey,
+      state.animationLibraryIds
+    ),
   metadata: previous?.metadata,
   scene: {
     appearance: {
@@ -211,12 +245,12 @@ export const createAvatarDefinition = (
       showFaceShadow: state.showShadow,
       showOutline: state.showOutline
     },
+    decals: (state.surfaceDecals ?? []).map(decal => ({ ...decal })),
     entity: {
       parts: state.entityParts.map(toPublicPart),
       preset: state.entityPreset
     },
     face: state.faceStyle,
-    glyph: state.glyph,
     interactionMode: state.interactionMode,
     lighting: {
       azimuth: state.lightAzimuth,
@@ -238,7 +272,7 @@ const setBoolean = (params: URLSearchParams, key: string, value: boolean) => {
 export const avatarDefinitionToSearchParams = (definition: AvatarDefinition) => {
   const { scene } = definition
   const params = new URLSearchParams()
-  params.set('face', `${scene.glyph.leftEye}${scene.glyph.mouth}${scene.glyph.rightEye}`)
+  params.set('face', `${DEFAULT_EDITOR_GLYPH.leftEye}${DEFAULT_EDITOR_GLYPH.mouth}${DEFAULT_EDITOR_GLYPH.rightEye}`)
   params.set('palette', scene.appearance.paletteId)
   params.set('bg', scene.appearance.backgroundStyle)
   params.set('shape', scene.appearance.bodyShape)
@@ -252,7 +286,7 @@ export const avatarDefinitionToSearchParams = (definition: AvatarDefinition) => 
   params.set('camera', '1')
   params.set('cameraBg', scene.camera.background)
   params.set('cameraFrame', scene.camera.frame)
-  setBoolean(params, 'eyes', scene.glyph.linkEyes)
+  setBoolean(params, 'eyes', DEFAULT_EDITOR_GLYPH.linkEyes)
   params.set('eyeShape', scene.face.eyeShape)
   params.set('eyeRound', String(scene.face.eyeRoundness))
   params.set('eyeW', String(scene.face.width))
@@ -263,6 +297,14 @@ export const avatarDefinitionToSearchParams = (definition: AvatarDefinition) => 
   params.set('eyeRot', String(scene.face.rotation))
   params.set('eyeLeftRot', String(scene.face.leftEyeRotation))
   params.set('eyeRightRot', String(scene.face.rightEyeRotation))
+  if (scene.face.eyeHighlight != null) {
+    setBoolean(params, 'eyeHighlight', scene.face.eyeHighlight.enabled)
+    params.set('eyeHighlightColor', scene.face.eyeHighlight.color)
+    params.set('eyeHighlightSize', String(scene.face.eyeHighlight.size))
+    params.set('eyeHighlightX', String(scene.face.eyeHighlight.offsetX))
+    params.set('eyeHighlightY', String(scene.face.eyeHighlight.offsetY))
+    params.set('eyeHighlightOpacity', String(scene.face.eyeHighlight.opacity))
+  }
   setBoolean(params, 'nose', scene.face.noseEnabled)
   params.set('noseShape', scene.face.noseShape)
   params.set('noseW', String(scene.face.noseWidth))
@@ -308,6 +350,9 @@ export const avatarDefinitionToSearchParams = (definition: AvatarDefinition) => 
   params.set('entity', scene.entity.preset)
   if (scene.entity.parts.length > 0) {
     params.set('entityParts', serializeAvatarEntityParts(scene.entity.parts as readonly AvatarEntityPart[]))
+  }
+  if (scene.decals != null && scene.decals.length > 0) {
+    params.set('decals', serializeAvatarSurfaceDecals(scene.decals))
   }
   params.set('size', String(scene.camera.size))
   params.set('sidebar', '1')

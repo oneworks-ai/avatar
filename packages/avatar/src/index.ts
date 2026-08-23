@@ -31,6 +31,7 @@ export type AvatarBodyShape =
 export type AvatarCameraFrame = 'circle' | 'rounded' | 'square'
 export type AvatarEntityPreset = 'bear' | 'cat' | 'cloud' | 'custom' | 'dog' | 'rabbit' | 'sun'
 export type AvatarEyeShape = 'ellipse' | 'rounded'
+export type AvatarSurfaceDecalShape = 'ellipse' | 'rounded'
 export type AvatarInteractionMode = 'move' | 'rotate'
 export type AvatarMouthShape = 'curve' | 'ellipse' | 'rounded' | 'rounded-triangle'
 export type AvatarNoseShape = 'ellipse' | 'inverted-triangle' | 'rounded'
@@ -57,6 +58,7 @@ export interface AvatarView {
 }
 
 export interface AvatarFace {
+  readonly eyeHighlight: AvatarEyeHighlight
   readonly eyeRoundness: number
   readonly eyeShape: AvatarEyeShape
   readonly gap: number
@@ -80,6 +82,29 @@ export interface AvatarFace {
   readonly rightEyeHeight?: number
   readonly rightEyeRotation: number
   readonly width: number
+}
+
+export interface AvatarEyeHighlight {
+  readonly color: string
+  readonly enabled: boolean
+  readonly offsetX: number
+  readonly offsetY: number
+  readonly opacity: number
+  readonly size: number
+}
+
+export interface AvatarSurfaceDecal {
+  readonly color: string
+  readonly height: number
+  readonly id: string
+  readonly label: string
+  readonly opacity: number
+  readonly rotation: number
+  readonly shape: AvatarSurfaceDecalShape
+  readonly targetPartId: string | null
+  readonly width: number
+  readonly x: number
+  readonly y: number
 }
 
 export interface AvatarEntityPart {
@@ -145,17 +170,12 @@ export interface AvatarScene {
     readonly showFaceShadow: boolean
     readonly showOutline: boolean
   }
+  readonly decals?: readonly AvatarSurfaceDecal[]
   readonly entity: {
     readonly parts: readonly AvatarEntityPart[]
     readonly preset: AvatarEntityPreset
   }
   readonly face: AvatarFace
-  readonly glyph: {
-    readonly leftEye: string
-    readonly linkEyes: boolean
-    readonly mouth: string
-    readonly rightEye: string
-  }
   readonly interactionMode: AvatarInteractionMode
   readonly lighting: {
     readonly azimuth: number
@@ -242,6 +262,14 @@ export const DEFAULT_AVATAR_COLOR_GRADE: AvatarColorGrade = {
 }
 
 export const DEFAULT_AVATAR_FACE: AvatarFace = {
+  eyeHighlight: {
+    color: '#ffffff',
+    enabled: false,
+    offsetX: -18,
+    offsetY: -20,
+    opacity: 92,
+    size: 24
+  },
   eyeRoundness: 100,
   eyeShape: 'rounded',
   gap: 40,
@@ -286,7 +314,6 @@ export const createDefaultAvatarDefinition = (): AvatarDefinition => ({
     },
     entity: { parts: [], preset: 'custom' },
     face: DEFAULT_AVATAR_FACE,
-    glyph: { leftEye: '0', linkEyes: true, mouth: 'w', rightEye: '0' },
     interactionMode: 'rotate',
     lighting: { azimuth: -35, distance: 0, elevation: 40, enabled: false, gridDensity: 100 },
     view: { pitch: 0, positionX: 0, positionY: 0, roll: 0, scale: 1.28, yaw: 0 }
@@ -346,11 +373,27 @@ export const createSeededAvatarDefinition = ({
 
 const isRecord = (value: unknown): value is Record<string, unknown> => (
   typeof value === 'object' && value != null && !Array.isArray(value) &&
-  (Object.getPrototypeOf(value) === Object.prototype || Object.getPrototypeOf(value) === null)
+  (Object.getPrototypeOf(value) === Object.prototype || Object.getPrototypeOf(value) === null) &&
+  Object.values(Object.getOwnPropertyDescriptors(value)).every(descriptor => 'value' in descriptor)
 )
 const hasOnlyKeys = (value: Record<string, unknown>, keys: readonly string[]) => (
-  Object.keys(value).every(key => keys.includes(key))
+  Reflect.ownKeys(value).every(key => typeof key === 'string' && keys.includes(key))
 )
+const hasOwnKeys = (value: Record<string, unknown>, keys: readonly string[]) => (
+  keys.every(key => Object.hasOwn(value, key))
+)
+const isDenseArray = <T = unknown>(value: unknown): value is T[] => {
+  if (!Array.isArray(value)) return false
+  if (!Array.from({ length: value.length }, (_, index) => Object.hasOwn(value, index)).every(Boolean)) {
+    return false
+  }
+  return Reflect.ownKeys(value).every(key => {
+    if (key === 'length') return true
+    if (typeof key !== 'string' || !/^(0|[1-9]\d*)$/u.test(key)) return false
+    const index = Number(key)
+    return index < value.length && 'value' in Object.getOwnPropertyDescriptor(value, key)!
+  })
+}
 
 const isBoolean = (value: unknown): value is boolean => typeof value === 'boolean'
 const isFiniteNumber = (value: unknown): value is number => (
@@ -361,6 +404,61 @@ const isOptionalNumber = (value: unknown) => value === undefined || isFiniteNumb
 const isOptionalString = (value: unknown) => value === undefined || isString(value)
 const isOneOf = <T extends string>(value: unknown, options: readonly T[]): value is T => (
   isString(value) && options.includes(value as T)
+)
+const isHexColor = (value: unknown): value is string => (
+  isString(value) && /^#[\da-f]{6}$/iu.test(value)
+)
+
+const isAvatarEyeHighlight = (value: unknown): value is AvatarEyeHighlight => (
+  isRecord(value) && hasOnlyKeys(value, [
+    'color',
+    'enabled',
+    'offsetX',
+    'offsetY',
+    'opacity',
+    'size'
+  ]) && hasOwnKeys(value, ['color', 'enabled', 'offsetX', 'offsetY', 'opacity', 'size']) &&
+  isHexColor(value.color) && isBoolean(value.enabled) &&
+  isFiniteNumber(value.offsetX) && value.offsetX >= -35 && value.offsetX <= 35 &&
+  isFiniteNumber(value.offsetY) && value.offsetY >= -35 && value.offsetY <= 35 &&
+  isFiniteNumber(value.opacity) && value.opacity >= 0 && value.opacity <= 100 &&
+  isFiniteNumber(value.size) && value.size >= 8 && value.size <= 50
+)
+
+const isAvatarSurfaceDecal = (value: unknown): value is AvatarSurfaceDecal => (
+  isRecord(value) && hasOnlyKeys(value, [
+    'color',
+    'height',
+    'id',
+    'label',
+    'opacity',
+    'rotation',
+    'shape',
+    'targetPartId',
+    'width',
+    'x',
+    'y'
+  ]) && hasOwnKeys(value, [
+    'color',
+    'height',
+    'id',
+    'label',
+    'opacity',
+    'rotation',
+    'shape',
+    'targetPartId',
+    'width',
+    'x',
+    'y'
+  ]) && isHexColor(value.color) && isFiniteNumber(value.height) && value.height >= 2 && value.height <= 180 &&
+  isString(value.id) && value.id.length > 0 && isString(value.label) &&
+  isFiniteNumber(value.opacity) && value.opacity >= 0 && value.opacity <= 100 &&
+  isFiniteNumber(value.rotation) && value.rotation >= -180 && value.rotation <= 180 &&
+  isOneOf(value.shape, ['ellipse', 'rounded']) &&
+  (value.targetPartId === null || isString(value.targetPartId)) &&
+  isFiniteNumber(value.width) && value.width >= 2 && value.width <= 180 &&
+  isFiniteNumber(value.x) && value.x >= -180 && value.x <= 180 &&
+  isFiniteNumber(value.y) && value.y >= -180 && value.y <= 180
 )
 
 const isAvatarColorGradeField = (key: string, value: unknown) => {
@@ -381,18 +479,21 @@ const isAvatarColorGrade = (value: unknown): value is AvatarColorGrade => (
 
 const isAvatarShadow = (value: unknown): value is AvatarShadow => (
   isRecord(value) && hasOnlyKeys(value, ['color', 'direction', 'distance', 'opacity', 'softness']) &&
+  hasOwnKeys(value, ['direction', 'distance', 'opacity', 'softness']) &&
   isOptionalString(value.color) && isFiniteNumber(value.direction) &&
   isFiniteNumber(value.distance) && isFiniteNumber(value.opacity) && isFiniteNumber(value.softness)
 )
 
 const isAvatarOutline = (value: unknown): value is AvatarOutline => (
   isRecord(value) && hasOnlyKeys(value, ['color', 'opacity', 'width']) &&
+  hasOwnKeys(value, ['color', 'opacity', 'width']) &&
   isString(value.color) && isFiniteNumber(value.opacity) &&
   isFiniteNumber(value.width)
 )
 
 const isAvatarView = (value: unknown): value is AvatarView => (
   isRecord(value) && hasOnlyKeys(value, ['pitch', 'positionX', 'positionY', 'roll', 'scale', 'yaw']) &&
+  hasOwnKeys(value, ['pitch', 'positionX', 'positionY', 'roll', 'scale', 'yaw']) &&
   isFiniteNumber(value.pitch) && isFiniteNumber(value.positionX) &&
   isFiniteNumber(value.positionY) && isFiniteNumber(value.roll) && isFiniteNumber(value.scale) &&
   isFiniteNumber(value.yaw)
@@ -400,6 +501,7 @@ const isAvatarView = (value: unknown): value is AvatarView => (
 
 const isAvatarFace = (value: unknown): value is AvatarFace => (
   isRecord(value) && hasOnlyKeys(value, [
+    'eyeHighlight',
     'eyeRoundness',
     'eyeShape',
     'gap',
@@ -423,7 +525,30 @@ const isAvatarFace = (value: unknown): value is AvatarFace => (
     'rightEyeHeight',
     'rightEyeRotation',
     'width'
-  ]) && isFiniteNumber(value.eyeRoundness) &&
+  ]) && hasOwnKeys(value, [
+    'eyeRoundness',
+    'eyeShape',
+    'gap',
+    'height',
+    'leftEyeRotation',
+    'mouthCurve',
+    'mouthEnabled',
+    'mouthHeight',
+    'mouthRotation',
+    'mouthShape',
+    'mouthWidth',
+    'mouthY',
+    'noseEnabled',
+    'noseHeight',
+    'noseRotation',
+    'noseShape',
+    'noseWidth',
+    'noseY',
+    'rotation',
+    'rightEyeRotation',
+    'width'
+  ]) && (value.eyeHighlight === undefined || isAvatarEyeHighlight(value.eyeHighlight)) &&
+  isFiniteNumber(value.eyeRoundness) &&
   isOneOf(value.eyeShape, ['ellipse', 'rounded']) && isFiniteNumber(value.gap) &&
   isFiniteNumber(value.height) && isOptionalNumber(value.leftEyeHeight) &&
   isFiniteNumber(value.leftEyeRotation) && isFiniteNumber(value.mouthCurve) &&
@@ -462,6 +587,20 @@ const isAvatarEntityPart = (value: unknown): value is AvatarEntityPart => (
     'shadowColor',
     'shape',
     'topScale',
+    'x',
+    'y',
+    'z'
+  ]) && hasOwnKeys(value, [
+    'baseColor',
+    'face',
+    'foregroundColor',
+    'highlightColor',
+    'id',
+    'label',
+    'scaleX',
+    'scaleY',
+    'shadowColor',
+    'shape',
     'x',
     'y',
     'z'
@@ -522,6 +661,7 @@ const isPartialAvatarFace = (value: unknown) => {
     if (numberKeys.includes(key)) return isFiniteNumber(field)
     if (booleanKeys.includes(key)) return isBoolean(field)
     if (key === 'eyeShape') return isOneOf(field, ['ellipse', 'rounded'])
+    if (key === 'eyeHighlight') return isAvatarEyeHighlight(field)
     if (key === 'mouthShape') {
       return isOneOf(field, ['curve', 'ellipse', 'rounded', 'rounded-triangle'])
     }
@@ -555,15 +695,18 @@ const isAvatarAnimationClip = (value: unknown): value is AvatarAnimationClip => 
       'keyframes',
       'label',
       'playback'
-    ]) || !isOneOf(value.anchor, ['absolute', 'relative']) ||
+    ]) || !hasOwnKeys(value, ['anchor', 'durationMs', 'keyframes', 'playback']) ||
+    !isOneOf(value.anchor, ['absolute', 'relative']) ||
     !isFiniteNumber(value.durationMs) || value.durationMs <= 0 || !isOptionalString(value.label) ||
-    !isOneOf(value.playback, ['loop', 'once']) || !Array.isArray(value.keyframes) ||
+    !isOneOf(value.playback, ['loop', 'once']) ||
+    !isDenseArray<AvatarAnimationKeyframe>(value.keyframes) ||
     value.keyframes.length === 0 || (value.playback === 'loop' && value.keyframes.length < 2)
   ) return false
   const durationMs = value.durationMs
   if (
     !value.keyframes.every(keyframe => (
       isRecord(keyframe) && hasOnlyKeys(keyframe, ['atMs', 'easing', 'patch']) &&
+      hasOwnKeys(keyframe, ['atMs', 'patch']) &&
       isFiniteNumber(keyframe.atMs) && keyframe.atMs >= 0 &&
       keyframe.atMs <= durationMs &&
       (keyframe.easing === undefined || isOneOf(keyframe.easing, [
@@ -594,22 +737,28 @@ const isAvatarAnimationClip = (value: unknown): value is AvatarAnimationClip => 
 
 export const parseAvatarAnimationClip = (input: unknown): AvatarAnimationClip => {
   if (!isAvatarAnimationClip(input)) throw new TypeError('Invalid OneWorks Avatar animation clip')
-  return structuredClone(input)
+  const value = structuredClone(input)
+  if (!isAvatarAnimationClip(value)) throw new TypeError('Invalid OneWorks Avatar animation clip')
+  return value
 }
 
 const isAvatarAnimationLibrary = (value: unknown): value is AvatarAnimationLibrary => (
   isRecord(value) && hasOnlyKeys(value, ['groups', 'id', 'label']) &&
+  hasOwnKeys(value, ['groups', 'id']) &&
   isString(value.id) && isOptionalString(value.label) && isRecord(value.groups) &&
   Object.values(value.groups).every(group => (
     isRecord(group) && hasOnlyKeys(group, ['clips', 'defaultClip', 'label']) &&
+    hasOwnKeys(group, ['clips']) &&
     isOptionalString(group.defaultClip) && isOptionalString(group.label) &&
-    isRecord(group.clips) && Object.values(group.clips).every(isAvatarAnimationClip)
+    isRecord(group.clips) && Object.values(group.clips).every(isAvatarAnimationClip) &&
+    (group.defaultClip === undefined || Object.hasOwn(group.clips, group.defaultClip))
   ))
 )
 
 export const isAvatarDefinition = (value: unknown): value is AvatarDefinition => {
   if (
     !isRecord(value) || !hasOnlyKeys(value, ['animations', 'metadata', 'scene', 'schema', 'version']) ||
+    !hasOwnKeys(value, ['scene', 'schema', 'version']) ||
     value.schema !== AVATAR_DEFINITION_SCHEMA || value.version !== 1
   ) return false
   if (value.animations !== undefined && !isAvatarAnimationLibrary(value.animations)) return false
@@ -622,20 +771,33 @@ export const isAvatarDefinition = (value: unknown): value is AvatarDefinition =>
   if (!isRecord(value.scene) || !hasOnlyKeys(value.scene, [
     'appearance',
     'camera',
+    'decals',
     'effects',
     'entity',
     'face',
-    'glyph',
+    'interactionMode',
+    'lighting',
+    'view'
+  ]) || !hasOwnKeys(value.scene, [
+    'appearance',
+    'camera',
+    'effects',
+    'entity',
+    'face',
     'interactionMode',
     'lighting',
     'view'
   ])) return false
   const scene = value.scene
+  if (scene.decals !== undefined) {
+    if (!isDenseArray<AvatarSurfaceDecal>(scene.decals) || !scene.decals.every(isAvatarSurfaceDecal)) return false
+    if (new Set(scene.decals.map(decal => decal.id)).size !== scene.decals.length) return false
+  }
   return isRecord(scene.appearance) && hasOnlyKeys(scene.appearance, [
     'backgroundStyle',
     'bodyShape',
     'paletteId'
-  ]) &&
+  ]) && hasOwnKeys(scene.appearance, ['backgroundStyle', 'bodyShape', 'paletteId']) &&
     isOneOf(scene.appearance.backgroundStyle, ['gradient', 'solid']) &&
     isOneOf(scene.appearance.bodyShape, [
       'capsule',
@@ -656,6 +818,12 @@ export const isAvatarDefinition = (value: unknown): value is AvatarDefinition =>
       'frameShadow',
       'showFrameShadow',
       'size'
+    ]) && hasOwnKeys(scene.camera, [
+      'background',
+      'frame',
+      'frameShadow',
+      'showFrameShadow',
+      'size'
     ]) && isString(scene.camera.background) &&
     isOneOf(scene.camera.frame, ['circle', 'rounded', 'square']) &&
     isAvatarShadow(scene.camera.frameShadow) && isBoolean(scene.camera.showFrameShadow) &&
@@ -668,23 +836,33 @@ export const isAvatarDefinition = (value: unknown): value is AvatarDefinition =>
       'showAvatarShadow',
       'showFaceShadow',
       'showOutline'
+    ]) && hasOwnKeys(scene.effects, [
+      'avatarShadow',
+      'colorGrade',
+      'faceShadow',
+      'outline',
+      'showAvatarShadow',
+      'showFaceShadow',
+      'showOutline'
     ]) && isAvatarShadow(scene.effects.avatarShadow) &&
     isAvatarColorGrade(scene.effects.colorGrade) && isAvatarShadow(scene.effects.faceShadow) &&
     isAvatarOutline(scene.effects.outline) && isBoolean(scene.effects.showAvatarShadow) &&
     isBoolean(scene.effects.showFaceShadow) && isBoolean(scene.effects.showOutline) &&
     isRecord(scene.entity) && hasOnlyKeys(scene.entity, ['parts', 'preset']) &&
-    Array.isArray(scene.entity.parts) &&
+    hasOwnKeys(scene.entity, ['parts', 'preset']) &&
+    isDenseArray<AvatarEntityPart>(scene.entity.parts) &&
     scene.entity.parts.every(isAvatarEntityPart) &&
+    new Set(scene.entity.parts.map(part => part.id)).size === scene.entity.parts.length &&
+    (scene.entity.parts.length === 0 || scene.entity.parts.filter(part => part.face).length === 1) &&
     isOneOf(scene.entity.preset, ['bear', 'cat', 'cloud', 'custom', 'dog', 'rabbit', 'sun']) &&
-    isAvatarFace(scene.face) && isRecord(scene.glyph) && hasOnlyKeys(scene.glyph, [
-      'leftEye',
-      'linkEyes',
-      'mouth',
-      'rightEye'
-    ]) && isString(scene.glyph.leftEye) &&
-    isBoolean(scene.glyph.linkEyes) && isString(scene.glyph.mouth) &&
-    isString(scene.glyph.rightEye) && isOneOf(scene.interactionMode, ['move', 'rotate']) &&
+    isAvatarFace(scene.face) && isOneOf(scene.interactionMode, ['move', 'rotate']) &&
     isRecord(scene.lighting) && hasOnlyKeys(scene.lighting, [
+      'azimuth',
+      'distance',
+      'elevation',
+      'enabled',
+      'gridDensity'
+    ]) && hasOwnKeys(scene.lighting, [
       'azimuth',
       'distance',
       'elevation',
@@ -697,14 +875,18 @@ export const isAvatarDefinition = (value: unknown): value is AvatarDefinition =>
 }
 
 export const parseAvatarDefinition = (input: unknown): AvatarDefinition => {
-  const value = typeof input === 'string' ? JSON.parse(input) : input
+  const inputValue = typeof input === 'string' ? JSON.parse(input) : input
+  if (!isAvatarDefinition(inputValue)) throw new TypeError('Invalid OneWorks Avatar definition')
+  const value = structuredClone(inputValue)
   if (!isAvatarDefinition(value)) throw new TypeError('Invalid OneWorks Avatar definition')
-  return structuredClone(value)
+  return value
 }
 
 export const serializeAvatarDefinition = (definition: AvatarDefinition) => {
   if (!isAvatarDefinition(definition)) throw new TypeError('Invalid OneWorks Avatar definition')
-  return `${JSON.stringify(definition, null, 2)}\n`
+  const value = structuredClone(definition)
+  if (!isAvatarDefinition(value)) throw new TypeError('Invalid OneWorks Avatar definition')
+  return `${JSON.stringify(value, null, 2)}\n`
 }
 
 export const mergeAvatarAnimationLibraries = (

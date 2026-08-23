@@ -52,6 +52,121 @@ describe('OneWorks Avatar public runtime contract', () => {
     expect(() => parseAvatarDefinition({ ...definition, version: 2 })).toThrow(TypeError)
     expect(() => parseAvatarDefinition(Object.create(definition))).toThrow(TypeError)
     expect(() => parseAvatarAnimationClip(Object.create(nod))).toThrow(TypeError)
+    const decorated = {
+      ...definition,
+      scene: {
+        ...definition.scene,
+        decals: [{
+          color: '#f29a93', height: 18, id: 'blush-left', label: 'Left blush', opacity: 90,
+          rotation: -8, shape: 'ellipse' as const, targetPartId: null, width: 30, x: -48, y: 30
+        }],
+        face: {
+          ...definition.scene.face,
+          eyeHighlight: {
+            color: '#ffffff', enabled: true, offsetX: -18, offsetY: -20, opacity: 92, size: 28
+          }
+        }
+      }
+    }
+    expect(parseAvatarDefinition(serializeAvatarDefinition(decorated))).toEqual(decorated)
+    expect(() => parseAvatarDefinition({
+      ...decorated,
+      scene: { ...decorated.scene, decals: [{ ...decorated.scene.decals[0]!, opacity: 101 }] }
+    })).toThrow(TypeError)
+    expect(() => parseAvatarDefinition({
+      ...decorated,
+      scene: {
+        ...decorated.scene,
+        face: { ...decorated.scene.face, eyeHighlight: { ...decorated.scene.face.eyeHighlight, size: 0 } }
+      }
+    })).toThrow(TypeError)
+    const changing = { ...definition }
+    let versionReads = 0
+    Object.defineProperty(changing, 'version', {
+      enumerable: true,
+      get: () => ++versionReads === 1 ? 1 : 2
+    })
+    expect(() => parseAvatarDefinition(changing)).toThrow(TypeError)
+    const polluted = { ...definition, scene: { ...definition.scene, view: { ...definition.scene.view } } }
+    delete (polluted.scene.view as { yaw?: number }).yaw
+    Object.defineProperty(Object.prototype, 'yaw', { configurable: true, value: 0 })
+    try {
+      expect(() => parseAvatarDefinition(polluted)).toThrow(TypeError)
+    } finally {
+      delete (Object.prototype as { yaw?: number }).yaw
+    }
+    const hiddenVersion = { ...definition }
+    Object.defineProperty(hiddenVersion, 'version', { enumerable: false, value: 1 })
+    expect(() => parseAvatarDefinition(hiddenVersion)).toThrow(TypeError)
+    const hiddenExtra = { ...definition }
+    Object.defineProperty(hiddenExtra, 'extra', { value: true })
+    expect(() => parseAvatarDefinition(hiddenExtra)).toThrow(TypeError)
+    expect(() => parseAvatarDefinition({ ...definition, [Symbol('extra')]: true })).toThrow(TypeError)
+    expect(() => parseAvatarDefinition({
+      ...definition,
+      scene: {
+        ...definition.scene,
+        glyph: { leftEye: '0', linkEyes: true, mouth: 'w', rightEye: '0' }
+      }
+    })).toThrow(TypeError)
+    expect(() => parseAvatarDefinition({
+      ...definition,
+      scene: {
+        ...definition.scene,
+        entity: { parts: Array(1), preset: 'custom' }
+      }
+    })).toThrow(TypeError)
+    const duplicatePart = {
+      baseColor: '#111111',
+      face: true,
+      foregroundColor: '#ffffff',
+      highlightColor: '#eeeeee',
+      id: 'duplicate',
+      label: 'Duplicate',
+      scaleX: 1,
+      scaleY: 1,
+      shadowColor: '#000000',
+      shape: 'sphere' as const,
+      x: 0,
+      y: 0,
+      z: 0
+    }
+    expect(() => parseAvatarDefinition({
+      ...definition,
+      scene: {
+        ...definition.scene,
+        entity: {
+          parts: [{ ...duplicatePart, face: false }],
+          preset: 'custom'
+        }
+      }
+    })).toThrow(TypeError)
+    expect(() => parseAvatarDefinition({
+      ...definition,
+      scene: {
+        ...definition.scene,
+        entity: {
+          parts: [duplicatePart, { ...duplicatePart, id: 'second' }],
+          preset: 'custom'
+        }
+      }
+    })).toThrow(TypeError)
+    expect(() => parseAvatarDefinition({
+      ...definition,
+      scene: {
+        ...definition.scene,
+        entity: {
+          parts: [duplicatePart, { ...duplicatePart }],
+          preset: 'custom'
+        }
+      }
+    })).toThrow(TypeError)
+    expect(() => parseAvatarAnimationClip({
+      anchor: 'absolute',
+      durationMs: 100,
+      keyframes: Array(1),
+      playback: 'once'
+    })).toThrow(TypeError)
     expect(() => parseAvatarDefinition({ ...definition, extra: true })).toThrow(TypeError)
     expect(() => parseAvatarDefinition({ ...definition, animations: null })).toThrow(TypeError)
     expect(() => parseAvatarDefinition({ ...definition, metadata: null })).toThrow(TypeError)
@@ -69,6 +184,18 @@ describe('OneWorks Avatar public runtime contract', () => {
         scene: { ...definition.scene, face: { ...definition.scene.face, width: undefined } }
       })
     ).toThrow(TypeError)
+    expect(() => parseAvatarDefinition({
+      ...definition,
+      animations: {
+        groups: {
+          broken: {
+            clips: { nod },
+            defaultClip: 'missing'
+          }
+        },
+        id: 'broken'
+      }
+    })).toThrow(TypeError)
     expect(() =>
       parseAvatarAnimationClip({
         ...nod,

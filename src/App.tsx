@@ -95,6 +95,12 @@ import {
   serializeAvatarSvg
 } from './savedAvatarPresets'
 import type { SavedAvatarPreset } from './savedAvatarPresets'
+import {
+  createAvatarSurfaceDecal,
+  deserializeAvatarSurfaceDecals,
+  serializeAvatarSurfaceDecals
+} from './avatarSurfaceDecals'
+import type { AvatarSurfaceDecal } from './avatarSurfaceDecals'
 
 const INITIAL_EMOTICON = DEFAULT_AVATAR_GLYPH_EXPRESSION
 const INITIAL_PARTS = Array.from(INITIAL_EMOTICON)
@@ -172,6 +178,7 @@ interface AvatarQueryConfig {
   readonly showAvatarShadow: boolean
   readonly showFrameShadow: boolean
   readonly showShadow: boolean
+  readonly surfaceDecals: readonly AvatarSurfaceDecal[]
   readonly viewState: AvatarViewState
 }
 
@@ -193,6 +200,7 @@ interface AnimationThumbnailCaptureRequest {
   readonly showLight: boolean
   readonly showOutline: boolean
   readonly showShadow: boolean
+  readonly surfaceDecals: readonly AvatarSurfaceDecal[]
 }
 
 const ignoreAvatarViewStateChange = () => {}
@@ -326,6 +334,34 @@ const parseQueryConfig = (params: URLSearchParams): AvatarQueryConfig => {
     entityPreset,
     exportSize: parseExportSize(params.get('size')),
     faceStyle: {
+      eyeHighlight: {
+        color: parseOutlineColor(params.get('eyeHighlightColor')),
+        enabled: parseShadow(params.get('eyeHighlight')),
+        offsetX: parseRangeValue(
+          params.get('eyeHighlightX'),
+          DEFAULT_AVATAR_FACE_STYLE.eyeHighlight.offsetX,
+          -35,
+          35
+        ),
+        offsetY: parseRangeValue(
+          params.get('eyeHighlightY'),
+          DEFAULT_AVATAR_FACE_STYLE.eyeHighlight.offsetY,
+          -35,
+          35
+        ),
+        opacity: parseRangeValue(
+          params.get('eyeHighlightOpacity'),
+          DEFAULT_AVATAR_FACE_STYLE.eyeHighlight.opacity,
+          0,
+          100
+        ),
+        size: parseRangeValue(
+          params.get('eyeHighlightSize'),
+          DEFAULT_AVATAR_FACE_STYLE.eyeHighlight.size,
+          8,
+          50
+        )
+      },
       eyeRoundness: parseRangeValue(params.get('eyeRound'), DEFAULT_AVATAR_FACE_STYLE.eyeRoundness, 0, 100),
       eyeShape: parseEyeShape(params.get('eyeShape')),
       gap: parseRangeValue(params.get('eyeGap'), DEFAULT_AVATAR_FACE_STYLE.gap, 0, 100),
@@ -403,6 +439,7 @@ const parseQueryConfig = (params: URLSearchParams): AvatarQueryConfig => {
     showAvatarShadow: parseShadow(params.get('avatarShadow')),
     showFrameShadow: params.get('frameShadow') == null ? true : parseShadow(params.get('frameShadow')),
     showShadow: parseShadow(params.get('shadow')),
+    surfaceDecals: deserializeAvatarSurfaceDecals(params.get('decals')),
     sharedAnimation,
     viewState: {
       pitch: parseFiniteValue(params.get('pitch'), DEFAULT_AVATAR_VIEW_STATE.pitch),
@@ -466,6 +503,7 @@ const getInitialQueryConfig = (definition?: AvatarDefinition) => {
       showLight: state.showLight,
       showOutline: state.showOutline,
       showShadow: state.showShadow,
+      surfaceDecals: state.surfaceDecals,
       viewState: state.viewState
     }
   }
@@ -489,6 +527,7 @@ const getInitialQueryConfig = (definition?: AvatarDefinition) => {
     controlsCollapsed: false,
     entityParts: createAvatarEntityParts(preset),
     entityPreset: preset,
+    surfaceDecals: [],
     faceStyle,
     frameShadowStyle: scene.frameShadowStyle,
     interactionMode: scene.interactionMode,
@@ -554,6 +593,8 @@ function App({
   const [entityParts, setEntityParts] = useState<readonly AvatarEntityPart[]>(initialConfig.entityParts)
   const [entityPreset, setEntityPreset] = useState<AvatarEntityPreset>(initialConfig.entityPreset)
   const [selectedEntityPartId, setSelectedEntityPartId] = useState<string | null>(null)
+  const [surfaceDecals, setSurfaceDecals] = useState<readonly AvatarSurfaceDecal[]>(initialConfig.surfaceDecals ?? [])
+  const [selectedSurfaceDecalId, setSelectedSurfaceDecalId] = useState<string | null>(null)
   const [cameraMode, setCameraMode] = useState(initialConfig.cameraMode)
   const [cameraBackground, setCameraBackground] = useState(initialConfig.cameraBackground)
   const [cameraFrame, setCameraFrame] = useState<AvatarCameraFrame>(initialConfig.cameraFrame)
@@ -694,6 +735,7 @@ function App({
   const currentDefinition = useMemo(() =>
     createAvatarDefinition({
       animation: animationDraftSource === 'builtin' ? null : currentDocumentAnimation,
+      animationLibraryIds: animationLibraries.map(library => library.id),
       animationTargetKey: selectedAnimationKey,
       avatarOutlineStyle,
       avatarShadowStyle,
@@ -720,6 +762,7 @@ function App({
       showLight,
       showOutline,
       showShadow,
+      surfaceDecals,
       viewState: avatarViewState
     }, definition), [
     avatarOutlineStyle,
@@ -731,6 +774,7 @@ function App({
     cameraFrame,
     avatarColorGrade,
     animationDraftSource,
+    animationLibraries,
     currentDocumentAnimation,
     definition,
     entityParts,
@@ -754,7 +798,8 @@ function App({
     showFrameShadow,
     showLight,
     showOutline,
-    showShadow
+    showShadow,
+    surfaceDecals
   ])
   const currentDefinitionFingerprint = useMemo(
     () => JSON.stringify(currentDefinition),
@@ -879,6 +924,12 @@ function App({
     params.set('eyeRot', String(resolvedFaceStyle.rotation))
     params.set('eyeLeftRot', String(resolvedFaceStyle.leftEyeRotation))
     params.set('eyeRightRot', String(resolvedFaceStyle.rightEyeRotation))
+    params.set('eyeHighlight', resolvedFaceStyle.eyeHighlight.enabled ? '1' : '0')
+    params.set('eyeHighlightColor', resolvedFaceStyle.eyeHighlight.color)
+    params.set('eyeHighlightSize', String(resolvedFaceStyle.eyeHighlight.size))
+    params.set('eyeHighlightX', String(resolvedFaceStyle.eyeHighlight.offsetX))
+    params.set('eyeHighlightY', String(resolvedFaceStyle.eyeHighlight.offsetY))
+    params.set('eyeHighlightOpacity', String(resolvedFaceStyle.eyeHighlight.opacity))
     params.set('nose', resolvedFaceStyle.noseEnabled ? '1' : '0')
     params.set('noseShape', resolvedFaceStyle.noseShape)
     params.set('noseW', String(resolvedFaceStyle.noseWidth))
@@ -928,6 +979,7 @@ function App({
       params.set('entity', entityPreset)
       params.set('entityParts', serializeAvatarEntityParts(entityParts))
     }
+    if (surfaceDecals.length > 0) params.set('decals', serializeAvatarSurfaceDecals(surfaceDecals))
     params.delete('objects')
     params.set('size', String(exportSize))
     params.set('sidebar', controlsCollapsed ? '0' : '1')
@@ -994,7 +1046,8 @@ function App({
     showOutline,
     showAvatarShadow,
     showFrameShadow,
-    showShadow
+    showShadow,
+    surfaceDecals
   ])
 
   useEffect(() => {
@@ -1042,6 +1095,8 @@ function App({
       setControlsCollapsed(config.controlsCollapsed)
       setEntityParts(config.entityParts)
       setEntityPreset(config.entityPreset)
+      setSurfaceDecals(config.surfaceDecals)
+      setSelectedSurfaceDecalId(null)
       setExportSize(config.exportSize)
       setFaceShadowStyle(config.faceShadowStyle)
       setFaceStyle(config.faceStyle)
@@ -1111,7 +1166,8 @@ function App({
     showOutline,
     showAvatarShadow,
     showFrameShadow,
-    showShadow
+    showShadow,
+    surfaceDecals
   ])
 
   useEffect(() => {
@@ -1182,6 +1238,16 @@ function App({
     setActiveAnimationKeyframe(null)
   }
 
+  const avatarCaptureOptions = {
+    background: cameraBackground,
+    frame: cameraFrame,
+    frameShadow: {
+      ...frameShadowStyle,
+      color: frameShadowStyle.color ?? selectedPalette.shadow
+    },
+    showFrameShadow
+  }
+
   const handleEntityPresetChange = (preset: AvatarEntityPreset) => {
     const nextParts = createAvatarEntityParts(preset)
     const nextFaceStyle = getAvatarEntityPresetFaceStyle(preset)
@@ -1192,6 +1258,8 @@ function App({
     setEntityPreset(preset)
     setEntityParts(nextParts)
     setSelectedEntityPartId(null)
+    setSurfaceDecals([])
+    setSelectedSurfaceDecalId(null)
     setSelectedSavedPresetId(null)
     if (nextFaceStyle != null) {
       setFaceStyle(nextFaceStyle)
@@ -1225,8 +1293,7 @@ function App({
     const sourceSvg = avatarFrameRef.current?.querySelector<SVGSVGElement>('svg.interactive-avatar__canvas')
     if (sourceSvg == null) return
     await navigator.clipboard.writeText(serializeAvatarSvg(sourceSvg, exportSize, {
-      background: cameraBackground,
-      frame: cameraFrame
+      ...avatarCaptureOptions
     }))
     setCopyState('copied')
     window.setTimeout(() => setCopyState('idle'), 1400)
@@ -1239,8 +1306,7 @@ function App({
       `oneworks-avatar-${entityPreset}-${exportSize}.svg`,
       new Blob([
         serializeAvatarSvg(sourceSvg, exportSize, {
-          background: cameraBackground,
-          frame: cameraFrame
+          ...avatarCaptureOptions
         })
       ], { type: 'image/svg+xml;charset=utf-8' })
     )
@@ -1251,8 +1317,7 @@ function App({
     if (sourceSvg == null) return false
     try {
       const png = await renderAvatarPngBlob(sourceSvg, exportSize, {
-        background: cameraBackground,
-        frame: cameraFrame
+        ...avatarCaptureOptions
       })
       downloadBlob(`oneworks-avatar-${entityPreset}-${exportSize}.png`, png)
       return true
@@ -1289,7 +1354,8 @@ function App({
           showAvatarShadow,
           showLight,
           showOutline,
-          showShadow
+          showShadow,
+          surfaceDecals
         },
         size: exportSize,
         startFrameIndex: animationStartFrameIndex
@@ -1345,6 +1411,8 @@ function App({
     setEntityParts(config.entityParts)
     setEntityPreset(config.entityPreset)
     setSelectedEntityPartId(null)
+    setSurfaceDecals(config.surfaceDecals)
+    setSelectedSurfaceDecalId(null)
     setCameraBackground(config.cameraBackground)
     setCameraFrame(config.cameraFrame)
     setCameraMode(config.cameraMode)
@@ -1781,7 +1849,8 @@ function App({
       scale: avatarViewState.scale,
       showLight,
       showOutline,
-      showShadow
+      showShadow,
+      surfaceDecals
     })
   }
 
@@ -1800,6 +1869,7 @@ function App({
         colorGrade={keyframe.colorGrade}
         entityParts={entityParts}
         entityPreset={entityPreset}
+        surfaceDecals={surfaceDecals}
         faceStyleTransitionsEnabled={false}
         faceStyle={keyframe.faceStyle}
         gridDensity={25}
@@ -2072,6 +2142,7 @@ function App({
                 colorGrade={avatarColorGrade}
                 entityParts={entityParts}
                 entityPreset={entityPreset}
+                surfaceDecals={surfaceDecals}
                 faceStyleTransitionsEnabled={!animationPlaying}
                 faceStyle={resolvedFaceStyle}
                 gridDensity={gridDensity}
@@ -2162,7 +2233,15 @@ function App({
             setEntityParts([])
             setEntityPreset('custom')
             setSelectedEntityPartId(null)
+            setSurfaceDecals([])
+            setSelectedSurfaceDecalId(null)
             setCopyState('idle')
+          }}
+          onAddSurfaceDecal={() => {
+            const id = globalThis.crypto?.randomUUID?.() ?? `decal-${Date.now()}`
+            const targetPartId = selectedEntityPartId ?? entityParts.find(part => part.face)?.id ?? null
+            setSurfaceDecals(current => [...current, createAvatarSurfaceDecal(id, targetPartId)])
+            setSelectedSurfaceDecalId(id)
           }}
           onAvatarShadowStyleChange={(nextStyle) => {
             setAvatarShadowStyle(currentStyle => ({ ...currentStyle, ...nextStyle }))
@@ -2194,6 +2273,14 @@ function App({
             setActiveAnimationKeyframe(null)
             setFaceStyle(DEFAULT_AVATAR_FACE_STYLE)
             setAnimationPreviewFaceStyle(DEFAULT_AVATAR_FACE_STYLE)
+          }}
+          onDeleteSurfaceDecal={(id) => {
+            setSurfaceDecals(current => current.filter(decal => decal.id !== id))
+            setSelectedSurfaceDecalId(current => current === id ? null : current)
+          }}
+          onSelectSurfaceDecal={setSelectedSurfaceDecalId}
+          onSurfaceDecalChange={(id, patch) => {
+            setSurfaceDecals(current => current.map(decal => decal.id === id ? { ...decal, ...patch } : decal))
           }}
           onSavedPresetSelect={handleSavedPresetSelect}
           onSavedPresetRemove={handleSavedPresetRemove}
@@ -2229,6 +2316,7 @@ function App({
           selectedPalette={selectedPalette}
           selectedEntityPartId={selectedEntityPartId}
           selectedSavedPresetId={selectedSavedPresetId}
+          selectedSurfaceDecalId={selectedSurfaceDecalId}
           savedPresets={savedPresets}
           showLight={showLight}
           showOutline={showOutline}
@@ -2236,6 +2324,7 @@ function App({
           showFrameShadow={showFrameShadow}
           showMorePalettes={showMorePalettes}
           showShadow={showShadow}
+          surfaceDecals={surfaceDecals}
           visiblePalettes={visiblePalettes}
         />
         {animationOpen
@@ -2319,6 +2408,7 @@ function App({
                   colorGrade={keyframe.colorGrade}
                   entityParts={animationThumbnailCapture.entityParts}
                   entityPreset={animationThumbnailCapture.entityPreset}
+                  surfaceDecals={animationThumbnailCapture.surfaceDecals}
                   faceStyleTransitionsEnabled={false}
                   faceStyle={keyframe.faceStyle}
                   gridDensity={25}

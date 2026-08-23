@@ -1,3 +1,5 @@
+import type { AvatarSurfaceDecal } from './avatarSurfaceDecals'
+
 export const AVATAR_BODY_SHAPES = [
   'sphere',
   'ellipse',
@@ -58,6 +60,7 @@ export type AvatarMouthShape = 'curve' | 'ellipse' | 'rounded' | 'rounded-triang
 export type AvatarNoseShape = 'ellipse' | 'inverted-triangle' | 'rounded'
 
 export interface AvatarFaceStyle {
+  readonly eyeHighlight: AvatarEyeHighlightStyle
   readonly eyeRoundness: number
   readonly eyeShape: AvatarEyeShape
   readonly gap: number
@@ -83,7 +86,26 @@ export interface AvatarFaceStyle {
   readonly width: number
 }
 
+export interface AvatarEyeHighlightStyle {
+  readonly color: string
+  readonly enabled: boolean
+  readonly offsetX: number
+  readonly offsetY: number
+  readonly opacity: number
+  readonly size: number
+}
+
+export const DEFAULT_AVATAR_EYE_HIGHLIGHT_STYLE: AvatarEyeHighlightStyle = {
+  color: '#ffffff',
+  enabled: false,
+  offsetX: -18,
+  offsetY: -20,
+  opacity: 92,
+  size: 24
+}
+
 export const DEFAULT_AVATAR_FACE_STYLE: AvatarFaceStyle = {
+  eyeHighlight: DEFAULT_AVATAR_EYE_HIGHLIGHT_STYLE,
   eyeRoundness: 100,
   eyeShape: 'rounded',
   gap: 40,
@@ -108,7 +130,14 @@ export const DEFAULT_AVATAR_FACE_STYLE: AvatarFaceStyle = {
 }
 
 export const resolveAvatarFaceStyle = (faceStyle: Partial<AvatarFaceStyle>): AvatarFaceStyle => {
-  const resolved = { ...DEFAULT_AVATAR_FACE_STYLE, ...faceStyle }
+  const resolved = {
+    ...DEFAULT_AVATAR_FACE_STYLE,
+    ...faceStyle,
+    eyeHighlight: {
+      ...DEFAULT_AVATAR_EYE_HIGHLIGHT_STYLE,
+      ...faceStyle.eyeHighlight
+    }
+  }
   return {
     ...resolved,
     leftEyeRotation: Number.isFinite(resolved.leftEyeRotation)
@@ -147,6 +176,7 @@ export interface BodyGeometry {
 }
 
 export interface ProjectedFace {
+  readonly eyeHighlights: readonly ProjectedEye[]
   readonly eyes: readonly ProjectedEye[]
   readonly mouth: ProjectedEye | null
   readonly nose: ProjectedEye | null
@@ -877,6 +907,7 @@ export const projectDefaultFace = (
   const eyeOffset = resolvedFaceStyle.gap / 2 + resolvedFaceStyle.width / 2
   const faceOffsetY = options.faceOffsetY ?? 0
   const eyeCenterY = faceOffsetY
+  const eyeHighlights: ProjectedEye[] = []
   const eyes = [-eyeOffset, eyeOffset].flatMap((centerX, index) => {
     const eyeHeight = index === 0
       ? resolvedFaceStyle.leftEyeHeight ?? resolvedFaceStyle.height
@@ -895,6 +926,24 @@ export const projectDefaultFace = (
         resolvedFaceStyle.eyeRoundness
       )
     const eye = projectPart(`eye-${index}`, centerX, eyeCenterY, boundary)
+    if (eye != null && resolvedFaceStyle.eyeHighlight.enabled) {
+      const rawHighlightCenter = {
+        x: centerX + resolvedFaceStyle.width * resolvedFaceStyle.eyeHighlight.offsetX / 100,
+        y: eyeCenterY + eyeHeight * resolvedFaceStyle.eyeHighlight.offsetY / 100
+      }
+      const highlightCenter = rotateFacePoint(rawHighlightCenter, centerX, eyeCenterY, eyeRotation)
+      const diameter = Math.max(
+        Math.min(resolvedFaceStyle.width, eyeHeight) * resolvedFaceStyle.eyeHighlight.size / 100,
+        1
+      )
+      const highlight = projectPart(
+        `eye-highlight-${index}`,
+        highlightCenter.x,
+        highlightCenter.y,
+        buildEllipseBoundary(highlightCenter.x, highlightCenter.y, diameter, diameter, eyeRotation)
+      )
+      if (highlight != null) eyeHighlights.push(highlight)
+    }
     return eye == null ? [] : [eye]
   })
   const noseBoundary = resolvedFaceStyle.noseShape === 'ellipse'
@@ -922,6 +971,7 @@ export const projectDefaultFace = (
     )
 
   return {
+    eyeHighlights,
     eyes,
     mouth: projectPart(
       'mouth',
@@ -962,5 +1012,38 @@ export const projectDefaultFace = (
     ),
     nose: projectPart('nose', 0, resolvedFaceStyle.noseY, noseBoundary),
     visible: faceNormal.z > 0.015
+  }
+}
+
+export const projectAvatarSurfaceDecal = (
+  pose: AvatarPose,
+  bodyShape: AvatarBodyShape,
+  decal: AvatarSurfaceDecal,
+  options: AvatarBodyGeometryOptions = {}
+): ProjectedEye | null => {
+  const spec = SHAPE_SPECS[bodyShape]
+  const scaleX = options.scaleX ?? 1
+  const scaleY = options.scaleY ?? 1
+  const scaleZ = options.scaleZ ?? 1
+  const transformPoint = (point: Vec3) => rotate(rotateLocal({
+    x: point.x * scaleX,
+    y: point.y * scaleY,
+    z: point.z * scaleZ
+  }, options), pose)
+  const transformNormal = (normal: Vec3) => rotate(rotateLocal(normalize({
+    x: normal.x / scaleX,
+    y: normal.y / scaleY,
+    z: normal.z / scaleZ
+  }), options), pose)
+  const centerNormal = transformNormal(getFaceNormal(spec, { x: decal.x, y: decal.y }))
+  if (centerNormal.z <= 0.015) return null
+  const boundary = decal.shape === 'ellipse'
+    ? buildEllipseBoundary(decal.x, decal.y, decal.width, decal.height, decal.rotation)
+    : buildRoundedRectangleBoundary(decal.x, decal.y, decal.width, decal.height, decal.rotation, 100)
+  const projectedBoundary = boundary.map(point => project(transformPoint(getFacePoint(spec, point))))
+  return {
+    depth: clamp(centerNormal.z, 0, 1),
+    id: decal.id,
+    path: `M ${projectedBoundary.map(point => `${point.x.toFixed(3)} ${point.y.toFixed(3)}`).join(' L ')} Z`
   }
 }

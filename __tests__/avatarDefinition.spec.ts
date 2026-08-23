@@ -43,6 +43,19 @@ describe('Avatar editor public definition bridge', () => {
       showLight: false,
       showOutline: true,
       showShadow: false,
+      surfaceDecals: [{
+        color: '#f29a93',
+        height: 18,
+        id: 'blush-left',
+        label: 'Left blush',
+        opacity: 90,
+        rotation: -8,
+        shape: 'ellipse',
+        targetPartId: customParts.find(part => part.face)?.id ?? null,
+        width: 30,
+        x: -48,
+        y: 30
+      }],
       viewState: DEFAULT_AVATAR_VIEW_STATE
     })
     const params = avatarDefinitionToSearchParams(definition)
@@ -53,6 +66,8 @@ describe('Avatar editor public definition bridge', () => {
     expect(params.get('eyeRightH')).toBe('44')
     expect(params.get('shadowColor')).toBe('#123456')
     expect(params.get('frameShadowColor')).toBe('#654321')
+    expect(params.get('eyeHighlight')).toBe('0')
+    expect(params.get('decals')).toContain('blush-left')
     expect(deserializeAvatarEntityParts(params.get('entityParts'), 'custom')).toMatchObject(customParts)
     expect(createAvatarDefinition(avatarDefinitionToState(definition), definition)).toEqual(definition)
   })
@@ -187,6 +202,27 @@ describe('Avatar editor public definition bridge', () => {
     expect(edited.animations?.groups.primary.clips.second.label).toBe('Second')
     expect(edited.animations?.groups.secondary.clips.third.label).toBe('Third')
     expect(edited.animations?.label).toBe('Custom library')
+
+    const externalOverride = createAvatarDefinition({
+      ...state,
+      animation,
+      animationLibraryIds: ['custom'],
+      animationTargetKey: 'public:custom:primary:first'
+    }, definition)
+    expect(externalOverride.animations?.id).toBe('document')
+    expect(externalOverride.animations?.groups.primary.clips.second.label).toBe('Second')
+    expect(externalOverride.animations?.groups.document.clips.animation.label).toBe('Edited')
+    expect(flattenAvatarAnimationLibraries([
+      externalOverride.animations!,
+      { ...library, groups: { primary: library.groups.primary! } }
+    ], definition.scene).map(entry => entry.libraryId)).toEqual([
+      'document',
+      'document',
+      'document',
+      'document',
+      'custom',
+      'custom'
+    ])
   })
 
   it('preserves a delayed first public keyframe in the editor timeline', () => {
