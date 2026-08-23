@@ -38,7 +38,7 @@ const createAttestations = () => [
                 workflow: {
                   ref: 'refs/heads/main',
                   repository: 'https://github.com/oneworks-ai/avatar',
-                  path: '/.github/workflows/npm-publish.yml'
+                  path: '.github/workflows/npm-publish.yml'
                 }
               },
               resolvedDependencies: [{
@@ -71,7 +71,7 @@ describe('Avatar SDK npm provenance', () => {
 
   it.each([
     ['repository', 'https://github.com/oneworks-ai/app'],
-    ['path', '/.github/workflows/other.yml'],
+    ['path', '.github/workflows/other.yml'],
     ['ref', 'refs/heads/recovery']
   ])('rejects a mismatched provenance workflow %s', (field, value) => {
     const attestations = createAttestations()

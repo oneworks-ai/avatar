@@ -2,7 +2,7 @@ const PUBLISH_PREDICATE = 'https://github.com/npm/attestation/tree/main/specs/pu
 const PROVENANCE_PREDICATE = 'https://slsa.dev/provenance/v1'
 const EXPECTED_REPOSITORY = 'https://github.com/oneworks-ai/avatar'
 const EXPECTED_REF = 'refs/heads/main'
-const EXPECTED_WORKFLOW_PATH = '/.github/workflows/npm-publish.yml'
+const EXPECTED_WORKFLOW_PATH = '.github/workflows/npm-publish.yml'
 
 const decodePayload = (attestation) => {
   const encoded = attestation?.bundle?.dsseEnvelope?.payload
