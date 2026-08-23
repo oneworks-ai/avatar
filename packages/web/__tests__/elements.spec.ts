@@ -43,7 +43,7 @@ const mounts = vi.hoisted(() => {
 
 vi.mock('../src/index', () => mounts)
 
-import { createDefaultAvatarDefinition } from '@oneworks/avatar-core'
+import { createDefaultAvatarDefinition } from '@oneworks/avatar'
 
 import { OneWorksAvatarEditorElement, OneWorksAvatarElement, registerAvatarElements } from '../src/elements'
 

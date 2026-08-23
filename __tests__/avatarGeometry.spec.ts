@@ -1,6 +1,13 @@
 import { describe, expect, it } from 'vitest'
 
-import { AVATAR_GRID_DENSITY, buildAvatarBodyGeometry, resolveAvatarSurfaceShadeOpacity } from '../src/avatarGeometry'
+import {
+  AVATAR_GRID_DENSITY,
+  DEFAULT_AVATAR_FACE_STYLE,
+  buildAvatarBodyGeometry,
+  projectAvatarSurfaceDecal,
+  projectDefaultFace,
+  resolveAvatarSurfaceShadeOpacity
+} from '../src/avatarGeometry'
 
 const POSE = { pitch: -.35, yaw: .4 }
 const LIGHT = { azimuth: -92, elevation: 64 }
@@ -61,5 +68,33 @@ describe('avatar surface lighting', () => {
     })
 
     expect(deep.outlinePath).not.toBe(shallow.outlinePath)
+  })
+
+  it('projects eye highlights and reusable decals onto the curved surface', () => {
+    const face = projectDefaultFace({ pitch: 0, yaw: 0 }, 'teardrop', {
+      ...DEFAULT_AVATAR_FACE_STYLE,
+      eyeHighlight: { ...DEFAULT_AVATAR_FACE_STYLE.eyeHighlight, enabled: true, size: 30 }
+    })
+    const decal = projectAvatarSurfaceDecal({ pitch: 0, yaw: 0 }, 'teardrop', {
+      color: '#f29a93',
+      height: 18,
+      id: 'blush-left',
+      label: 'Left blush',
+      opacity: 90,
+      rotation: -8,
+      shape: 'ellipse',
+      targetPartId: null,
+      width: 30,
+      x: -48,
+      y: 30
+    })
+
+    expect(face.eyeHighlights).toHaveLength(2)
+    expect(face.eyeHighlights.every(highlight => highlight.path.startsWith('M '))).toBe(true)
+    expect(decal?.path).toContain(' Z')
+    expect(projectAvatarSurfaceDecal({ pitch: 0, yaw: Math.PI }, 'teardrop', {
+      color: '#f29a93', height: 18, id: 'hidden', label: 'Hidden', opacity: 100,
+      rotation: 0, shape: 'ellipse', targetPartId: null, width: 30, x: 0, y: 0
+    })).toBeNull()
   })
 })

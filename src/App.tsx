@@ -3,9 +3,18 @@ import './App.scss'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { CSSProperties } from 'react'
 
-import { AVATAR_PALETTES, AVATAR_PRESETS, getAvatarPalette, isSupportedAvatarEmoticon } from '@oneworks/avatar'
-import type { AvatarBackgroundStyle } from '@oneworks/avatar'
-import type { AvatarAnimationLibrary, AvatarDefinition } from '@oneworks/avatar-core'
+import {
+  AVATAR_EYE_HIGHLIGHT_RANGES,
+  AVATAR_FACE_RANGES,
+  AVATAR_LIGHTING_RANGES,
+  AVATAR_OUTLINE_RANGES,
+  AVATAR_PALETTES,
+  AVATAR_SHADOW_RANGES,
+  DEFAULT_AVATAR_GLYPH_EXPRESSION,
+  getAvatarPalette,
+  isSupportedAvatarGlyphExpression
+} from '@oneworks/avatar'
+import type { AvatarAnimationLibrary, AvatarBackgroundStyle, AvatarDefinition } from '@oneworks/avatar'
 
 import { AnimationPanel } from './AnimationPanel'
 import { AvatarControls } from './AvatarControls'
@@ -27,8 +36,6 @@ import type {
   AvatarViewState
 } from './InteractiveAvatar'
 import { LanguageSwitcher } from './LanguageSwitcher'
-import { DEFAULT_AVATAR_COLOR_GRADE, resolveAvatarColorGrade } from './avatarColorGrade'
-import type { AvatarColorGrade } from './avatarColorGrade'
 import {
   AVATAR_ANIMATION_PRESETS,
   applyAvatarAnimationTransformAnchor,
@@ -55,6 +62,14 @@ import type {
   AvatarAnimationTransformAnchor,
   SavedAvatarAnimation
 } from './avatarAnimations'
+import { DEFAULT_AVATAR_COLOR_GRADE, resolveAvatarColorGrade } from './avatarColorGrade'
+import type { AvatarColorGrade } from './avatarColorGrade'
+import {
+  avatarDefinitionToSearchParams,
+  avatarDefinitionToState,
+  createAvatarDefinition,
+  flattenAvatarAnimationLibraries
+} from './avatarDefinition'
 import {
   applyAvatarEntityPalette,
   createAvatarEntityParts,
@@ -73,6 +88,8 @@ import type {
   AvatarMouthShape,
   AvatarNoseShape
 } from './avatarGeometry'
+import { createAvatarGif } from './avatarGifExport'
+import { LAST_EDITOR_QUERY_STORAGE_KEY } from './avatarHome'
 import { useAvatarLocale } from './avatarLocale'
 import {
   captureAvatarScreenshot,
@@ -83,16 +100,14 @@ import {
   serializeAvatarSvg
 } from './savedAvatarPresets'
 import type { SavedAvatarPreset } from './savedAvatarPresets'
-import { LAST_EDITOR_QUERY_STORAGE_KEY } from './avatarHome'
-import { createAvatarGif } from './avatarGifExport'
 import {
-  avatarDefinitionToState,
-  avatarDefinitionToSearchParams,
-  createAvatarDefinition,
-  flattenAvatarAnimationLibraries
-} from './avatarDefinition'
+  createAvatarSurfaceDecal,
+  deserializeAvatarSurfaceDecals,
+  serializeAvatarSurfaceDecals
+} from './avatarSurfaceDecals'
+import type { AvatarSurfaceDecal } from './avatarSurfaceDecals'
 
-const INITIAL_EMOTICON = AVATAR_PRESETS[0]?.emoticon ?? '0w0'
+const INITIAL_EMOTICON = DEFAULT_AVATAR_GLYPH_EXPRESSION
 const INITIAL_PARTS = Array.from(INITIAL_EMOTICON)
 const DEFAULT_PALETTE_COUNT = 16
 const UNDO_GROUP_DELAY_MS = 400
@@ -168,6 +183,7 @@ interface AvatarQueryConfig {
   readonly showAvatarShadow: boolean
   readonly showFrameShadow: boolean
   readonly showShadow: boolean
+  readonly surfaceDecals: readonly AvatarSurfaceDecal[]
   readonly viewState: AvatarViewState
 }
 
@@ -189,6 +205,7 @@ interface AnimationThumbnailCaptureRequest {
   readonly showLight: boolean
   readonly showOutline: boolean
   readonly showShadow: boolean
+  readonly surfaceDecals: readonly AvatarSurfaceDecal[]
 }
 
 const ignoreAvatarViewStateChange = () => {}
@@ -273,7 +290,7 @@ const parseLinkEyes = (value: string | null, leftEye: string, rightEye: string) 
 
 const parseQueryConfig = (params: URLSearchParams): AvatarQueryConfig => {
   const queryFace = params.get('face') ?? ''
-  const emoticon = isSupportedAvatarEmoticon(queryFace) ? queryFace : INITIAL_EMOTICON
+  const emoticon = isSupportedAvatarGlyphExpression(queryFace) ? queryFace : INITIAL_EMOTICON
   const parts = Array.from(emoticon)
   const queryPaletteId = params.get('palette') ?? ''
   const selectedPaletteId = AVATAR_PALETTES.some(palette => palette.id === queryPaletteId)
@@ -291,6 +308,7 @@ const parseQueryConfig = (params: URLSearchParams): AvatarQueryConfig => {
 
   const animationSelectionKey = parseAnimationSelectionKey(params.get('animation'))
   const entityPreset = parseAvatarEntityPreset(params.get('entity'))
+  const entityParts = deserializeAvatarEntityParts(params.get('entityParts'), entityPreset)
   const sharedAnimation = animationSelectionKey === 'shared'
     ? deserializeSharedAvatarAnimation(params.get('animationData'))
     : null
@@ -302,15 +320,45 @@ const parseQueryConfig = (params: URLSearchParams): AvatarQueryConfig => {
       : animationSelectionKey,
     avatarShadowStyle: {
       color: parseAvatarShadowColor(params.get('avatarShadowColor')),
-      direction: parseRangeValue(params.get('avatarShadowDir'), DEFAULT_AVATAR_SHADOW_STYLE.direction, -180, 180),
-      distance: parseRangeValue(params.get('avatarShadowDist'), DEFAULT_AVATAR_SHADOW_STYLE.distance, 0, 40),
-      opacity: parseRangeValue(params.get('avatarShadowOpacity'), DEFAULT_AVATAR_SHADOW_STYLE.opacity, 0, 100),
-      softness: parseRangeValue(params.get('avatarShadowSoft'), DEFAULT_AVATAR_SHADOW_STYLE.softness, 0, 40)
+      direction: parseRangeValue(
+        params.get('avatarShadowDir'),
+        DEFAULT_AVATAR_SHADOW_STYLE.direction,
+        AVATAR_SHADOW_RANGES.avatar.direction.min,
+        AVATAR_SHADOW_RANGES.avatar.direction.max
+      ),
+      distance: parseRangeValue(
+        params.get('avatarShadowDist'),
+        DEFAULT_AVATAR_SHADOW_STYLE.distance,
+        AVATAR_SHADOW_RANGES.avatar.distance.min,
+        AVATAR_SHADOW_RANGES.avatar.distance.max
+      ),
+      opacity: parseRangeValue(
+        params.get('avatarShadowOpacity'),
+        DEFAULT_AVATAR_SHADOW_STYLE.opacity,
+        AVATAR_SHADOW_RANGES.avatar.opacity.min,
+        AVATAR_SHADOW_RANGES.avatar.opacity.max
+      ),
+      softness: parseRangeValue(
+        params.get('avatarShadowSoft'),
+        DEFAULT_AVATAR_SHADOW_STYLE.softness,
+        AVATAR_SHADOW_RANGES.avatar.softness.min,
+        AVATAR_SHADOW_RANGES.avatar.softness.max
+      )
     },
     avatarOutlineStyle: {
       color: parseOutlineColor(params.get('outlineColor')),
-      opacity: parseRangeValue(params.get('outlineOpacity'), DEFAULT_AVATAR_OUTLINE_STYLE.opacity, 0, 100),
-      width: parseRangeValue(params.get('outlineWidth'), DEFAULT_AVATAR_OUTLINE_STYLE.width, 1, 20)
+      opacity: parseRangeValue(
+        params.get('outlineOpacity'),
+        DEFAULT_AVATAR_OUTLINE_STYLE.opacity,
+        AVATAR_OUTLINE_RANGES.opacity.min,
+        AVATAR_OUTLINE_RANGES.opacity.max
+      ),
+      width: parseRangeValue(
+        params.get('outlineWidth'),
+        DEFAULT_AVATAR_OUTLINE_STYLE.width,
+        AVATAR_OUTLINE_RANGES.width.min,
+        AVATAR_OUTLINE_RANGES.width.max
+      )
     },
     backgroundStyle,
     bodyShape: parseBodyShape(params.get('shape')),
@@ -318,66 +366,209 @@ const parseQueryConfig = (params: URLSearchParams): AvatarQueryConfig => {
     cameraFrame: parseCameraFrame(params.get('cameraFrame')),
     cameraMode: parseShadow(params.get('camera')),
     controlsCollapsed: params.get('sidebar') === '0',
-    entityParts: deserializeAvatarEntityParts(params.get('entityParts'), entityPreset),
+    entityParts,
     entityPreset,
     exportSize: parseExportSize(params.get('size')),
     faceStyle: {
-      eyeRoundness: parseRangeValue(params.get('eyeRound'), DEFAULT_AVATAR_FACE_STYLE.eyeRoundness, 0, 100),
+      eyeHighlight: {
+        color: parseOutlineColor(params.get('eyeHighlightColor')),
+        enabled: parseShadow(params.get('eyeHighlight')),
+        offsetX: parseRangeValue(
+          params.get('eyeHighlightX'),
+          DEFAULT_AVATAR_FACE_STYLE.eyeHighlight.offsetX,
+          AVATAR_EYE_HIGHLIGHT_RANGES.offsetX.min,
+          AVATAR_EYE_HIGHLIGHT_RANGES.offsetX.max
+        ),
+        offsetY: parseRangeValue(
+          params.get('eyeHighlightY'),
+          DEFAULT_AVATAR_FACE_STYLE.eyeHighlight.offsetY,
+          AVATAR_EYE_HIGHLIGHT_RANGES.offsetY.min,
+          AVATAR_EYE_HIGHLIGHT_RANGES.offsetY.max
+        ),
+        opacity: parseRangeValue(
+          params.get('eyeHighlightOpacity'),
+          DEFAULT_AVATAR_FACE_STYLE.eyeHighlight.opacity,
+          AVATAR_EYE_HIGHLIGHT_RANGES.opacity.min,
+          AVATAR_EYE_HIGHLIGHT_RANGES.opacity.max
+        ),
+        size: parseRangeValue(
+          params.get('eyeHighlightSize'),
+          DEFAULT_AVATAR_FACE_STYLE.eyeHighlight.size,
+          AVATAR_EYE_HIGHLIGHT_RANGES.size.min,
+          AVATAR_EYE_HIGHLIGHT_RANGES.size.max
+        )
+      },
+      eyeRoundness: parseRangeValue(
+        params.get('eyeRound'),
+        DEFAULT_AVATAR_FACE_STYLE.eyeRoundness,
+        AVATAR_FACE_RANGES.eyeRoundness.min,
+        AVATAR_FACE_RANGES.eyeRoundness.max
+      ),
       eyeShape: parseEyeShape(params.get('eyeShape')),
-      gap: parseRangeValue(params.get('eyeGap'), DEFAULT_AVATAR_FACE_STYLE.gap, 0, 100),
-      height: parseRangeValue(params.get('eyeH'), DEFAULT_AVATAR_FACE_STYLE.height, 20, 104),
+      gap: parseRangeValue(
+        params.get('eyeGap'),
+        DEFAULT_AVATAR_FACE_STYLE.gap,
+        AVATAR_FACE_RANGES.gap.min,
+        AVATAR_FACE_RANGES.gap.max
+      ),
+      height: parseRangeValue(
+        params.get('eyeH'),
+        DEFAULT_AVATAR_FACE_STYLE.height,
+        AVATAR_FACE_RANGES.height.min,
+        AVATAR_FACE_RANGES.height.max
+      ),
       leftEyeHeight: params.has('eyeLeftH')
-        ? parseRangeValue(params.get('eyeLeftH'), DEFAULT_AVATAR_FACE_STYLE.height, 20, 104)
+        ? parseRangeValue(
+            params.get('eyeLeftH'),
+            DEFAULT_AVATAR_FACE_STYLE.height,
+            AVATAR_FACE_RANGES.leftEyeHeight.min,
+            AVATAR_FACE_RANGES.leftEyeHeight.max
+          )
         : undefined,
       leftEyeRotation: parseRangeValue(
         params.get('eyeLeftRot'),
         DEFAULT_AVATAR_FACE_STYLE.leftEyeRotation,
-        -90,
-        90
+        AVATAR_FACE_RANGES.leftEyeRotation.min,
+        AVATAR_FACE_RANGES.leftEyeRotation.max
       ),
-      mouthCurve: parseRangeValue(params.get('mouthCurve'), DEFAULT_AVATAR_FACE_STYLE.mouthCurve, -100, 100),
+      mouthCurve: parseRangeValue(
+        params.get('mouthCurve'),
+        DEFAULT_AVATAR_FACE_STYLE.mouthCurve,
+        AVATAR_FACE_RANGES.mouthCurve.min,
+        AVATAR_FACE_RANGES.mouthCurve.max
+      ),
       mouthEnabled: parseShadow(params.get('mouth')),
-      mouthHeight: parseRangeValue(params.get('mouthH'), DEFAULT_AVATAR_FACE_STYLE.mouthHeight, 6, 48),
-      mouthRotation: parseRangeValue(params.get('mouthRot'), DEFAULT_AVATAR_FACE_STYLE.mouthRotation, -180, 180),
+      mouthHeight: parseRangeValue(
+        params.get('mouthH'),
+        DEFAULT_AVATAR_FACE_STYLE.mouthHeight,
+        AVATAR_FACE_RANGES.mouthHeight.min,
+        AVATAR_FACE_RANGES.mouthHeight.max
+      ),
+      mouthRotation: parseRangeValue(
+        params.get('mouthRot'),
+        DEFAULT_AVATAR_FACE_STYLE.mouthRotation,
+        AVATAR_FACE_RANGES.mouthRotation.min,
+        AVATAR_FACE_RANGES.mouthRotation.max
+      ),
       mouthShape: parseMouthShape(params.get('mouthShape')),
-      mouthWidth: parseRangeValue(params.get('mouthW'), DEFAULT_AVATAR_FACE_STYLE.mouthWidth, 16, 100),
-      mouthY: parseRangeValue(params.get('mouthY'), DEFAULT_AVATAR_FACE_STYLE.mouthY, 24, 90),
+      mouthWidth: parseRangeValue(
+        params.get('mouthW'),
+        DEFAULT_AVATAR_FACE_STYLE.mouthWidth,
+        AVATAR_FACE_RANGES.mouthWidth.min,
+        AVATAR_FACE_RANGES.mouthWidth.max
+      ),
+      mouthY: parseRangeValue(
+        params.get('mouthY'),
+        DEFAULT_AVATAR_FACE_STYLE.mouthY,
+        AVATAR_FACE_RANGES.mouthY.min,
+        AVATAR_FACE_RANGES.mouthY.max
+      ),
       noseEnabled: parseShadow(params.get('nose')),
-      noseHeight: parseRangeValue(params.get('noseH'), DEFAULT_AVATAR_FACE_STYLE.noseHeight, 6, 48),
-      noseRotation: parseRangeValue(params.get('noseRot'), DEFAULT_AVATAR_FACE_STYLE.noseRotation, -180, 180),
+      noseHeight: parseRangeValue(
+        params.get('noseH'),
+        DEFAULT_AVATAR_FACE_STYLE.noseHeight,
+        AVATAR_FACE_RANGES.noseHeight.min,
+        AVATAR_FACE_RANGES.noseHeight.max
+      ),
+      noseRotation: parseRangeValue(
+        params.get('noseRot'),
+        DEFAULT_AVATAR_FACE_STYLE.noseRotation,
+        AVATAR_FACE_RANGES.noseRotation.min,
+        AVATAR_FACE_RANGES.noseRotation.max
+      ),
       noseShape: parseNoseShape(params.get('noseShape')),
-      noseWidth: parseRangeValue(params.get('noseW'), DEFAULT_AVATAR_FACE_STYLE.noseWidth, 6, 36),
-      noseY: parseRangeValue(params.get('noseY'), DEFAULT_AVATAR_FACE_STYLE.noseY, -10, 50),
-      rotation: parseRangeValue(params.get('eyeRot'), DEFAULT_AVATAR_FACE_STYLE.rotation, -90, 90),
+      noseWidth: parseRangeValue(
+        params.get('noseW'),
+        DEFAULT_AVATAR_FACE_STYLE.noseWidth,
+        AVATAR_FACE_RANGES.noseWidth.min,
+        AVATAR_FACE_RANGES.noseWidth.max
+      ),
+      noseY: parseRangeValue(
+        params.get('noseY'),
+        DEFAULT_AVATAR_FACE_STYLE.noseY,
+        AVATAR_FACE_RANGES.noseY.min,
+        AVATAR_FACE_RANGES.noseY.max
+      ),
+      rotation: parseRangeValue(
+        params.get('eyeRot'),
+        DEFAULT_AVATAR_FACE_STYLE.rotation,
+        AVATAR_FACE_RANGES.rotation.min,
+        AVATAR_FACE_RANGES.rotation.max
+      ),
       rightEyeRotation: parseRangeValue(
         params.get('eyeRightRot'),
         DEFAULT_AVATAR_FACE_STYLE.rightEyeRotation,
-        -90,
-        90
+        AVATAR_FACE_RANGES.rightEyeRotation.min,
+        AVATAR_FACE_RANGES.rightEyeRotation.max
       ),
       rightEyeHeight: params.has('eyeRightH')
-        ? parseRangeValue(params.get('eyeRightH'), DEFAULT_AVATAR_FACE_STYLE.height, 20, 104)
+        ? parseRangeValue(
+            params.get('eyeRightH'),
+            DEFAULT_AVATAR_FACE_STYLE.height,
+            AVATAR_FACE_RANGES.rightEyeHeight.min,
+            AVATAR_FACE_RANGES.rightEyeHeight.max
+          )
         : undefined,
-      width: parseRangeValue(params.get('eyeW'), DEFAULT_AVATAR_FACE_STYLE.width, 12, 72)
+      width: parseRangeValue(
+        params.get('eyeW'),
+        DEFAULT_AVATAR_FACE_STYLE.width,
+        AVATAR_FACE_RANGES.width.min,
+        AVATAR_FACE_RANGES.width.max
+      )
     },
     faceShadowStyle: {
       color: parseOptionalShadowColor(params.get('shadowColor')),
       direction: parseRangeValue(
         params.get('shadowDir'),
         DEFAULT_AVATAR_FACE_SHADOW_STYLE.direction,
-        -180,
-        180
+        AVATAR_SHADOW_RANGES.face.direction.min,
+        AVATAR_SHADOW_RANGES.face.direction.max
       ),
-      distance: parseRangeValue(params.get('shadowDist'), DEFAULT_AVATAR_FACE_SHADOW_STYLE.distance, 0, 24),
-      opacity: parseRangeValue(params.get('shadowOpacity'), DEFAULT_AVATAR_FACE_SHADOW_STYLE.opacity, 0, 100),
-      softness: parseRangeValue(params.get('shadowSoft'), DEFAULT_AVATAR_FACE_SHADOW_STYLE.softness, 0, 12)
+      distance: parseRangeValue(
+        params.get('shadowDist'),
+        DEFAULT_AVATAR_FACE_SHADOW_STYLE.distance,
+        AVATAR_SHADOW_RANGES.face.distance.min,
+        AVATAR_SHADOW_RANGES.face.distance.max
+      ),
+      opacity: parseRangeValue(
+        params.get('shadowOpacity'),
+        DEFAULT_AVATAR_FACE_SHADOW_STYLE.opacity,
+        AVATAR_SHADOW_RANGES.face.opacity.min,
+        AVATAR_SHADOW_RANGES.face.opacity.max
+      ),
+      softness: parseRangeValue(
+        params.get('shadowSoft'),
+        DEFAULT_AVATAR_FACE_SHADOW_STYLE.softness,
+        AVATAR_SHADOW_RANGES.face.softness.min,
+        AVATAR_SHADOW_RANGES.face.softness.max
+      )
     },
     frameShadowStyle: {
       color: parseOptionalShadowColor(params.get('frameShadowColor')),
-      direction: parseRangeValue(params.get('frameShadowDir'), DEFAULT_FRAME_SHADOW_STYLE.direction, -180, 180),
-      distance: parseRangeValue(params.get('frameShadowDist'), DEFAULT_FRAME_SHADOW_STYLE.distance, 0, 40),
-      opacity: parseRangeValue(params.get('frameShadowOpacity'), DEFAULT_FRAME_SHADOW_STYLE.opacity, 0, 100),
-      softness: parseRangeValue(params.get('frameShadowSoft'), DEFAULT_FRAME_SHADOW_STYLE.softness, 0, 48)
+      direction: parseRangeValue(
+        params.get('frameShadowDir'),
+        DEFAULT_FRAME_SHADOW_STYLE.direction,
+        AVATAR_SHADOW_RANGES.frame.direction.min,
+        AVATAR_SHADOW_RANGES.frame.direction.max
+      ),
+      distance: parseRangeValue(
+        params.get('frameShadowDist'),
+        DEFAULT_FRAME_SHADOW_STYLE.distance,
+        AVATAR_SHADOW_RANGES.frame.distance.min,
+        AVATAR_SHADOW_RANGES.frame.distance.max
+      ),
+      opacity: parseRangeValue(
+        params.get('frameShadowOpacity'),
+        DEFAULT_FRAME_SHADOW_STYLE.opacity,
+        AVATAR_SHADOW_RANGES.frame.opacity.min,
+        AVATAR_SHADOW_RANGES.frame.opacity.max
+      ),
+      softness: parseRangeValue(
+        params.get('frameShadowSoft'),
+        DEFAULT_FRAME_SHADOW_STYLE.softness,
+        AVATAR_SHADOW_RANGES.frame.softness.min,
+        AVATAR_SHADOW_RANGES.frame.softness.max
+      )
     },
     gridDensity: parseRangeValue(
       params.get('gridDensity'),
@@ -386,9 +577,24 @@ const parseQueryConfig = (params: URLSearchParams): AvatarQueryConfig => {
       AVATAR_GRID_DENSITY.max
     ),
     interactionMode: parseInteractionMode(params.get('mode')),
-    lightAzimuth: parseRangeValue(params.get('lightAz'), DEFAULT_LIGHT_AZIMUTH, -180, 180),
-    lightDistance: parseRangeValue(params.get('lightDist'), DEFAULT_LIGHT_DISTANCE, 0, 100),
-    lightElevation: parseRangeValue(params.get('lightEl'), DEFAULT_LIGHT_ELEVATION, -80, 80),
+    lightAzimuth: parseRangeValue(
+      params.get('lightAz'),
+      DEFAULT_LIGHT_AZIMUTH,
+      AVATAR_LIGHTING_RANGES.azimuth.min,
+      AVATAR_LIGHTING_RANGES.azimuth.max
+    ),
+    lightDistance: parseRangeValue(
+      params.get('lightDist'),
+      DEFAULT_LIGHT_DISTANCE,
+      AVATAR_LIGHTING_RANGES.distance.min,
+      AVATAR_LIGHTING_RANGES.distance.max
+    ),
+    lightElevation: parseRangeValue(
+      params.get('lightEl'),
+      DEFAULT_LIGHT_ELEVATION,
+      AVATAR_LIGHTING_RANGES.elevation.min,
+      AVATAR_LIGHTING_RANGES.elevation.max
+    ),
     leftEye,
     linkEyes,
     mouth,
@@ -399,6 +605,7 @@ const parseQueryConfig = (params: URLSearchParams): AvatarQueryConfig => {
     showAvatarShadow: parseShadow(params.get('avatarShadow')),
     showFrameShadow: params.get('frameShadow') == null ? true : parseShadow(params.get('frameShadow')),
     showShadow: parseShadow(params.get('shadow')),
+    surfaceDecals: deserializeAvatarSurfaceDecals(params.get('decals'), entityParts.map(part => part.id)),
     sharedAnimation,
     viewState: {
       pitch: parseFiniteValue(params.get('pitch'), DEFAULT_AVATAR_VIEW_STATE.pitch),
@@ -462,6 +669,7 @@ const getInitialQueryConfig = (definition?: AvatarDefinition) => {
       showLight: state.showLight,
       showOutline: state.showOutline,
       showShadow: state.showShadow,
+      surfaceDecals: state.surfaceDecals,
       viewState: state.viewState
     }
   }
@@ -485,6 +693,7 @@ const getInitialQueryConfig = (definition?: AvatarDefinition) => {
     controlsCollapsed: false,
     entityParts: createAvatarEntityParts(preset),
     entityPreset: preset,
+    surfaceDecals: [],
     faceStyle,
     frameShadowStyle: scene.frameShadowStyle,
     interactionMode: scene.interactionMode,
@@ -550,6 +759,8 @@ function App({
   const [entityParts, setEntityParts] = useState<readonly AvatarEntityPart[]>(initialConfig.entityParts)
   const [entityPreset, setEntityPreset] = useState<AvatarEntityPreset>(initialConfig.entityPreset)
   const [selectedEntityPartId, setSelectedEntityPartId] = useState<string | null>(null)
+  const [surfaceDecals, setSurfaceDecals] = useState<readonly AvatarSurfaceDecal[]>(initialConfig.surfaceDecals ?? [])
+  const [selectedSurfaceDecalId, setSelectedSurfaceDecalId] = useState<string | null>(null)
   const [cameraMode, setCameraMode] = useState(initialConfig.cameraMode)
   const [cameraBackground, setCameraBackground] = useState(initialConfig.cameraBackground)
   const [cameraFrame, setCameraFrame] = useState<AvatarCameraFrame>(initialConfig.cameraFrame)
@@ -637,9 +848,7 @@ function App({
     const direction = frameShadowStyle.direction * Math.PI / 180
     const x = Math.cos(direction) * frameShadowStyle.distance
     const y = Math.sin(direction) * frameShadowStyle.distance
-    return `${x.toFixed(2)}px ${
-      y.toFixed(2)
-    }px ${frameShadowStyle.softness}px color-mix(in srgb, ${
+    return `${x.toFixed(2)}px ${y.toFixed(2)}px ${frameShadowStyle.softness}px color-mix(in srgb, ${
       frameShadowStyle.color ?? selectedPalette.shadow
     } ${frameShadowStyle.opacity}%, transparent)`
   }, [frameShadowStyle, selectedPalette.shadow, showFrameShadow])
@@ -689,35 +898,39 @@ function App({
     animationPlaybackMode,
     animationStartFrameIndex
   ])
-  const currentDefinition = useMemo(() => createAvatarDefinition({
-    animation: currentDocumentAnimation,
-    avatarOutlineStyle,
-    avatarShadowStyle,
-    backgroundStyle,
-    bodyShape,
-    cameraBackground,
-    cameraFrame,
-    colorGrade: avatarColorGrade,
-    entityParts,
-    entityPreset,
-    exportSize,
-    faceShadowStyle: resolvedFaceShadowStyle,
-    faceStyle: resolvedFaceStyle,
-    frameShadowStyle,
-    glyph: { leftEye, linkEyes, mouth, rightEye },
-    gridDensity,
-    interactionMode,
-    lightAzimuth,
-    lightDistance,
-    lightElevation,
-    paletteId: selectedPaletteId,
-    showAvatarShadow,
-    showFrameShadow,
-    showLight,
-    showOutline,
-    showShadow,
-    viewState: avatarViewState
-  }, definition), [
+  const currentDefinition = useMemo(() =>
+    createAvatarDefinition({
+      animation: animationDraftSource === 'builtin' ? null : currentDocumentAnimation,
+      animationLibraryIds: animationLibraries.map(library => library.id),
+      animationTargetKey: selectedAnimationKey,
+      avatarOutlineStyle,
+      avatarShadowStyle,
+      backgroundStyle,
+      bodyShape,
+      cameraBackground,
+      cameraFrame,
+      colorGrade: avatarColorGrade,
+      entityParts,
+      entityPreset,
+      exportSize,
+      faceShadowStyle: resolvedFaceShadowStyle,
+      faceStyle: resolvedFaceStyle,
+      frameShadowStyle,
+      glyph: { leftEye, linkEyes, mouth, rightEye },
+      gridDensity,
+      interactionMode,
+      lightAzimuth,
+      lightDistance,
+      lightElevation,
+      paletteId: selectedPaletteId,
+      showAvatarShadow,
+      showFrameShadow,
+      showLight,
+      showOutline,
+      showShadow,
+      surfaceDecals,
+      viewState: avatarViewState
+    }, definition), [
     avatarOutlineStyle,
     avatarShadowStyle,
     avatarViewState,
@@ -726,6 +939,8 @@ function App({
     cameraBackground,
     cameraFrame,
     avatarColorGrade,
+    animationDraftSource,
+    animationLibraries,
     currentDocumentAnimation,
     definition,
     entityParts,
@@ -743,12 +958,14 @@ function App({
     resolvedFaceShadowStyle,
     resolvedFaceStyle,
     rightEye,
+    selectedAnimationKey,
     selectedPaletteId,
     showAvatarShadow,
     showFrameShadow,
     showLight,
     showOutline,
-    showShadow
+    showShadow,
+    surfaceDecals
   ])
   const currentDefinitionFingerprint = useMemo(
     () => JSON.stringify(currentDefinition),
@@ -757,12 +974,13 @@ function App({
   const lastEmittedDefinitionFingerprintRef = useRef(
     definition == null ? null : JSON.stringify(definition)
   )
-  const publicAnimationEntries = useMemo(() => flattenAvatarAnimationLibraries(
-    [definition?.animations, ...animationLibraries].filter(
-      (library): library is AvatarAnimationLibrary => library != null
-    ),
-    currentDefinition.scene
-  ), [animationLibraries, currentDefinition.scene, definition?.animations])
+  const publicAnimationEntries = useMemo(() =>
+    flattenAvatarAnimationLibraries(
+      [definition?.animations, ...animationLibraries].filter(
+        (library): library is AvatarAnimationLibrary => library != null
+      ),
+      currentDefinition.scene
+    ), [animationLibraries, currentDefinition.scene, definition?.animations])
   const publicAnimations = useMemo(
     () => publicAnimationEntries.map(entry => entry.animation),
     [publicAnimationEntries]
@@ -872,6 +1090,12 @@ function App({
     params.set('eyeRot', String(resolvedFaceStyle.rotation))
     params.set('eyeLeftRot', String(resolvedFaceStyle.leftEyeRotation))
     params.set('eyeRightRot', String(resolvedFaceStyle.rightEyeRotation))
+    params.set('eyeHighlight', resolvedFaceStyle.eyeHighlight.enabled ? '1' : '0')
+    params.set('eyeHighlightColor', resolvedFaceStyle.eyeHighlight.color)
+    params.set('eyeHighlightSize', String(resolvedFaceStyle.eyeHighlight.size))
+    params.set('eyeHighlightX', String(resolvedFaceStyle.eyeHighlight.offsetX))
+    params.set('eyeHighlightY', String(resolvedFaceStyle.eyeHighlight.offsetY))
+    params.set('eyeHighlightOpacity', String(resolvedFaceStyle.eyeHighlight.opacity))
     params.set('nose', resolvedFaceStyle.noseEnabled ? '1' : '0')
     params.set('noseShape', resolvedFaceStyle.noseShape)
     params.set('noseW', String(resolvedFaceStyle.noseWidth))
@@ -921,6 +1145,7 @@ function App({
       params.set('entity', entityPreset)
       params.set('entityParts', serializeAvatarEntityParts(entityParts))
     }
+    if (surfaceDecals.length > 0) params.set('decals', serializeAvatarSurfaceDecals(surfaceDecals))
     params.delete('objects')
     params.set('size', String(exportSize))
     params.set('sidebar', controlsCollapsed ? '0' : '1')
@@ -987,7 +1212,8 @@ function App({
     showOutline,
     showAvatarShadow,
     showFrameShadow,
-    showShadow
+    showShadow,
+    surfaceDecals
   ])
 
   useEffect(() => {
@@ -1001,7 +1227,8 @@ function App({
       if (
         editable instanceof HTMLTextAreaElement ||
         editable instanceof HTMLElement && editable.isContentEditable ||
-        editable instanceof HTMLInputElement && !['button', 'checkbox', 'color', 'radio', 'range'].includes(editable.type)
+        editable instanceof HTMLInputElement &&
+          !['button', 'checkbox', 'color', 'radio', 'range'].includes(editable.type)
       ) {
         return
       }
@@ -1034,6 +1261,8 @@ function App({
       setControlsCollapsed(config.controlsCollapsed)
       setEntityParts(config.entityParts)
       setEntityPreset(config.entityPreset)
+      setSurfaceDecals(config.surfaceDecals)
+      setSelectedSurfaceDecalId(null)
       setExportSize(config.exportSize)
       setFaceShadowStyle(config.faceShadowStyle)
       setFaceStyle(config.faceStyle)
@@ -1103,7 +1332,8 @@ function App({
     showOutline,
     showAvatarShadow,
     showFrameShadow,
-    showShadow
+    showShadow,
+    surfaceDecals
   ])
 
   useEffect(() => {
@@ -1174,6 +1404,16 @@ function App({
     setActiveAnimationKeyframe(null)
   }
 
+  const avatarCaptureOptions = {
+    background: cameraBackground,
+    frame: cameraFrame,
+    frameShadow: {
+      ...frameShadowStyle,
+      color: frameShadowStyle.color ?? selectedPalette.shadow
+    },
+    showFrameShadow
+  }
+
   const handleEntityPresetChange = (preset: AvatarEntityPreset) => {
     const nextParts = createAvatarEntityParts(preset)
     const nextFaceStyle = getAvatarEntityPresetFaceStyle(preset)
@@ -1184,6 +1424,8 @@ function App({
     setEntityPreset(preset)
     setEntityParts(nextParts)
     setSelectedEntityPartId(null)
+    setSurfaceDecals([])
+    setSelectedSurfaceDecalId(null)
     setSelectedSavedPresetId(null)
     if (nextFaceStyle != null) {
       setFaceStyle(nextFaceStyle)
@@ -1217,8 +1459,7 @@ function App({
     const sourceSvg = avatarFrameRef.current?.querySelector<SVGSVGElement>('svg.interactive-avatar__canvas')
     if (sourceSvg == null) return
     await navigator.clipboard.writeText(serializeAvatarSvg(sourceSvg, exportSize, {
-      background: cameraBackground,
-      frame: cameraFrame
+      ...avatarCaptureOptions
     }))
     setCopyState('copied')
     window.setTimeout(() => setCopyState('idle'), 1400)
@@ -1231,8 +1472,7 @@ function App({
       `oneworks-avatar-${entityPreset}-${exportSize}.svg`,
       new Blob([
         serializeAvatarSvg(sourceSvg, exportSize, {
-          background: cameraBackground,
-          frame: cameraFrame
+          ...avatarCaptureOptions
         })
       ], { type: 'image/svg+xml;charset=utf-8' })
     )
@@ -1243,8 +1483,7 @@ function App({
     if (sourceSvg == null) return false
     try {
       const png = await renderAvatarPngBlob(sourceSvg, exportSize, {
-        background: cameraBackground,
-        frame: cameraFrame
+        ...avatarCaptureOptions
       })
       downloadBlob(`oneworks-avatar-${entityPreset}-${exportSize}.png`, png)
       return true
@@ -1260,9 +1499,8 @@ function App({
     setGifExportState('exporting')
     try {
       const gif = await createAvatarGif({
-        background: cameraBackground,
+        ...avatarCaptureOptions,
         currentViewState: avatarViewState,
-        frame: cameraFrame,
         keyframes: animationKeyframes,
         lockStartPosition: animationLockStartPosition,
         playbackMode: animationPlaybackMode,
@@ -1281,7 +1519,8 @@ function App({
           showAvatarShadow,
           showLight,
           showOutline,
-          showShadow
+          showShadow,
+          surfaceDecals
         },
         size: exportSize,
         startFrameIndex: animationStartFrameIndex
@@ -1304,10 +1543,7 @@ function App({
     if (sourceSvg == null || savePresetState === 'saving') return
     setSavePresetState('saving')
     try {
-      const screenshot = await captureAvatarScreenshot(sourceSvg, {
-        background: cameraBackground,
-        frame: cameraFrame
-      })
+      const screenshot = await captureAvatarScreenshot(sourceSvg, avatarCaptureOptions)
       const preset: SavedAvatarPreset = {
         createdAt: Date.now(),
         id: globalThis.crypto?.randomUUID?.() ?? `preset-${Date.now()}`,
@@ -1337,6 +1573,8 @@ function App({
     setEntityParts(config.entityParts)
     setEntityPreset(config.entityPreset)
     setSelectedEntityPartId(null)
+    setSurfaceDecals(config.surfaceDecals)
+    setSelectedSurfaceDecalId(null)
     setCameraBackground(config.cameraBackground)
     setCameraFrame(config.cameraFrame)
     setCameraMode(config.cameraMode)
@@ -1773,7 +2011,8 @@ function App({
       scale: avatarViewState.scale,
       showLight,
       showOutline,
-      showShadow
+      showShadow,
+      surfaceDecals
     })
   }
 
@@ -1792,6 +2031,7 @@ function App({
         colorGrade={keyframe.colorGrade}
         entityParts={entityParts}
         entityPreset={entityPreset}
+        surfaceDecals={surfaceDecals}
         faceStyleTransitionsEnabled={false}
         faceStyle={keyframe.faceStyle}
         gridDensity={25}
@@ -2064,6 +2304,7 @@ function App({
                 colorGrade={avatarColorGrade}
                 entityParts={entityParts}
                 entityPreset={entityPreset}
+                surfaceDecals={surfaceDecals}
                 faceStyleTransitionsEnabled={!animationPlaying}
                 faceStyle={resolvedFaceStyle}
                 gridDensity={gridDensity}
@@ -2104,12 +2345,13 @@ function App({
           {interactionControlsDocked ? null : renderInteractionModeControls()}
           <AvatarOrientationControl
             viewState={avatarViewState}
-            onReset={() => handleAvatarViewStateChange({
-              ...avatarViewState,
-              pitch: DEFAULT_AVATAR_VIEW_STATE.pitch,
-              roll: DEFAULT_AVATAR_VIEW_STATE.roll,
-              yaw: DEFAULT_AVATAR_VIEW_STATE.yaw
-            })}
+            onReset={() =>
+              handleAvatarViewStateChange({
+                ...avatarViewState,
+                pitch: DEFAULT_AVATAR_VIEW_STATE.pitch,
+                roll: DEFAULT_AVATAR_VIEW_STATE.roll,
+                yaw: DEFAULT_AVATAR_VIEW_STATE.yaw
+              })}
             onViewStateChange={handleAvatarViewStateChange}
           />
         </section>
@@ -2153,7 +2395,15 @@ function App({
             setEntityParts([])
             setEntityPreset('custom')
             setSelectedEntityPartId(null)
+            setSurfaceDecals([])
+            setSelectedSurfaceDecalId(null)
             setCopyState('idle')
+          }}
+          onAddSurfaceDecal={() => {
+            const id = globalThis.crypto?.randomUUID?.() ?? `decal-${Date.now()}`
+            const targetPartId = selectedEntityPartId ?? entityParts.find(part => part.face)?.id ?? null
+            setSurfaceDecals(current => [...current, createAvatarSurfaceDecal(id, targetPartId)])
+            setSelectedSurfaceDecalId(id)
           }}
           onAvatarShadowStyleChange={(nextStyle) => {
             setAvatarShadowStyle(currentStyle => ({ ...currentStyle, ...nextStyle }))
@@ -2185,6 +2435,14 @@ function App({
             setActiveAnimationKeyframe(null)
             setFaceStyle(DEFAULT_AVATAR_FACE_STYLE)
             setAnimationPreviewFaceStyle(DEFAULT_AVATAR_FACE_STYLE)
+          }}
+          onDeleteSurfaceDecal={(id) => {
+            setSurfaceDecals(current => current.filter(decal => decal.id !== id))
+            setSelectedSurfaceDecalId(current => current === id ? null : current)
+          }}
+          onSelectSurfaceDecal={setSelectedSurfaceDecalId}
+          onSurfaceDecalChange={(id, patch) => {
+            setSurfaceDecals(current => current.map(decal => decal.id === id ? { ...decal, ...patch } : decal))
           }}
           onSavedPresetSelect={handleSavedPresetSelect}
           onSavedPresetRemove={handleSavedPresetRemove}
@@ -2220,6 +2478,7 @@ function App({
           selectedPalette={selectedPalette}
           selectedEntityPartId={selectedEntityPartId}
           selectedSavedPresetId={selectedSavedPresetId}
+          selectedSurfaceDecalId={selectedSurfaceDecalId}
           savedPresets={savedPresets}
           showLight={showLight}
           showOutline={showOutline}
@@ -2227,6 +2486,7 @@ function App({
           showFrameShadow={showFrameShadow}
           showMorePalettes={showMorePalettes}
           showShadow={showShadow}
+          surfaceDecals={surfaceDecals}
           visiblePalettes={visiblePalettes}
         />
         {animationOpen
@@ -2310,6 +2570,7 @@ function App({
                   colorGrade={keyframe.colorGrade}
                   entityParts={animationThumbnailCapture.entityParts}
                   entityPreset={animationThumbnailCapture.entityPreset}
+                  surfaceDecals={animationThumbnailCapture.surfaceDecals}
                   faceStyleTransitionsEnabled={false}
                   faceStyle={keyframe.faceStyle}
                   gridDensity={25}

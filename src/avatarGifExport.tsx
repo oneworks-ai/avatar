@@ -1,9 +1,11 @@
+/// <reference path="./gifenc.d.ts" />
+
+import { GIFEncoder, applyPalette, quantize } from 'gifenc'
 import { flushSync } from 'react-dom'
 import { createRoot } from 'react-dom/client'
-import { GIFEncoder, applyPalette, quantize } from 'gifenc'
 
 import { InteractiveAvatar } from './InteractiveAvatar'
-import type { InteractiveAvatarProps, AvatarViewState } from './InteractiveAvatar'
+import type { AvatarViewState, InteractiveAvatarProps } from './InteractiveAvatar'
 import {
   applyAvatarAnimationTransformAnchor,
   createAvatarAnimationTransformAnchor,
@@ -22,11 +24,23 @@ const GIF_FRAMES_PER_SECOND = 12
 const MAX_GIF_FRAMES = 48
 const GIF_PALETTE_SIZE = 256
 const GIF_PALETTE_FORMAT = 'rgba4444'
+const GIF_ALPHA_BAYER_4 = [
+  0, 8, 2, 10,
+  12, 4, 14, 6,
+  3, 11, 1, 9,
+  15, 7, 13, 5
+] as const
 
 type AvatarGifRenderProps = Omit<
   InteractiveAvatarProps,
-  'colorGrade' | 'faceStyle' | 'faceStyleTransitionsEnabled' | 'interactionMode' | 'interactive' |
-    'onViewStateChange' | 'selectedEntityPartId' | 'viewState'
+  | 'colorGrade'
+  | 'faceStyle'
+  | 'faceStyleTransitionsEnabled'
+  | 'interactionMode'
+  | 'interactive'
+  | 'onViewStateChange'
+  | 'selectedEntityPartId'
+  | 'viewState'
 >
 
 export interface AvatarGifExportOptions extends AvatarCaptureOptions {
@@ -161,9 +175,25 @@ export const createAvatarGifSamples = (
   return samples
 }
 
-const yieldToBrowser = () => new Promise<void>(resolve => {
-  window.setTimeout(resolve, 0)
-})
+const yieldToBrowser = () =>
+  new Promise<void>(resolve => {
+    window.setTimeout(resolve, 0)
+  })
+
+export const ditherAvatarGifAlpha = (source: Uint8ClampedArray, width: number) => {
+  const pixels = new Uint8ClampedArray(source)
+  const resolvedWidth = Math.max(Math.round(width), 1)
+  for (let offset = 0; offset < pixels.length; offset += 4) {
+    const alpha = pixels[offset + 3]!
+    if (alpha === 0 || alpha === 255) continue
+    const pixelIndex = offset / 4
+    const x = pixelIndex % resolvedWidth
+    const y = Math.floor(pixelIndex / resolvedWidth)
+    const threshold = (GIF_ALPHA_BAYER_4[(y % 4) * 4 + x % 4]! + .5) * 16
+    pixels[offset + 3] = alpha > threshold ? 255 : 0
+  }
+  return pixels
+}
 
 export const createAvatarGif = async (options: AvatarGifExportOptions) => {
   const samples = createAvatarGifSamples(options.keyframes, options)
@@ -213,7 +243,10 @@ export const createAvatarGif = async (options: AvatarGifExportOptions) => {
       const canvas = await renderAvatarCaptureCanvas(sourceSvg, options.size, options)
       const context = canvas.getContext('2d')
       if (context == null) throw new Error('Unable to read avatar GIF frame')
-      const pixels = context.getImageData(0, 0, options.size, options.size).data
+      const pixels = ditherAvatarGifAlpha(
+        context.getImageData(0, 0, options.size, options.size).data,
+        options.size
+      )
       const palette = quantize(pixels, GIF_PALETTE_SIZE, {
         clearAlpha: true,
         clearAlphaThreshold: 127,

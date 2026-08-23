@@ -4,13 +4,13 @@ import { createElement } from 'react'
 import { createRoot } from 'react-dom/client'
 import type { Root } from 'react-dom/client'
 
-import { createDefaultAvatarDefinition } from '@oneworks/avatar-core'
+import { createDefaultAvatarDefinition } from '@oneworks/avatar'
 import type {
   AvatarAnimationClip,
   AvatarAnimationLibrary,
   AvatarAnimationRef,
   AvatarDefinition
-} from '@oneworks/avatar-core'
+} from '@oneworks/avatar'
 import { Avatar, AvatarEditor } from '@oneworks/avatar-react'
 import type {
   AvatarCaptureOptions,
@@ -27,7 +27,7 @@ export type {
   AvatarAnimationLibrary,
   AvatarAnimationRef,
   AvatarDefinition
-} from '@oneworks/avatar-core'
+} from '@oneworks/avatar'
 export type { AvatarCaptureOptions, AvatarPlayOptions, AvatarTheme } from '@oneworks/avatar-react'
 
 export interface AvatarMountOptions {
@@ -108,6 +108,7 @@ export const createAvatar = (
     destroy: () => {
       if (destroyed) return
       destroyed = true
+      resolveReady()
       handle = null
       root.unmount()
     },
@@ -171,6 +172,7 @@ export const createAvatarEditor = (
     destroy: () => {
       if (destroyed) return
       destroyed = true
+      resolveReady()
       handle = null
       root.unmount()
     },

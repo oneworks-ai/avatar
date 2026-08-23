@@ -344,6 +344,7 @@ export const clampAvatarAnimationFrameDuration = (durationMs: number) => {
 
 const isAvatarFaceStyle = (value: unknown): value is AvatarFaceStyle => {
   if (!isRecord(value)) return false
+  const highlight = value.eyeHighlight
   return numericFaceStyleKeys.every(key => isFiniteNumber(value[key])) &&
     optionalNumericFaceStyleKeys.every(key => value[key] == null || isFiniteNumber(value[key])) &&
     (value.eyeShape === 'ellipse' || value.eyeShape === 'rounded') &&
@@ -354,7 +355,13 @@ const isAvatarFaceStyle = (value: unknown): value is AvatarFaceStyle => {
       value.mouthShape === 'rounded' ||
       value.mouthShape === 'rounded-triangle') &&
     typeof value.noseEnabled === 'boolean' &&
-    (value.noseShape === 'ellipse' || value.noseShape === 'inverted-triangle' || value.noseShape === 'rounded')
+    (value.noseShape === 'ellipse' || value.noseShape === 'inverted-triangle' || value.noseShape === 'rounded') &&
+    (highlight == null || (
+      isRecord(highlight) && typeof highlight.enabled === 'boolean' &&
+      typeof highlight.color === 'string' && /^#[\da-f]{6}$/iu.test(highlight.color) &&
+      isFiniteNumber(highlight.offsetX) && isFiniteNumber(highlight.offsetY) &&
+      isFiniteNumber(highlight.opacity) && isFiniteNumber(highlight.size)
+    ))
 }
 
 const isAvatarColorGrade = (value: unknown): value is AvatarColorGrade => {
@@ -432,7 +439,7 @@ export const normalizeAvatarAnimationKeyframes = (
           legacySegmentDuration > 0 ? legacySegmentDuration : DEFAULT_AVATAR_ANIMATION_FRAME_DURATION_MS
         ),
       easing: isAvatarAnimationEasing(easing) ? easing : legacyEasing,
-      faceStyle: { ...DEFAULT_AVATAR_FACE_STYLE, ...frame.faceStyle }
+      faceStyle: resolveAvatarFaceStyle(frame.faceStyle)
     }
   })
 }
@@ -607,7 +614,7 @@ export const createAvatarAnimationKeyframe = (
   colorGrade: resolveAvatarColorGrade(colorGrade),
   durationMs: DEFAULT_AVATAR_ANIMATION_FRAME_DURATION_MS,
   easing: DEFAULT_AVATAR_ANIMATION_EASING,
-  faceStyle: { ...faceStyle },
+  faceStyle: resolveAvatarFaceStyle(faceStyle),
   pitch: viewState.pitch,
   positionX: viewState.positionX,
   positionY: viewState.positionY,
@@ -633,7 +640,7 @@ const createRelativePresetFrame = (
   frame: AvatarPresetFrame = {}
 ): StoredAvatarAnimationKeyframe => ({
   colorGrade: resolveAvatarColorGrade(frame.colorGrade),
-  faceStyle: { ...faceStyle, ...frame.faceStyle },
+  faceStyle: resolveAvatarFaceStyle({ ...faceStyle, ...frame.faceStyle }),
   ...(frame.offset == null ? {} : { offset: frame.offset }),
   pitch: viewState.pitch + (frame.pitch ?? 0),
   positionX: viewState.positionX + (frame.positionX ?? 0),
@@ -1174,6 +1181,14 @@ export const interpolateAvatarAnimationKeyframes = (
     durationMs: to.durationMs,
     easing: to.easing,
     faceStyle: {
+      eyeHighlight: {
+        color: selectDiscrete(fromFaceStyle.eyeHighlight.color, toFaceStyle.eyeHighlight.color, progress),
+        enabled: selectDiscrete(fromFaceStyle.eyeHighlight.enabled, toFaceStyle.eyeHighlight.enabled, progress),
+        offsetX: interpolate(fromFaceStyle.eyeHighlight.offsetX, toFaceStyle.eyeHighlight.offsetX, progress),
+        offsetY: interpolate(fromFaceStyle.eyeHighlight.offsetY, toFaceStyle.eyeHighlight.offsetY, progress),
+        opacity: interpolate(fromFaceStyle.eyeHighlight.opacity, toFaceStyle.eyeHighlight.opacity, progress),
+        size: interpolate(fromFaceStyle.eyeHighlight.size, toFaceStyle.eyeHighlight.size, progress)
+      },
       eyeRoundness: interpolate(from.faceStyle.eyeRoundness, to.faceStyle.eyeRoundness, progress),
       eyeShape: selectDiscrete(from.faceStyle.eyeShape, to.faceStyle.eyeShape, progress),
       gap: interpolate(from.faceStyle.gap, to.faceStyle.gap, progress),

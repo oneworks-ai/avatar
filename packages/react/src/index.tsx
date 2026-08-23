@@ -1,35 +1,28 @@
 import './style.scss'
 
-import {
-  forwardRef,
-  useCallback,
-  useEffect,
-  useImperativeHandle,
-  useMemo,
-  useRef,
-  useState
-} from 'react'
+import { forwardRef, useCallback, useEffect, useImperativeHandle, useMemo, useRef, useState } from 'react'
 import type { CSSProperties, HTMLAttributes } from 'react'
 
-import { getAvatarPalette } from '@oneworks/avatar'
 import {
   anchorAvatarAnimationClip,
   createDefaultAvatarDefinition,
+  getAvatarPalette,
   mergeAvatarAnimationLibraries,
   parseAvatarAnimationClip,
   resolveAvatarAnimationClip,
   resolveAvatarAnimationFrame
-} from '@oneworks/avatar-core'
+} from '@oneworks/avatar'
 import type {
   AvatarAnimationClip,
   AvatarAnimationLibrary,
   AvatarAnimationRef,
   AvatarDefinition
-} from '@oneworks/avatar-core'
+} from '@oneworks/avatar'
 
 import App from '../../../src/App'
 import { InteractiveAvatar } from '../../../src/InteractiveAvatar'
 import type { AvatarViewState } from '../../../src/InteractiveAvatar'
+import { resolveAvatarFaceStyle } from '../../../src/avatarGeometry'
 import { AvatarLocaleProvider } from '../../../src/avatarLocale'
 import { renderAvatarPngBlob, serializeAvatarSvg } from '../../../src/savedAvatarPresets'
 
@@ -40,7 +33,7 @@ export type {
   AvatarAnimationLibrary,
   AvatarAnimationRef,
   AvatarDefinition
-} from '@oneworks/avatar-core'
+} from '@oneworks/avatar'
 
 export type AvatarTheme = 'dark' | 'light' | 'system'
 export type AvatarLocale = 'en' | 'zh-Hans'
@@ -82,7 +75,11 @@ export interface AvatarProps extends Omit<HTMLAttributes<HTMLDivElement>, 'child
 }
 
 const resolveSystemTheme = () => (
-  typeof window !== 'undefined' && window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'
+  typeof window !== 'undefined' &&
+    typeof window.matchMedia === 'function' &&
+    window.matchMedia('(prefers-color-scheme: dark)').matches
+    ? 'dark'
+    : 'light'
 )
 
 const applyView = (definition: AvatarDefinition, view: AvatarViewState): AvatarDefinition => ({
@@ -114,21 +111,24 @@ export const Avatar = forwardRef<AvatarHandle, AvatarProps>(function Avatar({
   const [systemTheme, setSystemTheme] = useState(resolveSystemTheme)
   const containerRef = useRef<HTMLDivElement>(null)
   const frameRef = useRef<number>()
-  const animationRef = useRef<{
-    base: AvatarDefinition
-    clip: AvatarAnimationClip
-    elapsedBeforeStart: number
-    lastLoop: number
-    playing: boolean
-    speed: number
-    startedAt: number
-  } | null>(null)
+  const animationRef = useRef<
+    {
+      base: AvatarDefinition
+      clip: AvatarAnimationClip
+      elapsedBeforeStart: number
+      lastLoop: number
+      playing: boolean
+      speed: number
+      startedAt: number
+    } | null
+  >(null)
   const callbacksRef = useRef({ onAnimationEnd, onAnimationLoop, onAnimationStart, onError })
   callbacksRef.current = { onAnimationEnd, onAnimationLoop, onAnimationStart, onError }
-  const libraries = useMemo(() => mergeAvatarAnimationLibraries([
-    ...(currentDefinition.animations == null ? [] : [currentDefinition.animations]),
-    ...animationLibraries
-  ]), [animationLibraries, currentDefinition.animations])
+  const libraries = useMemo(() =>
+    mergeAvatarAnimationLibraries([
+      ...(currentDefinition.animations == null ? [] : [currentDefinition.animations]),
+      ...animationLibraries
+    ]), [animationLibraries, currentDefinition.animations])
 
   useEffect(() => {
     if (frameRef.current != null) cancelAnimationFrame(frameRef.current)
@@ -139,7 +139,11 @@ export const Avatar = forwardRef<AvatarHandle, AvatarProps>(function Avatar({
   }, [definition])
 
   useEffect(() => {
-    if (theme !== 'system' || typeof window === 'undefined') return
+    if (
+      theme !== 'system' ||
+      typeof window === 'undefined' ||
+      typeof window.matchMedia !== 'function'
+    ) return
     const media = window.matchMedia('(prefers-color-scheme: dark)')
     const handleChange = () => setSystemTheme(media.matches ? 'dark' : 'light')
     media.addEventListener('change', handleChange)
@@ -188,10 +192,13 @@ export const Avatar = forwardRef<AvatarHandle, AvatarProps>(function Avatar({
       throw error
     }
     stopFrame()
-    const clip = anchorAvatarAnimationClip(currentDefinition, parseAvatarAnimationClip({
-      ...selected,
-      playback: options.playback ?? selected.playback
-    }))
+    const clip = anchorAvatarAnimationClip(
+      currentDefinition,
+      parseAvatarAnimationClip({
+        ...selected,
+        playback: options.playback ?? selected.playback
+      })
+    )
     animationRef.current = {
       base: currentDefinition,
       clip,
@@ -220,7 +227,14 @@ export const Avatar = forwardRef<AvatarHandle, AvatarProps>(function Avatar({
       if (svg == null) throw new Error('Avatar is not ready to capture')
       const captureOptions = {
         background: options.background ?? renderDefinition.scene.camera.background,
-        frame: options.frame ?? renderDefinition.scene.camera.frame
+        frame: options.frame ?? renderDefinition.scene.camera.frame,
+        frameShadow: {
+          ...renderDefinition.scene.camera.frameShadow,
+          color: renderDefinition.scene.camera.frameShadow.color ?? getAvatarPalette(
+            renderDefinition.scene.appearance.paletteId
+          ).shadow
+        },
+        showFrameShadow: renderDefinition.scene.camera.showFrameShadow
       }
       if (options.format === 'png') return renderAvatarPngBlob(svg, options.size, captureOptions)
       return new Blob([serializeAvatarSvg(svg, options.size, captureOptions)], {
@@ -264,10 +278,19 @@ export const Avatar = forwardRef<AvatarHandle, AvatarProps>(function Avatar({
   const scene = renderDefinition.scene
   const palette = getAvatarPalette(scene.appearance.paletteId)
   const resolvedTheme = theme === 'system' ? systemTheme : theme
+  const frameShadowDirection = scene.camera.frameShadow.direction * Math.PI / 180
+  const frameShadow = scene.camera.showFrameShadow
+    ? `${(Math.cos(frameShadowDirection) * scene.camera.frameShadow.distance).toFixed(2)}px ${
+      (Math.sin(frameShadowDirection) * scene.camera.frameShadow.distance).toFixed(2)
+    }px ${scene.camera.frameShadow.softness}px color-mix(in srgb, ${
+      scene.camera.frameShadow.color ?? palette.shadow
+    } ${scene.camera.frameShadow.opacity}%, transparent)`
+    : 'none'
   const mergedStyle = {
     '--oneworks-avatar-background': scene.camera.background === 'transparent'
       ? 'transparent'
       : scene.camera.background,
+    boxShadow: frameShadow,
     ...style
   } as CSSProperties
 
@@ -288,7 +311,7 @@ export const Avatar = forwardRef<AvatarHandle, AvatarProps>(function Avatar({
         colorGrade={scene.effects.colorGrade}
         entityParts={scene.entity.parts}
         entityPreset={scene.entity.preset}
-        faceStyle={scene.face}
+        faceStyle={resolveAvatarFaceStyle(scene.face)}
         gridDensity={scene.lighting.gridDensity}
         interactive={interactive}
         interactionMode={scene.interactionMode}
@@ -304,6 +327,7 @@ export const Avatar = forwardRef<AvatarHandle, AvatarProps>(function Avatar({
         showLight={scene.lighting.enabled}
         showOutline={scene.effects.showOutline}
         showShadow={scene.effects.showFaceShadow}
+        surfaceDecals={scene.decals}
         viewState={scene.view}
       />
     </div>

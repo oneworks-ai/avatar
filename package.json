@@ -1,7 +1,7 @@
 {
   "name": "@oneworks/avatar-assets",
   "type": "module",
-  "version": "0.1.0-alpha.0",
+  "version": "1.0.0-rc.6",
   "packageManager": "pnpm@11.7.0",
   "private": true,
   "description": "OneWorks geometric 3D Avatar editor, runtime, and framework adapters",
@@ -17,23 +17,22 @@
     "dev": "vite",
     "preview": "vite preview",
     "smoke:sdk": "node scripts/smoke-sdk-packages.mjs",
-    "test": "vitest run __tests__/*.spec.ts packages/core/__tests__/*.spec.ts packages/react/__tests__/*.spec.tsx packages/web/__tests__/*.spec.ts",
+    "test": "vitest run __tests__/*.spec.ts packages/avatar/__tests__/*.spec.ts packages/react/__tests__/*.spec.tsx packages/web/__tests__/*.spec.ts",
     "typecheck": "tsc -p tsconfig.app-source.json --noEmit --pretty false",
     "typecheck:npm": "tsc -p tsconfig.json --noEmit --pretty false",
     "typecheck:sdk": "pnpm build:sdk && pnpm --filter './packages/*' typecheck"
   },
   "dependencies": {
-    "@oneworks/avatar": "beta",
-    "@oneworks/avatar-core": "link:packages/core",
+    "@oneworks/avatar": "link:packages/avatar",
     "@oneworks/route-layout": "beta",
     "gifenc": "^1.0.3"
   },
   "devDependencies": {
     "@types/react": "^18.3.12",
     "@types/react-dom": "^18.3.2",
-    "@vitejs/plugin-vue": "^5.2.4",
     "jsdom": "^26.1.0",
     "@vitejs/plugin-react": "^5.1.2",
+    "@vitejs/plugin-vue": "^5.2.4",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
     "sass": "^1.97.2",

@@ -3,6 +3,7 @@ import './InteractiveAvatar.scss'
 import { memo, useEffect, useId, useMemo, useRef, useState } from 'react'
 import type { KeyboardEvent, PointerEvent, WheelEvent } from 'react'
 
+import { AVATAR_VIEW_RANGES } from '@oneworks/avatar'
 import type { AvatarBackgroundStyle, AvatarPalette } from '@oneworks/avatar'
 import { applyAvatarColorGrade } from './avatarColorGrade'
 import type { AvatarColorGrade } from './avatarColorGrade'
@@ -13,6 +14,7 @@ import {
   buildAvatarBodyGeometry,
   DEFAULT_AVATAR_FACE_SHADOW_STYLE,
   DEFAULT_AVATAR_FACE_STYLE,
+  projectAvatarSurfaceDecal,
   projectDefaultFace,
   resolveAvatarFaceStyle,
   resolveAvatarSurfaceShadeOpacity
@@ -34,6 +36,7 @@ import {
   resolveAvatarEntityPartScaleZ
 } from './avatarEntityPresets'
 import type { AvatarEntityPart, AvatarEntityPreset } from './avatarEntityPresets'
+import type { AvatarSurfaceDecal } from './avatarSurfaceDecals'
 
 export { AVATAR_BODY_SHAPES }
 export type { AvatarBodyShape }
@@ -63,9 +66,9 @@ export interface AvatarViewState {
 }
 
 export const AVATAR_VIEW_LIMITS = {
-  maxPosition: 230,
-  maxScale: 2.4,
-  minScale: 0.35
+  maxPosition: AVATAR_VIEW_RANGES.positionX.max,
+  maxScale: AVATAR_VIEW_RANGES.scale.max,
+  minScale: AVATAR_VIEW_RANGES.scale.min
 } as const
 
 export const DEFAULT_AVATAR_VIEW_STATE: AvatarViewState = {
@@ -98,6 +101,7 @@ export interface InteractiveAvatarProps {
   readonly renderSurfaceCells?: boolean
   readonly shadowStyle: AvatarFaceShadowStyle
   readonly selectedEntityPartId?: string | null
+  readonly surfaceDecals?: readonly AvatarSurfaceDecal[]
   readonly showLight: boolean
   readonly showOutline?: boolean
   readonly showAvatarShadow?: boolean
@@ -108,6 +112,10 @@ export interface InteractiveAvatarProps {
 interface AvatarPosition {
   readonly x: number
   readonly y: number
+}
+
+interface ProjectedSurfaceDecal extends AvatarSurfaceDecal {
+  readonly path: string
 }
 
 interface DragOrigin extends AvatarPose {
@@ -171,9 +179,6 @@ function EntityPrimitive({
           ))
           : null}
       </g>
-      {geometry.cavityPath == null
-        ? null
-        : <path d={geometry.cavityPath} fill={part.shadowColor} fillOpacity='.9' />}
     </>
   )
 }
@@ -254,6 +259,7 @@ function EntityPresetBody({
   renderSurfaceCells,
   selectedPartId,
   shadowStyle,
+  surfaceDecals,
   showGrid,
   showLight,
   showOutline,
@@ -269,10 +275,11 @@ function EntityPresetBody({
   readonly onPartSelect?: (id: string) => void
   readonly parts: readonly AvatarEntityPart[]
   readonly pose: AvatarPose
-  readonly preset: Exclude<AvatarEntityPreset, 'custom'>
+  readonly preset: AvatarEntityPreset
   readonly renderSurfaceCells: boolean
   readonly selectedPartId?: string | null
   readonly shadowStyle: AvatarFaceShadowStyle
+  readonly surfaceDecals: readonly ProjectedSurfaceDecal[]
   readonly showGrid: boolean
   readonly showLight: boolean
   readonly showOutline: boolean
@@ -371,6 +378,11 @@ function EntityPresetBody({
                   )}
             </mask>
           ))}
+        {face.eyes.map(eye => (
+          <clipPath key={`highlight-clip-${eye.id}`} id={`${idPrefix}-entity-${eye.id}-highlight-clip`}>
+            <path d={eye.path} />
+          </clipPath>
+        ))}
       </defs>
       <g filter={outlineEnabled ? `url(#${idPrefix}-entity-outline)` : undefined}>
         {projectedParts.map(part => (
@@ -388,6 +400,27 @@ function EntityPresetBody({
                 showLight={showLight && renderSurfaceCells && (part.face || part.scaleX * part.scaleY >= .075)}
                 lightDistance={lightDistance}
               />
+              <g clipPath={`url(#${idPrefix}-entity-${preset}-${part.index})`}>
+                {surfaceDecals.filter(decal => decal.targetPartId === part.id).map(decal => (
+                  <path
+                    key={decal.id}
+                    data-avatar-surface-decal={decal.id}
+                    d={decal.path}
+                    fill={decal.color}
+                    fillOpacity={decal.opacity / 100}
+                  />
+                ))}
+              </g>
+              {geometries[part.id].cavityPath == null
+                ? null
+                : (
+                  <path
+                    data-avatar-entity-cavity={part.id}
+                    d={geometries[part.id].cavityPath}
+                    fill={part.shadowColor}
+                    fillOpacity='.9'
+                  />
+                )}
             </g>
           </g>
         ))}
@@ -450,6 +483,16 @@ function EntityPresetBody({
               ))
               : null}
             {face.eyes.map(eye => <path key={eye.id} d={eye.path} fill={facePart.foregroundColor} />)}
+              {face.eyeHighlights.map(highlight => (
+                <path
+                  key={highlight.id}
+                  data-avatar-eye-highlight={highlight.id}
+                  clipPath={`url(#${idPrefix}-entity-${highlight.id.replace('eye-highlight-', 'eye-')}-highlight-clip)`}
+                  d={highlight.path}
+                  fill={faceStyle.eyeHighlight.color}
+                  fillOpacity={faceStyle.eyeHighlight.opacity / 100}
+                />
+              ))}
             {!faceStyle.noseEnabled || face.nose == null
               ? null
               : (
@@ -585,6 +628,7 @@ export const EntityPresetPreview = memo(function EntityPresetPreview({
           preset={preset}
           renderSurfaceCells={false}
           shadowStyle={DEFAULT_AVATAR_FACE_SHADOW_STYLE}
+          surfaceDecals={[]}
           showGrid={false}
           showLight={scene?.showLight ?? true}
           showOutline={scene?.showOutline ?? false}
@@ -618,6 +662,14 @@ const useAnimatedFaceStyle = (target: AvatarFaceStyle, transitionsEnabled: boole
       const progress = clamp((now - startedAt) / FACE_STYLE_ANIMATION_MS, 0, 1)
       const easedProgress = 1 - (1 - progress) ** 3
       const nextStyle = {
+        eyeHighlight: {
+          color: resolvedTarget.eyeHighlight.color,
+          enabled: resolvedTarget.eyeHighlight.enabled,
+          offsetX: interpolate(from.eyeHighlight.offsetX, resolvedTarget.eyeHighlight.offsetX, easedProgress),
+          offsetY: interpolate(from.eyeHighlight.offsetY, resolvedTarget.eyeHighlight.offsetY, easedProgress),
+          opacity: interpolate(from.eyeHighlight.opacity, resolvedTarget.eyeHighlight.opacity, easedProgress),
+          size: interpolate(from.eyeHighlight.size, resolvedTarget.eyeHighlight.size, easedProgress)
+        },
         eyeRoundness: interpolate(from.eyeRoundness, target.eyeRoundness, easedProgress),
         eyeShape: target.eyeShape,
         gap: interpolate(from.gap, target.gap, easedProgress),
@@ -661,6 +713,12 @@ const useAnimatedFaceStyle = (target: AvatarFaceStyle, transitionsEnabled: boole
       if (animationFrameRef.current != null) window.cancelAnimationFrame(animationFrameRef.current)
     }
   }, [
+    target.eyeHighlight.color,
+    target.eyeHighlight.enabled,
+    target.eyeHighlight.offsetX,
+    target.eyeHighlight.offsetY,
+    target.eyeHighlight.opacity,
+    target.eyeHighlight.size,
     target.eyeRoundness,
     target.eyeShape,
     target.gap,
@@ -715,6 +773,7 @@ function InteractiveAvatarComponent({
   showOutline = false,
   showAvatarShadow = false,
   showShadow,
+  surfaceDecals = [],
   viewState
 }: InteractiveAvatarProps) {
   const [dragging, setDragging] = useState(false)
@@ -762,6 +821,7 @@ function InteractiveAvatarComponent({
     () => entityParts.length > 0 ? entityParts : createAvatarEntityParts(entityPreset),
     [entityParts, entityPreset]
   )
+  const usesEntityParts = sourceEntityParts.length > 0
   const resolvedEntityParts = useMemo(
     () => sourceEntityParts.map(part => ({
       ...part,
@@ -785,6 +845,24 @@ function InteractiveAvatarComponent({
     ),
     [animatedFaceStyle, entityFacePart, entityPreset, pose]
   )
+  const projectedSurfaceDecals = useMemo<ProjectedSurfaceDecal[]>(() => surfaceDecals.flatMap(decal => {
+    if (!usesEntityParts) {
+      if (decal.targetPartId != null) return []
+      const projected = projectAvatarSurfaceDecal(pose, bodyShape, decal)
+      return projected == null ? [] : [{ ...decal, path: projected.path }]
+    }
+    const targetPart = decal.targetPartId == null
+      ? entityFacePart
+      : sourceEntityParts.find(part => part.id === decal.targetPartId)
+    if (targetPart == null) return []
+    const projected = projectAvatarSurfaceDecal(
+      pose,
+      targetPart.shape,
+      decal,
+      getEntityFaceGeometryOptions(targetPart, entityPreset)
+    )
+    return projected == null ? [] : [{ ...decal, path: projected.path, targetPartId: targetPart.id }]
+  }), [bodyShape, entityFacePart, entityPreset, pose, sourceEntityParts, surfaceDecals, usesEntityParts])
   const surfaceMid = applyAvatarColorGrade(
     backgroundStyle === 'gradient' ? palette.gradient[1] : palette.background,
     colorGrade
@@ -1038,6 +1116,11 @@ function InteractiveAvatarComponent({
           <clipPath id={`${id}-clip`}>
             <path d={bodyGeometry.outlinePath} />
           </clipPath>
+          {face.eyes.map(eye => (
+            <clipPath key={`highlight-clip-${eye.id}`} id={`${id}-${eye.id}-highlight-clip`}>
+              <path d={eye.path} />
+            </clipPath>
+          ))}
           <filter id={`${id}-face-shadow-blur`} x='-50%' y='-50%' width='200%' height='200%'>
             <feGaussianBlur stdDeviation={shadowStyle.softness} />
           </filter>
@@ -1058,7 +1141,7 @@ function InteractiveAvatarComponent({
             VIEW_SIZE / 2
           }) rotate(${avatarRoll * 180 / Math.PI}) scale(${avatarScale}) translate(${-VIEW_SIZE / 2} ${-VIEW_SIZE / 2})`}
         >
-          {entityPreset === 'custom'
+          {!usesEntityParts
             ? (
               <>
                 <g clipPath={`url(#${id}-clip)`}>
@@ -1073,6 +1156,16 @@ function InteractiveAvatarComponent({
                 />
               ))
               : null}
+
+            {projectedSurfaceDecals.filter(decal => decal.targetPartId == null).map(decal => (
+              <path
+                key={decal.id}
+                data-avatar-surface-decal={decal.id}
+                d={decal.path}
+                fill={decal.color}
+                fillOpacity={decal.opacity / 100}
+              />
+            ))}
 
             {dragging
               ? bodyGeometry.cells.map(cell => (
@@ -1107,6 +1200,16 @@ function InteractiveAvatarComponent({
                       key={eye.id}
                       d={eye.path}
                       fill={surfaceForeground}
+                    />
+                  ))}
+                  {face.eyeHighlights.map(highlight => (
+                    <path
+                      key={highlight.id}
+                      data-avatar-eye-highlight={highlight.id}
+                      clipPath={`url(#${id}-${highlight.id.replace('eye-highlight-', 'eye-')}-highlight-clip)`}
+                      d={highlight.path}
+                      fill={animatedFaceStyle.eyeHighlight.color}
+                      fillOpacity={animatedFaceStyle.eyeHighlight.opacity / 100}
                     />
                   ))}
                   {[
@@ -1186,6 +1289,7 @@ function InteractiveAvatarComponent({
                 renderSurfaceCells={renderSurfaceCells}
                 selectedPartId={selectedEntityPartId}
                 shadowStyle={shadowStyle}
+                surfaceDecals={projectedSurfaceDecals}
                 showGrid={selectedEntityPartId != null}
                 showLight={showLight}
                 showOutline={showOutline}

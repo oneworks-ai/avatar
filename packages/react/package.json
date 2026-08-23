@@ -1,6 +1,6 @@
 {
   "name": "@oneworks/avatar-react",
-  "version": "0.1.0-alpha.0",
+  "version": "1.0.0-rc.6",
   "description": "React renderer and embeddable editor for OneWorks 3D Avatar",
   "type": "module",
   "license": "MIT",
@@ -12,10 +12,14 @@
   },
   "exports": {
     ".": {
+      "__oneworks__": "./src/index.tsx",
       "types": "./dist/index.d.ts",
       "default": "./dist/index.js"
     },
-    "./style.css": "./dist/style.css",
+    "./style.css": {
+      "__oneworks__": "./src/style.scss",
+      "default": "./dist/style.css"
+    },
     "./package.json": "./package.json"
   },
   "files": ["dist", "README.md", "README.zh-Hans.md"],
@@ -24,7 +28,7 @@
     "typecheck": "tsc -p tsconfig.json --noEmit --pretty false"
   },
   "dependencies": {
-    "@oneworks/avatar-core": "workspace:*"
+    "@oneworks/avatar": "workspace:*"
   },
   "peerDependencies": {
     "react": ">=18.3.0 <20",

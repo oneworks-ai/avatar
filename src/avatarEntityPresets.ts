@@ -1,3 +1,4 @@
+import { AVATAR_ENTITY_RANGES } from '@oneworks/avatar'
 import type { AvatarPalette } from '@oneworks/avatar'
 
 import { AVATAR_BODY_SHAPES, DEFAULT_AVATAR_FACE_STYLE } from './avatarGeometry'
@@ -540,8 +541,18 @@ export const deserializeAvatarEntityParts = (
         highlightColor,
         id: item[0],
         label: typeof item[18] === 'string' ? item[18] : fallback?.label ?? item[0],
-        scaleX: finite(item[5], fallback?.scaleX ?? 1, .08, 1.5),
-        scaleY: finite(item[6], fallback?.scaleY ?? 1, .08, 1.5),
+        scaleX: finite(
+          item[5],
+          fallback?.scaleX ?? 1,
+          AVATAR_ENTITY_RANGES.scaleX.min,
+          AVATAR_ENTITY_RANGES.scaleX.max
+        ),
+        scaleY: finite(
+          item[6],
+          fallback?.scaleY ?? 1,
+          AVATAR_ENTITY_RANGES.scaleY.min,
+          AVATAR_ENTITY_RANGES.scaleY.max
+        ),
         shadowColor,
         shape,
         x: finiteNumber(item[2], fallback?.x ?? 0),
@@ -555,15 +566,45 @@ export const deserializeAvatarEntityParts = (
         rotationX: finiteNumber(item[11], part.rotationX ?? 0),
         rotationY: finiteNumber(item[12], part.rotationY ?? 0),
         rotationZ: finiteNumber(item[13], part.rotationZ ?? 0),
-        roundness: finite(item[14], part.roundness ?? 24, 0, 100),
-        scaleX: finite(item[5], part.scaleX, .08, 1.5),
-        scaleY: finite(item[6], part.scaleY, .08, 1.5),
-        scaleZ: finite(item[19], resolveAvatarEntityPartScaleZ(part), .08, 1.5),
-        topScale: finite(item[20], part.topScale ?? .82, .4, 1.2),
+        roundness: finite(
+          item[14],
+          part.roundness ?? 24,
+          AVATAR_ENTITY_RANGES.roundness.min,
+          AVATAR_ENTITY_RANGES.roundness.max
+        ),
+        scaleX: finite(
+          item[5],
+          part.scaleX,
+          AVATAR_ENTITY_RANGES.scaleX.min,
+          AVATAR_ENTITY_RANGES.scaleX.max
+        ),
+        scaleY: finite(
+          item[6],
+          part.scaleY,
+          AVATAR_ENTITY_RANGES.scaleY.min,
+          AVATAR_ENTITY_RANGES.scaleY.max
+        ),
+        scaleZ: finite(
+          item[19],
+          resolveAvatarEntityPartScaleZ(part),
+          AVATAR_ENTITY_RANGES.scaleZ.min,
+          AVATAR_ENTITY_RANGES.scaleZ.max
+        ),
+        topScale: finite(
+          item[20],
+          part.topScale ?? .82,
+          AVATAR_ENTITY_RANGES.topScale.min,
+          AVATAR_ENTITY_RANGES.topScale.max
+        ),
         occludedByFace: item[21] === 1 ? true : item[21] === 0 ? false : fallback?.occludedByFace,
         occlusionAmount: item[22] == null
           ? fallback?.occlusionAmount
-          : finite(item[22], fallback?.occlusionAmount ?? 0, 0, 100),
+          : finite(
+            item[22],
+            fallback?.occlusionAmount ?? 0,
+            AVATAR_ENTITY_RANGES.occlusionAmount.min,
+            AVATAR_ENTITY_RANGES.occlusionAmount.max
+          ),
         occlusionPole: item[23] === 'bottom' || item[23] === 'top'
           ? item[23]
           : fallback?.occlusionPole

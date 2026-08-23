@@ -9,9 +9,11 @@ import { createAvatar, createAvatarEditor } from '@oneworks/avatar-web'
 import '@oneworks/avatar-web/style.css'
 
 const avatar = createAvatar(document.querySelector('#avatar')!, { definition })
-const editor = createAvatarEditor(document.querySelector('#editor')!, { definition })
+const editor = createAvatarEditor(document.querySelector('#editor')!, {
+  definition
+})
 ```
 
 Custom elements are registered only when you call `registerAvatarElements()` from `@oneworks/avatar-web/elements`.
 
-See the [Avatar developer guide](https://oneworks.cloud/docs/en/usage/avatar#developer-integration).
+See the [Vanilla JavaScript and Web Component guide](https://oneworks.cloud/docs/en/usage/avatar-web).

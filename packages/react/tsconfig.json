@@ -3,8 +3,8 @@
   "compilerOptions": {
     "rootDir": "../..",
     "paths": {
-      "@oneworks/avatar": ["./app-source/packages/avatar/src/index.ts"],
-      "@oneworks/avatar/*": ["./app-source/packages/avatar/src/*.ts"]
+      "@oneworks/avatar": ["./packages/avatar/src/index.ts"],
+      "@oneworks/avatar/*": ["./packages/avatar/src/*.ts"]
     }
   },
   "include": ["src/**/*", "../../src/**/*"]

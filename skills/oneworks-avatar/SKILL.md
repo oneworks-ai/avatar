@@ -10,7 +10,7 @@ Work with the official OneWorks 3D geometric avatar system. Treat the editor URL
 ## Route the task
 
 - For creating, refining, or exporting an avatar, read [references/editor-workflow.md](references/editor-workflow.md). Also read [references/export-verification.md](references/export-verification.md) whenever files are requested.
-- For developer integration, read [references/developer-integration.md](references/developer-integration.md). Read it before recommending npm, React, JavaScript, iframe, embed, JSON, or runtime APIs so planned capabilities are never presented as current ones.
+- For developer integration, read [references/developer-integration.md](references/developer-integration.md). Read it before recommending npm, React, Vue, JavaScript, Web Components, iframe, embed, JSON, or runtime APIs so package and product boundaries stay accurate.
 - For editor implementation or debugging, read [references/3d-debugging.md](references/3d-debugging.md). Also read the workflow or export reference when the bug touches those surfaces.
 - For a request spanning routes, read each applicable reference once and keep one shared source of truth for the scene.
 
@@ -37,10 +37,11 @@ Do not require a fixed three-direction or six-candidate process. Offer alternati
 
 ## Current product boundaries
 
-- The current 3D product surface is the hosted editor, its generated share URL, and browser-exported SVG, PNG, and GIF assets.
-- There is no public 3D React component, JavaScript renderer, versioned avatar JSON definition, iframe/embed mode, or `postMessage` controller contract yet.
-- The public `@oneworks/avatar` npm package is a separate legacy 2D pixel-emoticon SVG renderer. It is useful for deterministic placeholders but does not render the 3D editor scene.
-- The editor URL is not an image URL. Store the editable `editorUrl` separately from the exported `assetUrl` used by an application.
+- `@oneworks/avatar` is the framework-neutral 3D definition, validation, serialization, animation, and deterministic-seed package. Do not look for or recommend the removed 2D pixel renderer.
+- `@oneworks/avatar-react`, `@oneworks/avatar-vue`, and `@oneworks/avatar-web` render the same 3D scene. Each includes a renderer and the full editor; the web package also offers opt-in custom elements.
+- Applications may carry custom animation libraries in a definition or pass libraries to a renderer/editor. Preserve the versioned definition instead of reverse-engineering editor URL tuples.
+- There is no iframe/embed URL or `postMessage` controller contract. Use the framework editor component or web mount when an application needs embedded editing.
+- The editor URL is not an image URL or a public definition schema. Store it separately from the versioned definition and exported asset URL.
 
 ## Delivery
 

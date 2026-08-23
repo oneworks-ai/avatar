@@ -11,9 +11,15 @@ import '@oneworks/avatar-vue/style.css'
 </script>
 
 <template>
-  <OneWorksAvatar :definition="avatar" :animation-libraries="[supportAnimations]" />
-  <OneWorksAvatarEditor :definition="avatar" @definition-change="avatar = $event" />
+  <OneWorksAvatar
+    :definition="avatar"
+    :animation-libraries="[supportAnimations]"
+  />
+  <OneWorksAvatarEditor
+    :definition="avatar"
+    @definition-change="avatar = $event"
+  />
 </template>
 ```
 
-See the [Avatar developer guide](https://oneworks.cloud/docs/en/usage/avatar#developer-integration).
+See the [Avatar Runtime guide](https://oneworks.cloud/docs/en/usage/avatar-runtime#vue).

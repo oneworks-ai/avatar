@@ -17,7 +17,7 @@ export default defineConfig({
     cssCodeSplit: false,
     rollupOptions: {
       external: [
-        '@oneworks/avatar-core',
+        '@oneworks/avatar',
         '@oneworks/avatar-react',
         'react',
         'react-dom/client'
