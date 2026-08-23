@@ -4,6 +4,8 @@ on:
   pull_request:
     paths:
       - .github/workflows/sdk-ci.yml
+      - .github/workflows/npm-publish.yml
+      - AGENTS.md
       - package.json
       - pnpm-lock.yaml
       - pnpm-workspace.yaml
