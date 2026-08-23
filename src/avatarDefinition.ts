@@ -243,12 +243,15 @@ export const avatarAnimationClipToSavedAnimation = (
   scene: AvatarScene
 ): SavedAvatarAnimation => {
   const ordered = [...clip.keyframes].sort((a, b) => a.atMs - b.atMs)
-  const keyframes: AvatarAnimationKeyframe[] = ordered.map((frame, index) => {
+  const timeline = ordered[0]?.atMs != null && ordered[0].atMs > 0
+    ? [{ atMs: 0, easing: ordered[0].easing, patch: {} }, ...ordered]
+    : ordered
+  const keyframes: AvatarAnimationKeyframe[] = timeline.map((frame, index) => {
     const resolved = applyAvatarScenePatch(scene, frame.patch)
-    const previous = ordered[index - 1]
+    const previous = timeline[index - 1]
     const durationMs = index === 0
       ? clip.playback === 'loop'
-        ? Math.max(clip.durationMs - (ordered.at(-1)?.atMs ?? 0), 100)
+        ? Math.max(clip.durationMs - (timeline.at(-1)?.atMs ?? 0), 100)
         : 100
       : Math.max(frame.atMs - (previous?.atMs ?? 0), 100)
     return {

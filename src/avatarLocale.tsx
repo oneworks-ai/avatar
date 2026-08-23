@@ -222,6 +222,10 @@ export function AvatarLocaleProvider({
   const t = useCallback((text: string) => translateAvatarText(locale, text), [locale])
 
   useEffect(() => {
+    if (initialLocale != null) setLocale(initialLocale)
+  }, [initialLocale])
+
+  useEffect(() => {
     if (!persist) return
     document.documentElement.lang = locale
     window.localStorage.setItem(AVATAR_LOCALE_STORAGE_KEY, locale)

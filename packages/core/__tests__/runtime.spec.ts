@@ -51,6 +51,100 @@ describe('OneWorks Avatar public runtime contract', () => {
         id: 'broken'
       }
     })).toThrow(TypeError)
+    expect(() => parseAvatarDefinition({
+      ...definition,
+      animations: {
+        groups: {
+          broken: {
+            clips: {
+              nope: {
+                anchor: 'absolute',
+                durationMs: 100,
+                keyframes: [{ atMs: 101, patch: {} }],
+                playback: 'once'
+              }
+            }
+          }
+        },
+        id: 'broken'
+      }
+    })).toThrow(TypeError)
+    expect(() => parseAvatarDefinition({
+      ...definition,
+      animations: {
+        groups: {
+          broken: {
+            clips: {
+              nope: {
+                anchor: 'absolute',
+                durationMs: 100,
+                keyframes: [{ atMs: 0, patch: { lighting: { enabled: true } } }],
+                playback: 'once'
+              }
+            }
+          }
+        },
+        id: 'broken'
+      }
+    })).toThrow(TypeError)
+    const withFaceAnimation = {
+      ...definition,
+      animations: {
+        groups: {
+          valid: {
+            clips: {
+              expression: {
+                anchor: 'absolute' as const,
+                durationMs: 100,
+                keyframes: [{
+                  atMs: 0,
+                  patch: { face: { eyeShape: 'rounded' as const, noseEnabled: false } }
+                }],
+                playback: 'once' as const
+              }
+            }
+          }
+        },
+        id: 'valid'
+      }
+    }
+    expect(parseAvatarDefinition(serializeAvatarDefinition(withFaceAnimation))).toEqual(withFaceAnimation)
+    expect(() => parseAvatarDefinition({
+      ...definition,
+      animations: {
+        groups: {
+          broken: {
+            clips: {
+              nope: {
+                anchor: 'absolute',
+                durationMs: 100,
+                keyframes: [{ atMs: 0, patch: { face: { width: 'wide' } } }],
+                playback: 'once'
+              }
+            }
+          }
+        },
+        id: 'broken'
+      }
+    })).toThrow(TypeError)
+    expect(() => parseAvatarDefinition({
+      ...definition,
+      animations: {
+        groups: {
+          broken: {
+            clips: {
+              nope: {
+                anchor: 'absolute',
+                durationMs: 100,
+                keyframes: [{ atMs: 0, patch: { view: { roll: 1 } } }],
+                playback: 'once'
+              }
+            }
+          }
+        },
+        id: 'broken'
+      }
+    })).toThrow(TypeError)
   })
 
   it('resolves custom animation groups with deterministic library precedence', () => {
@@ -84,5 +178,42 @@ describe('OneWorks Avatar public runtime contract', () => {
     expect(middle.scene.view.positionX).toBe(12)
     expect(middle.finished).toBe(false)
     expect(resolveAvatarAnimationFrame(source, anchored, 1000).finished).toBe(true)
+  })
+
+  it('anchors each sparse view dimension at its first authored keyframe', () => {
+    const source = createDefaultAvatarDefinition()
+    const definition = {
+      ...source,
+      scene: applyAvatarScenePatch(source.scene, { view: { yaw: -.3 } })
+    }
+    const clip: AvatarAnimationClip = {
+      anchor: 'relative',
+      durationMs: 1000,
+      keyframes: [
+        { atMs: 0, patch: { face: { mouthEnabled: false } } },
+        { atMs: 500, patch: { view: { yaw: .6 } } },
+        { atMs: 1000, patch: { view: { yaw: 1 } } }
+      ],
+      playback: 'once'
+    }
+    const anchored = anchorAvatarAnimationClip(definition, clip)
+    expect(resolveAvatarAnimationFrame(definition, anchored, 500).scene.view.yaw).toBeCloseTo(-.3)
+    expect(resolveAvatarAnimationFrame(definition, anchored, 1000).scene.view.yaw).toBeCloseTo(.1)
+  })
+
+  it('interpolates from the base scene to a delayed first keyframe', () => {
+    const definition = createDefaultAvatarDefinition()
+    const clip: AvatarAnimationClip = {
+      anchor: 'absolute',
+      durationMs: 1000,
+      keyframes: [{ atMs: 500, easing: 'linear', patch: { view: { pitch: .6 } } }],
+      playback: 'once'
+    }
+    expect(resolveAvatarAnimationFrame(definition, clip, 0).scene.view.pitch).toBe(0)
+    expect(resolveAvatarAnimationFrame(definition, clip, 250).scene.view.pitch).toBeCloseTo(.3)
+    expect(resolveAvatarAnimationFrame(definition, clip, 500).scene.view.pitch).toBeCloseTo(.6)
+    const looping = { ...clip, playback: 'loop' as const }
+    expect(resolveAvatarAnimationFrame(definition, looping, 750).scene.view.pitch).toBeCloseTo(.3)
+    expect(resolveAvatarAnimationFrame(definition, looping, 1000).scene.view.pitch).toBe(0)
   })
 })

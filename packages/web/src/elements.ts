@@ -45,7 +45,10 @@ export class OneWorksAvatarElement extends HTMLElement {
 
   connectedCallback() { this.#update() }
   disconnectedCallback() {
-    this.#mount?.destroy()
+    if (this.#mount != null) {
+      this.#definition = this.#mount.getDefinition()
+      this.#mount.destroy()
+    }
     this.#mount = null
   }
   attributeChangedCallback() { this.#update() }
@@ -106,7 +109,10 @@ export class OneWorksAvatarEditorElement extends HTMLElement {
 
   connectedCallback() { this.#update() }
   disconnectedCallback() {
-    this.#mount?.destroy()
+    if (this.#mount != null) {
+      this.#definition = this.#mount.getDefinition()
+      this.#mount.destroy()
+    }
     this.#mount = null
   }
   attributeChangedCallback() { this.#update() }

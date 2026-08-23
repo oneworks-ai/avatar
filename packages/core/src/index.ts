@@ -155,10 +155,8 @@ export interface AvatarScene {
 
 export interface AvatarScenePatch {
   readonly colorGrade?: Partial<AvatarColorGrade>
-  readonly entityParts?: Readonly<Record<string, Partial<AvatarEntityPart>>>
   readonly face?: Partial<AvatarFace>
-  readonly lighting?: Partial<AvatarScene['lighting']>
-  readonly view?: Partial<AvatarView>
+  readonly view?: Partial<Pick<AvatarView, 'pitch' | 'positionX' | 'positionY' | 'yaw'>>
 }
 
 export interface AvatarAnimationKeyframe {
@@ -354,37 +352,54 @@ const isPartialNumberRecord = (value: unknown, keys: readonly string[]) => (
   isRecord(value) && Object.entries(value).every(([key, field]) => keys.includes(key) && isFiniteNumber(field))
 )
 
-const isAvatarScenePatch = (value: unknown): value is AvatarScenePatch => {
+const isPartialAvatarFace = (value: unknown) => {
   if (!isRecord(value)) return false
+  const numberKeys = [
+    'eyeRoundness', 'gap', 'height', 'leftEyeHeight', 'leftEyeRotation', 'mouthCurve',
+    'mouthHeight', 'mouthRotation', 'mouthWidth', 'mouthY', 'noseHeight', 'noseRotation',
+    'noseWidth', 'noseY', 'rotation', 'rightEyeHeight', 'rightEyeRotation', 'width'
+  ]
+  const booleanKeys = ['mouthEnabled', 'noseEnabled']
+  return Object.entries(value).every(([key, field]) => {
+    if (numberKeys.includes(key)) return isFiniteNumber(field)
+    if (booleanKeys.includes(key)) return isBoolean(field)
+    if (key === 'eyeShape') return isOneOf(field, ['ellipse', 'rounded'])
+    if (key === 'mouthShape') {
+      return isOneOf(field, ['curve', 'ellipse', 'rounded', 'rounded-triangle'])
+    }
+    if (key === 'noseShape') return isOneOf(field, ['ellipse', 'inverted-triangle', 'rounded'])
+    return false
+  })
+}
+
+const isAvatarScenePatch = (value: unknown): value is AvatarScenePatch => {
+  if (!isRecord(value) || Object.keys(value).some(key => !['colorGrade', 'face', 'view'].includes(key))) {
+    return false
+  }
   if (value.colorGrade != null && !isPartialNumberRecord(value.colorGrade, [
     'brightness', 'saturation', 'tintAmount', 'tintB', 'tintG', 'tintR'
   ])) return false
   if (value.view != null && !isPartialNumberRecord(value.view, [
-    'pitch', 'positionX', 'positionY', 'roll', 'scale', 'yaw'
+    'pitch', 'positionX', 'positionY', 'yaw'
   ])) return false
-  if (value.lighting != null && (!isRecord(value.lighting) || Object.entries(value.lighting).some(
-    ([key, field]) => key === 'enabled'
-      ? !isBoolean(field)
-      : !['azimuth', 'distance', 'elevation', 'gridDensity'].includes(key) || !isFiniteNumber(field)
-  ))) return false
-  if (value.face != null && !isRecord(value.face)) return false
-  if (value.entityParts != null && (!isRecord(value.entityParts) || Object.values(value.entityParts).some(
-    part => !isRecord(part)
-  ))) return false
+  if (value.face != null && !isPartialAvatarFace(value.face)) return false
   return true
 }
 
-const isAvatarAnimationClip = (value: unknown): value is AvatarAnimationClip => (
-  isRecord(value) && isOneOf(value.anchor, ['absolute', 'relative']) &&
-  isFiniteNumber(value.durationMs) && value.durationMs > 0 && isOptionalString(value.label) &&
-  isOneOf(value.playback, ['loop', 'once']) && Array.isArray(value.keyframes) &&
-  value.keyframes.every(keyframe => (
+const isAvatarAnimationClip = (value: unknown): value is AvatarAnimationClip => {
+  if (!isRecord(value) || !isOneOf(value.anchor, ['absolute', 'relative']) ||
+    !isFiniteNumber(value.durationMs) || value.durationMs <= 0 || !isOptionalString(value.label) ||
+    !isOneOf(value.playback, ['loop', 'once']) || !Array.isArray(value.keyframes) ||
+    value.keyframes.length === 0) return false
+  const durationMs = value.durationMs
+  return value.keyframes.every(keyframe => (
     isRecord(keyframe) && isFiniteNumber(keyframe.atMs) && keyframe.atMs >= 0 &&
+    keyframe.atMs <= durationMs &&
     (keyframe.easing == null || isOneOf(keyframe.easing, [
       'ease-in', 'ease-in-out', 'ease-out', 'linear'
     ])) && isAvatarScenePatch(keyframe.patch)
   ))
-)
+}
 
 const isAvatarAnimationLibrary = (value: unknown): value is AvatarAnimationLibrary => (
   isRecord(value) && isString(value.id) && isOptionalString(value.label) && isRecord(value.groups) &&
@@ -461,14 +476,13 @@ export const anchorAvatarAnimationClip = (
   clip: AvatarAnimationClip
 ): AvatarAnimationClip => {
   if (clip.anchor === 'absolute' || clip.keyframes.length === 0) return clip
-  const first = [...clip.keyframes].sort((a, b) => a.atMs - b.atMs)[0]!
-  const firstScene = applyAvatarScenePatch(definition.scene, first.patch)
-  const delta = {
-    pitch: definition.scene.view.pitch - firstScene.view.pitch,
-    positionX: definition.scene.view.positionX - firstScene.view.positionX,
-    positionY: definition.scene.view.positionY - firstScene.view.positionY,
-    yaw: definition.scene.view.yaw - firstScene.view.yaw
-  }
+  const ordered = [...clip.keyframes].sort((a, b) => a.atMs - b.atMs)
+  const viewKeys = ['pitch', 'positionX', 'positionY', 'yaw'] as const
+  const delta = Object.fromEntries(viewKeys.map(key => {
+    const first = ordered.find(frame => frame.patch.view?.[key] != null)
+    const authored = first?.patch.view?.[key]
+    return [key, authored == null ? 0 : definition.scene.view[key] - authored]
+  })) as Record<(typeof viewKeys)[number], number>
   return {
     ...clip,
     anchor: 'absolute',
@@ -476,17 +490,13 @@ export const anchorAvatarAnimationClip = (
       ...frame,
       patch: {
         ...frame.patch,
-        view: {
-          ...frame.patch.view,
-          ...(frame.patch.view?.pitch == null ? {} : { pitch: frame.patch.view.pitch + delta.pitch }),
-          ...(frame.patch.view?.positionX == null
-            ? {}
-            : { positionX: frame.patch.view.positionX + delta.positionX }),
-          ...(frame.patch.view?.positionY == null
-            ? {}
-            : { positionY: frame.patch.view.positionY + delta.positionY }),
-          ...(frame.patch.view?.yaw == null ? {} : { yaw: frame.patch.view.yaw + delta.yaw })
-        }
+        ...(frame.patch.view == null
+          ? {}
+          : {
+              view: Object.fromEntries(Object.entries(frame.patch.view).map(([key, value]) => (
+                [key, value + delta[key as keyof typeof delta]]
+              )))
+            })
       }
     }))
   }
@@ -509,14 +519,7 @@ export const applyAvatarScenePatch = (scene: AvatarScene, patch: AvatarScenePatc
     ...scene.effects,
     colorGrade: { ...scene.effects.colorGrade, ...patch.colorGrade }
   },
-  entity: patch.entityParts == null
-    ? scene.entity
-    : {
-        ...scene.entity,
-        parts: scene.entity.parts.map(part => ({ ...part, ...patch.entityParts?.[part.id] }))
-      },
   face: { ...scene.face, ...patch.face },
-  lighting: { ...scene.lighting, ...patch.lighting },
   view: { ...scene.view, ...patch.view }
 })
 
@@ -542,15 +545,7 @@ const interpolateScene = (from: AvatarScene, to: AvatarScene, progress: number):
     ...from.effects,
     colorGrade: interpolateRecord(from.effects.colorGrade, to.effects.colorGrade, progress)
   },
-  entity: {
-    ...from.entity,
-    parts: from.entity.parts.map(part => {
-      const target = to.entity.parts.find(candidate => candidate.id === part.id)
-      return target == null ? part : interpolateRecord(part, target, progress)
-    })
-  },
   face: interpolateRecord(from.face, to.face, progress),
-  lighting: interpolateRecord(from.lighting, to.lighting, progress),
   view: interpolateRecord(from.view, to.view, progress)
 })
 
@@ -559,10 +554,13 @@ export const resolveAvatarAnimationFrame = (
   clip: AvatarAnimationClip,
   elapsedMs: number
 ): ResolvedAvatarAnimationFrame => {
-  const ordered = [...clip.keyframes].sort((a, b) => a.atMs - b.atMs)
-  if (ordered.length === 0 || clip.durationMs <= 0) {
+  const authored = [...clip.keyframes].sort((a, b) => a.atMs - b.atMs)
+  if (authored.length === 0 || clip.durationMs <= 0) {
     return { elapsedMs: 0, finished: true, progress: 1, scene: definition.scene }
   }
+  const ordered: readonly AvatarAnimationKeyframe[] = authored[0]!.atMs > 0
+    ? [{ atMs: 0, easing: authored[0]!.easing, patch: {} }, ...authored]
+    : authored
   const requested = Math.max(elapsedMs, 0)
   const finished = clip.playback === 'once' && requested >= clip.durationMs
   const timeline = clip.playback === 'loop'

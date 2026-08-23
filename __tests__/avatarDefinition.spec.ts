@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
 import {
+  avatarAnimationClipToSavedAnimation,
   avatarDefinitionToSearchParams,
   createAvatarDefinition,
   flattenAvatarAnimationLibraries
@@ -100,5 +101,46 @@ describe('Avatar editor public definition bridge', () => {
     expect(entry?.animation.name).toBe('Listen')
     expect(entry?.animation.keyframes).toHaveLength(2)
     expect(entry?.animation.id).toBe('public:customer-support:support:listen')
+  })
+
+  it('preserves a delayed first public keyframe in the editor timeline', () => {
+    const saved = avatarAnimationClipToSavedAnimation('delayed', {
+      anchor: 'absolute',
+      durationMs: 800,
+      keyframes: [{ atMs: 300, easing: 'linear', patch: { view: { pitch: .4 } } }],
+      playback: 'once'
+    }, createAvatarDefinition({
+      animation: null,
+      avatarOutlineStyle: { color: '#000000', opacity: 80, width: 4 },
+      avatarShadowStyle: { color: '#000000', direction: 45, distance: 12, opacity: 24, softness: 16 },
+      backgroundStyle: 'solid',
+      bodyShape: 'sphere',
+      cameraBackground: '#111315',
+      cameraFrame: 'rounded',
+      colorGrade: { brightness: 1, saturation: 1, tintAmount: 0, tintB: 0, tintG: 0, tintR: 0 },
+      entityParts: [],
+      entityPreset: 'custom',
+      exportSize: 256,
+      faceShadowStyle: { direction: 50, distance: 4, opacity: 28, softness: 0 },
+      faceStyle: DEFAULT_AVATAR_FACE_STYLE,
+      frameShadowStyle: { direction: 90, distance: 12, opacity: 22, softness: 24 },
+      glyph: { leftEye: '0', linkEyes: true, mouth: 'w', rightEye: '0' },
+      gridDensity: 100,
+      interactionMode: 'rotate',
+      lightAzimuth: -35,
+      lightDistance: 0,
+      lightElevation: 40,
+      paletteId: 'signal',
+      showAvatarShadow: true,
+      showFrameShadow: true,
+      showLight: false,
+      showOutline: true,
+      showShadow: false,
+      viewState: DEFAULT_AVATAR_VIEW_STATE
+    }).scene)
+    expect(saved.keyframes).toHaveLength(2)
+    expect(saved.keyframes[0]?.pitch).toBe(DEFAULT_AVATAR_VIEW_STATE.pitch)
+    expect(saved.keyframes[1]?.durationMs).toBe(300)
+    expect(saved.keyframes[1]?.pitch).toBe(.4)
   })
 })

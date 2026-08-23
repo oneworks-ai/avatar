@@ -291,7 +291,10 @@ export const Avatar = forwardRef<AvatarHandle, AvatarProps>(function Avatar({
         interactionMode={scene.interactionMode}
         lightDistance={scene.lighting.distance}
         lightDirection={{ azimuth: scene.lighting.azimuth, elevation: scene.lighting.elevation }}
-        onViewStateChange={view => commitDefinition(applyView(currentDefinition, view))}
+        onViewStateChange={view => {
+          stop()
+          commitDefinition(applyView(currentDefinition, view))
+        }}
         palette={palette}
         shadowStyle={scene.effects.faceShadow}
         showAvatarShadow={scene.effects.showAvatarShadow}
@@ -342,6 +345,7 @@ export const AvatarEditor = forwardRef<AvatarEditorHandle, AvatarEditorProps>(fu
 
   useEffect(() => {
     if (definition == null || definition === emittedRef.current) return
+    emittedRef.current = undefined
     setInternalDefinition(definition)
     setRevision(current => current + 1)
   }, [definition])
