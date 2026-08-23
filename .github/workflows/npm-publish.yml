@@ -1,0 +1,199 @@
+name: Publish Avatar SDK
+
+on:
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        default: true
+        description: Pack and validate without publishing to npm.
+        required: false
+        type: boolean
+      publish_tag:
+        default: rc
+        description: npm dist-tag for the release.
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: 'true'
+
+concurrency:
+  group: avatar-sdk-publish-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  validate:
+    name: test-pack-validate
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    permissions:
+      contents: read
+    outputs:
+      version: ${{ steps.publish.outputs.version }}
+
+    steps:
+      - name: Checkout Avatar repository
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+
+      - name: Checkout shared OneWorks sources
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          repository: oneworks-ai/app
+          path: app-source
+          submodules: false
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4
+        with:
+          version: 11.7.0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version-file: app-source/.node-version
+          registry-url: https://registry.npmjs.org
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Test editor and runtime contracts
+        run: pnpm test
+
+      - name: Build and typecheck SDK packages
+        run: pnpm typecheck:sdk
+
+      - name: Test packed packages in a clean consumer
+        run: pnpm smoke:sdk
+
+      - name: Audit production dependencies
+        run: pnpm audit --prod --audit-level high
+
+      - name: Prepare immutable npm tarballs
+        id: publish
+        env:
+          NPM_PUBLISH_TARBALL_DIRECTORY: ${{ runner.temp }}/avatar-sdk-tarballs
+          PUBLISH_TAG: ${{ inputs.publish_tag }}
+        run: node scripts/publish-sdk-packages.mjs --prepare-only
+
+      - name: Upload immutable npm tarballs
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: avatar-sdk-${{ steps.publish.outputs.version }}
+          path: ${{ runner.temp }}/avatar-sdk-tarballs
+          if-no-files-found: error
+          retention-days: 1
+
+  publish:
+    name: oidc-publish-verify
+    needs: validate
+    if: ${{ !inputs.dry_run }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    environment:
+      name: npm-publish
+    permissions:
+      contents: read
+      id-token: write
+    outputs:
+      version: ${{ steps.publish.outputs.version }}
+
+    steps:
+      - name: Checkout validated source
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          ref: ${{ github.sha }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: 24
+          registry-url: https://registry.npmjs.org
+
+      - name: Install npm with Trusted Publishing support
+        run: npm install -g npm@11.15.0
+
+      - name: Download immutable npm tarballs
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          name: avatar-sdk-${{ needs.validate.outputs.version }}
+          path: ${{ runner.temp }}/avatar-sdk-tarballs
+
+      - name: Require protected main for publishing
+        env:
+          TRUSTED_PUBLISHERS: ${{ vars.NPM_TRUSTED_PUBLISHERS }}
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REF" = 'refs/heads/main'
+          test "$TRUSTED_PUBLISHERS" = '@oneworks/avatar,@oneworks/avatar-react,@oneworks/avatar-web,@oneworks/avatar-vue|oneworks-ai/avatar|npm-publish.yml|npm-publish|allow:npm-publish|token:none'
+
+      - name: Create tokenless npm configuration
+        env:
+          NPM_CONFIG_USERCONFIG: ${{ runner.temp }}/avatar-npm-publish.npmrc
+        run: |
+          umask 077
+          printf 'registry=https://registry.npmjs.org/\n' > "$NPM_CONFIG_USERCONFIG"
+
+      - name: Publish and reconcile npm packages
+        id: publish
+        env:
+          NPM_CONFIG_PROVENANCE: 'true'
+          NPM_CONFIG_USERCONFIG: ${{ runner.temp }}/avatar-npm-publish.npmrc
+          NPM_PUBLISH_TARBALL_DIRECTORY: ${{ runner.temp }}/avatar-sdk-tarballs
+          PUBLISH_TAG: ${{ inputs.publish_tag }}
+        run: node scripts/publish-sdk-packages.mjs --publish-prepared
+
+      - name: Remove isolated npm configuration
+        if: ${{ always() }}
+        env:
+          NPM_CONFIG_USERCONFIG: ${{ runner.temp }}/avatar-npm-publish.npmrc
+        run: rm -f "$NPM_CONFIG_USERCONFIG"
+
+  release:
+    name: tag-sdk-release
+    needs: publish
+    if: ${{ !inputs.dry_run }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout published source
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          ref: ${{ github.sha }}
+
+      - name: Create the immutable SDK release tag
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ needs.publish.outputs.version }}
+        run: |
+          set -euo pipefail
+          tag="sdk-v${VERSION}"
+          if git ls-remote --exit-code --tags origin "refs/tags/${tag}" >/dev/null 2>&1; then
+            test "$(git ls-remote origin "refs/tags/${tag}" | awk '{print $1}')" = "$GITHUB_SHA"
+          else
+            git tag "$tag" "$GITHUB_SHA"
+            git push origin "$tag"
+          fi
+          if ! gh release view "$tag" >/dev/null 2>&1; then
+            release_args=()
+            if [[ "$VERSION" == *-* ]]; then
+              release_args+=(--prerelease)
+            fi
+            gh release create "$tag" \
+              --target "$GITHUB_SHA" \
+              --title "OneWorks Avatar SDK ${VERSION}" \
+              --notes "Publishes @oneworks/avatar, @oneworks/avatar-react, @oneworks/avatar-web, and @oneworks/avatar-vue with npm provenance." \
+              "${release_args[@]}"
+          fi
+          test "$(gh release view "$tag" --json tagName --jq '.tagName')" = "$tag"
+          test "$(gh release view "$tag" --json name --jq '.name')" = "OneWorks Avatar SDK ${VERSION}"
+          expected_prerelease=false
+          if [[ "$VERSION" == *-* ]]; then
+            expected_prerelease=true
+          fi
+          test "$(gh release view "$tag" --json isPrerelease --jq '.isPrerelease')" = "$expected_prerelease"
