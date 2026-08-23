@@ -380,6 +380,11 @@ function EntityPresetBody({
                   )}
             </mask>
           ))}
+        {face.eyes.map(eye => (
+          <clipPath key={`highlight-clip-${eye.id}`} id={`${idPrefix}-entity-${eye.id}-highlight-clip`}>
+            <path d={eye.path} />
+          </clipPath>
+        ))}
       </defs>
       <g filter={outlineEnabled ? `url(#${idPrefix}-entity-outline)` : undefined}>
         {projectedParts.map(part => (
@@ -397,15 +402,17 @@ function EntityPresetBody({
                 showLight={showLight && renderSurfaceCells && (part.face || part.scaleX * part.scaleY >= .075)}
                 lightDistance={lightDistance}
               />
-              {surfaceDecals.filter(decal => decal.targetPartId === part.id).map(decal => (
-                <path
-                  key={decal.id}
-                  data-avatar-surface-decal={decal.id}
-                  d={decal.path}
-                  fill={decal.color}
-                  fillOpacity={decal.opacity / 100}
-                />
-              ))}
+              <g clipPath={`url(#${idPrefix}-entity-${preset}-${part.index})`}>
+                {surfaceDecals.filter(decal => decal.targetPartId === part.id).map(decal => (
+                  <path
+                    key={decal.id}
+                    data-avatar-surface-decal={decal.id}
+                    d={decal.path}
+                    fill={decal.color}
+                    fillOpacity={decal.opacity / 100}
+                  />
+                ))}
+              </g>
             </g>
           </g>
         ))}
@@ -472,11 +479,12 @@ function EntityPresetBody({
                 <path
                   key={highlight.id}
                   data-avatar-eye-highlight={highlight.id}
-                d={highlight.path}
-                fill={faceStyle.eyeHighlight.color}
-                fillOpacity={faceStyle.eyeHighlight.opacity / 100}
-              />
-            ))}
+                  clipPath={`url(#${idPrefix}-entity-${highlight.id.replace('eye-highlight-', 'eye-')}-highlight-clip)`}
+                  d={highlight.path}
+                  fill={faceStyle.eyeHighlight.color}
+                  fillOpacity={faceStyle.eyeHighlight.opacity / 100}
+                />
+              ))}
             {!faceStyle.noseEnabled || face.nose == null
               ? null
               : (
@@ -1100,6 +1108,11 @@ function InteractiveAvatarComponent({
           <clipPath id={`${id}-clip`}>
             <path d={bodyGeometry.outlinePath} />
           </clipPath>
+          {face.eyes.map(eye => (
+            <clipPath key={`highlight-clip-${eye.id}`} id={`${id}-${eye.id}-highlight-clip`}>
+              <path d={eye.path} />
+            </clipPath>
+          ))}
           <filter id={`${id}-face-shadow-blur`} x='-50%' y='-50%' width='200%' height='200%'>
             <feGaussianBlur stdDeviation={shadowStyle.softness} />
           </filter>
@@ -1185,6 +1198,7 @@ function InteractiveAvatarComponent({
                     <path
                       key={highlight.id}
                       data-avatar-eye-highlight={highlight.id}
+                      clipPath={`url(#${id}-${highlight.id.replace('eye-highlight-', 'eye-')}-highlight-clip)`}
                       d={highlight.path}
                       fill={animatedFaceStyle.eyeHighlight.color}
                       fillOpacity={animatedFaceStyle.eyeHighlight.opacity / 100}

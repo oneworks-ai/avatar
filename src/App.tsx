@@ -1333,9 +1333,8 @@ function App({
     setGifExportState('exporting')
     try {
       const gif = await createAvatarGif({
-        background: cameraBackground,
+        ...avatarCaptureOptions,
         currentViewState: avatarViewState,
-        frame: cameraFrame,
         keyframes: animationKeyframes,
         lockStartPosition: animationLockStartPosition,
         playbackMode: animationPlaybackMode,
@@ -1378,10 +1377,7 @@ function App({
     if (sourceSvg == null || savePresetState === 'saving') return
     setSavePresetState('saving')
     try {
-      const screenshot = await captureAvatarScreenshot(sourceSvg, {
-        background: cameraBackground,
-        frame: cameraFrame
-      })
+      const screenshot = await captureAvatarScreenshot(sourceSvg, avatarCaptureOptions)
       const preset: SavedAvatarPreset = {
         createdAt: Date.now(),
         id: globalThis.crypto?.randomUUID?.() ?? `preset-${Date.now()}`,

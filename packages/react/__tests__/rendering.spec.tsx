@@ -66,7 +66,10 @@ describe('OneWorks Avatar React rendering', () => {
     ).toEqual(expect.arrayContaining(parts.map(part => part.id)))
     expect(host.querySelectorAll('[data-avatar-entity-part]')).toHaveLength(parts.length)
     expect(host.querySelector('[data-avatar-surface-decal="blush-left"]')).not.toBeNull()
+    expect(host.querySelector('[data-avatar-surface-decal="blush-left"]')?.parentElement?.getAttribute('clip-path'))
+      .toContain('-entity-custom-')
     expect(host.querySelectorAll('[data-avatar-eye-highlight]')).toHaveLength(2)
+    expect(host.querySelector('[data-avatar-eye-highlight]')?.getAttribute('clip-path')).toContain('highlight-clip')
   })
 
   it('renders the definition camera frame shadow', () => {
@@ -103,5 +106,7 @@ describe('OneWorks Avatar React rendering', () => {
     })
     expect(source).toContain('oneworks-avatar-export-frame-shadow')
     expect(source).toContain('flood-opacity="0.22"')
+    expect(source).toContain('operator="out"')
+    expect(source).toContain('in2="SourceAlpha"')
   })
 })

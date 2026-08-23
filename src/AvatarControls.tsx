@@ -1,7 +1,7 @@
 import './AvatarControls.scss'
 
 import type { AvatarBackgroundStyle, AvatarPalette } from '@oneworks/avatar'
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useId, useRef, useState } from 'react'
 import type { CSSProperties, KeyboardEvent, PointerEvent, ReactNode } from 'react'
 
 import { AVATAR_BODY_SHAPES, EntityPresetPreview } from './InteractiveAvatar'
@@ -227,14 +227,23 @@ const DEFAULT_CAMERA_BACKGROUND_COLOR = CAMERA_BACKGROUND_PRESETS[0]
 
 function FacePresetPreview({ preset }: { readonly preset: AvatarFacePreset }) {
   const { style } = preset
+  const id = useId()
   const face = projectDefaultFace({ pitch: 0, yaw: 0 }, 'sphere', style)
   return (
     <svg className='avatar-controls__face-preset-preview' viewBox='135 140 150 145' aria-hidden='true'>
+      <defs>
+        {face.eyes.map(eye => (
+          <clipPath key={eye.id} id={`${id}-${eye.id}-highlight-clip`}>
+            <path d={eye.path} />
+          </clipPath>
+        ))}
+      </defs>
       <rect className='avatar-controls__face-preset-head' x='143' y='143' width='134' height='136' rx='58' />
       {face.eyes.map(eye => <path key={eye.id} d={eye.path} />)}
       {face.eyeHighlights.map(highlight => (
         <path
           key={highlight.id}
+          clipPath={`url(#${id}-${highlight.id.replace('eye-highlight-', 'eye-')}-highlight-clip)`}
           d={highlight.path}
           fill={style.eyeHighlight.color}
           fillOpacity={style.eyeHighlight.opacity / 100}

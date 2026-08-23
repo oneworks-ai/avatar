@@ -762,7 +762,7 @@ const isAvatarAnimationLibrary = (value: unknown): value is AvatarAnimationLibra
   ))
 )
 
-export const isAvatarDefinition = (value: unknown): value is AvatarDefinition => {
+const isAvatarDefinitionValue = (value: unknown): value is AvatarDefinition => {
   if (
     !isRecord(value) || !hasOnlyKeys(value, ['animations', 'metadata', 'scene', 'schema', 'version']) ||
     !hasOwnKeys(value, ['scene', 'schema', 'version']) ||
@@ -887,17 +887,40 @@ export const isAvatarDefinition = (value: unknown): value is AvatarDefinition =>
     isAvatarView(scene.view)
 }
 
+export const isAvatarDefinition = (value: unknown): value is AvatarDefinition => {
+  try {
+    return isAvatarDefinitionValue(value)
+  } catch {
+    return false
+  }
+}
+
 export const parseAvatarDefinition = (input: unknown): AvatarDefinition => {
-  const inputValue = typeof input === 'string' ? JSON.parse(input) : input
+  let inputValue: unknown
+  try {
+    inputValue = typeof input === 'string' ? JSON.parse(input) : input
+  } catch {
+    throw new TypeError('Invalid OneWorks Avatar definition')
+  }
   if (!isAvatarDefinition(inputValue)) throw new TypeError('Invalid OneWorks Avatar definition')
-  const value = structuredClone(inputValue)
+  let value: unknown
+  try {
+    value = structuredClone(inputValue)
+  } catch {
+    throw new TypeError('Invalid OneWorks Avatar definition')
+  }
   if (!isAvatarDefinition(value)) throw new TypeError('Invalid OneWorks Avatar definition')
   return value
 }
 
 export const serializeAvatarDefinition = (definition: AvatarDefinition) => {
   if (!isAvatarDefinition(definition)) throw new TypeError('Invalid OneWorks Avatar definition')
-  const value = structuredClone(definition)
+  let value: unknown
+  try {
+    value = structuredClone(definition)
+  } catch {
+    throw new TypeError('Invalid OneWorks Avatar definition')
+  }
   if (!isAvatarDefinition(value)) throw new TypeError('Invalid OneWorks Avatar definition')
   return `${JSON.stringify(value, null, 2)}\n`
 }

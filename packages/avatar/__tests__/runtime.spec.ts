@@ -5,6 +5,7 @@ import {
   applyAvatarScenePatch,
   createDefaultAvatarDefinition,
   createSeededAvatarDefinition,
+  isAvatarDefinition,
   mergeAvatarAnimationLibraries,
   parseAvatarAnimationClip,
   parseAvatarDefinition,
@@ -51,6 +52,10 @@ describe('OneWorks Avatar public runtime contract', () => {
     expect(parseAvatarDefinition(serializeAvatarDefinition(definition))).toEqual(definition)
     expect(() => parseAvatarDefinition({ ...definition, version: 2 })).toThrow(TypeError)
     expect(() => parseAvatarDefinition(Object.create(definition))).toThrow(TypeError)
+    const revoked = Proxy.revocable(definition, {})
+    revoked.revoke()
+    expect(isAvatarDefinition(revoked.proxy)).toBe(false)
+    expect(() => parseAvatarDefinition(revoked.proxy)).toThrow(TypeError)
     expect(() => parseAvatarAnimationClip(Object.create(nod))).toThrow(TypeError)
     const decorated = {
       ...definition,
