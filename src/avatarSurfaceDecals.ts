@@ -59,16 +59,24 @@ export const serializeAvatarSurfaceDecals = (decals: readonly AvatarSurfaceDecal
   ]))
 )
 
-export const deserializeAvatarSurfaceDecals = (value: string | null): AvatarSurfaceDecal[] => {
+export const deserializeAvatarSurfaceDecals = (
+  value: string | null,
+  targetPartIds?: readonly string[]
+): AvatarSurfaceDecal[] => {
   if (value == null) return []
   try {
     const parsed: unknown = JSON.parse(value)
     if (!Array.isArray(parsed)) return []
+    const validTargets = targetPartIds == null ? null : new Set(targetPartIds)
     return parsed.flatMap(item => {
       if (!Array.isArray(item) || typeof item[0] !== 'string' || item[0].length === 0) return []
       if (item[1] != null && typeof item[1] !== 'string') return []
       if (!AVATAR_SURFACE_DECAL_SHAPES.includes(item[2] as AvatarSurfaceDecalShape)) return []
       if (!isHexColor(item[8])) return []
+      const requestedTarget = typeof item[1] === 'string' && item[1].trim() !== '' ? item[1] : null
+      const targetPartId = requestedTarget != null && (validTargets == null || validTargets.has(requestedTarget))
+        ? requestedTarget
+        : null
       return [{
         color: item[8].toLowerCase(),
         height: finite(item[6], 24, 2, 180),
@@ -77,7 +85,7 @@ export const deserializeAvatarSurfaceDecals = (value: string | null): AvatarSurf
         opacity: finite(item[9], 100, 0, 100),
         rotation: finite(item[7], 0, -180, 180),
         shape: item[2] as AvatarSurfaceDecalShape,
-        targetPartId: item[1] ?? null,
+        targetPartId,
         width: finite(item[5], 36, 2, 180),
         x: finite(item[3], 0, -180, 180),
         y: finite(item[4], 0, -180, 180)

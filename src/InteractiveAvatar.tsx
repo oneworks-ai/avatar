@@ -178,9 +178,6 @@ function EntityPrimitive({
           ))
           : null}
       </g>
-      {geometry.cavityPath == null
-        ? null
-        : <path d={geometry.cavityPath} fill={part.shadowColor} fillOpacity='.9' />}
     </>
   )
 }
@@ -413,6 +410,16 @@ function EntityPresetBody({
                   />
                 ))}
               </g>
+              {geometries[part.id].cavityPath == null
+                ? null
+                : (
+                  <path
+                    data-avatar-entity-cavity={part.id}
+                    d={geometries[part.id].cavityPath}
+                    fill={part.shadowColor}
+                    fillOpacity='.9'
+                  />
+                )}
             </g>
           </g>
         ))}

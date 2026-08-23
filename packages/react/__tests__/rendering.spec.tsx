@@ -72,6 +72,30 @@ describe('OneWorks Avatar React rendering', () => {
     expect(host.querySelector('[data-avatar-eye-highlight]')?.getAttribute('clip-path')).toContain('highlight-clip')
   })
 
+  it('clips decals to a hollow part and redraws its cavity above them', () => {
+    const definition = createDefaultAvatarDefinition()
+    const parts = createAvatarEntityParts('dog').map((part, index) => index === 0 ? { ...part, hollow: true } : part)
+    const target = parts[0]!
+    act(() => root.render(createElement(Avatar, {
+      definition: {
+        ...definition,
+        scene: {
+          ...definition.scene,
+          decals: [{
+            color: '#ffffff', height: 180, id: 'large', label: 'Large', opacity: 100,
+            rotation: 0, shape: 'ellipse', targetPartId: target.id, width: 180, x: 0, y: 0
+          }],
+          entity: { parts, preset: 'custom' }
+        }
+      }
+    })))
+
+    const decal = host.querySelector('[data-avatar-surface-decal="large"]')!
+    const cavity = host.querySelector(`[data-avatar-entity-cavity="${target.id}"]`)!
+    expect(decal.parentElement?.getAttribute('clip-path')).toContain('-entity-custom-')
+    expect(decal.compareDocumentPosition(cavity) & Node.DOCUMENT_POSITION_FOLLOWING).not.toBe(0)
+  })
+
   it('renders the definition camera frame shadow', () => {
     const definition = createDefaultAvatarDefinition()
     act(() => root.render(createElement(Avatar, { definition })))
@@ -108,5 +132,6 @@ describe('OneWorks Avatar React rendering', () => {
     expect(source).toContain('flood-opacity="0.22"')
     expect(source).toContain('operator="out"')
     expect(source).toContain('in2="SourceAlpha"')
+    expect(source).toContain('translate(36 36) scale(')
   })
 })

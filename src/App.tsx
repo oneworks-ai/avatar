@@ -303,6 +303,7 @@ const parseQueryConfig = (params: URLSearchParams): AvatarQueryConfig => {
 
   const animationSelectionKey = parseAnimationSelectionKey(params.get('animation'))
   const entityPreset = parseAvatarEntityPreset(params.get('entity'))
+  const entityParts = deserializeAvatarEntityParts(params.get('entityParts'), entityPreset)
   const sharedAnimation = animationSelectionKey === 'shared'
     ? deserializeSharedAvatarAnimation(params.get('animationData'))
     : null
@@ -330,7 +331,7 @@ const parseQueryConfig = (params: URLSearchParams): AvatarQueryConfig => {
     cameraFrame: parseCameraFrame(params.get('cameraFrame')),
     cameraMode: parseShadow(params.get('camera')),
     controlsCollapsed: params.get('sidebar') === '0',
-    entityParts: deserializeAvatarEntityParts(params.get('entityParts'), entityPreset),
+    entityParts,
     entityPreset,
     exportSize: parseExportSize(params.get('size')),
     faceStyle: {
@@ -439,7 +440,7 @@ const parseQueryConfig = (params: URLSearchParams): AvatarQueryConfig => {
     showAvatarShadow: parseShadow(params.get('avatarShadow')),
     showFrameShadow: params.get('frameShadow') == null ? true : parseShadow(params.get('frameShadow')),
     showShadow: parseShadow(params.get('shadow')),
-    surfaceDecals: deserializeAvatarSurfaceDecals(params.get('decals')),
+    surfaceDecals: deserializeAvatarSurfaceDecals(params.get('decals'), entityParts.map(part => part.id)),
     sharedAnimation,
     viewState: {
       pitch: parseFiniteValue(params.get('pitch'), DEFAULT_AVATAR_VIEW_STATE.pitch),

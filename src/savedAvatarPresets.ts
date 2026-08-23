@@ -56,22 +56,28 @@ export const prependSavedAvatarPreset = (
   preset: SavedAvatarPreset
 ) => [preset, ...presets].slice(0, MAX_SAVED_PRESETS)
 
-const getAvatarFramePath = (width: number, height: number, frame: AvatarCameraFrame) => {
+const getAvatarFramePath = (width: number, height: number, frame: AvatarCameraFrame, inset = 0) => {
+  const innerWidth = Math.max(width - inset * 2, 1)
+  const innerHeight = Math.max(height - inset * 2, 1)
   if (frame === 'circle') {
-    const radius = Math.min(width, height) / 2
+    const radius = Math.min(innerWidth, innerHeight) / 2
     return `M ${width / 2} ${height / 2 - radius} A ${radius} ${radius} 0 1 1 ${
       width / 2
     } ${height / 2 + radius} A ${radius} ${radius} 0 1 1 ${width / 2} ${height / 2 - radius} Z`
   }
   if (frame === 'rounded') {
-    const radius = Math.min(width, height) * 18 / SCREENSHOT_SIZE
-    return `M ${radius} 0 H ${width - radius} Q ${width} 0 ${width} ${radius} V ${
-      height - radius
-    } Q ${width} ${height} ${width - radius} ${height} H ${radius} Q 0 ${height} 0 ${
-      height - radius
-    } V ${radius} Q 0 0 ${radius} 0 Z`
+    const right = width - inset
+    const bottom = height - inset
+    const radius = Math.min(innerWidth, innerHeight) * 18 / SCREENSHOT_SIZE
+    return `M ${inset + radius} ${inset} H ${right - radius} Q ${right} ${inset} ${right} ${
+      inset + radius
+    } V ${bottom - radius} Q ${right} ${bottom} ${right - radius} ${bottom} H ${
+      inset + radius
+    } Q ${inset} ${bottom} ${inset} ${bottom - radius} V ${inset + radius} Q ${inset} ${inset} ${
+      inset + radius
+    } ${inset} Z`
   }
-  return `M 0 0 H ${width} V ${height} H 0 Z`
+  return `M ${inset} ${inset} H ${width - inset} V ${height - inset} H ${inset} Z`
 }
 
 const applyAvatarCaptureFrame = (svg: SVGSVGElement, options: AvatarCaptureOptions) => {
@@ -89,9 +95,16 @@ const applyAvatarCaptureFrame = (svg: SVGSVGElement, options: AvatarCaptureOptio
   const clipPath = document.createElementNS(namespace, 'clipPath')
   const framePath = document.createElementNS(namespace, 'path')
   const content = document.createElementNS(namespace, 'g')
+  const scene = document.createElementNS(namespace, 'g')
+  const shadowInset = options.showFrameShadow && options.frameShadow != null && options.frameShadow.opacity > 0
+    ? Math.min(
+      Math.max(options.frameShadow.distance + options.frameShadow.softness, 1),
+      Math.min(width, height) / 4
+    )
+    : 0
 
   clipPath.setAttribute('id', clipId)
-  framePath.setAttribute('d', getAvatarFramePath(width, height, frame))
+  framePath.setAttribute('d', getAvatarFramePath(width, height, frame, shadowInset))
   clipPath.append(framePath)
   defs.append(clipPath)
 
@@ -130,7 +143,7 @@ const applyAvatarCaptureFrame = (svg: SVGSVGElement, options: AvatarCaptureOptio
     defs.append(filter)
 
     shadowPath = document.createElementNS(namespace, 'path')
-    shadowPath.setAttribute('d', getAvatarFramePath(width, height, frame))
+    shadowPath.setAttribute('d', getAvatarFramePath(width, height, frame, shadowInset))
     shadowPath.setAttribute('fill', '#000000')
     shadowPath.setAttribute('filter', `url(#${shadowFilterId})`)
   }
@@ -138,11 +151,20 @@ const applyAvatarCaptureFrame = (svg: SVGSVGElement, options: AvatarCaptureOptio
   content.setAttribute('clip-path', `url(#${clipId})`)
   if (options.background != null) {
     const background = document.createElementNS(namespace, 'path')
-    background.setAttribute('d', getAvatarFramePath(width, height, frame))
+    background.setAttribute('d', getAvatarFramePath(width, height, frame, shadowInset))
     background.setAttribute('fill', options.background)
     content.append(background)
   }
-  while (svg.firstChild != null) content.append(svg.firstChild)
+  if (shadowInset > 0) {
+    scene.setAttribute(
+      'transform',
+      `translate(${shadowInset} ${shadowInset}) scale(${(width - shadowInset * 2) / width} ${
+        (height - shadowInset * 2) / height
+      })`
+    )
+  }
+  while (svg.firstChild != null) scene.append(svg.firstChild)
+  content.append(scene)
   svg.append(defs)
   if (shadowPath != null) svg.append(shadowPath)
   svg.append(content)
