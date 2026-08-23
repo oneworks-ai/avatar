@@ -5,6 +5,8 @@ import { tmpdir } from 'node:os'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 
+import { verifyAvatarSdkAttestations } from './avatar-sdk-provenance.mjs'
+
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 const prepareOnly = process.argv.includes('--prepare-only')
 const publishPrepared = process.argv.includes('--publish-prepared')
@@ -55,20 +57,42 @@ const npmView = (selector, field) => {
   return typeof value === 'string' ? value : undefined
 }
 
+const verifyRegistryAttestations = async ({ integrity, name, version }) => {
+  const selector = `${name}@${version}`
+  const attestationUrl = npmView(selector, 'dist.attestations.url')
+  if (attestationUrl == null) {
+    throw new Error(`${selector} has no npm attestation URL`)
+  }
+  const response = await fetch(attestationUrl)
+  if (!response.ok) {
+    throw new Error(`${selector} npm attestation request failed with ${response.status}`)
+  }
+  const body = await response.json()
+  verifyAvatarSdkAttestations({
+    attestations: body?.attestations,
+    integrity,
+    name,
+    sourceSha: process.env.GITHUB_SHA?.trim() ?? '',
+    version
+  })
+}
+
 const verifyRegistryPackage = async ({ integrity, name, version }) => {
   const selector = `${name}@${version}`
   for (let attempt = 1; attempt <= 18; attempt += 1) {
     const registryIntegrity = npmView(selector, 'dist.integrity')
     const registryTag = npmView(name, `dist-tags.${publishTag}`)
-    const provenancePredicate = npmView(
-      selector,
-      'dist.attestations.provenance.predicateType'
-    )
     if (
       registryIntegrity === integrity &&
-      registryTag === version &&
-      provenancePredicate === 'https://slsa.dev/provenance/v1'
-    ) return
+      registryTag === version
+    ) {
+      try {
+        await verifyRegistryAttestations({ integrity, name, version })
+        return
+      } catch (error) {
+        if (attempt === 18) throw error
+      }
+    }
     if (registryIntegrity != null && registryIntegrity !== integrity) {
       throw new Error(`${selector} exists with a different tarball integrity`)
     }
@@ -155,17 +179,15 @@ try {
         throw new Error(`${selector} already exists with a different tarball integrity`)
       }
       const registryTag = npmView(releasePackage.name, `dist-tags.${publishTag}`)
-      const provenancePredicate = npmView(
-        selector,
-        'dist.attestations.provenance.predicateType'
-      )
       let existingValid = true
       if (registryTag !== version) {
         preflightFailures.push(`${selector} does not own npm dist-tag ${publishTag}`)
         existingValid = false
       }
-      if (provenancePredicate !== 'https://slsa.dev/provenance/v1') {
-        preflightFailures.push(`${selector} has no npm SLSA provenance attestation`)
+      try {
+        await verifyRegistryAttestations(releasePackage)
+      } catch (error) {
+        preflightFailures.push(error instanceof Error ? error.message : String(error))
         existingValid = false
       }
       publicationPlan.push({
