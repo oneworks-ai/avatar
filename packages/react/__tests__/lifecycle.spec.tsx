@@ -118,6 +118,31 @@ describe('OneWorks Avatar React lifecycle', () => {
     expect(ref.current?.getDefinition().scene.view.yaw).toBe(.9)
   })
 
+  it('does not restart autoplay after an interactive view change', () => {
+    const definition = createDefaultAvatarDefinition()
+    const clip: AvatarAnimationClip = {
+      anchor: 'absolute',
+      durationMs: 1000,
+      keyframes: [
+        { atMs: 0, patch: { view: { yaw: 0 } } },
+        { atMs: 1000, patch: { view: { yaw: .4 } } }
+      ],
+      playback: 'loop'
+    }
+    act(() =>
+      root?.render(createElement(Avatar, {
+        animation: clip,
+        autoplay: true,
+        definition,
+        interactive: true
+      }))
+    )
+    expect(animationFrames.size).toBe(1)
+
+    act(() => host?.querySelector<HTMLButtonElement>('[data-testid="view-change"]')?.click())
+    expect(animationFrames.size).toBe(0)
+  })
+
   it('reacts to locale prop changes', () => {
     const LocaleProbe = () => {
       const { t } = useAvatarLocale()

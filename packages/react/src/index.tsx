@@ -203,6 +203,8 @@ export const Avatar = forwardRef<AvatarHandle, AvatarProps>(function Avatar({
     callbacksRef.current.onAnimationStart?.()
     frameRef.current = requestAnimationFrame(tick)
   }, [currentDefinition, libraries, stopFrame, tick])
+  const playRef = useRef(play)
+  playRef.current = play
 
   const stop = useCallback((options: { readonly reset?: boolean } = {}) => {
     const state = animationRef.current
@@ -254,9 +256,9 @@ export const Avatar = forwardRef<AvatarHandle, AvatarProps>(function Avatar({
 
   useEffect(() => () => stopFrame(), [stopFrame])
   useEffect(() => {
-    if (autoplay && animation != null) void play(animation)
+    if (autoplay && animation != null) void playRef.current(animation)
     return () => stopFrame()
-  }, [animation, autoplay, play, stopFrame])
+  }, [animation, autoplay, stopFrame])
 
   const scene = renderDefinition.scene
   const palette = getAvatarPalette(scene.appearance.paletteId)

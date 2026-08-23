@@ -1,6 +1,7 @@
 import {
   AVATAR_DEFINITION_SCHEMA,
   AVATAR_DEFINITION_VERSION,
+  anchorAvatarAnimationClip,
   applyAvatarScenePatch
 } from '@oneworks/avatar-core'
 import type {
@@ -242,16 +243,25 @@ export const avatarAnimationClipToSavedAnimation = (
   clip: AvatarAnimationClip,
   scene: AvatarScene
 ): SavedAvatarAnimation => {
-  const ordered = [...clip.keyframes].sort((a, b) => a.atMs - b.atMs)
-  const timeline = ordered[0]?.atMs != null && ordered[0].atMs > 0
+  const resolvedClip = anchorAvatarAnimationClip({
+    scene,
+    schema: AVATAR_DEFINITION_SCHEMA,
+    version: AVATAR_DEFINITION_VERSION
+  }, clip)
+  const ordered = [...resolvedClip.keyframes].sort((a, b) => a.atMs - b.atMs)
+  const withBase = ordered[0]?.atMs != null && ordered[0].atMs > 0
     ? [{ atMs: 0, easing: ordered[0].easing, patch: {} }, ...ordered]
     : ordered
+  const last = withBase.at(-1)
+  const timeline = resolvedClip.playback === 'once' && last != null && last.atMs < resolvedClip.durationMs
+    ? [...withBase, { atMs: resolvedClip.durationMs, easing: last.easing, patch: last.patch }]
+    : withBase
   const keyframes: AvatarAnimationKeyframe[] = timeline.map((frame, index) => {
     const resolved = applyAvatarScenePatch(scene, frame.patch)
     const previous = timeline[index - 1]
     const durationMs = index === 0
-      ? clip.playback === 'loop'
-        ? Math.max(clip.durationMs - (timeline.at(-1)?.atMs ?? 0), 100)
+      ? resolvedClip.playback === 'loop'
+        ? Math.max(resolvedClip.durationMs - (timeline.at(-1)?.atMs ?? 0), 100)
         : 100
       : Math.max(frame.atMs - (previous?.atMs ?? 0), 100)
     return {
@@ -269,9 +279,9 @@ export const avatarAnimationClipToSavedAnimation = (
     createdAt: 0,
     id,
     keyframes,
-    lockStartPosition: clip.anchor === 'absolute',
-    name: clip.label ?? id,
-    playbackMode: clip.playback as AvatarAnimationPlaybackMode,
+    lockStartPosition: resolvedClip.anchor === 'absolute',
+    name: resolvedClip.label ?? id,
+    playbackMode: resolvedClip.playback as AvatarAnimationPlaybackMode,
     startFrameIndex: 0,
     version: 3
   }

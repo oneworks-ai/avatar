@@ -138,9 +138,57 @@ describe('Avatar editor public definition bridge', () => {
       showShadow: false,
       viewState: DEFAULT_AVATAR_VIEW_STATE
     }).scene)
-    expect(saved.keyframes).toHaveLength(2)
+    expect(saved.keyframes).toHaveLength(3)
     expect(saved.keyframes[0]?.pitch).toBe(DEFAULT_AVATAR_VIEW_STATE.pitch)
     expect(saved.keyframes[1]?.durationMs).toBe(300)
     expect(saved.keyframes[1]?.pitch).toBe(.4)
+    expect(saved.keyframes[2]?.durationMs).toBe(500)
+    expect(saved.keyframes[2]?.pitch).toBe(.4)
+  })
+
+  it('preserves sparse relative view anchors when opening a public clip in the editor', () => {
+    const scene = createAvatarDefinition({
+      animation: null,
+      avatarOutlineStyle: { color: '#000000', opacity: 80, width: 4 },
+      avatarShadowStyle: { color: '#000000', direction: 45, distance: 12, opacity: 24, softness: 16 },
+      backgroundStyle: 'solid',
+      bodyShape: 'sphere',
+      cameraBackground: '#111315',
+      cameraFrame: 'rounded',
+      colorGrade: { brightness: 1, saturation: 1, tintAmount: 0, tintB: 0, tintG: 0, tintR: 0 },
+      entityParts: [],
+      entityPreset: 'custom',
+      exportSize: 256,
+      faceShadowStyle: { direction: 50, distance: 4, opacity: 28, softness: 0 },
+      faceStyle: DEFAULT_AVATAR_FACE_STYLE,
+      frameShadowStyle: { direction: 90, distance: 12, opacity: 22, softness: 24 },
+      glyph: { leftEye: '0', linkEyes: true, mouth: 'w', rightEye: '0' },
+      gridDensity: 100,
+      interactionMode: 'rotate',
+      lightAzimuth: -35,
+      lightDistance: 0,
+      lightElevation: 40,
+      paletteId: 'signal',
+      showAvatarShadow: true,
+      showFrameShadow: true,
+      showLight: false,
+      showOutline: true,
+      showShadow: false,
+      viewState: { ...DEFAULT_AVATAR_VIEW_STATE, yaw: -.3 }
+    }).scene
+    const saved = avatarAnimationClipToSavedAnimation('sparse', {
+      anchor: 'relative',
+      durationMs: 1000,
+      keyframes: [
+        { atMs: 0, patch: { face: { mouthEnabled: false } } },
+        { atMs: 500, patch: { view: { yaw: .6 } } },
+        { atMs: 1000, patch: { view: { yaw: 1 } } }
+      ],
+      playback: 'once'
+    }, scene)
+    expect(saved.lockStartPosition).toBe(true)
+    expect(saved.keyframes[0]?.yaw).toBeCloseTo(-.3)
+    expect(saved.keyframes[1]?.yaw).toBeCloseTo(-.3)
+    expect(saved.keyframes[2]?.yaw).toBeCloseTo(.1)
   })
 })
