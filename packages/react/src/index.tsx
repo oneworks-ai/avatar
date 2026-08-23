@@ -16,6 +16,7 @@ import {
   anchorAvatarAnimationClip,
   createDefaultAvatarDefinition,
   mergeAvatarAnimationLibraries,
+  parseAvatarAnimationClip,
   resolveAvatarAnimationClip,
   resolveAvatarAnimationFrame
 } from '@oneworks/avatar-core'
@@ -187,10 +188,10 @@ export const Avatar = forwardRef<AvatarHandle, AvatarProps>(function Avatar({
       throw error
     }
     stopFrame()
-    const clip = anchorAvatarAnimationClip(currentDefinition, {
+    const clip = anchorAvatarAnimationClip(currentDefinition, parseAvatarAnimationClip({
       ...selected,
       playback: options.playback ?? selected.playback
-    })
+    }))
     animationRef.current = {
       base: currentDefinition,
       clip,

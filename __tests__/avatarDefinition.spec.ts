@@ -84,7 +84,7 @@ describe('Avatar editor public definition bridge', () => {
           clips: {
             listen: {
               anchor: 'relative',
-              durationMs: 400,
+              durationMs: 500,
               keyframes: [
                 { atMs: 0, patch: { view: { yaw: 0 } } },
                 { atMs: 400, patch: { view: { yaw: .2 } } }

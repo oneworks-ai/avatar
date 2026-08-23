@@ -105,7 +105,7 @@ describe('OneWorks Avatar React lifecycle', () => {
       durationMs: 1000,
       keyframes: [
         { atMs: 0, patch: { view: { yaw: 0 } } },
-        { atMs: 1000, patch: { view: { yaw: .4 } } }
+        { atMs: 900, patch: { view: { yaw: .4 } } }
       ],
       playback: 'loop'
     }
@@ -125,7 +125,7 @@ describe('OneWorks Avatar React lifecycle', () => {
       durationMs: 1000,
       keyframes: [
         { atMs: 0, patch: { view: { yaw: 0 } } },
-        { atMs: 1000, patch: { view: { yaw: .4 } } }
+        { atMs: 900, patch: { view: { yaw: .4 } } }
       ],
       playback: 'loop'
     }

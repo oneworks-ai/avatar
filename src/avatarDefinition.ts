@@ -2,7 +2,8 @@ import {
   AVATAR_DEFINITION_SCHEMA,
   AVATAR_DEFINITION_VERSION,
   anchorAvatarAnimationClip,
-  applyAvatarScenePatch
+  applyAvatarScenePatch,
+  parseAvatarAnimationClip
 } from '@oneworks/avatar-core'
 import type {
   AvatarAnimationClip,
@@ -243,11 +244,12 @@ export const avatarAnimationClipToSavedAnimation = (
   clip: AvatarAnimationClip,
   scene: AvatarScene
 ): SavedAvatarAnimation => {
+  const parsedClip = parseAvatarAnimationClip(clip)
   const resolvedClip = anchorAvatarAnimationClip({
     scene,
     schema: AVATAR_DEFINITION_SCHEMA,
     version: AVATAR_DEFINITION_VERSION
-  }, clip)
+  }, parsedClip)
   const ordered = [...resolvedClip.keyframes].sort((a, b) => a.atMs - b.atMs)
   const withBase = ordered[0]?.atMs != null && ordered[0].atMs > 0
     ? [{ atMs: 0, easing: ordered[0].easing, patch: {} }, ...ordered]

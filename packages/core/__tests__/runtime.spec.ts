@@ -5,6 +5,7 @@ import {
   applyAvatarScenePatch,
   createDefaultAvatarDefinition,
   mergeAvatarAnimationLibraries,
+  parseAvatarAnimationClip,
   parseAvatarDefinition,
   resolveAvatarAnimationClip,
   resolveAvatarAnimationFrame,
@@ -215,5 +216,44 @@ describe('OneWorks Avatar public runtime contract', () => {
     const looping = { ...clip, playback: 'loop' as const }
     expect(resolveAvatarAnimationFrame(definition, looping, 750).scene.view.pitch).toBeCloseTo(.3)
     expect(resolveAvatarAnimationFrame(definition, looping, 1000).scene.view.pitch).toBe(0)
+  })
+
+  it('rejects timeline segments the editor cannot represent losslessly', () => {
+    expect(() => parseAvatarAnimationClip({
+      anchor: 'absolute',
+      durationMs: 50,
+      keyframes: [
+        { atMs: 0, patch: {} },
+        { atMs: 50, patch: { view: { yaw: .1 } } }
+      ],
+      playback: 'once'
+    })).toThrow(TypeError)
+    expect(() => parseAvatarAnimationClip({
+      anchor: 'absolute',
+      durationMs: 9000,
+      keyframes: [
+        { atMs: 0, patch: {} },
+        { atMs: 9000, patch: { view: { yaw: .1 } } }
+      ],
+      playback: 'once'
+    })).toThrow(TypeError)
+    expect(() => parseAvatarAnimationClip({
+      anchor: 'absolute',
+      durationMs: 800,
+      keyframes: [
+        { atMs: 0, patch: {} },
+        { atMs: 800, patch: { view: { yaw: .1 } } }
+      ],
+      playback: 'loop'
+    })).toThrow(TypeError)
+    expect(parseAvatarAnimationClip({
+      anchor: 'absolute',
+      durationMs: 900,
+      keyframes: [
+        { atMs: 0, patch: {} },
+        { atMs: 300, patch: { view: { yaw: .1 } } }
+      ],
+      playback: 'loop'
+    }).durationMs).toBe(900)
   })
 })

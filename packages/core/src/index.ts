@@ -1,5 +1,7 @@
 export const AVATAR_DEFINITION_SCHEMA = 'oneworks.avatar' as const
 export const AVATAR_DEFINITION_VERSION = 1 as const
+export const AVATAR_ANIMATION_MIN_SEGMENT_MS = 100
+export const AVATAR_ANIMATION_MAX_SEGMENT_MS = 8000
 
 export type AvatarBackgroundStyle = 'gradient' | 'solid'
 export type AvatarBodyShape =
@@ -392,13 +394,32 @@ const isAvatarAnimationClip = (value: unknown): value is AvatarAnimationClip => 
     !isOneOf(value.playback, ['loop', 'once']) || !Array.isArray(value.keyframes) ||
     value.keyframes.length === 0) return false
   const durationMs = value.durationMs
-  return value.keyframes.every(keyframe => (
+  if (!value.keyframes.every(keyframe => (
     isRecord(keyframe) && isFiniteNumber(keyframe.atMs) && keyframe.atMs >= 0 &&
     keyframe.atMs <= durationMs &&
     (keyframe.easing == null || isOneOf(keyframe.easing, [
       'ease-in', 'ease-in-out', 'ease-out', 'linear'
     ])) && isAvatarScenePatch(keyframe.patch)
-  ))
+  ))) return false
+  const ordered = [...value.keyframes].sort((a, b) => a.atMs - b.atMs)
+  const timeline = ordered[0]!.atMs > 0
+    ? [{ atMs: 0 }, ...ordered]
+    : ordered
+  const segmentIsValid = (duration: number) => (
+    duration >= AVATAR_ANIMATION_MIN_SEGMENT_MS && duration <= AVATAR_ANIMATION_MAX_SEGMENT_MS
+  )
+  if (timeline.slice(1).some((frame, index) => (
+    !segmentIsValid(frame.atMs - timeline[index]!.atMs)
+  ))) return false
+  const tailDuration = durationMs - timeline.at(-1)!.atMs
+  return value.playback === 'loop'
+    ? segmentIsValid(tailDuration)
+    : tailDuration === 0 || segmentIsValid(tailDuration)
+}
+
+export const parseAvatarAnimationClip = (input: unknown): AvatarAnimationClip => {
+  if (!isAvatarAnimationClip(input)) throw new TypeError('Invalid OneWorks Avatar animation clip')
+  return structuredClone(input)
 }
 
 const isAvatarAnimationLibrary = (value: unknown): value is AvatarAnimationLibrary => (
