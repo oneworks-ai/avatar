@@ -1,6 +1,7 @@
 import { AVATAR_LIGHTING_RANGES } from '@oneworks/avatar'
 
 import type { AvatarSurfaceDecal } from './avatarSurfaceDecals'
+import { CLAUDE_SPARK_PATH, CLAUDE_SPARK_VIEWBOX_SIZE } from './claudeSpark'
 
 export const AVATAR_BODY_SHAPES = [
   'sphere',
@@ -189,6 +190,7 @@ export interface ProjectedEye {
   readonly depth: number
   readonly id: string
   readonly path: string
+  readonly transform?: string
 }
 
 interface ShapeSpec {
@@ -1027,25 +1029,140 @@ export const projectAvatarSurfaceDecal = (
   const scaleX = options.scaleX ?? 1
   const scaleY = options.scaleY ?? 1
   const scaleZ = options.scaleZ ?? 1
-  const transformPoint = (point: Vec3) => rotate(rotateLocal({
-    x: point.x * scaleX,
-    y: point.y * scaleY,
-    z: point.z * scaleZ
-  }, options), pose)
-  const transformNormal = (normal: Vec3) => rotate(rotateLocal(normalize({
-    x: normal.x / scaleX,
-    y: normal.y / scaleY,
-    z: normal.z / scaleZ
-  }), options), pose)
+  const orientToSurfaceSide = (point: Vec3): Vec3 => {
+    if (decal.shape === 'radial-pleats') return point
+    if (decal.side === 'back') return { x: point.x, y: point.y, z: -point.z }
+    if (decal.side === 'left') return { x: -point.z, y: point.y, z: point.x }
+    if (decal.side === 'right') return { x: point.z, y: point.y, z: -point.x }
+    return point
+  }
+  const transformPoint = (point: Vec3) => {
+    const orientedPoint = orientToSurfaceSide(point)
+    return rotate(rotateLocal({
+      x: orientedPoint.x * scaleX,
+      y: orientedPoint.y * scaleY,
+      z: orientedPoint.z * scaleZ
+    }, options), pose)
+  }
+  const transformNormal = (normal: Vec3) => {
+    const orientedNormal = orientToSurfaceSide(normal)
+    return rotate(rotateLocal(normalize({
+      x: orientedNormal.x / scaleX,
+      y: orientedNormal.y / scaleY,
+      z: orientedNormal.z / scaleZ
+    }), options), pose)
+  }
+  if (decal.shape === 'radial-pleats') {
+    const rayCount = 12
+    const samplesPerRay = 9
+    const phase = decal.rotation * Math.PI / 180
+    const curveRadians = decal.x * Math.PI / 180
+    const startProgress = .06
+    const endProgress = clamp(.2 + decal.height / 160, .3, .82)
+    const angularHalfWidth = clamp(decal.width / spec.radiusX, .008, .08)
+    const paths: string[] = []
+    const visibleDepths: number[] = []
+
+    for (let rayIndex = 0; rayIndex < rayCount; rayIndex += 1) {
+      const baseLongitude = phase + rayIndex / rayCount * Math.PI * 2
+      const curvedLongitude = (progress: number) => {
+        const normalizedProgress = (progress - startProgress) / (endProgress - startProgress)
+        const easedProgress = normalizedProgress * normalizedProgress * (3 - 2 * normalizedProgress)
+        return baseLongitude + curveRadians * easedProgress
+      }
+      const centerProgress = (startProgress + endProgress) / 2
+      const centerLongitude = curvedLongitude(centerProgress)
+      const centerLatitude = ((startProgress + endProgress) / 2) * Math.PI - Math.PI / 2
+      const centerNormal = transformNormal(getSurfaceNormal(
+        spec,
+        centerLongitude,
+        centerLatitude,
+        false,
+        options
+      ))
+      if (centerNormal.z <= .015) continue
+
+      const samples = Array.from({ length: samplesPerRay }, (_, sampleIndex) => {
+        const progress = startProgress +
+          sampleIndex / (samplesPerRay - 1) * (endProgress - startProgress)
+        return {
+          latitude: progress * Math.PI - Math.PI / 2,
+          longitude: curvedLongitude(progress)
+        }
+      })
+      const boundary = [
+        ...samples.map(sample => getSurfacePoint(
+          spec,
+          sample.longitude - angularHalfWidth,
+          sample.latitude,
+          false,
+          options
+        )),
+        ...[...samples].reverse().map(sample => getSurfacePoint(
+          spec,
+          sample.longitude + angularHalfWidth,
+          sample.latitude,
+          false,
+          options
+        ))
+      ].map(point => project(transformPoint(point)))
+
+      paths.push(`M ${boundary.map(point => `${point.x.toFixed(3)} ${point.y.toFixed(3)}`).join(' L ')} Z`)
+      visibleDepths.push(centerNormal.z)
+    }
+
+    if (paths.length === 0) return null
+    return {
+      depth: clamp(
+        visibleDepths.reduce((total, depth) => total + depth, 0) / visibleDepths.length,
+        0,
+        1
+      ),
+      id: decal.id,
+      path: paths.join(' ')
+    }
+  }
   const centerNormal = transformNormal(getFaceNormal(spec, { x: decal.x, y: decal.y }))
   if (centerNormal.z <= 0.015) return null
   const boundary = decal.shape === 'ellipse'
     ? buildEllipseBoundary(decal.x, decal.y, decal.width, decal.height, decal.rotation)
-    : buildRoundedRectangleBoundary(decal.x, decal.y, decal.width, decal.height, decal.rotation, 100)
+    : decal.shape === 'rounded-triangle'
+      ? buildRoundedInvertedTriangleBoundary(
+          decal.x,
+          decal.y,
+          decal.width,
+          decal.height,
+          decal.rotation
+        )
+      : buildRoundedRectangleBoundary(decal.x, decal.y, decal.width, decal.height, decal.rotation, 100)
   const projectedBoundary = boundary.map(point => project(transformPoint(getFacePoint(spec, point))))
+  const assetTransform = decal.shape === 'claude-spark'
+    ? (() => {
+        const halfWidth = decal.width / 2
+        const halfHeight = decal.height / 2
+        const [topLeft, topRight, bottomLeft] = [
+          { x: decal.x - halfWidth, y: decal.y - halfHeight },
+          { x: decal.x + halfWidth, y: decal.y - halfHeight },
+          { x: decal.x - halfWidth, y: decal.y + halfHeight }
+        ].map(point => project(transformPoint(getFacePoint(
+          spec,
+          rotateFacePoint(point, decal.x, decal.y, decal.rotation)
+        ))))
+        if (topLeft == null || topRight == null || bottomLeft == null) return null
+        const size = CLAUDE_SPARK_VIEWBOX_SIZE
+        const a = (topRight.x - topLeft.x) / size
+        const b = (topRight.y - topLeft.y) / size
+        const c = (bottomLeft.x - topLeft.x) / size
+        const d = (bottomLeft.y - topLeft.y) / size
+        return `matrix(${a.toFixed(6)} ${b.toFixed(6)} ${c.toFixed(6)} ${d.toFixed(6)} ${topLeft.x.toFixed(3)} ${topLeft.y.toFixed(3)})`
+      })()
+    : null
   return {
     depth: clamp(centerNormal.z, 0, 1),
     id: decal.id,
-    path: `M ${projectedBoundary.map(point => `${point.x.toFixed(3)} ${point.y.toFixed(3)}`).join(' L ')} Z`
+    path: decal.shape === 'claude-spark'
+      ? CLAUDE_SPARK_PATH
+      : `M ${projectedBoundary.map(point => `${point.x.toFixed(3)} ${point.y.toFixed(3)}`).join(' L ')} Z`,
+    ...(assetTransform == null ? {} : { transform: assetTransform })
   }
 }

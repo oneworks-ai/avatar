@@ -337,36 +337,86 @@
     display: grid;
     grid-template-columns: repeat(2, minmax(0, 1fr));
     gap: 6px;
+    margin-right: 6px;
+  }
 
-    button {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      min-width: 0;
-      border: 1px solid var(--border-color);
-      border-radius: 8px;
-      padding: 8px;
-      overflow: hidden;
-      background: var(--bg-color);
-      color: var(--sub-text-color);
-      text-overflow: ellipsis;
-      white-space: nowrap;
-      cursor: pointer;
+  &__decal-item {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 30px;
+    min-width: 0;
+    overflow: hidden;
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    background: var(--bg-color);
 
-      &[aria-selected='true'] {
-        border-color: var(--primary-color);
-        background: var(--primary-soft-bg);
-        color: var(--primary-text-color);
-      }
-
-      > span {
-        flex: 0 0 auto;
-        width: 14px;
-        height: 14px;
-        border: 1px solid rgb(127 127 127 / 35%);
-        border-radius: 50%;
-      }
+    &[data-selected='true'] {
+      border-color: var(--primary-color);
+      background: var(--primary-soft-bg);
+      color: var(--primary-text-color);
     }
+  }
+
+  &__decal-option,
+  &__decal-remove {
+    min-width: 0;
+    border: 0;
+    background: transparent;
+    color: var(--sub-text-color);
+    cursor: pointer;
+  }
+
+  &__decal-option {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px;
+    overflow: hidden;
+    text-align: left;
+
+    > span:first-child {
+      flex: 0 0 auto;
+      width: 14px;
+      height: 14px;
+      border: 1px solid rgb(127 127 127 / 35%);
+      border-radius: 50%;
+    }
+  }
+
+  &__decal-item[data-selected='true'] &__decal-option {
+    color: var(--primary-text-color);
+  }
+
+  &__decal-label {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  &__decal-remove {
+    display: grid;
+    place-items: center;
+    border-left: 1px solid var(--border-color);
+
+    &:hover {
+      background: rgb(231 89 79 / 12%);
+      color: #e7594f;
+    }
+
+    svg {
+      width: 14px;
+      height: 14px;
+      fill: none;
+      stroke: currentcolor;
+      stroke-linecap: round;
+      stroke-width: 1.5;
+    }
+  }
+
+  &__decal-option:focus-visible,
+  &__decal-remove:focus-visible {
+    outline: 2px solid var(--primary-color);
+    outline-offset: -2px;
   }
 
   &__decal-editor {

@@ -153,6 +153,7 @@ const HomeAvatarPreview = ({ template }: HomeAvatarPreviewProps) => {
         showLight={scene.showLight}
         showOutline={scene.showOutline}
         showShadow={scene.showShadow}
+        surfaceDecals={scene.surfaceDecals}
         viewState={viewState}
       />
     </div>

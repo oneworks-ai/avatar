@@ -593,6 +593,42 @@ describe('OneWorks Avatar public runtime contract', () => {
     expect(resolveAvatarAnimationFrame(source, anchored, 1000).finished).toBe(true)
   })
 
+  it('interpolates nested eye highlights consistently with the editor', () => {
+    const definition = createDefaultAvatarDefinition()
+    const fromHighlight = {
+      ...definition.scene.face.eyeHighlight,
+      enabled: true,
+      offsetX: -20,
+      offsetY: -16,
+      opacity: 0,
+      size: 8
+    }
+    const toHighlight = {
+      ...fromHighlight,
+      offsetX: 20,
+      offsetY: 16,
+      opacity: 100,
+      size: 48
+    }
+    const clip: AvatarAnimationClip = {
+      anchor: 'absolute',
+      durationMs: 1000,
+      keyframes: [
+        { atMs: 0, patch: { face: { eyeHighlight: fromHighlight } } },
+        { atMs: 1000, patch: { face: { eyeHighlight: toHighlight } } }
+      ],
+      playback: 'once'
+    }
+
+    const middle = resolveAvatarAnimationFrame(definition, clip, 500).scene.face.eyeHighlight
+    expect(middle).toMatchObject({
+      offsetX: 0,
+      offsetY: 0,
+      opacity: 50,
+      size: 28
+    })
+  })
+
   it('anchors each sparse view dimension at its first authored keyframe', () => {
     const source = createDefaultAvatarDefinition()
     const definition = {

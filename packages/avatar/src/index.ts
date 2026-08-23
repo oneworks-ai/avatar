@@ -114,9 +114,15 @@ export type AvatarBodyShape =
   | 'teardrop'
   | 'trapezoid'
 export type AvatarCameraFrame = 'circle' | 'rounded' | 'square'
-export type AvatarEntityPreset = 'bear' | 'cat' | 'cloud' | 'custom' | 'dog' | 'rabbit' | 'sun'
+export type AvatarEntityPreset = 'bear' | 'bun' | 'cat' | 'cloud' | 'custom' | 'dog' | 'rabbit' | 'sun'
 export type AvatarEyeShape = 'ellipse' | 'rounded'
-export type AvatarSurfaceDecalShape = 'ellipse' | 'rounded'
+export type AvatarSurfaceDecalSide = 'back' | 'front' | 'left' | 'right'
+export type AvatarSurfaceDecalShape =
+  | 'claude-spark'
+  | 'ellipse'
+  | 'radial-pleats'
+  | 'rounded'
+  | 'rounded-triangle'
 export type AvatarInteractionMode = 'move' | 'rotate'
 export type AvatarMouthShape = 'curve' | 'ellipse' | 'rounded' | 'rounded-triangle'
 export type AvatarNoseShape = 'ellipse' | 'inverted-triangle' | 'rounded'
@@ -185,6 +191,7 @@ export interface AvatarSurfaceDecal {
   readonly label: string
   readonly opacity: number
   readonly rotation: number
+  readonly side?: AvatarSurfaceDecalSide
   readonly shape: AvatarSurfaceDecalShape
   readonly targetPartId: string | null
   readonly width: number
@@ -527,6 +534,7 @@ const isAvatarSurfaceDecal = (value: unknown): value is AvatarSurfaceDecal => (
     'label',
     'opacity',
     'rotation',
+    'side',
     'shape',
     'targetPartId',
     'width',
@@ -548,7 +556,8 @@ const isAvatarSurfaceDecal = (value: unknown): value is AvatarSurfaceDecal => (
   isString(value.id) && value.id.trim().length > 0 && isString(value.label) &&
   isFiniteInRange(value.opacity, AVATAR_SURFACE_DECAL_RANGES.opacity) &&
   isFiniteInRange(value.rotation, AVATAR_SURFACE_DECAL_RANGES.rotation) &&
-  isOneOf(value.shape, ['ellipse', 'rounded']) &&
+  (value.side === undefined || isOneOf(value.side, ['back', 'front', 'left', 'right'])) &&
+  isOneOf(value.shape, ['claude-spark', 'ellipse', 'radial-pleats', 'rounded', 'rounded-triangle']) &&
   (value.targetPartId === null || (isString(value.targetPartId) && value.targetPartId.trim().length > 0)) &&
   isFiniteInRange(value.width, AVATAR_SURFACE_DECAL_RANGES.width) &&
   isFiniteInRange(value.x, AVATAR_SURFACE_DECAL_RANGES.x) &&
@@ -991,7 +1000,7 @@ const isAvatarDefinitionValue = (value: unknown): value is AvatarDefinition => {
     new Set(scene.entity.parts.map(part => part.id)).size === scene.entity.parts.length &&
     (scene.entity.parts.length === 0 || scene.entity.parts.filter(part => part.face).length === 1) &&
     decalTargetsAreValid &&
-    isOneOf(scene.entity.preset, ['bear', 'cat', 'cloud', 'custom', 'dog', 'rabbit', 'sun']) &&
+    isOneOf(scene.entity.preset, ['bear', 'bun', 'cat', 'cloud', 'custom', 'dog', 'rabbit', 'sun']) &&
     isAvatarFace(scene.face) && isOneOf(scene.interactionMode, ['move', 'rotate']) &&
     isRecord(scene.lighting) && hasOnlyKeys(scene.lighting, [
       'azimuth',
@@ -1119,7 +1128,13 @@ export const applyAvatarScenePatch = (scene: AvatarScene, patch: AvatarScenePatc
     ...scene.effects,
     colorGrade: { ...scene.effects.colorGrade, ...patch.colorGrade }
   },
-  face: { ...scene.face, ...patch.face },
+  face: {
+    ...scene.face,
+    ...patch.face,
+    ...(patch.face?.eyeHighlight == null
+      ? {}
+      : { eyeHighlight: { ...scene.face.eyeHighlight, ...patch.face.eyeHighlight } })
+  },
   view: { ...scene.view, ...patch.view }
 })
 
@@ -1139,15 +1154,21 @@ const interpolateRecord = <T extends object>(from: T, to: T, progress: number): 
   return result as T
 }
 
-const interpolateScene = (from: AvatarScene, to: AvatarScene, progress: number): AvatarScene => ({
-  ...from,
-  effects: {
-    ...from.effects,
-    colorGrade: interpolateRecord(from.effects.colorGrade, to.effects.colorGrade, progress)
-  },
-  face: interpolateRecord(from.face, to.face, progress),
-  view: interpolateRecord(from.view, to.view, progress)
-})
+const interpolateScene = (from: AvatarScene, to: AvatarScene, progress: number): AvatarScene => {
+  const face = interpolateRecord(from.face, to.face, progress)
+  return {
+    ...from,
+    effects: {
+      ...from.effects,
+      colorGrade: interpolateRecord(from.effects.colorGrade, to.effects.colorGrade, progress)
+    },
+    face: {
+      ...face,
+      eyeHighlight: interpolateRecord(from.face.eyeHighlight, to.face.eyeHighlight, progress)
+    },
+    view: interpolateRecord(from.view, to.view, progress)
+  }
+}
 
 export const resolveAvatarAnimationFrame = (
   definition: AvatarDefinition,

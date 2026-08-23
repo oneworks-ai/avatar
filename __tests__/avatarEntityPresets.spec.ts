@@ -13,7 +13,7 @@ import { DEFAULT_AVATAR_FACE_STYLE } from '../src/avatarGeometry'
 
 describe('built-in entity preset scenes', () => {
   it('gives every built-in entity a distinct complete camera composition', () => {
-    const presets = ['cloud', 'sun', 'cat', 'dog', 'bear', 'rabbit'] as const
+    const presets = ['cloud', 'sun', 'cat', 'dog', 'bear', 'rabbit', 'bun'] as const
     const scenes = presets.map(preset => {
       const scene = getAvatarEntityPresetScene(preset)
       expect(scene).not.toBeNull()
@@ -76,6 +76,82 @@ describe('built-in entity preset scenes', () => {
     expect(firstDog).not.toBe(secondDog)
     expect(firstDog.avatarShadowStyle).not.toBe(secondDog.avatarShadowStyle)
     expect(firstDog.viewState).not.toBe(secondDog.viewState)
+  })
+
+  it('restores the authored Bun avatar as one complete built-in scene', () => {
+    const bun = getAvatarEntityPresetScene('bun')!
+    const face = getAvatarEntityPresetFaceStyle('bun')!
+    const parts = createAvatarEntityParts('bun')
+
+    expect(bun).toMatchObject({
+      cameraBackground: '#f7f5ef',
+      cameraFrame: 'rounded',
+      cameraMode: true,
+      gridDensity: 228,
+      lightAzimuth: -32,
+      lightDistance: 6,
+      lightElevation: 46,
+      paletteId: 'white',
+      showLight: false,
+      viewState: {
+        pitch: -.0157,
+        positionX: -60.6238,
+        positionY: 42.0197,
+        roll: .1906,
+        scale: 2.4,
+        yaw: -.0753
+      }
+    })
+    expect(face).toMatchObject({
+      eyeHighlight: {
+        color: '#ffffff',
+        enabled: true,
+        offsetX: -20,
+        offsetY: -22,
+        opacity: 100,
+        size: 36
+      },
+      eyeShape: 'ellipse',
+      gap: 36,
+      height: 28,
+      mouthEnabled: false,
+      noseEnabled: false,
+      width: 28
+    })
+    expect(parts).toMatchObject([
+      {
+        id: 'bun-crown',
+        scaleX: .5,
+        scaleY: .23,
+        scaleZ: .5,
+        shape: 'cone'
+      },
+      {
+        face: true,
+        id: 'bun-body',
+        scaleX: .7,
+        scaleY: .5,
+        scaleZ: .7,
+        shape: 'sphere'
+      }
+    ])
+    expect(bun.surfaceDecals).toHaveLength(6)
+    expect(bun.surfaceDecals[0]).toMatchObject({
+      id: 'bun-crown-pleats',
+      shape: 'radial-pleats',
+      targetPartId: 'bun-crown'
+    })
+    expect(bun.surfaceDecals.at(-1)).toMatchObject({
+      id: 'claude-spark-official',
+      shape: 'claude-spark',
+      side: 'back',
+      targetPartId: 'bun-body'
+    })
+
+    const secondBun = getAvatarEntityPresetScene('bun')!
+    expect(bun.surfaceDecals).not.toBe(secondBun.surfaceDecals)
+    expect(bun.surfaceDecals[0]).not.toBe(secondBun.surfaceDecals[0])
+    expect(face.eyeHighlight).not.toBe(getAvatarEntityPresetFaceStyle('bun')!.eyeHighlight)
   })
 
   it('applies a palette to every part of a multipart entity', () => {

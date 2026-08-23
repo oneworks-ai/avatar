@@ -3,12 +3,13 @@ import type { AvatarPalette } from '@oneworks/avatar'
 
 import { AVATAR_BODY_SHAPES, DEFAULT_AVATAR_FACE_STYLE } from './avatarGeometry'
 import type { AvatarBodyShape, AvatarFaceStyle } from './avatarGeometry'
+import type { AvatarSurfaceDecal } from './avatarSurfaceDecals'
 
-export const AVATAR_ENTITY_PRESETS = ['custom', 'cloud', 'sun', 'cat', 'dog', 'bear', 'rabbit'] as const
+export const AVATAR_ENTITY_PRESETS = ['custom', 'cloud', 'sun', 'cat', 'dog', 'bear', 'rabbit', 'bun'] as const
 
 export type AvatarEntityPreset = (typeof AVATAR_ENTITY_PRESETS)[number]
 
-export const AVATAR_BUILT_IN_ENTITY_PRESETS = ['cloud', 'sun', 'cat', 'dog', 'bear', 'rabbit'] as const satisfies readonly AvatarEntityPreset[]
+export const AVATAR_BUILT_IN_ENTITY_PRESETS = ['cloud', 'sun', 'cat', 'dog', 'bear', 'rabbit', 'bun'] as const satisfies readonly AvatarEntityPreset[]
 
 export interface AvatarEntityPart {
   readonly baseColor: string
@@ -141,6 +142,39 @@ const DOG_FACE_STYLE: AvatarFaceStyle = {
   noseY: 25
 } as const
 
+const BUN_FACE_STYLE: AvatarFaceStyle = {
+  ...DEFAULT_AVATAR_FACE_STYLE,
+  eyeHighlight: {
+    color: '#ffffff',
+    enabled: true,
+    offsetX: -20,
+    offsetY: -22,
+    opacity: 100,
+    size: 36
+  },
+  eyeRoundness: 100,
+  eyeShape: 'ellipse',
+  gap: 36,
+  height: 28,
+  leftEyeRotation: 0,
+  mouthCurve: 42,
+  mouthEnabled: false,
+  mouthHeight: 8,
+  mouthRotation: 0,
+  mouthShape: 'curve',
+  mouthWidth: 34,
+  mouthY: 51,
+  noseEnabled: false,
+  noseHeight: 8,
+  noseRotation: 0,
+  noseShape: 'rounded',
+  noseWidth: 12,
+  noseY: 24,
+  rotation: 0,
+  rightEyeRotation: 0,
+  width: 28
+} as const
+
 export interface AvatarEntityPresetScene {
   readonly avatarOutlineStyle: {
     readonly color: string
@@ -164,13 +198,18 @@ export interface AvatarEntityPresetScene {
     readonly opacity: number
     readonly softness: number
   }
+  readonly gridDensity: number
   readonly interactionMode: 'move' | 'rotate'
+  readonly lightAzimuth: number
+  readonly lightDistance: number
+  readonly lightElevation: number
   readonly paletteId: string
   readonly showAvatarShadow: boolean
   readonly showFrameShadow: boolean
   readonly showLight: boolean
   readonly showOutline: boolean
   readonly showShadow: boolean
+  readonly surfaceDecals: readonly AvatarSurfaceDecal[]
   readonly viewState: {
     readonly pitch: number
     readonly positionX: number
@@ -181,7 +220,15 @@ export interface AvatarEntityPresetScene {
   }
 }
 
+const DEFAULT_PRESET_LIGHTING = {
+  gridDensity: 100,
+  lightAzimuth: -35,
+  lightDistance: 0,
+  lightElevation: 40
+} as const
+
 const CLOUD_PRESET_SCENE = {
+  ...DEFAULT_PRESET_LIGHTING,
   avatarOutlineStyle: { color: '#293646', opacity: 80, width: 4 },
   avatarShadowStyle: { color: '#315e8c', direction: 132, distance: 11, opacity: 24, softness: 18 },
   backgroundStyle: 'solid',
@@ -196,6 +243,7 @@ const CLOUD_PRESET_SCENE = {
   showLight: false,
   showOutline: true,
   showShadow: false,
+  surfaceDecals: [],
   viewState: {
     pitch: -.3425,
     positionX: 100.6977,
@@ -207,6 +255,7 @@ const CLOUD_PRESET_SCENE = {
 } as const satisfies AvatarEntityPresetScene
 
 const SUN_PRESET_SCENE = {
+  ...DEFAULT_PRESET_LIGHTING,
   avatarOutlineStyle: { color: '#25130d', opacity: 84, width: 4 },
   avatarShadowStyle: { color: '#180e22', direction: 44, distance: 12, opacity: 30, softness: 18 },
   backgroundStyle: 'solid',
@@ -221,6 +270,7 @@ const SUN_PRESET_SCENE = {
   showLight: false,
   showOutline: true,
   showShadow: false,
+  surfaceDecals: [],
   viewState: {
     pitch: -.1,
     positionX: -46,
@@ -232,6 +282,7 @@ const SUN_PRESET_SCENE = {
 } as const satisfies AvatarEntityPresetScene
 
 const CAT_PRESET_SCENE = {
+  ...DEFAULT_PRESET_LIGHTING,
   avatarOutlineStyle: { color: '#050608', opacity: 84, width: 4 },
   avatarShadowStyle: { color: '#7c3140', direction: 132, distance: 10, opacity: 28, softness: 14 },
   backgroundStyle: 'solid',
@@ -246,6 +297,7 @@ const CAT_PRESET_SCENE = {
   showLight: false,
   showOutline: true,
   showShadow: false,
+  surfaceDecals: [],
   viewState: {
     pitch: -.1155,
     positionX: 72.5476,
@@ -257,6 +309,7 @@ const CAT_PRESET_SCENE = {
 } as const satisfies AvatarEntityPresetScene
 
 const DOG_PRESET_SCENE = {
+  ...DEFAULT_PRESET_LIGHTING,
   avatarOutlineStyle: { color: '#000000', opacity: 80, width: 4 },
   avatarShadowStyle: { color: '#000000', direction: 45, distance: 12, opacity: 24, softness: 16 },
   backgroundStyle: 'solid',
@@ -271,6 +324,7 @@ const DOG_PRESET_SCENE = {
   showLight: false,
   showOutline: true,
   showShadow: false,
+  surfaceDecals: [],
   viewState: {
     pitch: .1413,
     positionX: -59.3965,
@@ -282,6 +336,7 @@ const DOG_PRESET_SCENE = {
 } as const satisfies AvatarEntityPresetScene
 
 const BEAR_PRESET_SCENE = {
+  ...DEFAULT_PRESET_LIGHTING,
   avatarOutlineStyle: { color: '#2b1d18', opacity: 84, width: 4 },
   avatarShadowStyle: { color: '#6f3f25', direction: 42, distance: 11, opacity: 26, softness: 16 },
   backgroundStyle: 'solid',
@@ -296,6 +351,7 @@ const BEAR_PRESET_SCENE = {
   showLight: false,
   showOutline: true,
   showShadow: false,
+  surfaceDecals: [],
   viewState: {
     pitch: -.07,
     positionX: -35,
@@ -307,6 +363,7 @@ const BEAR_PRESET_SCENE = {
 } as const satisfies AvatarEntityPresetScene
 
 const RABBIT_PRESET_SCENE = {
+  ...DEFAULT_PRESET_LIGHTING,
   avatarOutlineStyle: { color: '#292724', opacity: 82, width: 4 },
   avatarShadowStyle: { color: '#9b451f', direction: 126, distance: 10, opacity: 25, softness: 18 },
   backgroundStyle: 'solid',
@@ -321,6 +378,7 @@ const RABBIT_PRESET_SCENE = {
   showLight: false,
   showOutline: true,
   showShadow: false,
+  surfaceDecals: [],
   viewState: {
     pitch: -.2275,
     positionX: 82.7852,
@@ -328,6 +386,58 @@ const RABBIT_PRESET_SCENE = {
     roll: -.4163,
     scale: 1.8604,
     yaw: .0827
+  }
+} as const satisfies AvatarEntityPresetScene
+
+const BUN_PLEAT_DECAL: AvatarSurfaceDecal = {
+  color: '#d9b985',
+  height: 64,
+  id: 'bun-crown-pleats',
+  label: 'Crown pleats',
+  opacity: 62,
+  rotation: 0,
+  shape: 'radial-pleats',
+  side: 'front',
+  targetPartId: 'bun-crown',
+  width: 5,
+  x: -42,
+  y: 0
+}
+
+const BUN_PRESET_SCENE = {
+  avatarOutlineStyle: { color: '#211813', opacity: 92, width: 3 },
+  avatarShadowStyle: { color: '#7a5637', direction: 122, distance: 10, opacity: 24, softness: 18 },
+  backgroundStyle: 'solid',
+  cameraBackground: '#f7f5ef',
+  cameraFrame: 'rounded',
+  cameraMode: true,
+  frameShadowStyle: { direction: 90, distance: 12, opacity: 20, softness: 24 },
+  gridDensity: 228,
+  interactionMode: 'rotate',
+  lightAzimuth: -32,
+  lightDistance: 6,
+  lightElevation: 46,
+  paletteId: 'white',
+  showAvatarShadow: true,
+  showFrameShadow: true,
+  showLight: false,
+  showOutline: true,
+  showShadow: false,
+  surfaceDecals: [
+    BUN_PLEAT_DECAL,
+    { color: '#f5a1ac', height: 12, id: 'blush-left', label: 'Left blush', opacity: 88, rotation: -2, shape: 'ellipse', side: 'front', targetPartId: 'bun-body', width: 23, x: -44, y: 13 },
+    { color: '#f5a1ac', height: 12, id: 'blush-right', label: 'Right blush', opacity: 88, rotation: 2, shape: 'ellipse', side: 'front', targetPartId: 'bun-body', width: 23, x: 44, y: 13 },
+    { color: '#241915', height: 22, id: 'mouth-outline', label: 'Open smile', opacity: 100, rotation: 0, shape: 'rounded-triangle', side: 'front', targetPartId: 'bun-body', width: 32, x: 0, y: 49 },
+    { color: '#f05f68', height: 8, id: 'mouth-inner', label: 'Smile interior', opacity: 100, rotation: 0, shape: 'ellipse', side: 'front', targetPartId: 'bun-body', width: 19, x: 0, y: 54 },
+    { color: '#d97757', height: 34, id: 'claude-spark-official', label: 'Official Claude Spark', opacity: 100, rotation: 0, shape: 'claude-spark', side: 'back', targetPartId: 'bun-body', width: 34, x: 30, y: 48 }
+  ],
+  viewState: {
+    pitch: -.0157,
+    positionX: -60.6238,
+    positionY: 42.0197,
+    roll: .1906,
+    scale: 2.4,
+    yaw: -.0753
   }
 } as const satisfies AvatarEntityPresetScene
 
@@ -345,6 +455,13 @@ const RABBIT_FACE_STYLE: AvatarFaceStyle = {
   mouthEnabled: false,
   noseEnabled: false,
   rightEyeRotation: 0
+} as const
+
+const BUN_MATERIAL = {
+  baseColor: '#fff3d9',
+  foregroundColor: '#241915',
+  highlightColor: '#fffdf4',
+  shadowColor: '#d9b985'
 } as const
 
 const CLOUD_PARTS: readonly AvatarEntityPart[] = [
@@ -404,6 +521,11 @@ const RABBIT_PARTS: readonly AvatarEntityPart[] = [
   { ...RABBIT_MATERIAL, face: true, id: 'primary', label: 'Primary', roundness: 100, scaleX: .72, scaleY: .74, shape: 'trapezoid', topScale: .94, x: 0, y: 20, z: 0 }
 ]
 
+const BUN_PARTS: readonly AvatarEntityPart[] = [
+  { ...BUN_MATERIAL, face: false, id: 'bun-crown', label: 'Rounded bun crown', occludedByFace: true, occlusionAmount: 11, occlusionPole: 'bottom', roundness: 46, scaleX: .5, scaleY: .23, scaleZ: .5, shape: 'cone', topScale: .82, x: 0, y: -46, z: -14 },
+  { ...BUN_MATERIAL, face: true, id: 'bun-body', label: 'Flattened bun', roundness: 100, scaleX: .7, scaleY: .5, scaleZ: .7, shape: 'sphere', topScale: .62, x: 0, y: 24, z: 0 }
+]
+
 const cloneParts = (parts: readonly AvatarEntityPart[]) => parts.map(part => ({ ...part }))
 
 const getMaterialSignature = (part: AvatarEntityPart) => [
@@ -439,6 +561,7 @@ export const createAvatarEntityParts = (preset: AvatarEntityPreset): AvatarEntit
   if (preset === 'dog') return cloneParts(DOG_PARTS)
   if (preset === 'bear') return cloneParts(BEAR_PARTS)
   if (preset === 'rabbit') return cloneParts(RABBIT_PARTS)
+  if (preset === 'bun') return cloneParts(BUN_PARTS)
   return []
 }
 
@@ -449,11 +572,13 @@ export const getAvatarEntityPresetFaceStyle = (preset: AvatarEntityPreset): Avat
   if (preset === 'dog') return { ...DOG_FACE_STYLE }
   if (preset === 'bear') return { ...BEAR_FACE_STYLE }
   if (preset === 'rabbit') return { ...RABBIT_FACE_STYLE }
+  if (preset === 'bun') return { ...BUN_FACE_STYLE, eyeHighlight: { ...BUN_FACE_STYLE.eyeHighlight } }
   return null
 }
 
 const ENTITY_PRESET_SCENES: Partial<Record<AvatarEntityPreset, AvatarEntityPresetScene>> = {
   bear: BEAR_PRESET_SCENE,
+  bun: BUN_PRESET_SCENE,
   cat: CAT_PRESET_SCENE,
   cloud: CLOUD_PRESET_SCENE,
   dog: DOG_PRESET_SCENE,
@@ -469,6 +594,7 @@ export const getAvatarEntityPresetScene = (preset: AvatarEntityPreset): AvatarEn
     avatarOutlineStyle: { ...scene.avatarOutlineStyle },
     avatarShadowStyle: { ...scene.avatarShadowStyle },
     frameShadowStyle: { ...scene.frameShadowStyle },
+    surfaceDecals: scene.surfaceDecals.map(decal => ({ ...decal })),
     viewState: { ...scene.viewState }
   }
 }
