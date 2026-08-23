@@ -1,13 +1,6 @@
 import './style.css'
 
-import {
-  defineComponent,
-  h,
-  onBeforeUnmount,
-  onMounted,
-  ref,
-  watch
-} from 'vue'
+import { defineComponent, h, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import type { PropType } from 'vue'
 
 import type {
@@ -15,11 +8,8 @@ import type {
   AvatarAnimationLibrary,
   AvatarAnimationRef,
   AvatarDefinition
-} from '@oneworks/avatar-core'
-import {
-  createAvatar,
-  createAvatarEditor
-} from '@oneworks/avatar-web'
+} from '@oneworks/avatar'
+import { createAvatar, createAvatarEditor } from '@oneworks/avatar-web'
 import type {
   AvatarCaptureOptions,
   AvatarEditorMount,
@@ -76,14 +66,16 @@ export const OneWorksAvatar = defineComponent({
       host.value.addEventListener('animationend', () => emit('animation-end'))
       host.value.addEventListener('animationloop', () => emit('animation-loop'))
       host.value.addEventListener('animationstart', () => emit('animation-start'))
-      host.value.addEventListener('avatarchange', event => emit(
-        'definition-change',
-        (event as CustomEvent<{ definition: AvatarDefinition }>).detail.definition
-      ))
-      host.value.addEventListener('avatarerror', event => emit(
-        'error',
-        (event as CustomEvent<{ error: Error }>).detail.error
-      ))
+      host.value.addEventListener('avatarchange', event =>
+        emit(
+          'definition-change',
+          (event as CustomEvent<{ definition: AvatarDefinition }>).detail.definition
+        ))
+      host.value.addEventListener('avatarerror', event =>
+        emit(
+          'error',
+          (event as CustomEvent<{ error: Error }>).detail.error
+        ))
       void mount.ready.then(() => emit('ready'))
     })
     watch(() => [
@@ -137,10 +129,11 @@ export const OneWorksAvatarEditor = defineComponent({
     onMounted(() => {
       if (host.value == null) return
       mount = createAvatarEditor(host.value, options())
-      host.value.addEventListener('avatarchange', event => emit(
-        'definition-change',
-        (event as CustomEvent<{ definition: AvatarDefinition }>).detail.definition
-      ))
+      host.value.addEventListener('avatarchange', event =>
+        emit(
+          'definition-change',
+          (event as CustomEvent<{ definition: AvatarDefinition }>).detail.definition
+        ))
       void mount.ready.then(() => emit('ready'))
     })
     watch(() => [props.animationLibraries, props.definition, props.locale, props.theme], () => {

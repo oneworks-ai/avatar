@@ -4,13 +4,10 @@
     "rootDir": ".",
     "paths": {
       "@oneworks/avatar": [
-        "./app-source/packages/avatar/src/index.ts"
+        "./packages/avatar/src/index.ts"
       ],
       "@oneworks/avatar/*": [
-        "./app-source/packages/avatar/src/*.ts"
-      ],
-      "@oneworks/avatar-core": [
-        "./packages/core/src/index.ts"
+        "./packages/avatar/src/*.ts"
       ]
     }
   }

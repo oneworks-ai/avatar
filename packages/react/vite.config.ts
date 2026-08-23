@@ -8,6 +8,7 @@ export default defineConfig({
   plugins: [
     react(),
     dts({
+      aliasesExclude: ['@oneworks/avatar'],
       entryRoot: 'src',
       include: ['src/**/*', '../../src/gifenc.d.ts'],
       tsconfigPath: path.resolve(__dirname, 'tsconfig.json')
@@ -15,7 +16,7 @@ export default defineConfig({
   ],
   resolve: {
     alias: {
-      '@oneworks/avatar': path.resolve(__dirname, '../../app-source/packages/avatar/src/index.ts'),
+      '@oneworks/avatar': path.resolve(__dirname, '../avatar/src/index.ts'),
       '@oneworks/route-layout/design-tokens.css': path.resolve(
         __dirname,
         '../../app-source/packages/route-layout/src/design-tokens.css'
@@ -31,7 +32,7 @@ export default defineConfig({
     },
     rollupOptions: {
       external: [
-        '@oneworks/avatar-core',
+        '@oneworks/avatar',
         'react',
         'react-dom',
         'react-dom/client',

@@ -1,131 +1,159 @@
 # Developer integration
 
-Use this reference before recommending a OneWorks Avatar integration. Distinguish current 3D surfaces from the separate legacy npm renderer and from future architecture ideas.
+Use this reference before recommending a OneWorks Avatar integration. All public adapters consume the same versioned 3D definition and renderer; do not reintroduce the removed pixel renderer or treat private editor URL tuples as an SDK.
 
-## Choose the current integration
+## Choose the package
 
-### Editable 3D source plus exported asset
+Install the framework-neutral package and only the adapters the application needs:
 
-Use the hosted editor at `https://oneworks.cloud/avatar/`, save its complete generated URL as an opaque editable source, and export an SVG, PNG, or GIF for the application.
+```bash
+pnpm add @oneworks/avatar@rc
+pnpm add @oneworks/avatar-react@rc # React
+pnpm add @oneworks/avatar-vue@rc   # Vue
+pnpm add @oneworks/avatar-web@rc   # Vanilla JS and opt-in elements
+```
 
-Store the two concerns separately:
+- `@oneworks/avatar`: versioned definitions, parsing, serialization, deterministic seeded definitions, animation libraries, validation, interpolation, and playback resolution.
+- `@oneworks/avatar-react`: `Avatar`, full `AvatarEditor`, controller refs, callbacks, and capture.
+- `@oneworks/avatar-vue`: `OneWorksAvatar`, full `OneWorksAvatarEditor`, exposed controllers, and emits.
+- `@oneworks/avatar-web`: `createAvatar`, `createAvatarEditor`, DOM events, and explicitly registered `<oneworks-avatar>` / `<oneworks-avatar-editor>` elements.
+
+Import styles from the selected adapter's `style.css` export.
+
+## Define a 3D avatar and animations
+
+```ts
+import {
+  type AvatarAnimationLibrary,
+  createSeededAvatarDefinition
+} from '@oneworks/avatar'
+
+const definition = createSeededAvatarDefinition({
+  seed: 'agent:support',
+  name: 'Support agent'
+})
+
+const supportAnimations = {
+  id: 'support',
+  label: 'Support',
+  groups: {
+    attention: {
+      label: 'Attention',
+      defaultClip: 'acknowledge',
+      clips: {
+        acknowledge: {
+          anchor: 'relative',
+          durationMs: 900,
+          playback: 'once',
+          keyframes: [
+            { atMs: 0, patch: { view: { pitch: 0 } } },
+            { atMs: 300, patch: { view: { pitch: .2 } } },
+            { atMs: 900, patch: { view: { pitch: 0 } } }
+          ]
+        }
+      }
+    }
+  }
+} satisfies AvatarAnimationLibrary
+```
+
+A definition contains `scene` and may additionally carry a top-level `animations` library. Renderers and editors also accept `animationLibraries`, so products can keep reusable motion packs separate from saved avatar identity.
+
+## React
+
+```tsx
+import { Avatar, AvatarEditor } from '@oneworks/avatar-react'
+import '@oneworks/avatar-react/style.css'
+
+<Avatar
+  definition={definition}
+  animationLibraries={[supportAnimations]}
+  interactive
+/>
+<AvatarEditor
+  definition={definition}
+  animationLibraries={[supportAnimations]}
+  locale='zh-Hans'
+/>
+```
+
+Use renderer refs for `play`, `pause`, `resume`, `seek`, `stop`, `capture`, `getDefinition`, and `setDefinition`. Use editor refs for `focus`, `getDefinition`, and `setDefinition`. React events are callback props.
+
+## Vue
+
+```vue
+<script setup lang="ts">
+import { OneWorksAvatar, OneWorksAvatarEditor } from '@oneworks/avatar-vue'
+import '@oneworks/avatar-vue/style.css'
+</script>
+
+<template>
+  <OneWorksAvatar
+    :definition="definition"
+    :animation-libraries="[supportAnimations]"
+  />
+  <OneWorksAvatarEditor
+    :definition="definition"
+    :animation-libraries="[supportAnimations]"
+  />
+</template>
+```
+
+Vue exposes renderer/editor controllers with `expose` and reports changes through emits.
+
+## Vanilla JS and opt-in Web Components
+
+```ts
+import { createAvatar, createAvatarEditor } from '@oneworks/avatar-web'
+import '@oneworks/avatar-web/style.css'
+
+const avatar = createAvatar(document.querySelector('#avatar')!, {
+  definition,
+  animationLibraries: [supportAnimations]
+})
+const editor = createAvatarEditor(document.querySelector('#editor')!, {
+  definition,
+  animationLibraries: [supportAnimations]
+})
+```
+
+Mounts expose controllers and emit DOM `CustomEvent`s from their hosts. Call `destroy()` when a mount is no longer needed.
+
+Custom elements never register as an import side effect:
+
+```ts
+import { registerAvatarElements } from '@oneworks/avatar-web/elements'
+
+registerAvatarElements()
+
+const element = document.querySelector('oneworks-avatar')!
+element.definition = definition
+element.animationLibraries = [supportAnimations]
+```
+
+Use element properties for complex values. `<oneworks-avatar>` provides playback and capture methods; read/write its `definition` property rather than assuming mount-style getter/setter methods.
+
+## Preserve authoring and delivery sources
+
+Keep these values distinct:
 
 ```ts
 interface AvatarAssetRecord {
-  editorUrl: string
-  assetUrl: string
-  format: 'svg' | 'png' | 'gif'
-  size: 128 | 256 | 512
+  definition: AvatarDefinition
+  editorUrl?: string
+  assetUrl?: string
+  format?: 'svg' | 'png' | 'gif'
 }
 ```
 
-The `editorUrl` restores authoring state; it is not an image URL. The `assetUrl` points to a file uploaded to the application's own static asset host or media storage.
+- `definition` is the portable runtime/editor data source.
+- `editorUrl` is the complete opaque URL produced by the hosted editor.
+- `assetUrl` points to an exported SVG, PNG, or GIF file for `<img src>` or media delivery.
 
-Prefer normal file embedding:
+Do not hand-author or parse `entityParts`, `animationData`, or other editor query tuples. Do not inject several exported SVG strings into one document when ordinary `<img src>` files suffice.
 
-```tsx
-export function SupportAgentAvatar() {
-  return (
-    <img
-      src='/avatars/support-agent.svg'
-      width={96}
-      height={96}
-      alt='Support agent'
-    />
-  )
-}
-```
+## Current boundary
 
-Keep editing and display actions explicit in product UI:
+There is no public iframe/embed URL or `postMessage` protocol. Embed the full editor through the React, Vue, or web adapter. Never import private `InteractiveAvatar`, saved-preset, GIF-export, or application storage modules.
 
-```tsx
-export function AvatarAsset({ avatar }: { avatar: AvatarAssetRecord }) {
-  return (
-    <figure>
-      <img src={avatar.assetUrl} width={96} height={96} alt='Support agent' />
-      <a href={avatar.editorUrl} target='_blank' rel='noreferrer'>Edit avatar</a>
-    </figure>
-  )
-}
-```
-
-SVG and PNG are static. GIF carries the selected animation. Prefer `<img src>` or independent files over injecting several exported SVG strings into one document, because internal SVG definition IDs are not a public multi-inline contract.
-
-Do not hand-author or parse `entityParts`, `animationData`, or other query tuples. The URL parser is editor persistence, not a semver-versioned public schema.
-
-### Deterministic legacy 2D placeholders
-
-Use `@oneworks/avatar` when an application needs deterministic pixel-emoticon SVG placeholders rather than the 3D editor scene:
-
-```bash
-pnpm add @oneworks/avatar
-```
-
-React can use the generated data URI:
-
-```tsx
-import { useMemo } from 'react'
-import { createSeededAvatarDataUri } from '@oneworks/avatar'
-
-export function AgentAvatar({ id, name }: { id: string; name: string }) {
-  const src = useMemo(() => createSeededAvatarDataUri({
-    seed: `agent:${id}`,
-    size: 128,
-    title: `${name} avatar`
-  }), [id, name])
-
-  return <img src={src} width={64} height={64} alt={`${name} avatar`} />
-}
-```
-
-Node or server-side TypeScript can write SVG without a DOM:
-
-```ts
-import { writeFile } from 'node:fs/promises'
-import {
-  createAvatarSvg,
-  getAvatarPalette,
-  isSupportedAvatarEmoticon
-} from '@oneworks/avatar'
-
-const emoticon = '0w0'
-if (!isSupportedAvatarEmoticon(emoticon)) throw new Error('Unsupported avatar')
-
-await writeFile('avatar.svg', createAvatarSvg({
-  emoticon,
-  palette: getAvatarPalette('signal'),
-  backgroundStyle: 'gradient',
-  showShadow: true,
-  size: 256,
-  title: 'Codex avatar'
-}), 'utf8')
-```
-
-This package is a legacy 2D pixel renderer. It does not accept a 3D editor URL, entity parts, camera settings, animations, PNG, or GIF.
-
-Seed mapping is deterministic within a package version but may change if preset ordering changes. Pin the package version for cross-version identity, or resolve once and persist the explicit emoticon and palette ID.
-
-## Do not promise these yet
-
-The current product does not expose:
-
-- a public 3D React component or JavaScript/DOM renderer;
-- a versioned `.oneworks-avatar.json` definition;
-- iframe/embed mode or a `postMessage` controller;
-- `play`, `pause`, `stop`, `setExpression`, or capture APIs;
-- public imports from `InteractiveAvatar`, `savedAvatarPresets`, or `avatarGifExport`.
-
-Do not recommend importing private editor source or treating the private Avatar app package as an SDK.
-
-## Future runtime direction
-
-When the user asks to design or implement a 3D runtime, treat it as a new product/code task rather than existing integration. A sound direction is:
-
-1. Define a versioned, validated 3D scene format covering entity parts/local transforms, face, whole-entity pose, camera, lighting/effects, and animations.
-2. Extract a pure core with no React, DOM, or storage dependency for validation, geometry, projection, depth ordering, and frame sampling.
-3. Build React and framework-free web adapters on the same core and semantic animation keys.
-4. Keep full editor project state distinct from the compact runtime definition and from share URLs.
-5. Add real package smoke tests: pack tarballs, install them into clean non-workspace consumers, then typecheck and build React and vanilla examples.
-6. Add an embed surface only with an explicit origin, sizing, lifecycle, and `postMessage` contract.
-
-These are architecture recommendations, not current APIs.
+For complete API examples, use the bilingual public guides at `https://oneworks.cloud/docs/usage/avatar` and `https://oneworks.cloud/docs/en/usage/avatar`.

@@ -4,15 +4,16 @@ import {
   anchorAvatarAnimationClip,
   applyAvatarScenePatch,
   parseAvatarAnimationClip
-} from '@oneworks/avatar-core'
+} from '@oneworks/avatar'
 import type {
   AvatarAnimationClip,
   AvatarAnimationLibrary,
+  AvatarBackgroundStyle,
   AvatarDefinition,
   AvatarScene
-} from '@oneworks/avatar-core'
-import type { AvatarBackgroundStyle } from '@oneworks/avatar'
+} from '@oneworks/avatar'
 
+import type { AvatarCameraFrame } from './AvatarControls'
 import type { ExportSize } from './ExportToolbar'
 import type {
   AvatarDropShadowStyle,
@@ -20,16 +21,11 @@ import type {
   AvatarOutlineStyle,
   AvatarViewState
 } from './InteractiveAvatar'
-import type {
-  AvatarAnimationKeyframe,
-  AvatarAnimationPlaybackMode,
-  SavedAvatarAnimation
-} from './avatarAnimations'
+import type { AvatarAnimationKeyframe, AvatarAnimationPlaybackMode, SavedAvatarAnimation } from './avatarAnimations'
 import type { AvatarColorGrade } from './avatarColorGrade'
 import { serializeAvatarEntityParts } from './avatarEntityPresets'
 import type { AvatarEntityPart, AvatarEntityPreset } from './avatarEntityPresets'
 import type { AvatarBodyShape, AvatarFaceShadowStyle, AvatarFaceStyle } from './avatarGeometry'
-import type { AvatarCameraFrame } from './AvatarControls'
 
 export interface AvatarDefinitionState {
   readonly animation?: SavedAvatarAnimation | null
@@ -338,17 +334,18 @@ export interface PublicAvatarAnimationEntry {
 export const flattenAvatarAnimationLibraries = (
   libraries: readonly AvatarAnimationLibrary[],
   scene: AvatarScene
-): readonly PublicAvatarAnimationEntry[] => libraries.flatMap(library => (
-  Object.entries(library.groups).flatMap(([groupId, group]) => (
-    Object.entries(group.clips).map(([clipId, clip]) => ({
-      animation: avatarAnimationClipToSavedAnimation(
-        `public:${library.id}:${groupId}:${clipId}`,
-        clip,
-        scene
-      ),
-      clipId,
-      groupId,
-      libraryId: library.id
-    }))
+): readonly PublicAvatarAnimationEntry[] =>
+  libraries.flatMap(library => (
+    Object.entries(library.groups).flatMap(([groupId, group]) => (
+      Object.entries(group.clips).map(([clipId, clip]) => ({
+        animation: avatarAnimationClipToSavedAnimation(
+          `public:${library.id}:${groupId}:${clipId}`,
+          clip,
+          scene
+        ),
+        clipId,
+        groupId,
+        libraryId: library.id
+      }))
+    ))
   ))
-))

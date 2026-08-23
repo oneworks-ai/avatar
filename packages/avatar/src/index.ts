@@ -1,3 +1,7 @@
+import { AVATAR_PALETTES } from './catalog.js'
+
+export * from './catalog.js'
+
 export const AVATAR_DEFINITION_SCHEMA = 'oneworks.avatar' as const
 export const AVATAR_DEFINITION_VERSION = 1 as const
 export const AVATAR_ANIMATION_MIN_SEGMENT_MS = 100
@@ -216,6 +220,11 @@ export interface AvatarDefinitionV1 {
 
 export type AvatarDefinition = AvatarDefinitionV1
 
+export interface CreateSeededAvatarDefinitionOptions {
+  readonly name?: string
+  readonly seed: string
+}
+
 export interface ResolvedAvatarAnimationFrame {
   readonly elapsedMs: number
   readonly finished: boolean
@@ -285,6 +294,55 @@ export const createDefaultAvatarDefinition = (): AvatarDefinition => ({
   schema: AVATAR_DEFINITION_SCHEMA,
   version: AVATAR_DEFINITION_VERSION
 })
+
+const hashAvatarSeed = (seed: string) => {
+  let hash = 2166136261
+  for (const character of seed) {
+    hash ^= character.codePointAt(0) ?? 0
+    hash = Math.imul(hash, 16777619)
+  }
+  return hash >>> 0
+}
+
+export const createSeededAvatarDefinition = ({
+  name,
+  seed
+}: CreateSeededAvatarDefinitionOptions): AvatarDefinition => {
+  const hash = hashAvatarSeed(seed)
+  const palette = AVATAR_PALETTES[hash % AVATAR_PALETTES.length]!
+  const definition = createDefaultAvatarDefinition()
+  const bodyShapes: readonly AvatarBodyShape[] = ['capsule', 'ellipse', 'rounded', 'sphere', 'teardrop']
+  const signed = (shift: number, range: number) => ((hash >>> shift) % (range * 2 + 1)) - range
+
+  return {
+    ...definition,
+    ...(name == null ? {} : { metadata: { name } }),
+    scene: {
+      ...definition.scene,
+      appearance: {
+        backgroundStyle: (hash & 1) === 0 ? 'solid' : 'gradient',
+        bodyShape: bodyShapes[(hash >>> 5) % bodyShapes.length]!,
+        paletteId: palette.id
+      },
+      camera: {
+        ...definition.scene.camera,
+        background: palette.gradient[1]
+      },
+      face: {
+        ...definition.scene.face,
+        gap: 38 + ((hash >>> 11) % 9),
+        leftEyeRotation: signed(16, 9),
+        rightEyeRotation: signed(21, 9)
+      },
+      view: {
+        ...definition.scene.view,
+        pitch: signed(8, 10) / 100,
+        roll: signed(3, 8) / 100,
+        yaw: signed(13, 16) / 100
+      }
+    }
+  }
+}
 
 const isRecord = (value: unknown): value is Record<string, unknown> => (
   typeof value === 'object' && value != null && !Array.isArray(value)
@@ -362,8 +420,17 @@ const isAvatarEntityPart = (value: unknown): value is AvatarEntityPart => (
   isFiniteNumber(value.scaleX) && isFiniteNumber(value.scaleY) &&
   isOptionalNumber(value.scaleZ) && isString(value.shadowColor) &&
   isOneOf(value.shape, [
-    'capsule', 'cone', 'diamond', 'ellipse', 'frustum', 'half-cone', 'rounded', 'square',
-    'sphere', 'teardrop', 'trapezoid'
+    'capsule',
+    'cone',
+    'diamond',
+    'ellipse',
+    'frustum',
+    'half-cone',
+    'rounded',
+    'square',
+    'sphere',
+    'teardrop',
+    'trapezoid'
   ]) && isOptionalNumber(value.topScale) && isFiniteNumber(value.x) &&
   isFiniteNumber(value.y) && isFiniteNumber(value.z)
 )
@@ -375,9 +442,24 @@ const isPartialNumberRecord = (value: unknown, keys: readonly string[]) => (
 const isPartialAvatarFace = (value: unknown) => {
   if (!isRecord(value)) return false
   const numberKeys = [
-    'eyeRoundness', 'gap', 'height', 'leftEyeHeight', 'leftEyeRotation', 'mouthCurve',
-    'mouthHeight', 'mouthRotation', 'mouthWidth', 'mouthY', 'noseHeight', 'noseRotation',
-    'noseWidth', 'noseY', 'rotation', 'rightEyeHeight', 'rightEyeRotation', 'width'
+    'eyeRoundness',
+    'gap',
+    'height',
+    'leftEyeHeight',
+    'leftEyeRotation',
+    'mouthCurve',
+    'mouthHeight',
+    'mouthRotation',
+    'mouthWidth',
+    'mouthY',
+    'noseHeight',
+    'noseRotation',
+    'noseWidth',
+    'noseY',
+    'rotation',
+    'rightEyeHeight',
+    'rightEyeRotation',
+    'width'
   ]
   const booleanKeys = ['mouthEnabled', 'noseEnabled']
   return Object.entries(value).every(([key, field]) => {
@@ -397,26 +479,38 @@ const isAvatarScenePatch = (value: unknown): value is AvatarScenePatch => {
     return false
   }
   if (value.colorGrade != null && !isPartialAvatarColorGrade(value.colorGrade)) return false
-  if (value.view != null && !isPartialNumberRecord(value.view, [
-    'pitch', 'positionX', 'positionY', 'yaw'
-  ])) return false
+  if (
+    value.view != null && !isPartialNumberRecord(value.view, [
+      'pitch',
+      'positionX',
+      'positionY',
+      'yaw'
+    ])
+  ) return false
   if (value.face != null && !isPartialAvatarFace(value.face)) return false
   return true
 }
 
 const isAvatarAnimationClip = (value: unknown): value is AvatarAnimationClip => {
-  if (!isRecord(value) || !isOneOf(value.anchor, ['absolute', 'relative']) ||
+  if (
+    !isRecord(value) || !isOneOf(value.anchor, ['absolute', 'relative']) ||
     !isFiniteNumber(value.durationMs) || value.durationMs <= 0 || !isOptionalString(value.label) ||
     !isOneOf(value.playback, ['loop', 'once']) || !Array.isArray(value.keyframes) ||
-    value.keyframes.length === 0 || (value.playback === 'loop' && value.keyframes.length < 2)) return false
+    value.keyframes.length === 0 || (value.playback === 'loop' && value.keyframes.length < 2)
+  ) return false
   const durationMs = value.durationMs
-  if (!value.keyframes.every(keyframe => (
-    isRecord(keyframe) && isFiniteNumber(keyframe.atMs) && keyframe.atMs >= 0 &&
-    keyframe.atMs <= durationMs &&
-    (keyframe.easing == null || isOneOf(keyframe.easing, [
-      'ease-in', 'ease-in-out', 'ease-out', 'linear'
-    ])) && isAvatarScenePatch(keyframe.patch)
-  ))) return false
+  if (
+    !value.keyframes.every(keyframe => (
+      isRecord(keyframe) && isFiniteNumber(keyframe.atMs) && keyframe.atMs >= 0 &&
+      keyframe.atMs <= durationMs &&
+      (keyframe.easing == null || isOneOf(keyframe.easing, [
+        'ease-in',
+        'ease-in-out',
+        'ease-out',
+        'linear'
+      ])) && isAvatarScenePatch(keyframe.patch)
+    ))
+  ) return false
   const ordered = [...value.keyframes].sort((a, b) => a.atMs - b.atMs)
   const timeline = ordered[0]!.atMs > 0
     ? [{ atMs: 0 }, ...ordered]
@@ -424,9 +518,11 @@ const isAvatarAnimationClip = (value: unknown): value is AvatarAnimationClip => 
   const segmentIsValid = (duration: number) => (
     duration >= AVATAR_ANIMATION_MIN_SEGMENT_MS && duration <= AVATAR_ANIMATION_MAX_SEGMENT_MS
   )
-  if (timeline.slice(1).some((frame, index) => (
-    !segmentIsValid(frame.atMs - timeline[index]!.atMs)
-  ))) return false
+  if (
+    timeline.slice(1).some((frame, index) => (
+      !segmentIsValid(frame.atMs - timeline[index]!.atMs)
+    ))
+  ) return false
   const tailDuration = durationMs - timeline.at(-1)!.atMs
   return value.playback === 'loop'
     ? segmentIsValid(tailDuration)
@@ -449,16 +545,27 @@ const isAvatarAnimationLibrary = (value: unknown): value is AvatarAnimationLibra
 export const isAvatarDefinition = (value: unknown): value is AvatarDefinition => {
   if (!isRecord(value) || value.schema !== AVATAR_DEFINITION_SCHEMA || value.version !== 1) return false
   if (value.animations != null && !isAvatarAnimationLibrary(value.animations)) return false
-  if (value.metadata != null && (!isRecord(value.metadata) ||
-    !isOptionalString(value.metadata.createdAt) || !isOptionalString(value.metadata.id) ||
-    !isOptionalString(value.metadata.name) || !isOptionalString(value.metadata.updatedAt))) return false
+  if (
+    value.metadata != null && (!isRecord(value.metadata) ||
+      !isOptionalString(value.metadata.createdAt) || !isOptionalString(value.metadata.id) ||
+      !isOptionalString(value.metadata.name) || !isOptionalString(value.metadata.updatedAt))
+  ) return false
   if (!isRecord(value.scene)) return false
   const scene = value.scene
   return isRecord(scene.appearance) &&
     isOneOf(scene.appearance.backgroundStyle, ['gradient', 'solid']) &&
     isOneOf(scene.appearance.bodyShape, [
-      'capsule', 'cone', 'diamond', 'ellipse', 'frustum', 'half-cone', 'rounded', 'square',
-      'sphere', 'teardrop', 'trapezoid'
+      'capsule',
+      'cone',
+      'diamond',
+      'ellipse',
+      'frustum',
+      'half-cone',
+      'rounded',
+      'square',
+      'sphere',
+      'teardrop',
+      'trapezoid'
     ]) && isString(scene.appearance.paletteId) &&
     isRecord(scene.camera) && isString(scene.camera.background) &&
     isOneOf(scene.camera.frame, ['circle', 'rounded', 'square']) &&
@@ -530,10 +637,10 @@ export const anchorAvatarAnimationClip = (
         ...(frame.patch.view == null
           ? {}
           : {
-              view: Object.fromEntries(Object.entries(frame.patch.view).map(([key, value]) => (
-                [key, value + delta[key as keyof typeof delta]]
-              )))
-            })
+            view: Object.fromEntries(
+              Object.entries(frame.patch.view).map(([key, value]) => [key, value + delta[key as keyof typeof delta]])
+            )
+          })
       }
     }))
   }

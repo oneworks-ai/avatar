@@ -1,17 +1,9 @@
 import { StrictMode, useRef, useState } from 'react'
 import { createRoot } from 'react-dom/client'
 
-import {
-  createDefaultAvatarDefinition
-} from '@oneworks/avatar-core'
-import type {
-  AvatarAnimationLibrary,
-  AvatarDefinition
-} from '@oneworks/avatar-core'
-import {
-  Avatar,
-  AvatarEditor
-} from '@oneworks/avatar-react'
+import { createDefaultAvatarDefinition } from '@oneworks/avatar'
+import type { AvatarAnimationLibrary, AvatarDefinition } from '@oneworks/avatar'
+import { Avatar, AvatarEditor } from '@oneworks/avatar-react'
 import type { AvatarHandle } from '@oneworks/avatar-react'
 import '@oneworks/avatar-react/style.css'
 
@@ -63,11 +55,12 @@ function Demo() {
           theme='dark'
         />
         <button
-          onClick={() => avatarRef.current?.play({
-            clipId: 'acknowledge',
-            groupId: 'support',
-            libraryId: 'sdk-demo'
-          })}
+          onClick={() =>
+            avatarRef.current?.play({
+              clipId: 'acknowledge',
+              groupId: 'support',
+              libraryId: 'sdk-demo'
+            })}
           type='button'
         >
           Play custom animation

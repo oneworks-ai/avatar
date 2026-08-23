@@ -71,13 +71,13 @@ jobs:
           const fs = require('node:fs')
           const path = require('node:path')
 
-          const readPackageVersion = (packagePath) => {
-            const manifestPath = path.join('app-source', packagePath, 'package.json')
+          const readPackageVersion = (root, packagePath) => {
+            const manifestPath = path.join(root, packagePath, 'package.json')
             return JSON.parse(fs.readFileSync(manifestPath, 'utf8')).version
           }
 
-          console.log(`avatar=${readPackageVersion('packages/avatar')}`)
-          console.log(`route_layout=${readPackageVersion('packages/route-layout')}`)
+          console.log(`avatar=${readPackageVersion('.', 'packages/avatar')}`)
+          console.log(`route_layout=${readPackageVersion('app-source', 'packages/route-layout')}`)
           NODE
 
       - name: Install dependencies

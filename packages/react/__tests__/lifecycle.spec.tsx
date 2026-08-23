@@ -33,8 +33,8 @@ vi.mock('../../../src/InteractiveAvatar', async () => {
   }
 })
 
-import { createDefaultAvatarDefinition } from '@oneworks/avatar-core'
-import type { AvatarAnimationClip } from '@oneworks/avatar-core'
+import { createDefaultAvatarDefinition } from '@oneworks/avatar'
+import type { AvatarAnimationClip } from '@oneworks/avatar'
 
 import { AvatarLocaleProvider, useAvatarLocale } from '../../../src/avatarLocale'
 import { Avatar, AvatarEditor } from '../src'
@@ -85,6 +85,16 @@ afterEach(() => {
 })
 
 describe('OneWorks Avatar React lifecycle', () => {
+  it('renders with the system theme when matchMedia is unavailable', () => {
+    vi.stubGlobal('matchMedia', undefined)
+    const definition = createDefaultAvatarDefinition()
+
+    expect(() => {
+      act(() => root?.render(createElement(Avatar, { definition, theme: 'system' })))
+    }).not.toThrow()
+    expect(host?.querySelector('[data-theme="light"]')).not.toBeNull()
+  })
+
   it('returns a newly controlled editor definition after an earlier edit', () => {
     const first = createDefaultAvatarDefinition()
     const second = { ...first, metadata: { id: 'second' } }

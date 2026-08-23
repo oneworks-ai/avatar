@@ -1,31 +1,23 @@
 import './style.scss'
 
-import {
-  forwardRef,
-  useCallback,
-  useEffect,
-  useImperativeHandle,
-  useMemo,
-  useRef,
-  useState
-} from 'react'
+import { forwardRef, useCallback, useEffect, useImperativeHandle, useMemo, useRef, useState } from 'react'
 import type { CSSProperties, HTMLAttributes } from 'react'
 
-import { getAvatarPalette } from '@oneworks/avatar'
 import {
   anchorAvatarAnimationClip,
   createDefaultAvatarDefinition,
+  getAvatarPalette,
   mergeAvatarAnimationLibraries,
   parseAvatarAnimationClip,
   resolveAvatarAnimationClip,
   resolveAvatarAnimationFrame
-} from '@oneworks/avatar-core'
+} from '@oneworks/avatar'
 import type {
   AvatarAnimationClip,
   AvatarAnimationLibrary,
   AvatarAnimationRef,
   AvatarDefinition
-} from '@oneworks/avatar-core'
+} from '@oneworks/avatar'
 
 import App from '../../../src/App'
 import { InteractiveAvatar } from '../../../src/InteractiveAvatar'
@@ -40,7 +32,7 @@ export type {
   AvatarAnimationLibrary,
   AvatarAnimationRef,
   AvatarDefinition
-} from '@oneworks/avatar-core'
+} from '@oneworks/avatar'
 
 export type AvatarTheme = 'dark' | 'light' | 'system'
 export type AvatarLocale = 'en' | 'zh-Hans'
@@ -82,7 +74,11 @@ export interface AvatarProps extends Omit<HTMLAttributes<HTMLDivElement>, 'child
 }
 
 const resolveSystemTheme = () => (
-  typeof window !== 'undefined' && window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'
+  typeof window !== 'undefined' &&
+    typeof window.matchMedia === 'function' &&
+    window.matchMedia('(prefers-color-scheme: dark)').matches
+    ? 'dark'
+    : 'light'
 )
 
 const applyView = (definition: AvatarDefinition, view: AvatarViewState): AvatarDefinition => ({
@@ -114,21 +110,24 @@ export const Avatar = forwardRef<AvatarHandle, AvatarProps>(function Avatar({
   const [systemTheme, setSystemTheme] = useState(resolveSystemTheme)
   const containerRef = useRef<HTMLDivElement>(null)
   const frameRef = useRef<number>()
-  const animationRef = useRef<{
-    base: AvatarDefinition
-    clip: AvatarAnimationClip
-    elapsedBeforeStart: number
-    lastLoop: number
-    playing: boolean
-    speed: number
-    startedAt: number
-  } | null>(null)
+  const animationRef = useRef<
+    {
+      base: AvatarDefinition
+      clip: AvatarAnimationClip
+      elapsedBeforeStart: number
+      lastLoop: number
+      playing: boolean
+      speed: number
+      startedAt: number
+    } | null
+  >(null)
   const callbacksRef = useRef({ onAnimationEnd, onAnimationLoop, onAnimationStart, onError })
   callbacksRef.current = { onAnimationEnd, onAnimationLoop, onAnimationStart, onError }
-  const libraries = useMemo(() => mergeAvatarAnimationLibraries([
-    ...(currentDefinition.animations == null ? [] : [currentDefinition.animations]),
-    ...animationLibraries
-  ]), [animationLibraries, currentDefinition.animations])
+  const libraries = useMemo(() =>
+    mergeAvatarAnimationLibraries([
+      ...(currentDefinition.animations == null ? [] : [currentDefinition.animations]),
+      ...animationLibraries
+    ]), [animationLibraries, currentDefinition.animations])
 
   useEffect(() => {
     if (frameRef.current != null) cancelAnimationFrame(frameRef.current)
@@ -139,7 +138,11 @@ export const Avatar = forwardRef<AvatarHandle, AvatarProps>(function Avatar({
   }, [definition])
 
   useEffect(() => {
-    if (theme !== 'system' || typeof window === 'undefined') return
+    if (
+      theme !== 'system' ||
+      typeof window === 'undefined' ||
+      typeof window.matchMedia !== 'function'
+    ) return
     const media = window.matchMedia('(prefers-color-scheme: dark)')
     const handleChange = () => setSystemTheme(media.matches ? 'dark' : 'light')
     media.addEventListener('change', handleChange)
@@ -188,10 +191,13 @@ export const Avatar = forwardRef<AvatarHandle, AvatarProps>(function Avatar({
       throw error
     }
     stopFrame()
-    const clip = anchorAvatarAnimationClip(currentDefinition, parseAvatarAnimationClip({
-      ...selected,
-      playback: options.playback ?? selected.playback
-    }))
+    const clip = anchorAvatarAnimationClip(
+      currentDefinition,
+      parseAvatarAnimationClip({
+        ...selected,
+        playback: options.playback ?? selected.playback
+      })
+    )
     animationRef.current = {
       base: currentDefinition,
       clip,

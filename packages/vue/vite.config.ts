@@ -17,7 +17,7 @@ export default defineConfig({
       formats: ['es']
     },
     rollupOptions: {
-      external: ['@oneworks/avatar-core', '@oneworks/avatar-web', 'vue']
+      external: ['@oneworks/avatar', '@oneworks/avatar-web', 'vue']
     },
     target: 'es2022'
   }

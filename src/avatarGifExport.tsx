@@ -1,9 +1,11 @@
+/// <reference path="./gifenc.d.ts" />
+
+import { GIFEncoder, applyPalette, quantize } from 'gifenc'
 import { flushSync } from 'react-dom'
 import { createRoot } from 'react-dom/client'
-import { GIFEncoder, applyPalette, quantize } from 'gifenc'
 
 import { InteractiveAvatar } from './InteractiveAvatar'
-import type { InteractiveAvatarProps, AvatarViewState } from './InteractiveAvatar'
+import type { AvatarViewState, InteractiveAvatarProps } from './InteractiveAvatar'
 import {
   applyAvatarAnimationTransformAnchor,
   createAvatarAnimationTransformAnchor,
@@ -25,8 +27,14 @@ const GIF_PALETTE_FORMAT = 'rgba4444'
 
 type AvatarGifRenderProps = Omit<
   InteractiveAvatarProps,
-  'colorGrade' | 'faceStyle' | 'faceStyleTransitionsEnabled' | 'interactionMode' | 'interactive' |
-    'onViewStateChange' | 'selectedEntityPartId' | 'viewState'
+  | 'colorGrade'
+  | 'faceStyle'
+  | 'faceStyleTransitionsEnabled'
+  | 'interactionMode'
+  | 'interactive'
+  | 'onViewStateChange'
+  | 'selectedEntityPartId'
+  | 'viewState'
 >
 
 export interface AvatarGifExportOptions extends AvatarCaptureOptions {
@@ -161,9 +169,10 @@ export const createAvatarGifSamples = (
   return samples
 }
 
-const yieldToBrowser = () => new Promise<void>(resolve => {
-  window.setTimeout(resolve, 0)
-})
+const yieldToBrowser = () =>
+  new Promise<void>(resolve => {
+    window.setTimeout(resolve, 0)
+  })
 
 export const createAvatarGif = async (options: AvatarGifExportOptions) => {
   const samples = createAvatarGifSamples(options.keyframes, options)

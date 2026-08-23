@@ -1,18 +1,13 @@
-import { createDefaultAvatarDefinition } from '@oneworks/avatar-core'
+import { createDefaultAvatarDefinition } from '@oneworks/avatar'
 import type {
   AvatarAnimationClip,
   AvatarAnimationLibrary,
   AvatarAnimationRef,
   AvatarDefinition
-} from '@oneworks/avatar-core'
+} from '@oneworks/avatar'
 
 import { createAvatar, createAvatarEditor } from './index'
-import type {
-  AvatarEditorMount,
-  AvatarEditorMountOptions,
-  AvatarMount,
-  AvatarMountOptions
-} from './index'
+import type { AvatarEditorMount, AvatarEditorMountOptions, AvatarMount, AvatarMountOptions } from './index'
 
 const readBooleanAttribute = (element: Element, name: string) => element.hasAttribute(name)
 
@@ -24,26 +19,34 @@ export class OneWorksAvatarElement extends HTMLElement {
   #definition: AvatarDefinition = createDefaultAvatarDefinition()
   #mount: AvatarMount | null = null
 
-  get animation() { return this.#animation }
+  get animation() {
+    return this.#animation
+  }
   set animation(value) {
     this.#animation = value
     this.#update()
   }
 
-  get animationLibraries() { return this.#animationLibraries }
+  get animationLibraries() {
+    return this.#animationLibraries
+  }
   set animationLibraries(value) {
     this.#animationLibraries = value
     this.#update()
   }
 
-  get definition() { return this.#mount?.getDefinition() ?? this.#definition }
-  set definition(value) {
+  get definition(): AvatarDefinition {
+    return this.#mount?.getDefinition() ?? this.#definition
+  }
+  set definition(value: AvatarDefinition) {
     this.#definition = value
     if (this.#mount == null) this.#update()
     else this.#mount.setDefinition(value)
   }
 
-  connectedCallback() { this.#update() }
+  connectedCallback() {
+    this.#update()
+  }
   disconnectedCallback() {
     if (this.#mount != null) {
       this.#definition = this.#mount.getDefinition()
@@ -51,16 +54,28 @@ export class OneWorksAvatarElement extends HTMLElement {
     }
     this.#mount = null
   }
-  attributeChangedCallback() { this.#update() }
+  attributeChangedCallback() {
+    this.#update()
+  }
 
-  capture(options: Parameters<AvatarMount['capture']>[0]) { return this.#requireMount().capture(options) }
-  pause() { this.#requireMount().pause() }
+  capture(options: Parameters<AvatarMount['capture']>[0]) {
+    return this.#requireMount().capture(options)
+  }
+  pause() {
+    this.#requireMount().pause()
+  }
   play(animation: AvatarAnimationClip | AvatarAnimationRef, options?: Parameters<AvatarMount['play']>[1]) {
     return this.#requireMount().play(animation, options)
   }
-  resume() { this.#requireMount().resume() }
-  seek(timeMs: number) { this.#requireMount().seek(timeMs) }
-  stop(options?: Parameters<AvatarMount['stop']>[0]) { this.#requireMount().stop(options) }
+  resume() {
+    this.#requireMount().resume()
+  }
+  seek(timeMs: number) {
+    this.#requireMount().seek(timeMs)
+  }
+  stop(options?: Parameters<AvatarMount['stop']>[0]) {
+    this.#requireMount().stop(options)
+  }
 
   #options(): AvatarMountOptions {
     const theme = this.getAttribute('theme')
@@ -94,20 +109,26 @@ export class OneWorksAvatarEditorElement extends HTMLElement {
   #definition: AvatarDefinition = createDefaultAvatarDefinition()
   #mount: AvatarEditorMount | null = null
 
-  get animationLibraries() { return this.#animationLibraries }
+  get animationLibraries() {
+    return this.#animationLibraries
+  }
   set animationLibraries(value) {
     this.#animationLibraries = value
     this.#update()
   }
 
-  get definition() { return this.#mount?.getDefinition() ?? this.#definition }
-  set definition(value) {
+  get definition(): AvatarDefinition {
+    return this.#mount?.getDefinition() ?? this.#definition
+  }
+  set definition(value: AvatarDefinition) {
     this.#definition = value
     if (this.#mount == null) this.#update()
     else this.#mount.setDefinition(value)
   }
 
-  connectedCallback() { this.#update() }
+  connectedCallback() {
+    this.#update()
+  }
   disconnectedCallback() {
     if (this.#mount != null) {
       this.#definition = this.#mount.getDefinition()
@@ -115,7 +136,9 @@ export class OneWorksAvatarEditorElement extends HTMLElement {
     }
     this.#mount = null
   }
-  attributeChangedCallback() { this.#update() }
+  attributeChangedCallback() {
+    this.#update()
+  }
   focus(options?: FocusOptions) {
     super.focus(options)
     this.#mount?.focus()

@@ -1,25 +1,30 @@
 {
   "name": "@oneworks/avatar-web",
-  "version": "0.1.0-alpha.0",
+  "version": "1.0.0-rc.6",
   "description": "Vanilla JavaScript runtime, editor mounts, and Web Components for OneWorks 3D Avatar",
   "type": "module",
   "license": "MIT",
   "sideEffects": ["./dist/style.css"],
   "repository": {
     "type": "git",
-    "url": "https://github.com/oneworks-ai/avatar.git",
-    "directory": "packages/web"
+    "url": "https://github.com/oneworks-ai/app.git",
+    "directory": "assets/avatar/packages/web"
   },
   "exports": {
     ".": {
+      "__oneworks__": "./src/index.ts",
       "types": "./dist/index.d.ts",
       "default": "./dist/index.js"
     },
     "./elements": {
+      "__oneworks__": "./src/elements.ts",
       "types": "./dist/elements.d.ts",
       "default": "./dist/elements.js"
     },
-    "./style.css": "./dist/style.css",
+    "./style.css": {
+      "__oneworks__": "./src/style.css",
+      "default": "./dist/style.css"
+    },
     "./package.json": "./package.json"
   },
   "files": ["dist", "README.md", "README.zh-Hans.md"],
@@ -28,7 +33,7 @@
     "typecheck": "tsc -p tsconfig.json --noEmit --pretty false"
   },
   "dependencies": {
-    "@oneworks/avatar-core": "workspace:*",
+    "@oneworks/avatar": "workspace:*",
     "@oneworks/avatar-react": "workspace:*",
     "react": "^18.3.1",
     "react-dom": "^18.3.1"

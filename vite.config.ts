@@ -18,29 +18,25 @@ export default defineConfig({
   resolve: appSourcePath == null
     ? undefined
     : {
-        alias: [
-          {
-            find: /^@oneworks\/avatar-core$/,
-            replacement: path.resolve('packages/core/src/index.ts')
-          },
-          {
-            find: /^@oneworks\/avatar-react$/,
-            replacement: path.resolve('packages/react/src/index.tsx')
-          },
-          {
-            find: /^@oneworks\/avatar-react\/style\.css$/,
-            replacement: path.resolve('packages/react/src/style.scss')
-          },
-          {
-            find: /^@oneworks\/avatar$/,
-            replacement: path.join(appSourcePath, 'packages/avatar/src/index.ts')
-          },
-          {
-            find: '@oneworks/route-layout/design-tokens.css',
-            replacement: path.join(appSourcePath, 'packages/route-layout/src/design-tokens.css')
-          }
-        ]
-      },
+      alias: [
+        {
+          find: /^@oneworks\/avatar-react$/,
+          replacement: path.resolve('packages/react/src/index.tsx')
+        },
+        {
+          find: /^@oneworks\/avatar-react\/style\.css$/,
+          replacement: path.resolve('packages/react/src/style.scss')
+        },
+        {
+          find: /^@oneworks\/avatar$/,
+          replacement: path.resolve('packages/avatar/src/index.ts')
+        },
+        {
+          find: '@oneworks/route-layout/design-tokens.css',
+          replacement: path.join(appSourcePath, 'packages/route-layout/src/design-tokens.css')
+        }
+      ]
+    },
   server: {
     host: '127.0.0.1'
   },

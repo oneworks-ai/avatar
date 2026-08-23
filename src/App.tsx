@@ -3,9 +3,13 @@ import './App.scss'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { CSSProperties } from 'react'
 
-import { AVATAR_PALETTES, AVATAR_PRESETS, getAvatarPalette, isSupportedAvatarEmoticon } from '@oneworks/avatar'
-import type { AvatarBackgroundStyle } from '@oneworks/avatar'
-import type { AvatarAnimationLibrary, AvatarDefinition } from '@oneworks/avatar-core'
+import {
+  AVATAR_PALETTES,
+  DEFAULT_AVATAR_GLYPH_EXPRESSION,
+  getAvatarPalette,
+  isSupportedAvatarGlyphExpression
+} from '@oneworks/avatar'
+import type { AvatarAnimationLibrary, AvatarBackgroundStyle, AvatarDefinition } from '@oneworks/avatar'
 
 import { AnimationPanel } from './AnimationPanel'
 import { AvatarControls } from './AvatarControls'
@@ -27,8 +31,6 @@ import type {
   AvatarViewState
 } from './InteractiveAvatar'
 import { LanguageSwitcher } from './LanguageSwitcher'
-import { DEFAULT_AVATAR_COLOR_GRADE, resolveAvatarColorGrade } from './avatarColorGrade'
-import type { AvatarColorGrade } from './avatarColorGrade'
 import {
   AVATAR_ANIMATION_PRESETS,
   applyAvatarAnimationTransformAnchor,
@@ -55,6 +57,14 @@ import type {
   AvatarAnimationTransformAnchor,
   SavedAvatarAnimation
 } from './avatarAnimations'
+import { DEFAULT_AVATAR_COLOR_GRADE, resolveAvatarColorGrade } from './avatarColorGrade'
+import type { AvatarColorGrade } from './avatarColorGrade'
+import {
+  avatarDefinitionToSearchParams,
+  avatarDefinitionToState,
+  createAvatarDefinition,
+  flattenAvatarAnimationLibraries
+} from './avatarDefinition'
 import {
   applyAvatarEntityPalette,
   createAvatarEntityParts,
@@ -73,6 +83,8 @@ import type {
   AvatarMouthShape,
   AvatarNoseShape
 } from './avatarGeometry'
+import { createAvatarGif } from './avatarGifExport'
+import { LAST_EDITOR_QUERY_STORAGE_KEY } from './avatarHome'
 import { useAvatarLocale } from './avatarLocale'
 import {
   captureAvatarScreenshot,
@@ -83,16 +95,8 @@ import {
   serializeAvatarSvg
 } from './savedAvatarPresets'
 import type { SavedAvatarPreset } from './savedAvatarPresets'
-import { LAST_EDITOR_QUERY_STORAGE_KEY } from './avatarHome'
-import { createAvatarGif } from './avatarGifExport'
-import {
-  avatarDefinitionToState,
-  avatarDefinitionToSearchParams,
-  createAvatarDefinition,
-  flattenAvatarAnimationLibraries
-} from './avatarDefinition'
 
-const INITIAL_EMOTICON = AVATAR_PRESETS[0]?.emoticon ?? '0w0'
+const INITIAL_EMOTICON = DEFAULT_AVATAR_GLYPH_EXPRESSION
 const INITIAL_PARTS = Array.from(INITIAL_EMOTICON)
 const DEFAULT_PALETTE_COUNT = 16
 const UNDO_GROUP_DELAY_MS = 400
@@ -273,7 +277,7 @@ const parseLinkEyes = (value: string | null, leftEye: string, rightEye: string) 
 
 const parseQueryConfig = (params: URLSearchParams): AvatarQueryConfig => {
   const queryFace = params.get('face') ?? ''
-  const emoticon = isSupportedAvatarEmoticon(queryFace) ? queryFace : INITIAL_EMOTICON
+  const emoticon = isSupportedAvatarGlyphExpression(queryFace) ? queryFace : INITIAL_EMOTICON
   const parts = Array.from(emoticon)
   const queryPaletteId = params.get('palette') ?? ''
   const selectedPaletteId = AVATAR_PALETTES.some(palette => palette.id === queryPaletteId)
@@ -637,9 +641,7 @@ function App({
     const direction = frameShadowStyle.direction * Math.PI / 180
     const x = Math.cos(direction) * frameShadowStyle.distance
     const y = Math.sin(direction) * frameShadowStyle.distance
-    return `${x.toFixed(2)}px ${
-      y.toFixed(2)
-    }px ${frameShadowStyle.softness}px color-mix(in srgb, ${
+    return `${x.toFixed(2)}px ${y.toFixed(2)}px ${frameShadowStyle.softness}px color-mix(in srgb, ${
       frameShadowStyle.color ?? selectedPalette.shadow
     } ${frameShadowStyle.opacity}%, transparent)`
   }, [frameShadowStyle, selectedPalette.shadow, showFrameShadow])
@@ -689,35 +691,36 @@ function App({
     animationPlaybackMode,
     animationStartFrameIndex
   ])
-  const currentDefinition = useMemo(() => createAvatarDefinition({
-    animation: currentDocumentAnimation,
-    avatarOutlineStyle,
-    avatarShadowStyle,
-    backgroundStyle,
-    bodyShape,
-    cameraBackground,
-    cameraFrame,
-    colorGrade: avatarColorGrade,
-    entityParts,
-    entityPreset,
-    exportSize,
-    faceShadowStyle: resolvedFaceShadowStyle,
-    faceStyle: resolvedFaceStyle,
-    frameShadowStyle,
-    glyph: { leftEye, linkEyes, mouth, rightEye },
-    gridDensity,
-    interactionMode,
-    lightAzimuth,
-    lightDistance,
-    lightElevation,
-    paletteId: selectedPaletteId,
-    showAvatarShadow,
-    showFrameShadow,
-    showLight,
-    showOutline,
-    showShadow,
-    viewState: avatarViewState
-  }, definition), [
+  const currentDefinition = useMemo(() =>
+    createAvatarDefinition({
+      animation: currentDocumentAnimation,
+      avatarOutlineStyle,
+      avatarShadowStyle,
+      backgroundStyle,
+      bodyShape,
+      cameraBackground,
+      cameraFrame,
+      colorGrade: avatarColorGrade,
+      entityParts,
+      entityPreset,
+      exportSize,
+      faceShadowStyle: resolvedFaceShadowStyle,
+      faceStyle: resolvedFaceStyle,
+      frameShadowStyle,
+      glyph: { leftEye, linkEyes, mouth, rightEye },
+      gridDensity,
+      interactionMode,
+      lightAzimuth,
+      lightDistance,
+      lightElevation,
+      paletteId: selectedPaletteId,
+      showAvatarShadow,
+      showFrameShadow,
+      showLight,
+      showOutline,
+      showShadow,
+      viewState: avatarViewState
+    }, definition), [
     avatarOutlineStyle,
     avatarShadowStyle,
     avatarViewState,
@@ -757,12 +760,13 @@ function App({
   const lastEmittedDefinitionFingerprintRef = useRef(
     definition == null ? null : JSON.stringify(definition)
   )
-  const publicAnimationEntries = useMemo(() => flattenAvatarAnimationLibraries(
-    [definition?.animations, ...animationLibraries].filter(
-      (library): library is AvatarAnimationLibrary => library != null
-    ),
-    currentDefinition.scene
-  ), [animationLibraries, currentDefinition.scene, definition?.animations])
+  const publicAnimationEntries = useMemo(() =>
+    flattenAvatarAnimationLibraries(
+      [definition?.animations, ...animationLibraries].filter(
+        (library): library is AvatarAnimationLibrary => library != null
+      ),
+      currentDefinition.scene
+    ), [animationLibraries, currentDefinition.scene, definition?.animations])
   const publicAnimations = useMemo(
     () => publicAnimationEntries.map(entry => entry.animation),
     [publicAnimationEntries]
@@ -1001,7 +1005,8 @@ function App({
       if (
         editable instanceof HTMLTextAreaElement ||
         editable instanceof HTMLElement && editable.isContentEditable ||
-        editable instanceof HTMLInputElement && !['button', 'checkbox', 'color', 'radio', 'range'].includes(editable.type)
+        editable instanceof HTMLInputElement &&
+          !['button', 'checkbox', 'color', 'radio', 'range'].includes(editable.type)
       ) {
         return
       }
@@ -2104,12 +2109,13 @@ function App({
           {interactionControlsDocked ? null : renderInteractionModeControls()}
           <AvatarOrientationControl
             viewState={avatarViewState}
-            onReset={() => handleAvatarViewStateChange({
-              ...avatarViewState,
-              pitch: DEFAULT_AVATAR_VIEW_STATE.pitch,
-              roll: DEFAULT_AVATAR_VIEW_STATE.roll,
-              yaw: DEFAULT_AVATAR_VIEW_STATE.yaw
-            })}
+            onReset={() =>
+              handleAvatarViewStateChange({
+                ...avatarViewState,
+                pitch: DEFAULT_AVATAR_VIEW_STATE.pitch,
+                roll: DEFAULT_AVATAR_VIEW_STATE.roll,
+                yaw: DEFAULT_AVATAR_VIEW_STATE.yaw
+              })}
             onViewStateChange={handleAvatarViewStateChange}
           />
         </section>

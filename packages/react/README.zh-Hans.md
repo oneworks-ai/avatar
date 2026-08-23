@@ -12,4 +12,4 @@ import '@oneworks/avatar-react/style.css'
 <AvatarEditor definition={avatar} animationLibraries={[supportAnimations]} />
 ```
 
-完整说明见 [Avatar 开发者接入指南](https://oneworks.cloud/docs/usage/avatar#开发者接入)。
+完整说明见 [Avatar Runtime 指南](https://oneworks.cloud/docs/usage/avatar-runtime#react)。
