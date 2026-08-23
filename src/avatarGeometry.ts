@@ -1,3 +1,5 @@
+import { AVATAR_LIGHTING_RANGES } from '@oneworks/avatar'
+
 import type { AvatarSurfaceDecal } from './avatarSurfaceDecals'
 
 export const AVATAR_BODY_SHAPES = [
@@ -43,8 +45,8 @@ export interface AvatarLightDirection {
 
 export const AVATAR_GRID_DENSITY = {
   default: 100,
-  max: 400,
-  min: 25
+  max: AVATAR_LIGHTING_RANGES.gridDensity.max,
+  min: AVATAR_LIGHTING_RANGES.gridDensity.min
 } as const
 
 export interface AvatarFaceShadowStyle {

@@ -7,8 +7,8 @@
   "sideEffects": false,
   "repository": {
     "type": "git",
-    "url": "https://github.com/oneworks-ai/app.git",
-    "directory": "assets/avatar/packages/avatar"
+    "url": "https://github.com/oneworks-ai/avatar.git",
+    "directory": "packages/avatar"
   },
   "exports": {
     ".": {

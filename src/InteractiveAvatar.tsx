@@ -3,6 +3,7 @@ import './InteractiveAvatar.scss'
 import { memo, useEffect, useId, useMemo, useRef, useState } from 'react'
 import type { KeyboardEvent, PointerEvent, WheelEvent } from 'react'
 
+import { AVATAR_VIEW_RANGES } from '@oneworks/avatar'
 import type { AvatarBackgroundStyle, AvatarPalette } from '@oneworks/avatar'
 import { applyAvatarColorGrade } from './avatarColorGrade'
 import type { AvatarColorGrade } from './avatarColorGrade'
@@ -65,9 +66,9 @@ export interface AvatarViewState {
 }
 
 export const AVATAR_VIEW_LIMITS = {
-  maxPosition: 230,
-  maxScale: 2.4,
-  minScale: 0.35
+  maxPosition: AVATAR_VIEW_RANGES.positionX.max,
+  maxScale: AVATAR_VIEW_RANGES.scale.max,
+  minScale: AVATAR_VIEW_RANGES.scale.min
 } as const
 
 export const DEFAULT_AVATAR_VIEW_STATE: AvatarViewState = {

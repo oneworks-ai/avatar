@@ -1,3 +1,5 @@
+import { AVATAR_SURFACE_DECAL_RANGES } from '@oneworks/avatar'
+
 export const AVATAR_SURFACE_DECAL_SHAPES = ['ellipse', 'rounded'] as const
 
 export type AvatarSurfaceDecalShape = (typeof AVATAR_SURFACE_DECAL_SHAPES)[number]
@@ -79,16 +81,36 @@ export const deserializeAvatarSurfaceDecals = (
         : null
       return [{
         color: item[8].toLowerCase(),
-        height: finite(item[6], 24, 2, 180),
+        height: finite(
+          item[6],
+          24,
+          AVATAR_SURFACE_DECAL_RANGES.height.min,
+          AVATAR_SURFACE_DECAL_RANGES.height.max
+        ),
         id: item[0],
         label: typeof item[10] === 'string' && item[10].trim() !== '' ? item[10] : item[0],
-        opacity: finite(item[9], 100, 0, 100),
-        rotation: finite(item[7], 0, -180, 180),
+        opacity: finite(
+          item[9],
+          100,
+          AVATAR_SURFACE_DECAL_RANGES.opacity.min,
+          AVATAR_SURFACE_DECAL_RANGES.opacity.max
+        ),
+        rotation: finite(
+          item[7],
+          0,
+          AVATAR_SURFACE_DECAL_RANGES.rotation.min,
+          AVATAR_SURFACE_DECAL_RANGES.rotation.max
+        ),
         shape: item[2] as AvatarSurfaceDecalShape,
         targetPartId,
-        width: finite(item[5], 36, 2, 180),
-        x: finite(item[3], 0, -180, 180),
-        y: finite(item[4], 0, -180, 180)
+        width: finite(
+          item[5],
+          36,
+          AVATAR_SURFACE_DECAL_RANGES.width.min,
+          AVATAR_SURFACE_DECAL_RANGES.width.max
+        ),
+        x: finite(item[3], 0, AVATAR_SURFACE_DECAL_RANGES.x.min, AVATAR_SURFACE_DECAL_RANGES.x.max),
+        y: finite(item[4], 0, AVATAR_SURFACE_DECAL_RANGES.y.min, AVATAR_SURFACE_DECAL_RANGES.y.max)
       } satisfies AvatarSurfaceDecal]
     })
   } catch {

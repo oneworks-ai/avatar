@@ -1,6 +1,11 @@
 import { describe, expect, it } from 'vitest'
 
-import { createDefaultAvatarDefinition, parseAvatarDefinition } from '@oneworks/avatar'
+import {
+  applyAvatarScenePatch,
+  createDefaultAvatarDefinition,
+  parseAvatarAnimationClip,
+  parseAvatarDefinition
+} from '@oneworks/avatar'
 import type { AvatarAnimationLibrary } from '@oneworks/avatar'
 
 import { DEFAULT_AVATAR_VIEW_STATE } from '../src/InteractiveAvatar'
@@ -9,11 +14,91 @@ import {
   avatarDefinitionToSearchParams,
   avatarDefinitionToState,
   createAvatarDefinition,
-  flattenAvatarAnimationLibraries
+  flattenAvatarAnimationLibraries,
+  savedAvatarAnimationToClip
 } from '../src/avatarDefinition'
-import { createAvatarEntityParts, deserializeAvatarEntityParts } from '../src/avatarEntityPresets'
+import { AVATAR_ANIMATION_PRESETS, resolveAvatarAnimationPreset } from '../src/avatarAnimations'
+import type { SavedAvatarAnimation } from '../src/avatarAnimations'
+import {
+  AVATAR_BUILT_IN_ENTITY_PRESETS,
+  createAvatarEntityParts,
+  deserializeAvatarEntityParts,
+  getAvatarEntityPresetFaceStyle,
+  getAvatarEntityPresetScene
+} from '../src/avatarEntityPresets'
 import { DEFAULT_AVATAR_FACE_STYLE } from '../src/avatarGeometry'
 describe('Avatar editor public definition bridge', () => {
+  it('keeps every built-in entity scene inside the public definition contract', () => {
+    const base = createDefaultAvatarDefinition()
+    const baseState = avatarDefinitionToState(base)
+
+    for (const preset of AVATAR_BUILT_IN_ENTITY_PRESETS) {
+      const presetScene = getAvatarEntityPresetScene(preset)!
+      const definition = createAvatarDefinition({
+        ...baseState,
+        avatarOutlineStyle: presetScene.avatarOutlineStyle,
+        avatarShadowStyle: presetScene.avatarShadowStyle,
+        backgroundStyle: presetScene.backgroundStyle,
+        cameraBackground: presetScene.cameraBackground,
+        cameraFrame: presetScene.cameraFrame,
+        entityParts: createAvatarEntityParts(preset),
+        entityPreset: preset,
+        faceStyle: getAvatarEntityPresetFaceStyle(preset)!,
+        frameShadowStyle: presetScene.frameShadowStyle,
+        interactionMode: presetScene.interactionMode,
+        paletteId: presetScene.paletteId,
+        showAvatarShadow: presetScene.showAvatarShadow,
+        showFrameShadow: presetScene.showFrameShadow,
+        showLight: presetScene.showLight,
+        showOutline: presetScene.showOutline,
+        showShadow: presetScene.showShadow,
+        viewState: presetScene.viewState
+      })
+
+      expect(parseAvatarDefinition(definition), `${preset} should stay public-valid`).toEqual(definition)
+    }
+  })
+
+  it('keeps every built-in animation parseable for default and authored entity faces', () => {
+    const faceStyles = [
+      DEFAULT_AVATAR_FACE_STYLE,
+      ...AVATAR_BUILT_IN_ENTITY_PRESETS.map(preset => getAvatarEntityPresetFaceStyle(preset)!)
+    ]
+
+    for (const faceStyle of faceStyles) {
+      for (const preset of AVATAR_ANIMATION_PRESETS) {
+        const resolved = resolveAvatarAnimationPreset(preset, DEFAULT_AVATAR_VIEW_STATE, faceStyle)
+        const animation: SavedAvatarAnimation = {
+          createdAt: 0,
+          id: preset.id,
+          keyframes: resolved.keyframes,
+          lockStartPosition: false,
+          name: preset.label,
+          playbackMode: 'loop',
+          startFrameIndex: 0,
+          version: 3
+        }
+        const clip = savedAvatarAnimationToClip(animation)
+        expect(parseAvatarAnimationClip(clip), `${preset.id} should accept ${faceStyle.width}×${faceStyle.height}`)
+          .toEqual(clip)
+      }
+    }
+  })
+
+  it('keeps every accepted animation face boundary inside the full scene contract', () => {
+    const definition = createDefaultAvatarDefinition()
+    const scene = applyAvatarScenePatch(definition.scene, {
+      face: { height: 1, mouthHeight: 4, mouthWidth: 12, width: 76 }
+    })
+
+    expect(parseAvatarDefinition({ ...definition, scene }).scene.face).toMatchObject({
+      height: 1,
+      mouthHeight: 4,
+      mouthWidth: 12,
+      width: 76
+    })
+  })
+
   it('preserves a custom multipart scene in the editor query bridge', () => {
     const customParts = createAvatarEntityParts('dog')
     const definition = createAvatarDefinition({

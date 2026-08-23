@@ -4,7 +4,16 @@ Use this reference before recommending a OneWorks Avatar integration. All public
 
 ## Choose the package
 
-Install the framework-neutral package and only the adapters the application needs:
+Before installing a prerelease, verify that the registry resolves the 3D release. Do not accept the removed 2D `@oneworks/avatar@1.0.0-rc.5`, and do not claim an adapter is installable while npm still returns `E404`:
+
+```bash
+npm view @oneworks/avatar@rc version
+npm view @oneworks/avatar-react@rc version
+npm view @oneworks/avatar-vue@rc version
+npm view @oneworks/avatar-web@rc version
+```
+
+Require all four results to be `1.0.0-rc.6` or a later compatible release. Until then, consume the matching source workspace from the `oneworks-ai/avatar` repository rather than mixing released and unpublished packages. Once verified, install the framework-neutral package and only the adapters the application needs:
 
 ```bash
 pnpm add @oneworks/avatar@rc

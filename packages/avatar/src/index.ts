@@ -2,18 +2,103 @@ import { AVATAR_PALETTES } from './catalog.js'
 
 export * from './catalog.js'
 
+const deepFreeze = <T>(value: T): T => {
+  if (value == null || typeof value !== 'object' || Object.isFrozen(value)) return value
+  Object.values(value as Record<string, unknown>).forEach(deepFreeze)
+  Object.freeze(value)
+  return value
+}
+
 export const AVATAR_DEFINITION_SCHEMA = 'oneworks.avatar' as const
 export const AVATAR_DEFINITION_VERSION = 1 as const
 export const AVATAR_ANIMATION_MIN_SEGMENT_MS = 100
 export const AVATAR_ANIMATION_MAX_SEGMENT_MS = 8000
-export const AVATAR_COLOR_GRADE_RANGES = {
+export const AVATAR_COLOR_GRADE_RANGES = deepFreeze({
   brightness: { max: 1.8, min: .35 },
   saturation: { max: 2, min: 0 },
   tintAmount: { max: 1, min: 0 },
   tintB: { max: 255, min: 0 },
   tintG: { max: 255, min: 0 },
   tintR: { max: 255, min: 0 }
-} as const
+} as const)
+export const AVATAR_EYE_HIGHLIGHT_RANGES = deepFreeze({
+  offsetX: { max: 35, min: -35 },
+  offsetY: { max: 35, min: -35 },
+  opacity: { max: 100, min: 0 },
+  size: { max: 50, min: 8 }
+} as const)
+export const AVATAR_FACE_RANGES = deepFreeze({
+  eyeRoundness: { max: 100, min: 0 },
+  gap: { max: 100, min: 0 },
+  height: { max: 112, min: 1 },
+  leftEyeHeight: { max: 112, min: 1 },
+  leftEyeRotation: { max: 90, min: -90 },
+  mouthCurve: { max: 100, min: -100 },
+  mouthHeight: { max: 48, min: 4 },
+  mouthRotation: { max: 180, min: -180 },
+  mouthWidth: { max: 100, min: 12 },
+  mouthY: { max: 90, min: 24 },
+  noseHeight: { max: 48, min: 6 },
+  noseRotation: { max: 180, min: -180 },
+  noseWidth: { max: 36, min: 6 },
+  noseY: { max: 50, min: -10 },
+  rotation: { max: 90, min: -90 },
+  rightEyeHeight: { max: 112, min: 1 },
+  rightEyeRotation: { max: 90, min: -90 },
+  width: { max: 76, min: 1 }
+} as const)
+export const AVATAR_ANIMATION_FACE_RANGES = AVATAR_FACE_RANGES
+export const AVATAR_VIEW_RANGES = deepFreeze({
+  positionX: { max: 230, min: -230 },
+  positionY: { max: 230, min: -230 },
+  scale: { max: 2.4, min: .35 }
+} as const)
+export const AVATAR_ENTITY_RANGES = deepFreeze({
+  occlusionAmount: { max: 100, min: 0 },
+  roundness: { max: 100, min: 0 },
+  scaleX: { max: 1.5, min: .08 },
+  scaleY: { max: 1.5, min: .08 },
+  scaleZ: { max: 1.5, min: .08 },
+  topScale: { max: 1.2, min: .4 }
+} as const)
+export const AVATAR_LIGHTING_RANGES = deepFreeze({
+  azimuth: { max: 180, min: -180 },
+  distance: { max: 100, min: 0 },
+  elevation: { max: 80, min: -80 },
+  gridDensity: { max: 400, min: 25 }
+} as const)
+export const AVATAR_OUTLINE_RANGES = deepFreeze({
+  opacity: { max: 100, min: 0 },
+  width: { max: 20, min: 1 }
+} as const)
+export const AVATAR_SHADOW_RANGES = deepFreeze({
+  avatar: {
+    direction: { max: 180, min: -180 },
+    distance: { max: 40, min: 0 },
+    opacity: { max: 100, min: 0 },
+    softness: { max: 40, min: 0 }
+  },
+  face: {
+    direction: { max: 180, min: -180 },
+    distance: { max: 24, min: 0 },
+    opacity: { max: 100, min: 0 },
+    softness: { max: 12, min: 0 }
+  },
+  frame: {
+    direction: { max: 180, min: -180 },
+    distance: { max: 40, min: 0 },
+    opacity: { max: 100, min: 0 },
+    softness: { max: 48, min: 0 }
+  }
+} as const)
+export const AVATAR_SURFACE_DECAL_RANGES = deepFreeze({
+  height: { max: 180, min: 2 },
+  opacity: { max: 100, min: 0 },
+  rotation: { max: 180, min: -180 },
+  width: { max: 180, min: 2 },
+  x: { max: 180, min: -180 },
+  y: { max: 180, min: -180 }
+} as const)
 
 export type AvatarBackgroundStyle = 'gradient' | 'solid'
 export type AvatarBodyShape =
@@ -395,7 +480,8 @@ const isDenseArray = <T = unknown>(value: unknown): value is T[] => {
     if (key === 'length') return true
     if (typeof key !== 'string' || !/^(0|[1-9]\d*)$/u.test(key)) return false
     const index = Number(key)
-    return index < value.length && 'value' in Object.getOwnPropertyDescriptor(value, key)!
+    const descriptor = Object.getOwnPropertyDescriptor(value, key)
+    return index < value.length && descriptor != null && 'value' in descriptor && descriptor.enumerable
   })
 }
 
@@ -403,9 +489,13 @@ const isBoolean = (value: unknown): value is boolean => typeof value === 'boolea
 const isFiniteNumber = (value: unknown): value is number => (
   typeof value === 'number' && Number.isFinite(value)
 )
+const isFiniteInRange = (value: unknown, range: { readonly max: number; readonly min: number }) => (
+  isFiniteNumber(value) && value >= range.min && value <= range.max
+)
 const isString = (value: unknown): value is string => typeof value === 'string'
 const isOptionalNumber = (value: unknown) => value === undefined || isFiniteNumber(value)
 const isOptionalString = (value: unknown) => value === undefined || isString(value)
+const isOptionalHexColor = (value: unknown) => value === undefined || isHexColor(value)
 const isOneOf = <T extends string>(value: unknown, options: readonly T[]): value is T => (
   isString(value) && options.includes(value as T)
 )
@@ -423,10 +513,10 @@ const isAvatarEyeHighlight = (value: unknown): value is AvatarEyeHighlight => (
     'size'
   ]) && hasOwnKeys(value, ['color', 'enabled', 'offsetX', 'offsetY', 'opacity', 'size']) &&
   isHexColor(value.color) && isBoolean(value.enabled) &&
-  isFiniteNumber(value.offsetX) && value.offsetX >= -35 && value.offsetX <= 35 &&
-  isFiniteNumber(value.offsetY) && value.offsetY >= -35 && value.offsetY <= 35 &&
-  isFiniteNumber(value.opacity) && value.opacity >= 0 && value.opacity <= 100 &&
-  isFiniteNumber(value.size) && value.size >= 8 && value.size <= 50
+  isFiniteInRange(value.offsetX, AVATAR_EYE_HIGHLIGHT_RANGES.offsetX) &&
+  isFiniteInRange(value.offsetY, AVATAR_EYE_HIGHLIGHT_RANGES.offsetY) &&
+  isFiniteInRange(value.opacity, AVATAR_EYE_HIGHLIGHT_RANGES.opacity) &&
+  isFiniteInRange(value.size, AVATAR_EYE_HIGHLIGHT_RANGES.size)
 )
 
 const isAvatarSurfaceDecal = (value: unknown): value is AvatarSurfaceDecal => (
@@ -454,15 +544,15 @@ const isAvatarSurfaceDecal = (value: unknown): value is AvatarSurfaceDecal => (
     'width',
     'x',
     'y'
-  ]) && isHexColor(value.color) && isFiniteNumber(value.height) && value.height >= 2 && value.height <= 180 &&
+  ]) && isHexColor(value.color) && isFiniteInRange(value.height, AVATAR_SURFACE_DECAL_RANGES.height) &&
   isString(value.id) && value.id.trim().length > 0 && isString(value.label) &&
-  isFiniteNumber(value.opacity) && value.opacity >= 0 && value.opacity <= 100 &&
-  isFiniteNumber(value.rotation) && value.rotation >= -180 && value.rotation <= 180 &&
+  isFiniteInRange(value.opacity, AVATAR_SURFACE_DECAL_RANGES.opacity) &&
+  isFiniteInRange(value.rotation, AVATAR_SURFACE_DECAL_RANGES.rotation) &&
   isOneOf(value.shape, ['ellipse', 'rounded']) &&
   (value.targetPartId === null || (isString(value.targetPartId) && value.targetPartId.trim().length > 0)) &&
-  isFiniteNumber(value.width) && value.width >= 2 && value.width <= 180 &&
-  isFiniteNumber(value.x) && value.x >= -180 && value.x <= 180 &&
-  isFiniteNumber(value.y) && value.y >= -180 && value.y <= 180
+  isFiniteInRange(value.width, AVATAR_SURFACE_DECAL_RANGES.width) &&
+  isFiniteInRange(value.x, AVATAR_SURFACE_DECAL_RANGES.x) &&
+  isFiniteInRange(value.y, AVATAR_SURFACE_DECAL_RANGES.y)
 )
 
 const isAvatarColorGradeField = (key: string, value: unknown) => {
@@ -481,25 +571,30 @@ const isAvatarColorGrade = (value: unknown): value is AvatarColorGrade => (
   Object.entries(value).every(([key, field]) => isAvatarColorGradeField(key, field))
 )
 
-const isAvatarShadow = (value: unknown): value is AvatarShadow => (
+const isAvatarShadow = (
+  value: unknown,
+  ranges: (typeof AVATAR_SHADOW_RANGES)[keyof typeof AVATAR_SHADOW_RANGES]
+): value is AvatarShadow => (
   isRecord(value) && hasOnlyKeys(value, ['color', 'direction', 'distance', 'opacity', 'softness']) &&
   hasOwnKeys(value, ['direction', 'distance', 'opacity', 'softness']) &&
-  isOptionalString(value.color) && isFiniteNumber(value.direction) &&
-  isFiniteNumber(value.distance) && isFiniteNumber(value.opacity) && isFiniteNumber(value.softness)
+  isOptionalHexColor(value.color) && isFiniteInRange(value.direction, ranges.direction) &&
+  isFiniteInRange(value.distance, ranges.distance) && isFiniteInRange(value.opacity, ranges.opacity) &&
+  isFiniteInRange(value.softness, ranges.softness)
 )
 
 const isAvatarOutline = (value: unknown): value is AvatarOutline => (
   isRecord(value) && hasOnlyKeys(value, ['color', 'opacity', 'width']) &&
   hasOwnKeys(value, ['color', 'opacity', 'width']) &&
-  isString(value.color) && isFiniteNumber(value.opacity) &&
-  isFiniteNumber(value.width)
+  isHexColor(value.color) && isFiniteInRange(value.opacity, AVATAR_OUTLINE_RANGES.opacity) &&
+  isFiniteInRange(value.width, AVATAR_OUTLINE_RANGES.width)
 )
 
 const isAvatarView = (value: unknown): value is AvatarView => (
   isRecord(value) && hasOnlyKeys(value, ['pitch', 'positionX', 'positionY', 'roll', 'scale', 'yaw']) &&
   hasOwnKeys(value, ['pitch', 'positionX', 'positionY', 'roll', 'scale', 'yaw']) &&
   isFiniteNumber(value.pitch) && isFiniteNumber(value.positionX) &&
-  isFiniteNumber(value.positionY) && isFiniteNumber(value.roll) && isFiniteNumber(value.scale) &&
+  isFiniteNumber(value.positionY) && isFiniteNumber(value.roll) &&
+  isFiniteInRange(value.scale, AVATAR_VIEW_RANGES.scale) &&
   isFiniteNumber(value.yaw)
 )
 
@@ -552,20 +647,28 @@ const isAvatarFace = (value: unknown): value is AvatarFace => (
     'rotation',
     'rightEyeRotation',
     'width'
-  ]) && isAvatarEyeHighlight(value.eyeHighlight) && isFiniteNumber(value.eyeRoundness) &&
-  isOneOf(value.eyeShape, ['ellipse', 'rounded']) && isFiniteNumber(value.gap) &&
-  isFiniteNumber(value.height) && isOptionalNumber(value.leftEyeHeight) &&
-  isFiniteNumber(value.leftEyeRotation) && isFiniteNumber(value.mouthCurve) &&
-  isBoolean(value.mouthEnabled) && isFiniteNumber(value.mouthHeight) &&
-  isFiniteNumber(value.mouthRotation) &&
+  ]) && isAvatarEyeHighlight(value.eyeHighlight) &&
+  isFiniteInRange(value.eyeRoundness, AVATAR_FACE_RANGES.eyeRoundness) &&
+  isOneOf(value.eyeShape, ['ellipse', 'rounded']) && isFiniteInRange(value.gap, AVATAR_FACE_RANGES.gap) &&
+  isFiniteInRange(value.height, AVATAR_FACE_RANGES.height) &&
+  (value.leftEyeHeight === undefined || isFiniteInRange(value.leftEyeHeight, AVATAR_FACE_RANGES.leftEyeHeight)) &&
+  isFiniteInRange(value.leftEyeRotation, AVATAR_FACE_RANGES.leftEyeRotation) &&
+  isFiniteInRange(value.mouthCurve, AVATAR_FACE_RANGES.mouthCurve) &&
+  isBoolean(value.mouthEnabled) && isFiniteInRange(value.mouthHeight, AVATAR_FACE_RANGES.mouthHeight) &&
+  isFiniteInRange(value.mouthRotation, AVATAR_FACE_RANGES.mouthRotation) &&
   isOneOf(value.mouthShape, ['curve', 'ellipse', 'rounded', 'rounded-triangle']) &&
-  isFiniteNumber(value.mouthWidth) && isFiniteNumber(value.mouthY) &&
-  isBoolean(value.noseEnabled) && isFiniteNumber(value.noseHeight) &&
-  isFiniteNumber(value.noseRotation) &&
+  isFiniteInRange(value.mouthWidth, AVATAR_FACE_RANGES.mouthWidth) &&
+  isFiniteInRange(value.mouthY, AVATAR_FACE_RANGES.mouthY) &&
+  isBoolean(value.noseEnabled) && isFiniteInRange(value.noseHeight, AVATAR_FACE_RANGES.noseHeight) &&
+  isFiniteInRange(value.noseRotation, AVATAR_FACE_RANGES.noseRotation) &&
   isOneOf(value.noseShape, ['ellipse', 'inverted-triangle', 'rounded']) &&
-  isFiniteNumber(value.noseWidth) && isFiniteNumber(value.noseY) &&
-  isFiniteNumber(value.rotation) && isOptionalNumber(value.rightEyeHeight) &&
-  isFiniteNumber(value.rightEyeRotation) && isFiniteNumber(value.width)
+  isFiniteInRange(value.noseWidth, AVATAR_FACE_RANGES.noseWidth) &&
+  isFiniteInRange(value.noseY, AVATAR_FACE_RANGES.noseY) &&
+  isFiniteInRange(value.rotation, AVATAR_FACE_RANGES.rotation) &&
+  (value.rightEyeHeight === undefined ||
+    isFiniteInRange(value.rightEyeHeight, AVATAR_FACE_RANGES.rightEyeHeight)) &&
+  isFiniteInRange(value.rightEyeRotation, AVATAR_FACE_RANGES.rightEyeRotation) &&
+  isFiniteInRange(value.width, AVATAR_FACE_RANGES.width)
 )
 
 const isAvatarEntityPart = (value: unknown): value is AvatarEntityPart => (
@@ -608,17 +711,21 @@ const isAvatarEntityPart = (value: unknown): value is AvatarEntityPart => (
     'x',
     'y',
     'z'
-  ]) && isString(value.baseColor) && isOptionalNumber(value.cutAngle) &&
-  isBoolean(value.face) && isString(value.foregroundColor) && isString(value.highlightColor) &&
+  ]) && isHexColor(value.baseColor) && isOptionalNumber(value.cutAngle) &&
+  isBoolean(value.face) && isHexColor(value.foregroundColor) && isHexColor(value.highlightColor) &&
   (value.hollow === undefined || isBoolean(value.hollow)) && isString(value.id) && value.id.trim().length > 0 &&
   isString(value.label) &&
-  isOptionalNumber(value.occlusionAmount) &&
+  (value.occlusionAmount === undefined ||
+    isFiniteInRange(value.occlusionAmount, AVATAR_ENTITY_RANGES.occlusionAmount)) &&
   (value.occludedByFace === undefined || isBoolean(value.occludedByFace)) &&
   (value.occlusionPole === undefined || isOneOf(value.occlusionPole, ['bottom', 'top'])) &&
   isOptionalNumber(value.rotationX) && isOptionalNumber(value.rotationY) &&
-  isOptionalNumber(value.rotationZ) && isOptionalNumber(value.roundness) &&
-  isFiniteNumber(value.scaleX) && isFiniteNumber(value.scaleY) &&
-  isOptionalNumber(value.scaleZ) && isString(value.shadowColor) &&
+  isOptionalNumber(value.rotationZ) &&
+  (value.roundness === undefined || isFiniteInRange(value.roundness, AVATAR_ENTITY_RANGES.roundness)) &&
+  isFiniteInRange(value.scaleX, AVATAR_ENTITY_RANGES.scaleX) &&
+  isFiniteInRange(value.scaleY, AVATAR_ENTITY_RANGES.scaleY) &&
+  (value.scaleZ === undefined || isFiniteInRange(value.scaleZ, AVATAR_ENTITY_RANGES.scaleZ)) &&
+  isHexColor(value.shadowColor) &&
   isOneOf(value.shape, [
     'capsule',
     'cone',
@@ -631,13 +738,18 @@ const isAvatarEntityPart = (value: unknown): value is AvatarEntityPart => (
     'sphere',
     'teardrop',
     'trapezoid'
-  ]) && isOptionalNumber(value.topScale) && isFiniteNumber(value.x) &&
+  ]) && (value.topScale === undefined || isFiniteInRange(value.topScale, AVATAR_ENTITY_RANGES.topScale)) &&
+  isFiniteNumber(value.x) &&
   isFiniteNumber(value.y) && isFiniteNumber(value.z)
 )
 
 const isPartialNumberRecord = (value: unknown, keys: readonly string[]) => (
   isRecord(value) && Object.entries(value).every(([key, field]) => keys.includes(key) && isFiniteNumber(field))
 )
+
+const isPartialAvatarView = (value: unknown) => {
+  return isPartialNumberRecord(value, ['pitch', 'positionX', 'positionY', 'yaw'])
+}
 
 const isPartialAvatarFace = (value: unknown) => {
   if (!isRecord(value)) return false
@@ -662,8 +774,20 @@ const isPartialAvatarFace = (value: unknown) => {
     'width'
   ]
   const booleanKeys = ['mouthEnabled', 'noseEnabled']
+  const allowedKeys = [
+    ...numberKeys,
+    ...booleanKeys,
+    'eyeHighlight',
+    'eyeShape',
+    'mouthShape',
+    'noseShape'
+  ]
+  if (!hasOnlyKeys(value, allowedKeys)) return false
   return Object.entries(value).every(([key, field]) => {
-    if (numberKeys.includes(key)) return isFiniteNumber(field)
+    if (numberKeys.includes(key)) {
+      const range = AVATAR_ANIMATION_FACE_RANGES[key as keyof typeof AVATAR_ANIMATION_FACE_RANGES]
+      return range != null && isFiniteInRange(field, range)
+    }
     if (booleanKeys.includes(key)) return isBoolean(field)
     if (key === 'eyeShape') return isOneOf(field, ['ellipse', 'rounded'])
     if (key === 'eyeHighlight') return isAvatarEyeHighlight(field)
@@ -680,14 +804,7 @@ const isAvatarScenePatch = (value: unknown): value is AvatarScenePatch => {
     return false
   }
   if (value.colorGrade !== undefined && !isPartialAvatarColorGrade(value.colorGrade)) return false
-  if (
-    value.view !== undefined && !isPartialNumberRecord(value.view, [
-      'pitch',
-      'positionX',
-      'positionY',
-      'yaw'
-    ])
-  ) return false
+  if (value.view !== undefined && !isPartialAvatarView(value.view)) return false
   if (value.face !== undefined && !isPartialAvatarFace(value.face)) return false
   return true
 }
@@ -841,9 +958,10 @@ const isAvatarDefinitionValue = (value: unknown): value is AvatarDefinition => {
       'frameShadow',
       'showFrameShadow',
       'size'
-    ]) && isString(scene.camera.background) &&
+    ]) && (scene.camera.background === 'transparent' || isHexColor(scene.camera.background)) &&
     isOneOf(scene.camera.frame, ['circle', 'rounded', 'square']) &&
-    isAvatarShadow(scene.camera.frameShadow) && isBoolean(scene.camera.showFrameShadow) &&
+    isAvatarShadow(scene.camera.frameShadow, AVATAR_SHADOW_RANGES.frame) &&
+    isBoolean(scene.camera.showFrameShadow) &&
     [128, 256, 512].includes(scene.camera.size as number) &&
     isRecord(scene.effects) && hasOnlyKeys(scene.effects, [
       'avatarShadow',
@@ -861,8 +979,9 @@ const isAvatarDefinitionValue = (value: unknown): value is AvatarDefinition => {
       'showAvatarShadow',
       'showFaceShadow',
       'showOutline'
-    ]) && isAvatarShadow(scene.effects.avatarShadow) &&
-    isAvatarColorGrade(scene.effects.colorGrade) && isAvatarShadow(scene.effects.faceShadow) &&
+    ]) && isAvatarShadow(scene.effects.avatarShadow, AVATAR_SHADOW_RANGES.avatar) &&
+    isAvatarColorGrade(scene.effects.colorGrade) &&
+    isAvatarShadow(scene.effects.faceShadow, AVATAR_SHADOW_RANGES.face) &&
     isAvatarOutline(scene.effects.outline) && isBoolean(scene.effects.showAvatarShadow) &&
     isBoolean(scene.effects.showFaceShadow) && isBoolean(scene.effects.showOutline) &&
     isRecord(scene.entity) && hasOnlyKeys(scene.entity, ['parts', 'preset']) &&
@@ -886,9 +1005,11 @@ const isAvatarDefinitionValue = (value: unknown): value is AvatarDefinition => {
       'elevation',
       'enabled',
       'gridDensity'
-    ]) && isFiniteNumber(scene.lighting.azimuth) &&
-    isFiniteNumber(scene.lighting.distance) && isFiniteNumber(scene.lighting.elevation) &&
-    isBoolean(scene.lighting.enabled) && isFiniteNumber(scene.lighting.gridDensity) &&
+    ]) && isFiniteInRange(scene.lighting.azimuth, AVATAR_LIGHTING_RANGES.azimuth) &&
+    isFiniteInRange(scene.lighting.distance, AVATAR_LIGHTING_RANGES.distance) &&
+    isFiniteInRange(scene.lighting.elevation, AVATAR_LIGHTING_RANGES.elevation) &&
+    isBoolean(scene.lighting.enabled) &&
+    isFiniteInRange(scene.lighting.gridDensity, AVATAR_LIGHTING_RANGES.gridDensity) &&
     isAvatarView(scene.view)
 }
 
@@ -970,7 +1091,10 @@ export const anchorAvatarAnimationClip = (
           ? {}
           : {
             view: Object.fromEntries(
-              Object.entries(frame.patch.view).map(([key, value]) => [key, value + delta[key as keyof typeof delta]])
+              Object.entries(frame.patch.view).map(([key, value]) => [
+                key,
+                value + delta[key as keyof typeof delta]
+              ])
             )
           })
       }

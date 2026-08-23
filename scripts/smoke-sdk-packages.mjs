@@ -14,6 +14,12 @@ const packages = [
   '@oneworks/avatar-web',
   '@oneworks/avatar-vue'
 ]
+const packageDirectories = {
+  '@oneworks/avatar': 'packages/avatar',
+  '@oneworks/avatar-react': 'packages/react',
+  '@oneworks/avatar-vue': 'packages/vue',
+  '@oneworks/avatar-web': 'packages/web'
+}
 
 const run = (command, args, cwd) => {
   const result = spawnSync(command, args, {
@@ -40,11 +46,27 @@ try {
   }
 
   const tarballs = await readdir(tarballDirectory)
-  const fileDependency = packageName => {
+  const tarballPath = packageName => {
     const prefix = packageName.replace('@oneworks/', 'oneworks-')
     const tarball = tarballs.find(file => file.startsWith(prefix) && file.endsWith('.tgz'))
     if (tarball == null) throw new Error(`Missing tarball for ${packageName}`)
-    return `file:${path.join(tarballDirectory, tarball)}`
+    return path.join(tarballDirectory, tarball)
+  }
+  const fileDependency = packageName => `file:${tarballPath(packageName)}`
+
+  for (const packageName of packages) {
+    const manifest = JSON.parse(run('tar', ['-xOf', tarballPath(packageName), 'package/package.json'], root))
+    if (
+      manifest.repository?.url !== 'https://github.com/oneworks-ai/avatar.git' ||
+      manifest.repository?.directory !== packageDirectories[packageName]
+    ) {
+      throw new Error(`Invalid packed repository metadata for ${packageName}`)
+    }
+    for (const dependency of Object.values(manifest.dependencies ?? {})) {
+      if (String(dependency).startsWith('link:') || String(dependency).startsWith('workspace:')) {
+        throw new Error(`Unresolved packed dependency for ${packageName}: ${dependency}`)
+      }
+    }
   }
 
   await writeFile(

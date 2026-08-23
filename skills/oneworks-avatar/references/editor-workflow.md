@@ -22,6 +22,7 @@ Use this workflow for creating or refining a OneWorks 3D Avatar through the edit
 
 - The face is projected onto the primary surface. Recheck eyes, nose, and mouth after changing the body, yaw, pitch, or scale.
 - Tune rounded or elliptical eyes through width, height, gap, roundness, shared rotation, and independent left/right tilt. Near tangent angles, correct foreshortening or disappearance is expected.
+- Eye highlights are surface-bound details. Keep them inside the projected eye at the final pose, including when the two eyes use different heights or rotation.
 - Add a nose or mouth only when it carries identity or expression. Keep small parts large enough for the final export size.
 - Rotate mode controls 3D yaw and pitch. Move mode controls whole-object X/Y; pinch or wheel controls scale. Roll controls composition around the view axis. Do not use Move to hide an incorrect 3D pose.
 - The orientation control exposes red pitch and green yaw rings. Its blue and yellow affordances both manipulate the same roll state; do not describe them as separate model-roll and screen-roll values.
@@ -31,6 +32,7 @@ Use this workflow for creating or refining a OneWorks 3D Avatar through the edit
 
 - A palette swatch is entity-wide. For an intentional multipart material split, preserve it and use per-part base, highlight, shadow, and foreground colors for targeted edits.
 - Treat base, highlight, shadow, and foreground as one material system. Keep facial marks readable without making them look detached.
+- Use surface decals for blush, badges, patches, and other model-bound color shapes. Target a specific multipart part when needed; a `Body` target means the primary facial body. Rotate the model and confirm the decal stays clipped to the target silhouette and does not paint across hollow cavities.
 - Lighting shades the surface; it is not a visible mesh. Leave it off for a flat material. Near light increases contrast, greater distance attenuates it, and grid density changes shading resolution rather than silhouette quality.
 - Face shadow, whole-avatar shadow, outline, and frame shadow are independent. Tune one at a time and avoid stacking all at high strength.
 - A face shadow should hug the projected surface and attenuate near tangent views. Reduce distance, softness, or opacity if it looks detached.
@@ -40,7 +42,7 @@ Use this workflow for creating or refining a OneWorks 3D Avatar through the edit
 
 - Camera mode alone defines export background and crop. The editing surface may show geometry beyond the nominal viewport, so only trust Camera view for edge clearance.
 - Entering Camera mode, changing frame, or opening Animation should not move the character. Treat a shift as a state bug instead of manually repositioning per mode.
-- Choose square, rounded-square, or circle based on the destination. Rounded and circle frames clip geometry and make their outer corners transparent regardless of camera background.
+- Choose square, rounded-square, or circle based on the destination. Rounded and circle frames clip camera content at their outer corners regardless of camera background; when frame shadow is enabled, its intentional outside pixels may still reach those corners.
 - For a transparent asset, select `Transparent` under Style → Camera background and confirm the URL contains `cameraBg=transparent`. The checkerboard is only a UI preview and must not appear in exports.
 
 ## Animation
@@ -49,6 +51,7 @@ Use this workflow for creating or refining a OneWorks 3D Avatar through the edit
 - Available built-ins include Idle, Blink, Wink, Listening, Nod, Thinking, Searching, Working, Happy, Curious, Surprised, Bored, Sad, Angry, Shocked, Petrified, Laughing, Playful, Excited, and Celebrate.
 - Prefer Idle, Blink, Listening, Nod, Thinking, or Working for ambient product agents. Use broad reactions when explicitly requested.
 - A keyframe carries whole-object X/Y, yaw/pitch, face expression, transition duration/easing, and optional transient color grade. It does not replace entity geometry or base material.
+- Custom animation libraries may be stored on the definition or supplied separately to the renderer/editor. Keep reusable motion packs separate when several avatars share the same behavior.
 - Playback re-anchors to the avatar's current X/Y and yaw/pitch when it starts. Put the stage in the desired pose and position before preview or GIF export.
 - In Loop mode the first frame owns the final-to-first transition. In Once mode the selected first frame should appear immediately.
 - Select and preview an animation before GIF export; the action remains disabled without one.

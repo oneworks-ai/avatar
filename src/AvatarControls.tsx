@@ -1,5 +1,14 @@
 import './AvatarControls.scss'
 
+import {
+  AVATAR_ENTITY_RANGES,
+  AVATAR_EYE_HIGHLIGHT_RANGES,
+  AVATAR_FACE_RANGES,
+  AVATAR_LIGHTING_RANGES,
+  AVATAR_OUTLINE_RANGES,
+  AVATAR_SHADOW_RANGES,
+  AVATAR_SURFACE_DECAL_RANGES
+} from '@oneworks/avatar'
 import type { AvatarBackgroundStyle, AvatarPalette } from '@oneworks/avatar'
 import { useEffect, useId, useRef, useState } from 'react'
 import type { CSSProperties, KeyboardEvent, PointerEvent, ReactNode } from 'react'
@@ -958,8 +967,8 @@ export function AvatarControls({
                             <ValueSlider
                               ariaLabel='Eye corner roundness'
                               label='Roundness'
-                              min={0}
-                              max={100}
+                              min={AVATAR_FACE_RANGES.eyeRoundness.min}
+                              max={AVATAR_FACE_RANGES.eyeRoundness.max}
                               suffix='%'
                               value={faceStyle.eyeRoundness}
                               onChange={eyeRoundness => onFaceStyleChange({ eyeRoundness })}
@@ -969,32 +978,32 @@ export function AvatarControls({
                         <ValueSlider
                           ariaLabel='Eye width'
                           label='Width'
-                          min={12}
-                          max={72}
+                          min={AVATAR_FACE_RANGES.width.min}
+                          max={AVATAR_FACE_RANGES.width.max}
                           value={faceStyle.width}
                           onChange={width => onFaceStyleChange({ width })}
                         />
                         <ValueSlider
                           ariaLabel='Eye height'
                           label='Height'
-                          min={20}
-                          max={104}
+                          min={AVATAR_FACE_RANGES.height.min}
+                          max={AVATAR_FACE_RANGES.height.max}
                           value={faceStyle.height}
                           onChange={height => onFaceStyleChange({ height })}
                         />
                         <ValueSlider
                           ariaLabel='Eye gap'
                           label='Gap'
-                          min={0}
-                          max={100}
+                          min={AVATAR_FACE_RANGES.gap.min}
+                          max={AVATAR_FACE_RANGES.gap.max}
                           value={faceStyle.gap}
                           onChange={gap => onFaceStyleChange({ gap })}
                         />
                         <ValueSlider
                           ariaLabel='Overall eye rotation'
                           label='Rotation (overall)'
-                          min={-90}
-                          max={90}
+                          min={AVATAR_FACE_RANGES.rotation.min}
+                          max={AVATAR_FACE_RANGES.rotation.max}
                           suffix='°'
                           value={faceStyle.rotation}
                           onChange={rotation => onFaceStyleChange({ rotation })}
@@ -1002,8 +1011,8 @@ export function AvatarControls({
                         <ValueSlider
                           ariaLabel='Left eye tilt'
                           label='Left tilt'
-                          min={-90}
-                          max={90}
+                          min={AVATAR_FACE_RANGES.leftEyeRotation.min}
+                          max={AVATAR_FACE_RANGES.leftEyeRotation.max}
                           suffix='°'
                           value={faceStyle.leftEyeRotation}
                           onChange={leftEyeRotation => onFaceStyleChange({ leftEyeRotation })}
@@ -1011,8 +1020,8 @@ export function AvatarControls({
                         <ValueSlider
                           ariaLabel='Right eye tilt'
                           label='Right tilt'
-                          min={-90}
-                          max={90}
+                          min={AVATAR_FACE_RANGES.rightEyeRotation.min}
+                          max={AVATAR_FACE_RANGES.rightEyeRotation.max}
                           suffix='°'
                           value={faceStyle.rightEyeRotation}
                           onChange={rightEyeRotation => onFaceStyleChange({ rightEyeRotation })}
@@ -1046,8 +1055,8 @@ export function AvatarControls({
                             <ValueSlider
                               ariaLabel='Eye highlight size'
                               label='Highlight size'
-                              min={8}
-                              max={50}
+                              min={AVATAR_EYE_HIGHLIGHT_RANGES.size.min}
+                              max={AVATAR_EYE_HIGHLIGHT_RANGES.size.max}
                               suffix='%'
                               value={faceStyle.eyeHighlight.size}
                               onChange={size => onFaceStyleChange({
@@ -1057,8 +1066,8 @@ export function AvatarControls({
                             <ValueSlider
                               ariaLabel='Eye highlight horizontal position'
                               label='Highlight position X'
-                              min={-35}
-                              max={35}
+                              min={AVATAR_EYE_HIGHLIGHT_RANGES.offsetX.min}
+                              max={AVATAR_EYE_HIGHLIGHT_RANGES.offsetX.max}
                               suffix='%'
                               value={faceStyle.eyeHighlight.offsetX}
                               onChange={offsetX => onFaceStyleChange({
@@ -1068,8 +1077,8 @@ export function AvatarControls({
                             <ValueSlider
                               ariaLabel='Eye highlight vertical position'
                               label='Highlight position Y'
-                              min={-35}
-                              max={35}
+                              min={AVATAR_EYE_HIGHLIGHT_RANGES.offsetY.min}
+                              max={AVATAR_EYE_HIGHLIGHT_RANGES.offsetY.max}
                               suffix='%'
                               value={faceStyle.eyeHighlight.offsetY}
                               onChange={offsetY => onFaceStyleChange({
@@ -1079,8 +1088,8 @@ export function AvatarControls({
                             <ValueSlider
                               ariaLabel='Eye highlight opacity'
                               label='Highlight opacity'
-                              min={0}
-                              max={100}
+                              min={AVATAR_EYE_HIGHLIGHT_RANGES.opacity.min}
+                              max={AVATAR_EYE_HIGHLIGHT_RANGES.opacity.max}
                               suffix='%'
                               value={faceStyle.eyeHighlight.opacity}
                               onChange={opacity => onFaceStyleChange({
@@ -1115,32 +1124,32 @@ export function AvatarControls({
                               <ValueSlider
                                 ariaLabel='Nose width'
                                 label='Width'
-                                min={6}
-                                max={36}
+                                min={AVATAR_FACE_RANGES.noseWidth.min}
+                                max={AVATAR_FACE_RANGES.noseWidth.max}
                                 value={faceStyle.noseWidth}
                                 onChange={noseWidth => onFaceStyleChange({ noseWidth })}
                               />
                               <ValueSlider
                                 ariaLabel='Nose height'
                                 label='Height'
-                                min={6}
-                                max={48}
+                                min={AVATAR_FACE_RANGES.noseHeight.min}
+                                max={AVATAR_FACE_RANGES.noseHeight.max}
                                 value={faceStyle.noseHeight}
                                 onChange={noseHeight => onFaceStyleChange({ noseHeight })}
                               />
                               <ValueSlider
                                 ariaLabel='Nose vertical position'
                                 label='Position Y'
-                                min={-10}
-                                max={50}
+                                min={AVATAR_FACE_RANGES.noseY.min}
+                                max={AVATAR_FACE_RANGES.noseY.max}
                                 value={faceStyle.noseY}
                                 onChange={noseY => onFaceStyleChange({ noseY })}
                               />
                               <ValueSlider
                                 ariaLabel='Nose rotation'
                                 label='Rotation'
-                                min={-180}
-                                max={180}
+                                min={AVATAR_FACE_RANGES.noseRotation.min}
+                                max={AVATAR_FACE_RANGES.noseRotation.max}
                                 suffix='°'
                                 value={faceStyle.noseRotation}
                                 onChange={noseRotation => onFaceStyleChange({ noseRotation })}
@@ -1174,24 +1183,24 @@ export function AvatarControls({
                               <ValueSlider
                                 ariaLabel='Mouth width'
                                 label='Width'
-                                min={16}
-                                max={100}
+                                min={AVATAR_FACE_RANGES.mouthWidth.min}
+                                max={AVATAR_FACE_RANGES.mouthWidth.max}
                                 value={faceStyle.mouthWidth}
                                 onChange={mouthWidth => onFaceStyleChange({ mouthWidth })}
                               />
                               <ValueSlider
                                 ariaLabel='Mouth height'
                                 label={faceStyle.mouthShape === 'curve' ? 'Thickness' : 'Height'}
-                                min={6}
-                                max={48}
+                                min={AVATAR_FACE_RANGES.mouthHeight.min}
+                                max={AVATAR_FACE_RANGES.mouthHeight.max}
                                 value={faceStyle.mouthHeight}
                                 onChange={mouthHeight => onFaceStyleChange({ mouthHeight })}
                               />
                               <ValueSlider
                                 ariaLabel='Mouth vertical position'
                                 label='Position Y'
-                                min={24}
-                                max={90}
+                                min={AVATAR_FACE_RANGES.mouthY.min}
+                                max={AVATAR_FACE_RANGES.mouthY.max}
                                 value={faceStyle.mouthY}
                                 onChange={mouthY => onFaceStyleChange({ mouthY })}
                               />
@@ -1201,8 +1210,8 @@ export function AvatarControls({
                                     <ValueSlider
                                       ariaLabel='Mouth curvature from frown to smile'
                                       label='Curvature'
-                                      min={-100}
-                                      max={100}
+                                      min={AVATAR_FACE_RANGES.mouthCurve.min}
+                                      max={AVATAR_FACE_RANGES.mouthCurve.max}
                                       suffix='%'
                                       value={faceStyle.mouthCurve}
                                       onChange={mouthCurve => onFaceStyleChange({ mouthCurve })}
@@ -1218,8 +1227,8 @@ export function AvatarControls({
                               <ValueSlider
                                 ariaLabel='Mouth rotation'
                                 label='Rotation'
-                                min={-180}
-                                max={180}
+                                min={AVATAR_FACE_RANGES.mouthRotation.min}
+                                max={AVATAR_FACE_RANGES.mouthRotation.max}
                                 suffix='°'
                                 value={faceStyle.mouthRotation}
                                 onChange={mouthRotation => onFaceStyleChange({ mouthRotation })}
@@ -1291,22 +1300,30 @@ export function AvatarControls({
                         />
                       </label>
                       <div className='avatar-controls__parameter-controls'>
-                        <ValueSlider ariaLabel='Decal position X' label='Position X' min={-180} max={180}
+                        <ValueSlider ariaLabel='Decal position X' label='Position X'
+                          min={AVATAR_SURFACE_DECAL_RANGES.x.min} max={AVATAR_SURFACE_DECAL_RANGES.x.max}
                           value={editingSurfaceDecal.x}
                           onChange={x => onSurfaceDecalChange(editingSurfaceDecal.id, { x })} />
-                        <ValueSlider ariaLabel='Decal position Y' label='Position Y' min={-180} max={180}
+                        <ValueSlider ariaLabel='Decal position Y' label='Position Y'
+                          min={AVATAR_SURFACE_DECAL_RANGES.y.min} max={AVATAR_SURFACE_DECAL_RANGES.y.max}
                           value={editingSurfaceDecal.y}
                           onChange={y => onSurfaceDecalChange(editingSurfaceDecal.id, { y })} />
-                        <ValueSlider ariaLabel='Decal width' label='Width' min={2} max={180}
+                        <ValueSlider ariaLabel='Decal width' label='Width'
+                          min={AVATAR_SURFACE_DECAL_RANGES.width.min} max={AVATAR_SURFACE_DECAL_RANGES.width.max}
                           value={editingSurfaceDecal.width}
                           onChange={width => onSurfaceDecalChange(editingSurfaceDecal.id, { width })} />
-                        <ValueSlider ariaLabel='Decal height' label='Height' min={2} max={180}
+                        <ValueSlider ariaLabel='Decal height' label='Height'
+                          min={AVATAR_SURFACE_DECAL_RANGES.height.min} max={AVATAR_SURFACE_DECAL_RANGES.height.max}
                           value={editingSurfaceDecal.height}
                           onChange={height => onSurfaceDecalChange(editingSurfaceDecal.id, { height })} />
-                        <ValueSlider ariaLabel='Decal rotation' label='Rotation' min={-180} max={180} suffix='°'
+                        <ValueSlider ariaLabel='Decal rotation' label='Rotation'
+                          min={AVATAR_SURFACE_DECAL_RANGES.rotation.min}
+                          max={AVATAR_SURFACE_DECAL_RANGES.rotation.max} suffix='°'
                           value={editingSurfaceDecal.rotation}
                           onChange={rotation => onSurfaceDecalChange(editingSurfaceDecal.id, { rotation })} />
-                        <ValueSlider ariaLabel='Decal opacity' label='Opacity' min={0} max={100} suffix='%'
+                        <ValueSlider ariaLabel='Decal opacity' label='Opacity'
+                          min={AVATAR_SURFACE_DECAL_RANGES.opacity.min}
+                          max={AVATAR_SURFACE_DECAL_RANGES.opacity.max} suffix='%'
                           value={editingSurfaceDecal.opacity}
                           onChange={opacity => onSurfaceDecalChange(editingSurfaceDecal.id, { opacity })} />
                       </div>
@@ -1520,9 +1537,18 @@ export function AvatarControls({
                     <NumberField ariaLabel='Part position X' label='Position X' value={editingEntityPart.x} onChange={x => onEntityPartChange(editingEntityPart.id, { x })} />
                     <NumberField ariaLabel='Part position Y' label='Position Y' value={editingEntityPart.y} onChange={y => onEntityPartChange(editingEntityPart.id, { y })} />
                     <NumberField ariaLabel='Part position Z' label='Position Z' value={editingEntityPart.z} onChange={z => onEntityPartChange(editingEntityPart.id, { z })} />
-                    <ValueSlider ariaLabel='Part width' label='Width' min={8} max={150} suffix='%' value={editingEntityPart.scaleX * 100} onChange={value => onEntityPartChange(editingEntityPart.id, { scaleX: value / 100 })} />
-                    <ValueSlider ariaLabel='Part height' label='Height' min={8} max={150} suffix='%' value={editingEntityPart.scaleY * 100} onChange={value => onEntityPartChange(editingEntityPart.id, { scaleY: value / 100 })} />
-                    <ValueSlider ariaLabel='Part depth' label='Depth' min={8} max={150} suffix='%' value={resolveAvatarEntityPartScaleZ(editingEntityPart) * 100} onChange={value => onEntityPartChange(editingEntityPart.id, { scaleZ: value / 100 })} />
+                    <ValueSlider ariaLabel='Part width' label='Width'
+                      min={AVATAR_ENTITY_RANGES.scaleX.min * 100} max={AVATAR_ENTITY_RANGES.scaleX.max * 100}
+                      suffix='%' value={editingEntityPart.scaleX * 100}
+                      onChange={value => onEntityPartChange(editingEntityPart.id, { scaleX: value / 100 })} />
+                    <ValueSlider ariaLabel='Part height' label='Height'
+                      min={AVATAR_ENTITY_RANGES.scaleY.min * 100} max={AVATAR_ENTITY_RANGES.scaleY.max * 100}
+                      suffix='%' value={editingEntityPart.scaleY * 100}
+                      onChange={value => onEntityPartChange(editingEntityPart.id, { scaleY: value / 100 })} />
+                    <ValueSlider ariaLabel='Part depth' label='Depth'
+                      min={AVATAR_ENTITY_RANGES.scaleZ.min * 100} max={AVATAR_ENTITY_RANGES.scaleZ.max * 100}
+                      suffix='%' value={resolveAvatarEntityPartScaleZ(editingEntityPart) * 100}
+                      onChange={value => onEntityPartChange(editingEntityPart.id, { scaleZ: value / 100 })} />
                     <NumberField ariaLabel='Part rotation X' label='Rotation X' suffix='°' value={editingEntityPart.rotationX ?? 0} onChange={rotationX => onEntityPartChange(editingEntityPart.id, { rotationX })} />
                     <NumberField ariaLabel='Part rotation Y' label='Rotation Y' suffix='°' value={editingEntityPart.rotationY ?? 0} onChange={rotationY => onEntityPartChange(editingEntityPart.id, { rotationY })} />
                     <NumberField ariaLabel='Part rotation Z' label='Rotation Z' suffix='°' value={editingEntityPart.rotationZ ?? 0} onChange={rotationZ => onEntityPartChange(editingEntityPart.id, { rotationZ })} />
@@ -1532,8 +1558,8 @@ export function AvatarControls({
                           <ValueSlider
                             ariaLabel='Part cone roundness'
                             label='Cone roundness'
-                            min={0}
-                            max={100}
+                            min={AVATAR_ENTITY_RANGES.roundness.min}
+                            max={AVATAR_ENTITY_RANGES.roundness.max}
                             suffix='%'
                             value={editingEntityPart.roundness ?? 24}
                             onChange={roundness => onEntityPartChange(editingEntityPart.id, { roundness })}
@@ -1559,8 +1585,8 @@ export function AvatarControls({
                         <ValueSlider
                           ariaLabel='Part corner roundness'
                           label='Corner roundness'
-                          min={0}
-                          max={100}
+                          min={AVATAR_ENTITY_RANGES.roundness.min}
+                          max={AVATAR_ENTITY_RANGES.roundness.max}
                           suffix='%'
                           value={editingEntityPart.roundness ?? 72}
                           onChange={roundness => onEntityPartChange(editingEntityPart.id, { roundness })}
@@ -1583,8 +1609,8 @@ export function AvatarControls({
                     <ValueSlider
                       ariaLabel='Light direction'
                       label='Direction'
-                      min={-180}
-                      max={180}
+                      min={AVATAR_LIGHTING_RANGES.azimuth.min}
+                      max={AVATAR_LIGHTING_RANGES.azimuth.max}
                       suffix='°'
                       value={lightAzimuth}
                       onChange={onLightAzimuthChange}
@@ -1592,8 +1618,8 @@ export function AvatarControls({
                     <ValueSlider
                       ariaLabel='Light angle'
                       label='Angle'
-                      min={-80}
-                      max={80}
+                      min={AVATAR_LIGHTING_RANGES.elevation.min}
+                      max={AVATAR_LIGHTING_RANGES.elevation.max}
                       suffix='°'
                       value={lightElevation}
                       onChange={onLightElevationChange}
@@ -1602,8 +1628,8 @@ export function AvatarControls({
                       <ValueSlider
                         ariaLabel='Light distance'
                         label='Distance'
-                        min={0}
-                        max={100}
+                        min={AVATAR_LIGHTING_RANGES.distance.min}
+                        max={AVATAR_LIGHTING_RANGES.distance.max}
                         suffix='%'
                         value={lightDistance}
                         onChange={onLightDistanceChange}
@@ -1617,8 +1643,8 @@ export function AvatarControls({
                       <ValueSlider
                         ariaLabel='Surface grid density'
                         label='Grid density'
-                        min={25}
-                        max={400}
+                        min={AVATAR_LIGHTING_RANGES.gridDensity.min}
+                        max={AVATAR_LIGHTING_RANGES.gridDensity.max}
                         suffix='%'
                         value={gridDensity}
                         onChange={onGridDensityChange}
@@ -1655,8 +1681,8 @@ export function AvatarControls({
                     <ValueSlider
                       ariaLabel='Avatar shadow direction'
                       label='Direction'
-                      min={-180}
-                      max={180}
+                      min={AVATAR_SHADOW_RANGES.avatar.direction.min}
+                      max={AVATAR_SHADOW_RANGES.avatar.direction.max}
                       suffix='°'
                       value={avatarShadowStyle.direction}
                       onChange={direction => onAvatarShadowStyleChange({ direction })}
@@ -1664,8 +1690,8 @@ export function AvatarControls({
                     <ValueSlider
                       ariaLabel='Avatar shadow distance'
                       label='Distance'
-                      min={0}
-                      max={40}
+                      min={AVATAR_SHADOW_RANGES.avatar.distance.min}
+                      max={AVATAR_SHADOW_RANGES.avatar.distance.max}
                       suffix='px'
                       value={avatarShadowStyle.distance}
                       onChange={distance => onAvatarShadowStyleChange({ distance })}
@@ -1673,8 +1699,8 @@ export function AvatarControls({
                     <ValueSlider
                       ariaLabel='Avatar shadow softness'
                       label='Softness'
-                      min={0}
-                      max={40}
+                      min={AVATAR_SHADOW_RANGES.avatar.softness.min}
+                      max={AVATAR_SHADOW_RANGES.avatar.softness.max}
                       suffix='px'
                       value={avatarShadowStyle.softness}
                       onChange={softness => onAvatarShadowStyleChange({ softness })}
@@ -1682,8 +1708,8 @@ export function AvatarControls({
                     <ValueSlider
                       ariaLabel='Avatar shadow opacity'
                       label='Opacity'
-                      min={0}
-                      max={100}
+                      min={AVATAR_SHADOW_RANGES.avatar.opacity.min}
+                      max={AVATAR_SHADOW_RANGES.avatar.opacity.max}
                       suffix='%'
                       value={avatarShadowStyle.opacity}
                       onChange={opacity => onAvatarShadowStyleChange({ opacity })}
@@ -1715,8 +1741,8 @@ export function AvatarControls({
                     <ValueSlider
                       ariaLabel='Avatar outline width'
                       label='Width'
-                      min={1}
-                      max={20}
+                      min={AVATAR_OUTLINE_RANGES.width.min}
+                      max={AVATAR_OUTLINE_RANGES.width.max}
                       suffix='px'
                       value={avatarOutlineStyle.width}
                       onChange={width => onAvatarOutlineStyleChange({ width })}
@@ -1724,8 +1750,8 @@ export function AvatarControls({
                     <ValueSlider
                       ariaLabel='Avatar outline opacity'
                       label='Opacity'
-                      min={0}
-                      max={100}
+                      min={AVATAR_OUTLINE_RANGES.opacity.min}
+                      max={AVATAR_OUTLINE_RANGES.opacity.max}
                       suffix='%'
                       value={avatarOutlineStyle.opacity}
                       onChange={opacity => onAvatarOutlineStyleChange({ opacity })}
@@ -1740,8 +1766,8 @@ export function AvatarControls({
                     <ValueSlider
                       ariaLabel='Face shadow direction'
                       label='Direction'
-                      min={-180}
-                      max={180}
+                      min={AVATAR_SHADOW_RANGES.face.direction.min}
+                      max={AVATAR_SHADOW_RANGES.face.direction.max}
                       suffix='°'
                       value={faceShadowStyle.direction}
                       onChange={direction => onFaceShadowStyleChange({ direction })}
@@ -1749,8 +1775,8 @@ export function AvatarControls({
                     <ValueSlider
                       ariaLabel='Face shadow distance'
                       label='Distance'
-                      min={0}
-                      max={24}
+                      min={AVATAR_SHADOW_RANGES.face.distance.min}
+                      max={AVATAR_SHADOW_RANGES.face.distance.max}
                       suffix='px'
                       value={faceShadowStyle.distance}
                       onChange={distance => onFaceShadowStyleChange({ distance })}
@@ -1758,8 +1784,8 @@ export function AvatarControls({
                     <ValueSlider
                       ariaLabel='Face shadow softness'
                       label='Softness'
-                      min={0}
-                      max={12}
+                      min={AVATAR_SHADOW_RANGES.face.softness.min}
+                      max={AVATAR_SHADOW_RANGES.face.softness.max}
                       suffix='px'
                       value={faceShadowStyle.softness}
                       onChange={softness => onFaceShadowStyleChange({ softness })}
@@ -1767,8 +1793,8 @@ export function AvatarControls({
                     <ValueSlider
                       ariaLabel='Face shadow opacity'
                       label='Opacity'
-                      min={0}
-                      max={100}
+                      min={AVATAR_SHADOW_RANGES.face.opacity.min}
+                      max={AVATAR_SHADOW_RANGES.face.opacity.max}
                       suffix='%'
                       value={faceShadowStyle.opacity}
                       onChange={opacity => onFaceShadowStyleChange({ opacity })}
@@ -1788,8 +1814,8 @@ export function AvatarControls({
                     <ValueSlider
                       ariaLabel='Frame shadow direction'
                       label='Direction'
-                      min={-180}
-                      max={180}
+                      min={AVATAR_SHADOW_RANGES.frame.direction.min}
+                      max={AVATAR_SHADOW_RANGES.frame.direction.max}
                       suffix='°'
                       value={frameShadowStyle.direction}
                       onChange={direction => onFrameShadowStyleChange({ direction })}
@@ -1797,8 +1823,8 @@ export function AvatarControls({
                     <ValueSlider
                       ariaLabel='Frame shadow distance'
                       label='Distance'
-                      min={0}
-                      max={40}
+                      min={AVATAR_SHADOW_RANGES.frame.distance.min}
+                      max={AVATAR_SHADOW_RANGES.frame.distance.max}
                       suffix='px'
                       value={frameShadowStyle.distance}
                       onChange={distance => onFrameShadowStyleChange({ distance })}
@@ -1806,8 +1832,8 @@ export function AvatarControls({
                     <ValueSlider
                       ariaLabel='Frame shadow softness'
                       label='Softness'
-                      min={0}
-                      max={48}
+                      min={AVATAR_SHADOW_RANGES.frame.softness.min}
+                      max={AVATAR_SHADOW_RANGES.frame.softness.max}
                       suffix='px'
                       value={frameShadowStyle.softness}
                       onChange={softness => onFrameShadowStyleChange({ softness })}
@@ -1815,8 +1841,8 @@ export function AvatarControls({
                     <ValueSlider
                       ariaLabel='Frame shadow opacity'
                       label='Opacity'
-                      min={0}
-                      max={100}
+                      min={AVATAR_SHADOW_RANGES.frame.opacity.min}
+                      max={AVATAR_SHADOW_RANGES.frame.opacity.max}
                       suffix='%'
                       value={frameShadowStyle.opacity}
                       onChange={opacity => onFrameShadowStyleChange({ opacity })}

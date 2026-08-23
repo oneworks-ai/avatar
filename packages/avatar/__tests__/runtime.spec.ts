@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
 import {
+  AVATAR_FACE_RANGES,
   anchorAvatarAnimationClip,
   applyAvatarScenePatch,
   createDefaultAvatarDefinition,
@@ -88,6 +89,53 @@ describe('OneWorks Avatar public runtime contract', () => {
         face: { ...decorated.scene.face, eyeHighlight: { ...decorated.scene.face.eyeHighlight, size: 0 } }
       }
     })).toThrow(TypeError)
+    const invalidScenes = [
+      { ...definition.scene, face: { ...definition.scene.face, width: -1 } },
+      { ...definition.scene, view: { ...definition.scene.view, scale: -1 } },
+      {
+        ...definition.scene,
+        effects: {
+          ...definition.scene.effects,
+          outline: { ...definition.scene.effects.outline, opacity: 1000 }
+        }
+      },
+      {
+        ...definition.scene,
+        camera: {
+          ...definition.scene.camera,
+          frameShadow: { ...definition.scene.camera.frameShadow, distance: -20 }
+        }
+      },
+      { ...definition.scene, lighting: { ...definition.scene.lighting, gridDensity: -1 } },
+      { ...definition.scene, camera: { ...definition.scene.camera, background: 'bogus' } },
+      {
+        ...definition.scene,
+        effects: {
+          ...definition.scene.effects,
+          outline: { ...definition.scene.effects.outline, color: 'bogus' }
+        }
+      }
+    ]
+    invalidScenes.forEach(scene => {
+      expect(() => parseAvatarDefinition({ ...definition, scene })).toThrow(TypeError)
+    })
+    expect(parseAvatarDefinition({
+      ...definition,
+      scene: {
+        ...definition.scene,
+        camera: {
+          ...definition.scene.camera,
+          frameShadow: { ...definition.scene.camera.frameShadow, distance: 40, softness: 48 }
+        },
+        effects: {
+          ...definition.scene.effects,
+          outline: { ...definition.scene.effects.outline, opacity: 100, width: 20 }
+        },
+        face: { ...definition.scene.face, width: 72 },
+        lighting: { ...definition.scene.lighting, gridDensity: 400 },
+        view: { ...definition.scene.view, positionX: -230, positionY: 230, scale: .35 }
+      }
+    }).scene.view.scale).toBe(.35)
     const changing = { ...definition }
     let versionReads = 0
     Object.defineProperty(changing, 'version', {
@@ -121,7 +169,36 @@ describe('OneWorks Avatar public runtime contract', () => {
     const missingDecals = { ...definition, scene: { ...definition.scene } }
     delete (missingDecals.scene as Partial<typeof missingDecals.scene>).decals
     expect(() => parseAvatarDefinition(missingDecals)).toThrow(TypeError)
+    const hiddenDecals = [] as typeof definition.scene.decals[number][]
+    Object.defineProperty(hiddenDecals, '0', {
+      configurable: true,
+      enumerable: false,
+      value: definition.scene.decals[0] ?? {
+        color: '#ffffff',
+        height: 20,
+        id: 'hidden',
+        label: 'Hidden',
+        opacity: 100,
+        rotation: 0,
+        shape: 'ellipse',
+        targetPartId: null,
+        width: 20,
+        x: 0,
+        y: 0
+      },
+      writable: true
+    })
+    expect(isAvatarDefinition({ ...definition, scene: { ...definition.scene, decals: hiddenDecals } })).toBe(false)
     expect(() => parseAvatarDefinition({ ...definition, [Symbol('extra')]: true })).toThrow(TypeError)
+    const invalidWidth = {
+      ...definition,
+      scene: { ...definition.scene, face: { ...definition.scene.face, width: 999 } }
+    }
+    expect(isAvatarDefinition(invalidWidth)).toBe(false)
+    expect(() => {
+      (AVATAR_FACE_RANGES.width as { max: number }).max = 1000
+    }).toThrow(TypeError)
+    expect(isAvatarDefinition(invalidWidth)).toBe(false)
     expect(() => parseAvatarDefinition({
       ...definition,
       scene: {
@@ -194,6 +271,20 @@ describe('OneWorks Avatar public runtime contract', () => {
       scene: {
         ...definition.scene,
         entity: { parts: [{ ...duplicatePart, id: '' }], preset: 'custom' }
+      }
+    })).toThrow(TypeError)
+    expect(() => parseAvatarDefinition({
+      ...definition,
+      scene: {
+        ...definition.scene,
+        entity: { parts: [{ ...duplicatePart, baseColor: 'bogus' }], preset: 'custom' }
+      }
+    })).toThrow(TypeError)
+    expect(() => parseAvatarDefinition({
+      ...definition,
+      scene: {
+        ...definition.scene,
+        entity: { parts: [{ ...duplicatePart, scaleX: 0 }], preset: 'custom' }
       }
     })).toThrow(TypeError)
     expect(() => parseAvatarDefinition({
@@ -283,6 +374,18 @@ describe('OneWorks Avatar public runtime contract', () => {
       parseAvatarAnimationClip({
         ...nod,
         keyframes: [{ atMs: 0, patch: { view: null } }]
+      })
+    ).toThrow(TypeError)
+    expect(() =>
+      parseAvatarAnimationClip({
+        ...nod,
+        keyframes: [{ atMs: 0, patch: { face: { width: -1 } } }]
+      })
+    ).toThrow(TypeError)
+    expect(() =>
+      parseAvatarAnimationClip({
+        ...nod,
+        keyframes: [{ atMs: 0, patch: { view: { positionX: Number.POSITIVE_INFINITY } } }]
       })
     ).toThrow(TypeError)
     const symbolicPatch = {
@@ -509,6 +612,29 @@ describe('OneWorks Avatar public runtime contract', () => {
     const anchored = anchorAvatarAnimationClip(definition, clip)
     expect(resolveAvatarAnimationFrame(definition, anchored, 500).scene.view.yaw).toBeCloseTo(-.3)
     expect(resolveAvatarAnimationFrame(definition, anchored, 1000).scene.view.yaw).toBeCloseTo(.1)
+  })
+
+  it('keeps relative motion unbounded by the editor drag range', () => {
+    const base = createDefaultAvatarDefinition()
+    const definition = {
+      ...base,
+      scene: applyAvatarScenePatch(base.scene, { view: { positionX: 230 } })
+    }
+    const clip: AvatarAnimationClip = {
+      anchor: 'relative',
+      durationMs: 100,
+      keyframes: [
+        { atMs: 0, patch: { view: { positionX: -230 } } },
+        { atMs: 100, patch: { view: { positionX: 230 } } }
+      ],
+      playback: 'once'
+    }
+    const anchored = anchorAvatarAnimationClip(definition, clip)
+
+    expect(anchored.keyframes.map(frame => frame.patch.view?.positionX)).toEqual([230, 690])
+    expect(parseAvatarAnimationClip(anchored)).toEqual(anchored)
+    const scene = resolveAvatarAnimationFrame(definition, anchored, 100).scene
+    expect(parseAvatarDefinition({ ...definition, scene }).scene.view.positionX).toBe(690)
   })
 
   it('interpolates from the base scene to a delayed first keyframe', () => {

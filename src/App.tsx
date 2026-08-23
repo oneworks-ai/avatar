@@ -4,7 +4,12 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { CSSProperties } from 'react'
 
 import {
+  AVATAR_EYE_HIGHLIGHT_RANGES,
+  AVATAR_FACE_RANGES,
+  AVATAR_LIGHTING_RANGES,
+  AVATAR_OUTLINE_RANGES,
   AVATAR_PALETTES,
+  AVATAR_SHADOW_RANGES,
   DEFAULT_AVATAR_GLYPH_EXPRESSION,
   getAvatarPalette,
   isSupportedAvatarGlyphExpression
@@ -315,15 +320,45 @@ const parseQueryConfig = (params: URLSearchParams): AvatarQueryConfig => {
       : animationSelectionKey,
     avatarShadowStyle: {
       color: parseAvatarShadowColor(params.get('avatarShadowColor')),
-      direction: parseRangeValue(params.get('avatarShadowDir'), DEFAULT_AVATAR_SHADOW_STYLE.direction, -180, 180),
-      distance: parseRangeValue(params.get('avatarShadowDist'), DEFAULT_AVATAR_SHADOW_STYLE.distance, 0, 40),
-      opacity: parseRangeValue(params.get('avatarShadowOpacity'), DEFAULT_AVATAR_SHADOW_STYLE.opacity, 0, 100),
-      softness: parseRangeValue(params.get('avatarShadowSoft'), DEFAULT_AVATAR_SHADOW_STYLE.softness, 0, 40)
+      direction: parseRangeValue(
+        params.get('avatarShadowDir'),
+        DEFAULT_AVATAR_SHADOW_STYLE.direction,
+        AVATAR_SHADOW_RANGES.avatar.direction.min,
+        AVATAR_SHADOW_RANGES.avatar.direction.max
+      ),
+      distance: parseRangeValue(
+        params.get('avatarShadowDist'),
+        DEFAULT_AVATAR_SHADOW_STYLE.distance,
+        AVATAR_SHADOW_RANGES.avatar.distance.min,
+        AVATAR_SHADOW_RANGES.avatar.distance.max
+      ),
+      opacity: parseRangeValue(
+        params.get('avatarShadowOpacity'),
+        DEFAULT_AVATAR_SHADOW_STYLE.opacity,
+        AVATAR_SHADOW_RANGES.avatar.opacity.min,
+        AVATAR_SHADOW_RANGES.avatar.opacity.max
+      ),
+      softness: parseRangeValue(
+        params.get('avatarShadowSoft'),
+        DEFAULT_AVATAR_SHADOW_STYLE.softness,
+        AVATAR_SHADOW_RANGES.avatar.softness.min,
+        AVATAR_SHADOW_RANGES.avatar.softness.max
+      )
     },
     avatarOutlineStyle: {
       color: parseOutlineColor(params.get('outlineColor')),
-      opacity: parseRangeValue(params.get('outlineOpacity'), DEFAULT_AVATAR_OUTLINE_STYLE.opacity, 0, 100),
-      width: parseRangeValue(params.get('outlineWidth'), DEFAULT_AVATAR_OUTLINE_STYLE.width, 1, 20)
+      opacity: parseRangeValue(
+        params.get('outlineOpacity'),
+        DEFAULT_AVATAR_OUTLINE_STYLE.opacity,
+        AVATAR_OUTLINE_RANGES.opacity.min,
+        AVATAR_OUTLINE_RANGES.opacity.max
+      ),
+      width: parseRangeValue(
+        params.get('outlineWidth'),
+        DEFAULT_AVATAR_OUTLINE_STYLE.width,
+        AVATAR_OUTLINE_RANGES.width.min,
+        AVATAR_OUTLINE_RANGES.width.max
+      )
     },
     backgroundStyle,
     bodyShape: parseBodyShape(params.get('shape')),
@@ -341,84 +376,199 @@ const parseQueryConfig = (params: URLSearchParams): AvatarQueryConfig => {
         offsetX: parseRangeValue(
           params.get('eyeHighlightX'),
           DEFAULT_AVATAR_FACE_STYLE.eyeHighlight.offsetX,
-          -35,
-          35
+          AVATAR_EYE_HIGHLIGHT_RANGES.offsetX.min,
+          AVATAR_EYE_HIGHLIGHT_RANGES.offsetX.max
         ),
         offsetY: parseRangeValue(
           params.get('eyeHighlightY'),
           DEFAULT_AVATAR_FACE_STYLE.eyeHighlight.offsetY,
-          -35,
-          35
+          AVATAR_EYE_HIGHLIGHT_RANGES.offsetY.min,
+          AVATAR_EYE_HIGHLIGHT_RANGES.offsetY.max
         ),
         opacity: parseRangeValue(
           params.get('eyeHighlightOpacity'),
           DEFAULT_AVATAR_FACE_STYLE.eyeHighlight.opacity,
-          0,
-          100
+          AVATAR_EYE_HIGHLIGHT_RANGES.opacity.min,
+          AVATAR_EYE_HIGHLIGHT_RANGES.opacity.max
         ),
         size: parseRangeValue(
           params.get('eyeHighlightSize'),
           DEFAULT_AVATAR_FACE_STYLE.eyeHighlight.size,
-          8,
-          50
+          AVATAR_EYE_HIGHLIGHT_RANGES.size.min,
+          AVATAR_EYE_HIGHLIGHT_RANGES.size.max
         )
       },
-      eyeRoundness: parseRangeValue(params.get('eyeRound'), DEFAULT_AVATAR_FACE_STYLE.eyeRoundness, 0, 100),
+      eyeRoundness: parseRangeValue(
+        params.get('eyeRound'),
+        DEFAULT_AVATAR_FACE_STYLE.eyeRoundness,
+        AVATAR_FACE_RANGES.eyeRoundness.min,
+        AVATAR_FACE_RANGES.eyeRoundness.max
+      ),
       eyeShape: parseEyeShape(params.get('eyeShape')),
-      gap: parseRangeValue(params.get('eyeGap'), DEFAULT_AVATAR_FACE_STYLE.gap, 0, 100),
-      height: parseRangeValue(params.get('eyeH'), DEFAULT_AVATAR_FACE_STYLE.height, 20, 104),
+      gap: parseRangeValue(
+        params.get('eyeGap'),
+        DEFAULT_AVATAR_FACE_STYLE.gap,
+        AVATAR_FACE_RANGES.gap.min,
+        AVATAR_FACE_RANGES.gap.max
+      ),
+      height: parseRangeValue(
+        params.get('eyeH'),
+        DEFAULT_AVATAR_FACE_STYLE.height,
+        AVATAR_FACE_RANGES.height.min,
+        AVATAR_FACE_RANGES.height.max
+      ),
       leftEyeHeight: params.has('eyeLeftH')
-        ? parseRangeValue(params.get('eyeLeftH'), DEFAULT_AVATAR_FACE_STYLE.height, 20, 104)
+        ? parseRangeValue(
+            params.get('eyeLeftH'),
+            DEFAULT_AVATAR_FACE_STYLE.height,
+            AVATAR_FACE_RANGES.leftEyeHeight.min,
+            AVATAR_FACE_RANGES.leftEyeHeight.max
+          )
         : undefined,
       leftEyeRotation: parseRangeValue(
         params.get('eyeLeftRot'),
         DEFAULT_AVATAR_FACE_STYLE.leftEyeRotation,
-        -90,
-        90
+        AVATAR_FACE_RANGES.leftEyeRotation.min,
+        AVATAR_FACE_RANGES.leftEyeRotation.max
       ),
-      mouthCurve: parseRangeValue(params.get('mouthCurve'), DEFAULT_AVATAR_FACE_STYLE.mouthCurve, -100, 100),
+      mouthCurve: parseRangeValue(
+        params.get('mouthCurve'),
+        DEFAULT_AVATAR_FACE_STYLE.mouthCurve,
+        AVATAR_FACE_RANGES.mouthCurve.min,
+        AVATAR_FACE_RANGES.mouthCurve.max
+      ),
       mouthEnabled: parseShadow(params.get('mouth')),
-      mouthHeight: parseRangeValue(params.get('mouthH'), DEFAULT_AVATAR_FACE_STYLE.mouthHeight, 6, 48),
-      mouthRotation: parseRangeValue(params.get('mouthRot'), DEFAULT_AVATAR_FACE_STYLE.mouthRotation, -180, 180),
+      mouthHeight: parseRangeValue(
+        params.get('mouthH'),
+        DEFAULT_AVATAR_FACE_STYLE.mouthHeight,
+        AVATAR_FACE_RANGES.mouthHeight.min,
+        AVATAR_FACE_RANGES.mouthHeight.max
+      ),
+      mouthRotation: parseRangeValue(
+        params.get('mouthRot'),
+        DEFAULT_AVATAR_FACE_STYLE.mouthRotation,
+        AVATAR_FACE_RANGES.mouthRotation.min,
+        AVATAR_FACE_RANGES.mouthRotation.max
+      ),
       mouthShape: parseMouthShape(params.get('mouthShape')),
-      mouthWidth: parseRangeValue(params.get('mouthW'), DEFAULT_AVATAR_FACE_STYLE.mouthWidth, 16, 100),
-      mouthY: parseRangeValue(params.get('mouthY'), DEFAULT_AVATAR_FACE_STYLE.mouthY, 24, 90),
+      mouthWidth: parseRangeValue(
+        params.get('mouthW'),
+        DEFAULT_AVATAR_FACE_STYLE.mouthWidth,
+        AVATAR_FACE_RANGES.mouthWidth.min,
+        AVATAR_FACE_RANGES.mouthWidth.max
+      ),
+      mouthY: parseRangeValue(
+        params.get('mouthY'),
+        DEFAULT_AVATAR_FACE_STYLE.mouthY,
+        AVATAR_FACE_RANGES.mouthY.min,
+        AVATAR_FACE_RANGES.mouthY.max
+      ),
       noseEnabled: parseShadow(params.get('nose')),
-      noseHeight: parseRangeValue(params.get('noseH'), DEFAULT_AVATAR_FACE_STYLE.noseHeight, 6, 48),
-      noseRotation: parseRangeValue(params.get('noseRot'), DEFAULT_AVATAR_FACE_STYLE.noseRotation, -180, 180),
+      noseHeight: parseRangeValue(
+        params.get('noseH'),
+        DEFAULT_AVATAR_FACE_STYLE.noseHeight,
+        AVATAR_FACE_RANGES.noseHeight.min,
+        AVATAR_FACE_RANGES.noseHeight.max
+      ),
+      noseRotation: parseRangeValue(
+        params.get('noseRot'),
+        DEFAULT_AVATAR_FACE_STYLE.noseRotation,
+        AVATAR_FACE_RANGES.noseRotation.min,
+        AVATAR_FACE_RANGES.noseRotation.max
+      ),
       noseShape: parseNoseShape(params.get('noseShape')),
-      noseWidth: parseRangeValue(params.get('noseW'), DEFAULT_AVATAR_FACE_STYLE.noseWidth, 6, 36),
-      noseY: parseRangeValue(params.get('noseY'), DEFAULT_AVATAR_FACE_STYLE.noseY, -10, 50),
-      rotation: parseRangeValue(params.get('eyeRot'), DEFAULT_AVATAR_FACE_STYLE.rotation, -90, 90),
+      noseWidth: parseRangeValue(
+        params.get('noseW'),
+        DEFAULT_AVATAR_FACE_STYLE.noseWidth,
+        AVATAR_FACE_RANGES.noseWidth.min,
+        AVATAR_FACE_RANGES.noseWidth.max
+      ),
+      noseY: parseRangeValue(
+        params.get('noseY'),
+        DEFAULT_AVATAR_FACE_STYLE.noseY,
+        AVATAR_FACE_RANGES.noseY.min,
+        AVATAR_FACE_RANGES.noseY.max
+      ),
+      rotation: parseRangeValue(
+        params.get('eyeRot'),
+        DEFAULT_AVATAR_FACE_STYLE.rotation,
+        AVATAR_FACE_RANGES.rotation.min,
+        AVATAR_FACE_RANGES.rotation.max
+      ),
       rightEyeRotation: parseRangeValue(
         params.get('eyeRightRot'),
         DEFAULT_AVATAR_FACE_STYLE.rightEyeRotation,
-        -90,
-        90
+        AVATAR_FACE_RANGES.rightEyeRotation.min,
+        AVATAR_FACE_RANGES.rightEyeRotation.max
       ),
       rightEyeHeight: params.has('eyeRightH')
-        ? parseRangeValue(params.get('eyeRightH'), DEFAULT_AVATAR_FACE_STYLE.height, 20, 104)
+        ? parseRangeValue(
+            params.get('eyeRightH'),
+            DEFAULT_AVATAR_FACE_STYLE.height,
+            AVATAR_FACE_RANGES.rightEyeHeight.min,
+            AVATAR_FACE_RANGES.rightEyeHeight.max
+          )
         : undefined,
-      width: parseRangeValue(params.get('eyeW'), DEFAULT_AVATAR_FACE_STYLE.width, 12, 72)
+      width: parseRangeValue(
+        params.get('eyeW'),
+        DEFAULT_AVATAR_FACE_STYLE.width,
+        AVATAR_FACE_RANGES.width.min,
+        AVATAR_FACE_RANGES.width.max
+      )
     },
     faceShadowStyle: {
       color: parseOptionalShadowColor(params.get('shadowColor')),
       direction: parseRangeValue(
         params.get('shadowDir'),
         DEFAULT_AVATAR_FACE_SHADOW_STYLE.direction,
-        -180,
-        180
+        AVATAR_SHADOW_RANGES.face.direction.min,
+        AVATAR_SHADOW_RANGES.face.direction.max
       ),
-      distance: parseRangeValue(params.get('shadowDist'), DEFAULT_AVATAR_FACE_SHADOW_STYLE.distance, 0, 24),
-      opacity: parseRangeValue(params.get('shadowOpacity'), DEFAULT_AVATAR_FACE_SHADOW_STYLE.opacity, 0, 100),
-      softness: parseRangeValue(params.get('shadowSoft'), DEFAULT_AVATAR_FACE_SHADOW_STYLE.softness, 0, 12)
+      distance: parseRangeValue(
+        params.get('shadowDist'),
+        DEFAULT_AVATAR_FACE_SHADOW_STYLE.distance,
+        AVATAR_SHADOW_RANGES.face.distance.min,
+        AVATAR_SHADOW_RANGES.face.distance.max
+      ),
+      opacity: parseRangeValue(
+        params.get('shadowOpacity'),
+        DEFAULT_AVATAR_FACE_SHADOW_STYLE.opacity,
+        AVATAR_SHADOW_RANGES.face.opacity.min,
+        AVATAR_SHADOW_RANGES.face.opacity.max
+      ),
+      softness: parseRangeValue(
+        params.get('shadowSoft'),
+        DEFAULT_AVATAR_FACE_SHADOW_STYLE.softness,
+        AVATAR_SHADOW_RANGES.face.softness.min,
+        AVATAR_SHADOW_RANGES.face.softness.max
+      )
     },
     frameShadowStyle: {
       color: parseOptionalShadowColor(params.get('frameShadowColor')),
-      direction: parseRangeValue(params.get('frameShadowDir'), DEFAULT_FRAME_SHADOW_STYLE.direction, -180, 180),
-      distance: parseRangeValue(params.get('frameShadowDist'), DEFAULT_FRAME_SHADOW_STYLE.distance, 0, 40),
-      opacity: parseRangeValue(params.get('frameShadowOpacity'), DEFAULT_FRAME_SHADOW_STYLE.opacity, 0, 100),
-      softness: parseRangeValue(params.get('frameShadowSoft'), DEFAULT_FRAME_SHADOW_STYLE.softness, 0, 48)
+      direction: parseRangeValue(
+        params.get('frameShadowDir'),
+        DEFAULT_FRAME_SHADOW_STYLE.direction,
+        AVATAR_SHADOW_RANGES.frame.direction.min,
+        AVATAR_SHADOW_RANGES.frame.direction.max
+      ),
+      distance: parseRangeValue(
+        params.get('frameShadowDist'),
+        DEFAULT_FRAME_SHADOW_STYLE.distance,
+        AVATAR_SHADOW_RANGES.frame.distance.min,
+        AVATAR_SHADOW_RANGES.frame.distance.max
+      ),
+      opacity: parseRangeValue(
+        params.get('frameShadowOpacity'),
+        DEFAULT_FRAME_SHADOW_STYLE.opacity,
+        AVATAR_SHADOW_RANGES.frame.opacity.min,
+        AVATAR_SHADOW_RANGES.frame.opacity.max
+      ),
+      softness: parseRangeValue(
+        params.get('frameShadowSoft'),
+        DEFAULT_FRAME_SHADOW_STYLE.softness,
+        AVATAR_SHADOW_RANGES.frame.softness.min,
+        AVATAR_SHADOW_RANGES.frame.softness.max
+      )
     },
     gridDensity: parseRangeValue(
       params.get('gridDensity'),
@@ -427,9 +577,24 @@ const parseQueryConfig = (params: URLSearchParams): AvatarQueryConfig => {
       AVATAR_GRID_DENSITY.max
     ),
     interactionMode: parseInteractionMode(params.get('mode')),
-    lightAzimuth: parseRangeValue(params.get('lightAz'), DEFAULT_LIGHT_AZIMUTH, -180, 180),
-    lightDistance: parseRangeValue(params.get('lightDist'), DEFAULT_LIGHT_DISTANCE, 0, 100),
-    lightElevation: parseRangeValue(params.get('lightEl'), DEFAULT_LIGHT_ELEVATION, -80, 80),
+    lightAzimuth: parseRangeValue(
+      params.get('lightAz'),
+      DEFAULT_LIGHT_AZIMUTH,
+      AVATAR_LIGHTING_RANGES.azimuth.min,
+      AVATAR_LIGHTING_RANGES.azimuth.max
+    ),
+    lightDistance: parseRangeValue(
+      params.get('lightDist'),
+      DEFAULT_LIGHT_DISTANCE,
+      AVATAR_LIGHTING_RANGES.distance.min,
+      AVATAR_LIGHTING_RANGES.distance.max
+    ),
+    lightElevation: parseRangeValue(
+      params.get('lightEl'),
+      DEFAULT_LIGHT_ELEVATION,
+      AVATAR_LIGHTING_RANGES.elevation.min,
+      AVATAR_LIGHTING_RANGES.elevation.max
+    ),
     leftEye,
     linkEyes,
     mouth,
