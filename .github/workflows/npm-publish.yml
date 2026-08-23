@@ -13,6 +13,14 @@ on:
         description: npm dist-tag for the release.
         required: true
         type: string
+      auth_mode:
+        default: oidc
+        description: Prefer OIDC; use token only for a protected recovery publish when trusted-publisher setup is unavailable.
+        required: true
+        type: choice
+        options:
+          - oidc
+          - token
 
 permissions:
   contents: read
@@ -87,7 +95,7 @@ jobs:
           retention-days: 1
 
   publish:
-    name: oidc-publish-verify
+    name: npm-publish-verify
     needs: validate
     if: ${{ !inputs.dry_run }}
     runs-on: ubuntu-latest
@@ -112,7 +120,7 @@ jobs:
           node-version: 24
           registry-url: https://registry.npmjs.org
 
-      - name: Install npm with Trusted Publishing support
+      - name: Install npm with provenance support
         run: npm install -g npm@11.15.0
 
       - name: Download immutable npm tarballs
@@ -123,22 +131,44 @@ jobs:
 
       - name: Require protected main for publishing
         env:
+          AUTH_MODE: ${{ inputs.auth_mode }}
+          NODE_AUTH_TOKEN: ${{ inputs.auth_mode == 'token' && secrets.NPM_TOKEN || '' }}
           TRUSTED_PUBLISHERS: ${{ vars.NPM_TRUSTED_PUBLISHERS }}
         run: |
           set -euo pipefail
           test "$GITHUB_REF" = 'refs/heads/main'
-          test "$TRUSTED_PUBLISHERS" = '@oneworks/avatar,@oneworks/avatar-react,@oneworks/avatar-web,@oneworks/avatar-vue|oneworks-ai/avatar|npm-publish.yml|npm-publish|allow:npm-publish|token:none'
+          if [ "$AUTH_MODE" = 'oidc' ]; then
+            test "$TRUSTED_PUBLISHERS" = '@oneworks/avatar,@oneworks/avatar-react,@oneworks/avatar-web,@oneworks/avatar-vue|oneworks-ai/avatar|npm-publish.yml|npm-publish|allow:npm-publish|token:none'
+          else
+            test "$AUTH_MODE" = 'token'
+            test -n "$NODE_AUTH_TOKEN"
+          fi
 
-      - name: Create tokenless npm configuration
+      - name: Create isolated npm configuration
         env:
+          AUTH_MODE: ${{ inputs.auth_mode }}
+          NODE_AUTH_TOKEN: ${{ inputs.auth_mode == 'token' && secrets.NPM_TOKEN || '' }}
           NPM_CONFIG_USERCONFIG: ${{ runner.temp }}/avatar-npm-publish.npmrc
         run: |
+          set -euo pipefail
           umask 077
-          printf 'registry=https://registry.npmjs.org/\n' > "$NPM_CONFIG_USERCONFIG"
+          if [ "$AUTH_MODE" = 'oidc' ]; then
+            printf 'registry=https://registry.npmjs.org/\n' > "$NPM_CONFIG_USERCONFIG"
+          else
+            test "$AUTH_MODE" = 'token'
+            test -n "$NODE_AUTH_TOKEN"
+            cat > "$NPM_CONFIG_USERCONFIG" <<'NPMRC'
+          registry=https://registry.npmjs.org/
+          //registry.npmjs.org/:_authToken=${NODE_AUTH_TOKEN}
+          NPMRC
+            npm whoami --registry https://registry.npmjs.org
+          fi
+          chmod 600 "$NPM_CONFIG_USERCONFIG"
 
       - name: Publish and reconcile npm packages
         id: publish
         env:
+          NODE_AUTH_TOKEN: ${{ inputs.auth_mode == 'token' && secrets.NPM_TOKEN || '' }}
           NPM_CONFIG_PROVENANCE: 'true'
           NPM_CONFIG_USERCONFIG: ${{ runner.temp }}/avatar-npm-publish.npmrc
           NPM_PUBLISH_TARBALL_DIRECTORY: ${{ runner.temp }}/avatar-sdk-tarballs
