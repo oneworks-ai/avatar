@@ -375,6 +375,7 @@ export const createSeededAvatarDefinition = ({
 const isRecord = (value: unknown): value is Record<string, unknown> => (
   typeof value === 'object' && value != null && !Array.isArray(value) &&
   (Object.getPrototypeOf(value) === Object.prototype || Object.getPrototypeOf(value) === null) &&
+  Reflect.ownKeys(value).every(key => typeof key === 'string') &&
   Object.values(Object.getOwnPropertyDescriptors(value)).every(descriptor => (
     'value' in descriptor && descriptor.enumerable
   ))
@@ -740,10 +741,14 @@ const isAvatarAnimationClip = (value: unknown): value is AvatarAnimationClip => 
 }
 
 export const parseAvatarAnimationClip = (input: unknown): AvatarAnimationClip => {
-  if (!isAvatarAnimationClip(input)) throw new TypeError('Invalid OneWorks Avatar animation clip')
-  const value = structuredClone(input)
-  if (!isAvatarAnimationClip(value)) throw new TypeError('Invalid OneWorks Avatar animation clip')
-  return value
+  try {
+    if (!isAvatarAnimationClip(input)) throw new TypeError('Invalid OneWorks Avatar animation clip')
+    const value = structuredClone(input)
+    if (!isAvatarAnimationClip(value)) throw new TypeError('Invalid OneWorks Avatar animation clip')
+    return value
+  } catch {
+    throw new TypeError('Invalid OneWorks Avatar animation clip')
+  }
 }
 
 const isAvatarAnimationLibrary = (value: unknown): value is AvatarAnimationLibrary => (

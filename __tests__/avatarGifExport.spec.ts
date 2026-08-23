@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { createAvatarGifSamples, orderAvatarGifKeyframes } from '../src/avatarGifExport'
+import { createAvatarGifSamples, ditherAvatarGifAlpha, orderAvatarGifKeyframes } from '../src/avatarGifExport'
 import { createAvatarAnimationKeyframe } from '../src/avatarAnimations'
 import { DEFAULT_AVATAR_FACE_STYLE } from '../src/avatarGeometry'
 
@@ -80,5 +80,22 @@ describe('avatar GIF export', () => {
 
     expect(samples).toHaveLength(5)
     expect(samples.map(sample => sample.keyframe.positionX)).toEqual([0, 5, 10, 20, 30])
+  })
+
+  it('dithers semi-transparent frame shadows into GIF-compatible binary alpha', () => {
+    const pixels = new Uint8ClampedArray(4 * 4 * 4)
+    for (let offset = 0; offset < pixels.length; offset += 4) {
+      pixels[offset] = 20
+      pixels[offset + 1] = 30
+      pixels[offset + 2] = 40
+      pixels[offset + 3] = 56
+    }
+
+    const dithered = ditherAvatarGifAlpha(pixels, 4)
+    const alpha = Array.from({ length: 16 }, (_, index) => dithered[index * 4 + 3])
+    expect(alpha).toContain(0)
+    expect(alpha).toContain(255)
+    expect(alpha.every(value => value === 0 || value === 255)).toBe(true)
+    expect(dithered.slice(0, 3)).toEqual(new Uint8ClampedArray([20, 30, 40]))
   })
 })

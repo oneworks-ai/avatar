@@ -57,6 +57,9 @@ describe('OneWorks Avatar public runtime contract', () => {
     expect(isAvatarDefinition(revoked.proxy)).toBe(false)
     expect(() => parseAvatarDefinition(revoked.proxy)).toThrow(TypeError)
     expect(() => parseAvatarAnimationClip(Object.create(nod))).toThrow(TypeError)
+    const revokedClip = Proxy.revocable(nod, {})
+    revokedClip.revoke()
+    expect(() => parseAvatarAnimationClip(revokedClip.proxy)).toThrow(TypeError)
     const decorated = {
       ...definition,
       scene: {
@@ -282,6 +285,15 @@ describe('OneWorks Avatar public runtime contract', () => {
         keyframes: [{ atMs: 0, patch: { view: null } }]
       })
     ).toThrow(TypeError)
+    const symbolicPatch = {
+      ...nod,
+      keyframes: [{ atMs: 0, patch: { face: { width: 28 } } }]
+    }
+    Object.defineProperty(symbolicPatch.keyframes[0]!.patch.face, Symbol('unknown'), {
+      enumerable: true,
+      value: 1
+    })
+    expect(() => parseAvatarAnimationClip(symbolicPatch)).toThrow(TypeError)
     expect(() =>
       parseAvatarDefinition({
         ...definition,
