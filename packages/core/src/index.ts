@@ -392,7 +392,7 @@ const isAvatarAnimationClip = (value: unknown): value is AvatarAnimationClip => 
   if (!isRecord(value) || !isOneOf(value.anchor, ['absolute', 'relative']) ||
     !isFiniteNumber(value.durationMs) || value.durationMs <= 0 || !isOptionalString(value.label) ||
     !isOneOf(value.playback, ['loop', 'once']) || !Array.isArray(value.keyframes) ||
-    value.keyframes.length === 0) return false
+    value.keyframes.length === 0 || (value.playback === 'loop' && value.keyframes.length < 2)) return false
   const durationMs = value.durationMs
   if (!value.keyframes.every(keyframe => (
     isRecord(keyframe) && isFiniteNumber(keyframe.atMs) && keyframe.atMs >= 0 &&

@@ -246,6 +246,12 @@ describe('OneWorks Avatar public runtime contract', () => {
       ],
       playback: 'loop'
     })).toThrow(TypeError)
+    expect(() => parseAvatarAnimationClip({
+      anchor: 'absolute',
+      durationMs: 500,
+      keyframes: [{ atMs: 0, patch: { view: { yaw: .1 } } }],
+      playback: 'loop'
+    })).toThrow(TypeError)
     expect(parseAvatarAnimationClip({
       anchor: 'absolute',
       durationMs: 900,
