@@ -24,7 +24,7 @@ import { InteractiveAvatar } from '../../../src/InteractiveAvatar'
 import type { AvatarViewState } from '../../../src/InteractiveAvatar'
 import { resolveAvatarFaceStyle } from '../../../src/avatarGeometry'
 import { AvatarLocaleProvider } from '../../../src/avatarLocale'
-import { renderAvatarPngBlob, serializeAvatarSvg } from '../../../src/savedAvatarPresets'
+import { renderAvatarPngBlob, renderAvatarSvgSource } from '../../../src/savedAvatarPresets'
 
 export type {
   AvatarAnimationClip,
@@ -234,10 +234,11 @@ export const Avatar = forwardRef<AvatarHandle, AvatarProps>(function Avatar({
             renderDefinition.scene.appearance.paletteId
           ).shadow
         },
+        pixelEffect: renderDefinition.scene.effects.pixelate,
         showFrameShadow: renderDefinition.scene.camera.showFrameShadow
       }
       if (options.format === 'png') return renderAvatarPngBlob(svg, options.size, captureOptions)
-      return new Blob([serializeAvatarSvg(svg, options.size, captureOptions)], {
+      return new Blob([await renderAvatarSvgSource(svg, options.size, captureOptions)], {
         type: 'image/svg+xml;charset=utf-8'
       })
     },
@@ -322,6 +323,7 @@ export const Avatar = forwardRef<AvatarHandle, AvatarProps>(function Avatar({
           commitDefinition(applyView(currentDefinition, view))
         }}
         palette={palette}
+        pixelEffect={scene.effects.pixelate}
         shadowStyle={scene.effects.faceShadow}
         showAvatarShadow={scene.effects.showAvatarShadow}
         showLight={scene.lighting.enabled}

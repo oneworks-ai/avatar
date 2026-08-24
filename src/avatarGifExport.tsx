@@ -39,6 +39,7 @@ type AvatarGifRenderProps = Omit<
   | 'interactionMode'
   | 'interactive'
   | 'onViewStateChange'
+  | 'pixelEffect'
   | 'selectedEntityPartId'
   | 'viewState'
 >
