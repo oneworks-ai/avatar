@@ -5,22 +5,29 @@ import type { CSSProperties } from 'react'
 
 import {
   AVATAR_EYE_HIGHLIGHT_RANGES,
+  AVATAR_COAT_PATTERN_RANGES,
   AVATAR_FACE_RANGES,
   AVATAR_LIGHTING_RANGES,
   AVATAR_OUTLINE_RANGES,
   AVATAR_PALETTES,
   AVATAR_PIXEL_EFFECT_RANGES,
   AVATAR_SHADOW_RANGES,
+  AVATAR_TABBY_COMPATIBLE_PALETTE_IDS,
   DEFAULT_AVATAR_GLYPH_EXPRESSION,
+  DEFAULT_AVATAR_COAT_PATTERN,
   DEFAULT_AVATAR_PIXEL_EFFECT,
   getAvatarPalette,
-  isSupportedAvatarGlyphExpression
+  isSupportedAvatarGlyphExpression,
+  resolveAvatarCoatPatternDecals
 } from '@oneworks/avatar'
 import type {
   AvatarAnimationLibrary,
   AvatarBackgroundStyle,
+  AvatarCoatPattern,
+  AvatarCoatPatternAlgorithm,
   AvatarDefinition,
-  AvatarPixelEffect
+  AvatarPixelEffect,
+  AvatarSeedConfiguration
 } from '@oneworks/avatar'
 
 import { AnimationPanel } from './AnimationPanel'
@@ -72,15 +79,25 @@ import type {
 import { DEFAULT_AVATAR_COLOR_GRADE, resolveAvatarColorGrade } from './avatarColorGrade'
 import type { AvatarColorGrade } from './avatarColorGrade'
 import {
+  AVATAR_CAT_BREED_CONTROLLED_FIELDS,
+  getAvatarCatBreedTemplate,
+  isAvatarCatBreedTemplateId,
+  resolveAvatarCatBreedTemplate
+} from './avatarBreedTemplates'
+import type { AvatarCatBreedTemplateId } from './avatarBreedTemplates'
+import {
   avatarDefinitionToSearchParams,
   avatarDefinitionToState,
   createAvatarDefinition,
   flattenAvatarAnimationLibraries
 } from './avatarDefinition'
 import {
+  applyCatEarScale,
   applyAvatarEntityPalette,
+  CAT_EAR_SCALE_RANGE,
   createAvatarEntityParts,
   deserializeAvatarEntityParts,
+  getCatEarScale,
   getAvatarEntityPresetFaceStyle,
   getAvatarEntityPresetScene,
   parseAvatarEntityPreset,
@@ -98,6 +115,26 @@ import type {
 import { createAvatarGif } from './avatarGifExport'
 import { LAST_EDITOR_QUERY_STORAGE_KEY } from './avatarHome'
 import { useAvatarLocale } from './avatarLocale'
+import {
+  AVATAR_COAT_PATTERN_SEED_FIELDS,
+  AVATAR_SEED_FIELD,
+  AVATAR_SEED_FIELDS,
+  createRandomAvatarSeed,
+  normalizeEditorAvatarSeed,
+  parseAvatarSeedFields,
+  resolveSeededAvatarBackgroundStyle,
+  resolveSeededAvatarCameraBackground,
+  resolveSeededAvatarCatEarScale,
+  resolveSeededAvatarCoatPattern,
+  resolveSeededAvatarEntityPreset,
+  resolveSeededAvatarFacePreset,
+  resolveSeededAvatarPaletteId,
+  resolveSeededAvatarTabbyPaletteId,
+  resolveSeededAvatarView,
+  interpolateAvatarView,
+  serializeAvatarSeedFields
+} from './avatarSeed'
+import type { AvatarSeedField } from './avatarSeed'
 import {
   createAvatarSurfaceDecal,
   deserializeAvatarSurfaceDecals,
@@ -120,6 +157,7 @@ const DEFAULT_PALETTE_COUNT = 16
 const UNDO_GROUP_DELAY_MS = 400
 const UNDO_HISTORY_LIMIT = 100
 const DEFAULT_PALETTE_ID = AVATAR_PALETTES[0]?.id ?? ''
+const DEFAULT_TABBY_PALETTE_ID = AVATAR_TABBY_COMPATIBLE_PALETTE_IDS[0]
 const DEFAULT_BACKGROUND_STYLE: AvatarBackgroundStyle = 'solid'
 const DEFAULT_EXPORT_SIZE: ExportSize = 256
 const DEFAULT_LIGHT_AZIMUTH = -35
@@ -146,6 +184,7 @@ const DEFAULT_FRAME_SHADOW_STYLE: AvatarDropShadowStyle = {
   softness: 24
 }
 const DEFAULT_CONTROLS_WIDTH = 420
+const SEEDED_VIEW_TRANSITION_MS = 220
 const SYSTEM_DARK_MEDIA_QUERY = '(prefers-color-scheme: dark)'
 const AVATAR_GITHUB_URL = 'https://github.com/oneworks-ai/avatar'
 
@@ -187,6 +226,10 @@ interface AvatarQueryConfig {
   readonly cameraBackground: string
   readonly cameraFrame: AvatarCameraFrame
   readonly cameraMode: boolean
+  readonly catBreedTemplateId: string | null
+  readonly catEarHeight: number | null
+  readonly catEarWidth: number | null
+  readonly coatPattern: AvatarCoatPattern
   readonly controlsCollapsed: boolean
   readonly entityParts: readonly AvatarEntityPart[]
   readonly entityPreset: AvatarEntityPreset
@@ -204,6 +247,8 @@ interface AvatarQueryConfig {
   readonly mouth: string
   readonly pixelEffect: AvatarPixelEffect
   readonly rightEye: string
+  readonly seed: string
+  readonly seededFields: readonly string[]
   readonly selectedPaletteId: string
   readonly showLight: boolean
   readonly showOutline: boolean
@@ -278,6 +323,18 @@ const parseFiniteValue = (value: string | null, fallback: number) => {
   return Number.isFinite(parsed) ? parsed : fallback
 }
 const formatQueryNumber = (value: number) => String(Number(value.toFixed(4)))
+const createStableJsonFingerprint = (value: unknown): string => {
+  if (Array.isArray(value)) return `[${value.map(createStableJsonFingerprint).join(',')}]`
+  if (value != null && typeof value === 'object') {
+    return `{${Object.keys(value).sort().flatMap((key) => {
+      const entry = (value as Record<string, unknown>)[key]
+      return entry === undefined
+        ? []
+        : [`${JSON.stringify(key)}:${createStableJsonFingerprint(entry)}`]
+    }).join(',')}}`
+  }
+  return JSON.stringify(value) ?? 'null'
+}
 const parseBodyShape = (value: string | null): AvatarBodyShape => {
   return AVATAR_BODY_SHAPES.includes(value as AvatarBodyShape) ? (value as AvatarBodyShape) : 'sphere'
 }
@@ -298,6 +355,33 @@ const parseInteractionMode = (value: string | null): AvatarInteractionMode => {
   return value === 'move' || value === 'rotate' ? value : 'rotate'
 }
 
+const parseAvatarCoatPatternAlgorithm = (value: string | null): AvatarCoatPatternAlgorithm => (
+  ['broken-mackerel', 'classic', 'mackerel', 'random', 'spotted'].includes(value ?? '')
+    ? value as AvatarCoatPatternAlgorithm
+    : DEFAULT_AVATAR_COAT_PATTERN.algorithm
+)
+
+const parseAvatarCoatPattern = (params: URLSearchParams, fallbackSeed: string): AvatarCoatPattern => ({
+  algorithm: parseAvatarCoatPatternAlgorithm(params.get('coatAlgorithm')),
+  algorithmSeed: normalizeEditorAvatarSeed(params.get('coatAlgorithmSeed') ?? params.get('seed') ?? fallbackSeed),
+  breakup: parseRangeValue(params.get('coatBreakup'), DEFAULT_AVATAR_COAT_PATTERN.breakup, AVATAR_COAT_PATTERN_RANGES.breakup.min, AVATAR_COAT_PATTERN_RANGES.breakup.max),
+  contrast: parseRangeValue(params.get('coatContrast'), DEFAULT_AVATAR_COAT_PATTERN.contrast, AVATAR_COAT_PATTERN_RANGES.contrast.min, AVATAR_COAT_PATTERN_RANGES.contrast.max),
+  density: parseRangeValue(params.get('coatDensity'), DEFAULT_AVATAR_COAT_PATTERN.density, AVATAR_COAT_PATTERN_RANGES.density.min, AVATAR_COAT_PATTERN_RANGES.density.max),
+  enabled: parseShadow(params.get('coat')) || parseAvatarSeedFields(params.get('seedFields')).some(field => (
+    field === 'scene.decals.coatPattern' || field.startsWith('scene.appearance.coatPattern.')
+  )),
+  jitter: parseRangeValue(params.get('coatJitter'), DEFAULT_AVATAR_COAT_PATTERN.jitter, AVATAR_COAT_PATTERN_RANGES.jitter.min, AVATAR_COAT_PATTERN_RANGES.jitter.max),
+  lightPatchLength: parseRangeValue(params.get('coatLightPatchLength'), DEFAULT_AVATAR_COAT_PATTERN.lightPatchLength!, AVATAR_COAT_PATTERN_RANGES.lightPatchLength.min, AVATAR_COAT_PATTERN_RANGES.lightPatchLength.max),
+  lightPatchOffsetY: parseRangeValue(params.get('coatLightPatchOffsetY'), DEFAULT_AVATAR_COAT_PATTERN.lightPatchOffsetY!, AVATAR_COAT_PATTERN_RANGES.lightPatchOffsetY.min, AVATAR_COAT_PATTERN_RANGES.lightPatchOffsetY.max),
+  lightPatchShape: ['face-mask', 'ellipse', 'rounded'].includes(params.get('coatLightPatchShape') ?? '')
+    ? params.get('coatLightPatchShape') as NonNullable<AvatarCoatPattern['lightPatchShape']>
+    : DEFAULT_AVATAR_COAT_PATTERN.lightPatchShape,
+  lightPatchWidth: parseRangeValue(params.get('coatLightPatchWidth'), DEFAULT_AVATAR_COAT_PATTERN.lightPatchWidth!, AVATAR_COAT_PATTERN_RANGES.lightPatchWidth.min, AVATAR_COAT_PATTERN_RANGES.lightPatchWidth.max),
+  seed: normalizeEditorAvatarSeed(params.get('coatSeed') ?? params.get('seed') ?? fallbackSeed),
+  symmetry: parseRangeValue(params.get('coatSymmetry'), DEFAULT_AVATAR_COAT_PATTERN.symmetry, AVATAR_COAT_PATTERN_RANGES.symmetry.min, AVATAR_COAT_PATTERN_RANGES.symmetry.max),
+  thickness: parseRangeValue(params.get('coatThickness'), DEFAULT_AVATAR_COAT_PATTERN.thickness, AVATAR_COAT_PATTERN_RANGES.thickness.min, AVATAR_COAT_PATTERN_RANGES.thickness.max)
+})
+
 const parseAnimationSelectionKey = (value: string | null): AvatarAnimationSelectionKey | null => {
   if (value == null) return null
   if (value === 'shared') return 'shared'
@@ -316,14 +400,30 @@ const parseLinkEyes = (value: string | null, leftEye: string, rightEye: string) 
   return leftEye === rightEye
 }
 
-const parseQueryConfig = (params: URLSearchParams): AvatarQueryConfig => {
+const getApplicableAvatarSeedFields = (
+  entityPreset: AvatarEntityPreset,
+  includeEntityPreset: boolean
+): readonly AvatarSeedField[] => AVATAR_SEED_FIELDS.filter(field => (
+  (includeEntityPreset || field !== AVATAR_SEED_FIELD.entityPreset) &&
+  (entityPreset === 'cat' || (
+    field !== AVATAR_SEED_FIELD.catEarWidth &&
+    field !== AVATAR_SEED_FIELD.catEarHeight &&
+    !field.startsWith('scene.appearance.coatPattern.')
+  ))
+))
+
+const parseQueryConfig = (
+  params: URLSearchParams,
+  fallbackSeed = createRandomAvatarSeed()
+): AvatarQueryConfig => {
   const queryFace = params.get('face') ?? ''
   const emoticon = isSupportedAvatarGlyphExpression(queryFace) ? queryFace : INITIAL_EMOTICON
   const parts = Array.from(emoticon)
+  const coatPattern = parseAvatarCoatPattern(params, fallbackSeed)
   const queryPaletteId = params.get('palette') ?? ''
   const selectedPaletteId = AVATAR_PALETTES.some(palette => palette.id === queryPaletteId)
     ? queryPaletteId
-    : DEFAULT_PALETTE_ID
+    : coatPattern.enabled ? DEFAULT_TABBY_PALETTE_ID : DEFAULT_PALETTE_ID
   const queryBackgroundStyle = params.get('bg')
   const backgroundStyle = isAvatarBackgroundStyle(queryBackgroundStyle)
     ? queryBackgroundStyle
@@ -336,11 +436,32 @@ const parseQueryConfig = (params: URLSearchParams): AvatarQueryConfig => {
 
   const animationSelectionKey = parseAnimationSelectionKey(params.get('animation'))
   const entityPreset = parseAvatarEntityPreset(params.get('entity'))
-  const entityParts = deserializeAvatarEntityParts(params.get('entityParts'), entityPreset)
+  const breedParam = params.get('breed')
+  const catBreedTemplateId = entityPreset === 'cat' && breedParam != null && breedParam.trim() !== ''
+    ? breedParam.trim()
+    : null
+  const rawEntityParts = deserializeAvatarEntityParts(params.get('entityParts'), entityPreset)
+  const catEarWidth = params.has('catEarWidth')
+    ? parseRangeValue(params.get('catEarWidth'), 100, CAT_EAR_SCALE_RANGE.min, CAT_EAR_SCALE_RANGE.max)
+    : null
+  const catEarHeight = params.has('catEarHeight')
+    ? parseRangeValue(params.get('catEarHeight'), 100, CAT_EAR_SCALE_RANGE.min, CAT_EAR_SCALE_RANGE.max)
+    : null
+  const entityParts = entityPreset === 'cat'
+    ? applyCatEarScale(rawEntityParts, catEarWidth ?? undefined, catEarHeight ?? undefined)
+    : rawEntityParts
   const sharedAnimation = animationSelectionKey === 'shared'
     ? deserializeSharedAvatarAnimation(params.get('animationData'))
     : null
 
+  const parsedSeedFields = parseAvatarSeedFields(params.get('seedFields'))
+  const seededFields = parsedSeedFields.includes('scene.decals.coatPattern')
+    ? [
+      ...parsedSeedFields.filter(field => field !== 'scene.decals.coatPattern'),
+      AVATAR_SEED_FIELD.coatPatternAlgorithm,
+      AVATAR_SEED_FIELD.coatPatternSeed
+    ]
+    : parsedSeedFields
   return {
     animationOpen: parseShadow(params.get('animationPanel')),
     animationSelectionKey: animationSelectionKey === 'shared' && sharedAnimation == null
@@ -393,6 +514,10 @@ const parseQueryConfig = (params: URLSearchParams): AvatarQueryConfig => {
     cameraBackground: parseCameraBackground(params.get('cameraBg')),
     cameraFrame: parseCameraFrame(params.get('cameraFrame')),
     cameraMode: parseShadow(params.get('camera')),
+    catBreedTemplateId,
+    catEarHeight,
+    catEarWidth,
+    coatPattern,
     controlsCollapsed: params.get('sidebar') === '0',
     entityParts,
     entityPreset,
@@ -452,6 +577,9 @@ const parseQueryConfig = (params: URLSearchParams): AvatarQueryConfig => {
           AVATAR_FACE_RANGES.leftEyeHeight.min,
           AVATAR_FACE_RANGES.leftEyeHeight.max
         )
+        : undefined,
+      leftEyeWidth: params.has('eyeLeftW')
+        ? parseRangeValue(params.get('eyeLeftW'), DEFAULT_AVATAR_FACE_STYLE.width, AVATAR_FACE_RANGES.leftEyeWidth.min, AVATAR_FACE_RANGES.leftEyeWidth.max)
         : undefined,
       leftEyeRotation: parseRangeValue(
         params.get('eyeLeftRot'),
@@ -536,6 +664,9 @@ const parseQueryConfig = (params: URLSearchParams): AvatarQueryConfig => {
           AVATAR_FACE_RANGES.rightEyeHeight.min,
           AVATAR_FACE_RANGES.rightEyeHeight.max
         )
+        : undefined,
+      rightEyeWidth: params.has('eyeRightW')
+        ? parseRangeValue(params.get('eyeRightW'), DEFAULT_AVATAR_FACE_STYLE.width, AVATAR_FACE_RANGES.rightEyeWidth.min, AVATAR_FACE_RANGES.rightEyeWidth.max)
         : undefined,
       width: parseRangeValue(
         params.get('eyeW'),
@@ -644,13 +775,16 @@ const parseQueryConfig = (params: URLSearchParams): AvatarQueryConfig => {
       sampling: parseAvatarPixelSampling(params.get('pixelSample'))
     },
     rightEye,
+    seed: normalizeEditorAvatarSeed(params.get('seed') ?? fallbackSeed),
+    seededFields,
     selectedPaletteId,
     showLight: parseLight(params.get('light')),
     showOutline: params.get('outline') == null ? true : parseShadow(params.get('outline')),
     showAvatarShadow: parseShadow(params.get('avatarShadow')),
     showFrameShadow: params.get('frameShadow') == null ? true : parseShadow(params.get('frameShadow')),
     showShadow: parseShadow(params.get('shadow')),
-    surfaceDecals: deserializeAvatarSurfaceDecals(params.get('decals'), entityParts.map(part => part.id)),
+    surfaceDecals: deserializeAvatarSurfaceDecals(params.get('decals'), entityParts.map(part => part.id))
+      .filter(decal => !decal.id.startsWith('seed-tabby-')),
     sharedAnimation,
     viewState: {
       pitch: parseFiniteValue(params.get('pitch'), DEFAULT_AVATAR_VIEW_STATE.pitch),
@@ -678,13 +812,99 @@ const parseQueryConfig = (params: URLSearchParams): AvatarQueryConfig => {
   }
 }
 
+const resolveSeededQueryConfig = (config: AvatarQueryConfig): AvatarQueryConfig => {
+  if (config.seededFields.length === 0) return config
+  const breedTemplate = getAvatarCatBreedTemplate(config.catBreedTemplateId)
+  const seedDomain = breedTemplate?.seedDomain
+  let next = config
+  if (config.seededFields.includes(AVATAR_SEED_FIELD.entityPreset)) {
+    const preset = resolveSeededAvatarEntityPreset(config.seed)
+    const parts = createAvatarEntityParts(preset)
+    const entityChanged = preset !== config.entityPreset
+    next = {
+      ...next,
+      bodyShape: 'sphere',
+      entityParts: config.seededFields.includes(AVATAR_SEED_FIELD.palette)
+        ? parts
+        : applyAvatarEntityPalette(parts, getAvatarPalette(config.selectedPaletteId)),
+      entityPreset: preset,
+      catBreedTemplateId: preset === 'cat' ? config.catBreedTemplateId : null,
+      surfaceDecals: entityChanged
+        ? getAvatarEntityPresetScene(preset)?.surfaceDecals ?? []
+        : config.surfaceDecals
+    }
+  }
+  const catEarWidthSeeded = config.seededFields.includes(AVATAR_SEED_FIELD.catEarWidth)
+  const catEarHeightSeeded = config.seededFields.includes(AVATAR_SEED_FIELD.catEarHeight)
+  if (catEarWidthSeeded || catEarHeightSeeded) {
+    const catEarWidth = catEarWidthSeeded
+      ? resolveSeededAvatarCatEarScale(config.seed, 'width', seedDomain)
+      : next.catEarWidth
+    const catEarHeight = catEarHeightSeeded
+      ? resolveSeededAvatarCatEarScale(config.seed, 'height', seedDomain)
+      : next.catEarHeight
+    next = {
+      ...next,
+      catEarHeight,
+      catEarWidth,
+      entityParts: next.entityPreset === 'cat'
+        ? applyCatEarScale(next.entityParts, catEarWidth ?? undefined, catEarHeight ?? undefined)
+        : next.entityParts
+    }
+  }
+  if (config.seededFields.includes(AVATAR_SEED_FIELD.facePreset)) {
+    next = { ...next, faceStyle: resolveSeededAvatarFacePreset(config.seed).style }
+  }
+  const coatPatternFields = AVATAR_SEED_FIELDS.filter(field => (
+    field.startsWith('scene.appearance.coatPattern.') && config.seededFields.includes(field)
+  ))
+  if (coatPatternFields.length > 0) {
+    next = {
+      ...next,
+      coatPattern: {
+        ...resolveSeededAvatarCoatPattern(config.seed, next.coatPattern, coatPatternFields, seedDomain),
+        enabled: true
+      }
+    }
+  }
+  if (config.seededFields.includes(AVATAR_SEED_FIELD.palette)) {
+    const paletteId = seedDomain?.paletteIds != null
+      ? resolveSeededAvatarPaletteId(config.seed, seedDomain.paletteIds)
+      : next.entityPreset === 'cat' && next.coatPattern.enabled
+        ? resolveSeededAvatarTabbyPaletteId(config.seed)
+      : resolveSeededAvatarPaletteId(config.seed)
+    next = {
+      ...next,
+      entityParts: applyAvatarEntityPalette(next.entityParts, getAvatarPalette(paletteId)),
+      selectedPaletteId: paletteId
+    }
+  }
+  if (config.seededFields.includes(AVATAR_SEED_FIELD.backgroundStyle)) {
+    next = { ...next, backgroundStyle: resolveSeededAvatarBackgroundStyle(config.seed) }
+  }
+  if (config.seededFields.includes(AVATAR_SEED_FIELD.cameraBackground)) {
+    next = { ...next, cameraBackground: resolveSeededAvatarCameraBackground(config.seed) }
+  }
+  if (config.seededFields.includes(AVATAR_SEED_FIELD.viewPose)) {
+    next = {
+      ...next,
+      viewState: resolveSeededAvatarView(config.seed, next.viewState)
+    }
+  }
+  return next
+}
+
 const getInitialQueryConfig = (definition?: AvatarDefinition) => {
   const params = definition == null
     ? typeof window === 'undefined' ? new URLSearchParams() : new URLSearchParams(window.location.search)
     : avatarDefinitionToSearchParams(definition)
-  const config = parseQueryConfig(params)
+  const config = definition == null
+    ? resolveSeededQueryConfig(parseQueryConfig(params))
+    : parseQueryConfig(params)
   if (definition != null) {
     const state = avatarDefinitionToState(definition)
+    const definitionSeedFields = parseAvatarSeedFields(state.generation?.fields.join(','))
+    const concreteCatEarScale = getCatEarScale(state.entityParts)
     return {
       ...config,
       avatarOutlineStyle: state.avatarOutlineStyle,
@@ -693,6 +913,14 @@ const getInitialQueryConfig = (definition?: AvatarDefinition) => {
       bodyShape: state.bodyShape,
       cameraBackground: state.cameraBackground,
       cameraFrame: state.cameraFrame,
+      catBreedTemplateId: state.generation?.profileId ?? null,
+      catEarHeight: definitionSeedFields.includes(AVATAR_SEED_FIELD.catEarHeight)
+        ? concreteCatEarScale.height
+        : null,
+      catEarWidth: definitionSeedFields.includes(AVATAR_SEED_FIELD.catEarWidth)
+        ? concreteCatEarScale.width
+        : null,
+      coatPattern: state.coatPattern ?? config.coatPattern,
       entityParts: state.entityParts,
       entityPreset: state.entityPreset,
       exportSize: state.exportSize,
@@ -709,6 +937,8 @@ const getInitialQueryConfig = (definition?: AvatarDefinition) => {
       mouth: state.glyph.mouth,
       pixelEffect: state.pixelEffect,
       rightEye: state.glyph.rightEye,
+      seed: state.generation?.seed ?? config.seed,
+      seededFields: definitionSeedFields,
       selectedPaletteId: state.paletteId,
       showAvatarShadow: state.showAvatarShadow,
       showFrameShadow: state.showFrameShadow,
@@ -726,7 +956,7 @@ const getInitialQueryConfig = (definition?: AvatarDefinition) => {
   const faceStyle = getAvatarEntityPresetFaceStyle(preset)
   if (preset === 'custom' || scene == null || faceStyle == null) return config
 
-  return {
+  return resolveSeededQueryConfig({
     ...config,
     animationOpen: false,
     avatarOutlineStyle: scene.avatarOutlineStyle,
@@ -736,8 +966,15 @@ const getInitialQueryConfig = (definition?: AvatarDefinition) => {
     cameraBackground: scene.cameraBackground,
     cameraFrame: scene.cameraFrame,
     cameraMode: scene.cameraMode,
+    catBreedTemplateId: null,
     controlsCollapsed: false,
-    entityParts: createAvatarEntityParts(preset),
+    entityParts: preset === 'cat'
+      ? applyCatEarScale(
+        createAvatarEntityParts(preset),
+        config.catEarWidth ?? undefined,
+        config.catEarHeight ?? undefined
+      )
+      : createAvatarEntityParts(preset),
     entityPreset: preset,
     surfaceDecals: scene.surfaceDecals,
     faceStyle,
@@ -754,7 +991,7 @@ const getInitialQueryConfig = (definition?: AvatarDefinition) => {
     showOutline: scene.showOutline,
     showShadow: scene.showShadow,
     viewState: scene.viewState
-  }
+  })
 }
 
 const downloadBlob = (filename: string, blob: Blob) => {
@@ -805,17 +1042,34 @@ function App({
   )
   const [interactionMode, setInteractionMode] = useState<AvatarInteractionMode>(initialConfig.interactionMode)
   const [avatarViewState, setAvatarViewState] = useState<AvatarViewState>(initialConfig.viewState)
+  const [seededViewTransitionState, setSeededViewTransitionState] = useState<AvatarViewState | null>(null)
   const [bodyShape, setBodyShape] = useState<AvatarBodyShape>(initialConfig.bodyShape)
   const [entityParts, setEntityParts] = useState<readonly AvatarEntityPart[]>(initialConfig.entityParts)
   const [entityPreset, setEntityPreset] = useState<AvatarEntityPreset>(initialConfig.entityPreset)
+  const [catBreedTemplateId, setCatBreedTemplateId] = useState<string | null>(
+    initialConfig.catBreedTemplateId
+  )
+  const [catEarWidth, setCatEarWidth] = useState<number | null>(initialConfig.catEarWidth)
+  const [catEarHeight, setCatEarHeight] = useState<number | null>(initialConfig.catEarHeight)
   const [selectedEntityPartId, setSelectedEntityPartId] = useState<string | null>(null)
   const [surfaceDecals, setSurfaceDecals] = useState<readonly AvatarSurfaceDecal[]>(initialConfig.surfaceDecals ?? [])
+  const [coatPattern, setCoatPattern] = useState<AvatarCoatPattern>(initialConfig.coatPattern)
   const [selectedSurfaceDecalId, setSelectedSurfaceDecalId] = useState<string | null>(null)
   const [cameraMode, setCameraMode] = useState(initialConfig.cameraMode)
   const [cameraBackground, setCameraBackground] = useState(initialConfig.cameraBackground)
   const [cameraFrame, setCameraFrame] = useState<AvatarCameraFrame>(initialConfig.cameraFrame)
   const { leftEye, linkEyes, mouth, rightEye } = initialConfig
   const [selectedPaletteId, setSelectedPaletteId] = useState(initialConfig.selectedPaletteId)
+  const [seed, setSeed] = useState(initialConfig.seed)
+  const [seededFields, setSeededFields] = useState<readonly string[]>(initialConfig.seededFields)
+  const paletteManuallyFixedRef = useRef(
+    !initialConfig.seededFields.includes(AVATAR_SEED_FIELD.palette) && (
+      definition != null || typeof window !== 'undefined' && new URLSearchParams(window.location.search).has('palette')
+    )
+  )
+  const [generationEnabled, setGenerationEnabled] = useState(
+    definition == null || definition.metadata?.generation != null
+  )
   const [showMorePalettes, setShowMorePalettes] = useState(() => {
     return AVATAR_PALETTES.findIndex(palette => palette.id === initialConfig.selectedPaletteId) >=
       DEFAULT_PALETTE_COUNT
@@ -873,6 +1127,10 @@ function App({
   const avatarFrameRef = useRef<HTMLDivElement>(null)
   const stageRef = useRef<HTMLElement>(null)
   const animationFrameRef = useRef<number>()
+  const avatarViewStateRef = useRef<AvatarViewState>(initialConfig.viewState)
+  const seededViewTransitionFrameRef = useRef<number>()
+  const seededViewTransitionTokenRef = useRef(0)
+  const seededViewTransitionViewRef = useRef<AvatarViewState | null>(null)
   const animationTransformAnchorRef = useRef<AvatarAnimationTransformAnchor>()
   const animationThumbnailCaptureRef = useRef<HTMLDivElement>(null)
   const animationThumbnailCaptureIdRef = useRef(0)
@@ -881,7 +1139,28 @@ function App({
   const undoStackRef = useRef<string[]>([])
   const resolvedTheme: AvatarTheme = themeOverride ?? (systemDark ? 'dark' : 'light')
 
+  avatarViewStateRef.current = avatarViewState
+  seededViewTransitionViewRef.current = seededViewTransitionState
+
   const selectedPalette = getAvatarPalette(selectedPaletteId)
+  const concreteCatEarScale = useMemo(() => getCatEarScale(entityParts), [entityParts])
+  const resolvedCatEarWidth = catEarWidth ?? concreteCatEarScale.width
+  const resolvedCatEarHeight = catEarHeight ?? concreteCatEarScale.height
+  const generatedCoatDecals = useMemo(() => coatPattern.enabled
+    ? resolveAvatarCoatPatternDecals({
+      entityParts,
+      entityPreset,
+      paletteId: selectedPaletteId,
+      pattern: coatPattern
+    })
+    : [], [coatPattern, entityParts, entityPreset, selectedPaletteId])
+  const resolvedSurfaceDecals = useMemo(() => {
+    const explicitDecalIds = new Set(surfaceDecals.map(decal => decal.id))
+    return [
+      ...generatedCoatDecals.filter(decal => !explicitDecalIds.has(decal.id)),
+      ...surfaceDecals
+    ]
+  }, [generatedCoatDecals, surfaceDecals])
   const resolvedFaceStyle = useMemo(
     () => ({ ...DEFAULT_AVATAR_FACE_STYLE, ...faceStyle }),
     [faceStyle]
@@ -949,6 +1228,16 @@ function App({
     animationPlaybackMode,
     animationStartFrameIndex
   ])
+  const seedGeneration = useMemo<AvatarSeedConfiguration | undefined>(() => (
+    generationEnabled
+      ? {
+        fields: seededFields,
+        ...(catBreedTemplateId == null ? {} : { profileId: catBreedTemplateId }),
+        seed,
+        version: 1
+      }
+      : undefined
+  ), [catBreedTemplateId, generationEnabled, seed, seededFields])
   const currentDefinition = useMemo(() =>
     createAvatarDefinition({
       animation: animationDraftSource === 'builtin' ? null : currentDocumentAnimation,
@@ -960,6 +1249,7 @@ function App({
       bodyShape,
       cameraBackground,
       cameraFrame,
+      coatPattern,
       colorGrade: avatarColorGrade,
       entityParts,
       entityPreset,
@@ -967,6 +1257,7 @@ function App({
       faceShadowStyle: resolvedFaceShadowStyle,
       faceStyle: resolvedFaceStyle,
       frameShadowStyle,
+      generation: seedGeneration,
       glyph: { leftEye, linkEyes, mouth, rightEye },
       gridDensity,
       interactionMode,
@@ -990,6 +1281,7 @@ function App({
     bodyShape,
     cameraBackground,
     cameraFrame,
+    coatPattern,
     avatarColorGrade,
     animationDraftSource,
     animationLibraries,
@@ -1011,6 +1303,7 @@ function App({
     resolvedFaceShadowStyle,
     resolvedFaceStyle,
     rightEye,
+    seedGeneration,
     selectedAnimationKey,
     selectedPaletteId,
     showAvatarShadow,
@@ -1021,11 +1314,11 @@ function App({
     surfaceDecals
   ])
   const currentDefinitionFingerprint = useMemo(
-    () => JSON.stringify(currentDefinition),
+    () => createStableJsonFingerprint(currentDefinition),
     [currentDefinition]
   )
   const lastEmittedDefinitionFingerprintRef = useRef(
-    definition == null ? null : JSON.stringify(definition)
+    definition == null ? null : createStableJsonFingerprint(definition)
   )
   const publicAnimationEntries = useMemo(() =>
     flattenAvatarAnimationLibraries(
@@ -1118,6 +1411,24 @@ function App({
     params.set('palette', selectedPalette.id)
     params.set('bg', backgroundStyle)
     params.set('shape', bodyShape)
+    params.set('coat', coatPattern.enabled ? '1' : '0')
+    params.set('coatAlgorithm', coatPattern.algorithm)
+    params.set('coatAlgorithmSeed', coatPattern.algorithmSeed)
+    params.set('coatSeed', coatPattern.seed)
+    params.set('coatDensity', String(coatPattern.density))
+    params.set('coatJitter', String(coatPattern.jitter))
+    params.set('coatLightPatchLength', String(coatPattern.lightPatchLength ?? DEFAULT_AVATAR_COAT_PATTERN.lightPatchLength))
+    params.set('coatLightPatchOffsetY', String(coatPattern.lightPatchOffsetY ?? DEFAULT_AVATAR_COAT_PATTERN.lightPatchOffsetY))
+    params.set('coatLightPatchWidth', String(coatPattern.lightPatchWidth ?? DEFAULT_AVATAR_COAT_PATTERN.lightPatchWidth))
+    params.set('coatLightPatchShape', coatPattern.lightPatchShape ?? 'face-mask')
+    params.set('coatThickness', String(coatPattern.thickness))
+    params.set('coatSymmetry', String(coatPattern.symmetry))
+    params.set('coatContrast', String(coatPattern.contrast))
+    params.set('coatBreakup', String(coatPattern.breakup))
+    params.set('seed', seed)
+    const serializedSeedFields = serializeAvatarSeedFields(seededFields)
+    if (serializedSeedFields === '') params.delete('seedFields')
+    else params.set('seedFields', serializedSeedFields)
     params.set('mode', interactionMode)
     params.set('yaw', formatQueryNumber(avatarViewState.yaw))
     params.set('pitch', formatQueryNumber(avatarViewState.pitch))
@@ -1139,6 +1450,8 @@ function App({
     if (resolvedFaceStyle.rightEyeHeight != null) {
       params.set('eyeRightH', String(resolvedFaceStyle.rightEyeHeight))
     }
+    if (resolvedFaceStyle.leftEyeWidth != null) params.set('eyeLeftW', String(resolvedFaceStyle.leftEyeWidth))
+    if (resolvedFaceStyle.rightEyeWidth != null) params.set('eyeRightW', String(resolvedFaceStyle.rightEyeWidth))
     params.set('eyeGap', String(resolvedFaceStyle.gap))
     params.set('eyeRot', String(resolvedFaceStyle.rotation))
     params.set('eyeLeftRot', String(resolvedFaceStyle.leftEyeRotation))
@@ -1202,6 +1515,9 @@ function App({
     } else {
       params.set('entity', entityPreset)
       params.set('entityParts', serializeAvatarEntityParts(entityParts))
+      if (entityPreset === 'cat' && catBreedTemplateId != null) params.set('breed', catBreedTemplateId)
+      if (entityPreset === 'cat' && catEarWidth != null) params.set('catEarWidth', String(catEarWidth))
+      if (entityPreset === 'cat' && catEarHeight != null) params.set('catEarHeight', String(catEarHeight))
     }
     if (surfaceDecals.length > 0) params.set('decals', serializeAvatarSurfaceDecals(surfaceDecals))
     params.delete('objects')
@@ -1247,6 +1563,10 @@ function App({
     bodyShape,
     cameraBackground,
     cameraFrame,
+    catEarHeight,
+    catEarWidth,
+    catBreedTemplateId,
+    coatPattern,
     cameraMode,
     controlsCollapsed,
     embedded,
@@ -1265,6 +1585,8 @@ function App({
     resolvedFaceStyle,
     resolvedFaceShadowStyle,
     selectedPalette.id,
+    seed,
+    seededFields,
     selectedAnimationKey,
     sharedAnimationQuery,
     showLight,
@@ -1299,10 +1621,12 @@ function App({
       undoGroupTimerRef.current = undefined
       applyingUndoRef.current = true
 
-      const config = parseQueryConfig(new URLSearchParams(previousSearch))
+      const previousParams = new URLSearchParams(previousSearch)
+      const config = resolveSeededQueryConfig(parseQueryConfig(previousParams, seed))
       const nextUrl = new URL(window.location.href)
       nextUrl.search = previousSearch
       window.history.replaceState(null, '', nextUrl)
+      cancelSeededViewTransition()
       if (animationFrameRef.current != null) window.cancelAnimationFrame(animationFrameRef.current)
       setAnimationPlaying(false)
       setActiveAnimationKeyframe(null)
@@ -1321,6 +1645,10 @@ function App({
       setControlsCollapsed(config.controlsCollapsed)
       setEntityParts(config.entityParts)
       setEntityPreset(config.entityPreset)
+      setCatBreedTemplateId(config.catBreedTemplateId)
+      setCatEarHeight(config.catEarHeight)
+      setCatEarWidth(config.catEarWidth)
+      setCoatPattern(config.coatPattern)
       setSurfaceDecals(config.surfaceDecals)
       setSelectedSurfaceDecalId(null)
       setExportSize(config.exportSize)
@@ -1335,6 +1663,11 @@ function App({
       setLightElevation(config.lightElevation)
       setSelectedEntityPartId(null)
       setSelectedPaletteId(config.selectedPaletteId)
+      paletteManuallyFixedRef.current = !config.seededFields.includes(AVATAR_SEED_FIELD.palette) &&
+        previousParams.has('palette')
+      setSeed(config.seed)
+      setSeededFields(config.seededFields)
+      setGenerationEnabled(true)
       setSelectedSavedPresetId(null)
       setShowAvatarShadow(config.showAvatarShadow)
       setShowFrameShadow(config.showFrameShadow)
@@ -1355,7 +1688,7 @@ function App({
       window.removeEventListener('keydown', handleUndo)
       window.clearTimeout(undoGroupTimerRef.current)
     }
-  }, [embedded])
+  }, [embedded, seed])
 
   useEffect(() => {
     if (embedded) return
@@ -1387,6 +1720,8 @@ function App({
     lightElevation,
     pixelEffect,
     savedPresets,
+    seed,
+    seededFields,
     selectedPaletteId,
     selectedSavedPresetId,
     showLight,
@@ -1450,10 +1785,66 @@ function App({
   useEffect(() => {
     return () => {
       if (animationFrameRef.current != null) window.cancelAnimationFrame(animationFrameRef.current)
+      if (seededViewTransitionFrameRef.current != null) {
+        window.cancelAnimationFrame(seededViewTransitionFrameRef.current)
+      }
     }
   }, [])
 
+  const cancelSeededViewTransition = () => {
+    seededViewTransitionTokenRef.current += 1
+    if (seededViewTransitionFrameRef.current != null) {
+      window.cancelAnimationFrame(seededViewTransitionFrameRef.current)
+      seededViewTransitionFrameRef.current = undefined
+    }
+    seededViewTransitionViewRef.current = null
+    setSeededViewTransitionState(null)
+  }
+
+  const startSeededViewTransition = (
+    target: AvatarViewState,
+    fromOverride?: AvatarViewState
+  ) => {
+    const from = fromOverride ?? seededViewTransitionViewRef.current ?? avatarViewStateRef.current
+    cancelSeededViewTransition()
+    avatarViewStateRef.current = target
+    setAvatarViewState(target)
+    setAnimationPreviewViewState(target)
+    if (
+      typeof window !== 'undefined' &&
+      window.matchMedia('(prefers-reduced-motion: reduce)').matches
+    ) {
+      return
+    }
+    if (Object.keys(target).every(key => target[key as keyof AvatarViewState] === from[key as keyof AvatarViewState])) {
+      return
+    }
+
+    const token = seededViewTransitionTokenRef.current
+    let startedAt: number | null = null
+    const tick = (now: number) => {
+      if (token !== seededViewTransitionTokenRef.current) return
+      startedAt ??= now
+      const progress = Math.min(Math.max((now - startedAt) / SEEDED_VIEW_TRANSITION_MS, 0), 1)
+      const easedProgress = .5 - Math.cos(Math.PI * progress) / 2
+      const nextViewState = interpolateAvatarView(from, target, easedProgress)
+      seededViewTransitionViewRef.current = nextViewState
+      setSeededViewTransitionState(nextViewState)
+      if (progress < 1) {
+        seededViewTransitionFrameRef.current = window.requestAnimationFrame(tick)
+        return
+      }
+      seededViewTransitionFrameRef.current = undefined
+      seededViewTransitionViewRef.current = null
+      setSeededViewTransitionState(null)
+    }
+    seededViewTransitionViewRef.current = from
+    setSeededViewTransitionState(from)
+    seededViewTransitionFrameRef.current = window.requestAnimationFrame(tick)
+  }
+
   const stopAnimationPlayback = () => {
+    cancelSeededViewTransition()
     if (animationFrameRef.current != null) {
       window.cancelAnimationFrame(animationFrameRef.current)
       animationFrameRef.current = undefined
@@ -1464,6 +1855,8 @@ function App({
 
   const handleAvatarViewStateChange = (nextState: AvatarViewState) => {
     stopAnimationPlayback()
+    markSeedFieldsManual(AVATAR_SEED_FIELD.viewPose)
+    avatarViewStateRef.current = nextState
     setAvatarViewState(nextState)
     setAnimationPreviewViewState(nextState)
     setActiveAnimationKeyframe(null)
@@ -1488,7 +1881,11 @@ function App({
     setActiveAnimationKeyframe(null)
     setAvatarColorGrade(DEFAULT_AVATAR_COLOR_GRADE)
     setEntityPreset(preset)
+    setCatBreedTemplateId(null)
     setEntityParts(nextParts)
+    setCatEarHeight(null)
+    setCatEarWidth(null)
+    setCoatPattern(current => ({ ...current, enabled: preset === 'cat' && current.enabled }))
     setSelectedEntityPartId(null)
     setSurfaceDecals(nextScene?.surfaceDecals ?? [])
     setSelectedSurfaceDecalId(null)
@@ -1516,6 +1913,7 @@ function App({
       setLightElevation(nextScene.lightElevation)
       setPixelEffect(DEFAULT_AVATAR_PIXEL_EFFECT)
       setSelectedPaletteId(nextScene.paletteId)
+      paletteManuallyFixedRef.current = false
       setShowAvatarShadow(nextScene.showAvatarShadow)
       setShowFrameShadow(nextScene.showFrameShadow)
       setShowLight(nextScene.showLight)
@@ -1524,6 +1922,250 @@ function App({
       setShowShadow(nextScene.showShadow)
     }
     setCopyState('idle')
+  }
+
+  const handleCatBreedTemplateChange = (profileId: AvatarCatBreedTemplateId | null) => {
+    cancelSeededViewTransition()
+    if (profileId == null) {
+      setCatBreedTemplateId(null)
+      setSeededFields(current => current.filter(
+        field => !AVATAR_CAT_BREED_CONTROLLED_FIELDS.some(candidate => candidate === field)
+      ))
+      paletteManuallyFixedRef.current = true
+      setSelectedSavedPresetId(null)
+      setCopyState('idle')
+      return
+    }
+    const template = getAvatarCatBreedTemplate(profileId)
+    if (template == null) return
+    const resolved = resolveAvatarCatBreedTemplate(template, seed, coatPattern)
+    stopAnimationPlayback()
+    setActiveAnimationKeyframe(null)
+    setGenerationEnabled(true)
+    setCatBreedTemplateId(profileId)
+    setEntityPreset('cat')
+    setEntityParts(resolved.entityParts)
+    setCatEarHeight(resolved.catEarHeight)
+    setCatEarWidth(resolved.catEarWidth)
+    setCoatPattern(resolved.coatPattern)
+    setSelectedPaletteId(resolved.paletteId)
+    paletteManuallyFixedRef.current = true
+    setSeededFields(current => [
+      ...AVATAR_SEED_FIELDS.filter(field => (
+        template.followByDefault.includes(field) ||
+        (
+          field !== AVATAR_SEED_FIELD.entityPreset &&
+          !AVATAR_CAT_BREED_CONTROLLED_FIELDS.some(candidate => candidate === field) &&
+          current.includes(field)
+        )
+      )),
+      ...current.filter(field => !AVATAR_SEED_FIELDS.includes(field as AvatarSeedField))
+    ])
+    setSelectedEntityPartId(null)
+    setSelectedSurfaceDecalId(null)
+    setSelectedSavedPresetId(null)
+    setShowMorePalettes(
+      AVATAR_PALETTES.findIndex(palette => palette.id === resolved.paletteId) >= DEFAULT_PALETTE_COUNT
+    )
+    setCopyState('idle')
+  }
+
+  const markSeedFieldsManual = (...fields: readonly AvatarSeedField[]) => {
+    setSeededFields(current => current.filter(field => !fields.includes(field as AvatarSeedField)))
+  }
+
+  const ensureNaturalCoatPalette = (nextSeed: string, paletteSeeded: boolean) => {
+    if (entityPreset !== 'cat') return
+    const breedTemplate = getAvatarCatBreedTemplate(catBreedTemplateId)
+    const paletteCandidates = breedTemplate?.seedDomain.paletteIds ?? AVATAR_TABBY_COMPATIBLE_PALETTE_IDS
+    const compatible = paletteCandidates.some(candidate => candidate === selectedPaletteId)
+    if (!paletteSeeded && (paletteManuallyFixedRef.current || compatible)) return
+    const paletteId = paletteSeeded
+      ? resolveSeededAvatarPaletteId(nextSeed, paletteCandidates)
+      : breedTemplate?.fixed.paletteId ?? DEFAULT_TABBY_PALETTE_ID
+    const palette = getAvatarPalette(paletteId)
+    setSelectedPaletteId(paletteId)
+    setEntityParts(currentParts => applyAvatarEntityPalette(currentParts, palette))
+    paletteManuallyFixedRef.current = false
+  }
+
+  const applySeededFields = (nextSeed: string, fields: readonly string[]) => {
+    const orderedFields = AVATAR_SEED_FIELDS.filter(field => fields.includes(field))
+    if (orderedFields.length === 0) return
+    const visibleSeededView = fields.includes(AVATAR_SEED_FIELD.viewPose)
+      ? seededViewTransitionViewRef.current ?? undefined
+      : undefined
+    stopAnimationPlayback()
+    setActiveAnimationKeyframe(null)
+
+    const breedTemplate = getAvatarCatBreedTemplate(catBreedTemplateId)
+    const seedDomain = breedTemplate?.seedDomain
+    const resolvedEntityPreset = fields.includes(AVATAR_SEED_FIELD.entityPreset)
+      ? resolveSeededAvatarEntityPreset(nextSeed)
+      : entityPreset
+    const resolvedEntityParts = fields.includes(AVATAR_SEED_FIELD.entityPreset)
+      ? createAvatarEntityParts(resolvedEntityPreset)
+      : entityParts
+    const nextCatEarWidth = fields.includes(AVATAR_SEED_FIELD.catEarWidth)
+      ? resolveSeededAvatarCatEarScale(nextSeed, 'width', seedDomain)
+      : catEarWidth
+    const nextCatEarHeight = fields.includes(AVATAR_SEED_FIELD.catEarHeight)
+      ? resolveSeededAvatarCatEarScale(nextSeed, 'height', seedDomain)
+      : catEarHeight
+    const resolvedSizedEntityParts = resolvedEntityPreset === 'cat'
+      ? applyCatEarScale(resolvedEntityParts, nextCatEarWidth ?? undefined, nextCatEarHeight ?? undefined)
+      : resolvedEntityParts
+    const coatPatternFields = orderedFields.filter(field => field.startsWith('scene.appearance.coatPattern.'))
+    const resolvedCoatPattern = coatPatternFields.length > 0
+      ? resolveSeededAvatarCoatPattern(nextSeed, coatPattern, coatPatternFields, seedDomain)
+      : coatPattern
+    const useTabbyPalette = resolvedEntityPreset === 'cat' && (
+      coatPattern.enabled || coatPatternFields.length > 0
+    )
+    const resolvedPaletteId = fields.includes(AVATAR_SEED_FIELD.palette)
+      ? seedDomain?.paletteIds != null
+        ? resolveSeededAvatarPaletteId(nextSeed, seedDomain.paletteIds)
+        : useTabbyPalette
+          ? resolveSeededAvatarTabbyPaletteId(nextSeed)
+        : resolveSeededAvatarPaletteId(nextSeed)
+      : selectedPaletteId
+    const resolvedViewState = fields.includes(AVATAR_SEED_FIELD.viewPose)
+      ? resolveSeededAvatarView(nextSeed, avatarViewStateRef.current)
+      : null
+
+    for (const field of orderedFields) {
+      if (field === AVATAR_SEED_FIELD.entityPreset) {
+        const scene = getAvatarEntityPresetScene(resolvedEntityPreset)
+        const entityChanged = resolvedEntityPreset !== entityPreset
+        setEntityPreset(resolvedEntityPreset)
+        if (resolvedEntityPreset !== 'cat') setCatBreedTemplateId(null)
+        setEntityParts(applyAvatarEntityPalette(
+          resolvedSizedEntityParts,
+          getAvatarPalette(selectedPaletteId)
+        ))
+        setBodyShape('sphere')
+        if (entityChanged) setSurfaceDecals(scene?.surfaceDecals ?? [])
+        setSelectedEntityPartId(null)
+        setSelectedSurfaceDecalId(null)
+        continue
+      }
+      if (field === AVATAR_SEED_FIELD.catEarWidth) {
+        setCatEarWidth(nextCatEarWidth)
+        if (resolvedEntityPreset === 'cat') {
+          setEntityParts(currentParts => applyCatEarScale(currentParts, nextCatEarWidth ?? undefined, undefined))
+        }
+        continue
+      }
+      if (field === AVATAR_SEED_FIELD.catEarHeight) {
+        setCatEarHeight(nextCatEarHeight)
+        if (resolvedEntityPreset === 'cat') {
+          setEntityParts(currentParts => applyCatEarScale(currentParts, undefined, nextCatEarHeight ?? undefined))
+        }
+        continue
+      }
+      if (field === AVATAR_SEED_FIELD.facePreset) {
+        const nextFaceStyle = resolveSeededAvatarFacePreset(nextSeed).style
+        setFaceStyle(nextFaceStyle)
+        setAnimationPreviewFaceStyle(nextFaceStyle)
+        continue
+      }
+      if (field === AVATAR_SEED_FIELD.palette) {
+        const palette = getAvatarPalette(resolvedPaletteId)
+        setSelectedPaletteId(resolvedPaletteId)
+        paletteManuallyFixedRef.current = false
+        setEntityParts(currentParts => applyAvatarEntityPalette(currentParts, palette))
+        continue
+      }
+      if (field.startsWith('scene.appearance.coatPattern.')) continue
+      if (field === AVATAR_SEED_FIELD.backgroundStyle) {
+        setBackgroundStyle(resolveSeededAvatarBackgroundStyle(nextSeed))
+        continue
+      }
+      if (field === AVATAR_SEED_FIELD.cameraBackground) {
+        setCameraBackground(resolveSeededAvatarCameraBackground(nextSeed))
+        continue
+      }
+      if (field === AVATAR_SEED_FIELD.viewPose && resolvedViewState != null) {
+        startSeededViewTransition(resolvedViewState, visibleSeededView)
+      }
+    }
+
+    if (coatPatternFields.length > 0) {
+      setCoatPattern({ ...resolvedCoatPattern, enabled: true })
+      setSelectedSurfaceDecalId(null)
+    }
+
+    setSelectedSavedPresetId(null)
+    setCopyState('idle')
+  }
+
+  const handleSeedChange = (value: string) => {
+    const nextSeed = normalizeEditorAvatarSeed(value)
+    setGenerationEnabled(true)
+    setSeed(nextSeed)
+    applySeededFields(nextSeed, seededFields)
+  }
+
+  const handleRandomSeed = () => {
+    const nextSeed = createRandomAvatarSeed()
+    const breedTemplate = getAvatarCatBreedTemplate(catBreedTemplateId)
+    const randomEntityPreset = entityPreset === 'custom'
+      ? resolveSeededAvatarEntityPreset(nextSeed)
+      : entityPreset
+    const activeFields = seededFields.length === 0
+      ? breedTemplate?.followByDefault ?? getApplicableAvatarSeedFields(
+        randomEntityPreset,
+        entityPreset === 'custom'
+      )
+      : seededFields
+    const randomFields = breedTemplate != null && !activeFields.includes(AVATAR_SEED_FIELD.viewPose)
+      ? [...activeFields, AVATAR_SEED_FIELD.viewPose]
+      : activeFields
+    setGenerationEnabled(true)
+    setSeed(nextSeed)
+    if (seededFields.length === 0 || randomFields !== activeFields) {
+      setSeededFields(current => [
+        ...AVATAR_SEED_FIELDS.filter(field => randomFields.includes(field) || current.includes(field)),
+        ...current.filter(field => !AVATAR_SEED_FIELDS.includes(field as AvatarSeedField))
+      ])
+    }
+    applySeededFields(nextSeed, randomFields)
+  }
+
+  const handleSeedFieldToggle = (field: AvatarSeedField, enabled: boolean) => {
+    setGenerationEnabled(true)
+    if (!enabled) {
+      if (field === AVATAR_SEED_FIELD.viewPose) cancelSeededViewTransition()
+      markSeedFieldsManual(field)
+      return
+    }
+    const nextSeed = normalizeEditorAvatarSeed(seed)
+    setSeed(nextSeed)
+    if (field === AVATAR_SEED_FIELD.entityPreset) setCatBreedTemplateId(null)
+    if (field.startsWith('scene.appearance.coatPattern.')) {
+      setCoatPattern(current => ({ ...current, enabled: true }))
+    }
+    setSeededFields(current => [
+      ...AVATAR_SEED_FIELDS.filter(candidate => candidate === field || current.includes(candidate)),
+      ...current.filter(candidate => !AVATAR_SEED_FIELDS.includes(candidate as AvatarSeedField))
+    ])
+    const paletteSeeded = seededFields.includes(AVATAR_SEED_FIELD.palette)
+    if (field.startsWith('scene.appearance.coatPattern.') && !paletteSeeded) {
+      ensureNaturalCoatPalette(nextSeed, false)
+    }
+    const dependentEntityFields = field === AVATAR_SEED_FIELD.entityPreset
+      ? [
+        field,
+        ...[AVATAR_SEED_FIELD.catEarWidth, AVATAR_SEED_FIELD.catEarHeight]
+          .filter(candidate => seededFields.includes(candidate))
+      ]
+      : [field]
+    applySeededFields(
+      nextSeed,
+      field.startsWith('scene.appearance.coatPattern.') && paletteSeeded
+        ? [field, AVATAR_SEED_FIELD.palette]
+        : dependentEntityFields
+    )
   }
 
   const handleCopy = async () => {
@@ -1592,7 +2234,7 @@ function App({
           showLight,
           showOutline,
           showShadow,
-          surfaceDecals
+          surfaceDecals: resolvedSurfaceDecals
         },
         size: exportSize,
         startFrameIndex: animationStartFrameIndex
@@ -1639,11 +2281,16 @@ function App({
 
   const handleSavedPresetSelect = (preset: SavedAvatarPreset) => {
     stopAnimationPlayback()
-    const config = parseQueryConfig(new URLSearchParams(preset.query))
+    const presetParams = new URLSearchParams(preset.query)
+    const config = resolveSeededQueryConfig(parseQueryConfig(presetParams, seed))
     setBackgroundStyle(config.backgroundStyle)
     setBodyShape(config.bodyShape)
     setEntityParts(config.entityParts)
     setEntityPreset(config.entityPreset)
+    setCatBreedTemplateId(config.catBreedTemplateId)
+    setCatEarHeight(config.catEarHeight)
+    setCatEarWidth(config.catEarWidth)
+    setCoatPattern(config.coatPattern)
     setSelectedEntityPartId(null)
     setSurfaceDecals(config.surfaceDecals)
     setSelectedSurfaceDecalId(null)
@@ -1664,6 +2311,11 @@ function App({
     setLightDistance(config.lightDistance)
     setLightElevation(config.lightElevation)
     setSelectedPaletteId(config.selectedPaletteId)
+    paletteManuallyFixedRef.current = !config.seededFields.includes(AVATAR_SEED_FIELD.palette) &&
+      presetParams.has('palette')
+    setSeed(config.seed)
+    setSeededFields(config.seededFields)
+    setGenerationEnabled(true)
     setShowLight(config.showLight)
     setShowOutline(config.showOutline)
     setShowMorePalettes(
@@ -1688,6 +2340,7 @@ function App({
   }
 
   const applyAnimationKeyframe = (keyframe: AvatarAnimationKeyframe) => {
+    cancelSeededViewTransition()
     setAvatarViewState(currentState => ({
       pitch: keyframe.pitch,
       positionX: keyframe.positionX,
@@ -2086,7 +2739,7 @@ function App({
       showLight,
       showOutline,
       showShadow,
-      surfaceDecals
+      surfaceDecals: resolvedSurfaceDecals
     })
   }
 
@@ -2105,7 +2758,7 @@ function App({
         colorGrade={keyframe.colorGrade}
         entityParts={entityParts}
         entityPreset={entityPreset}
-        surfaceDecals={surfaceDecals}
+        surfaceDecals={resolvedSurfaceDecals}
         faceStyleTransitionsEnabled={false}
         faceStyle={keyframe.faceStyle}
         gridDensity={25}
@@ -2380,7 +3033,7 @@ function App({
                 colorGrade={avatarColorGrade}
                 entityParts={entityParts}
                 entityPreset={entityPreset}
-                surfaceDecals={surfaceDecals}
+                surfaceDecals={resolvedSurfaceDecals}
                 faceStyleTransitionsEnabled={!animationPlaying}
                 faceStyle={resolvedFaceStyle}
                 gridDensity={gridDensity}
@@ -2388,6 +3041,7 @@ function App({
                 lightDistance={lightDistance}
                 lightDirection={lightDirection}
                 onEntityPartSelect={setSelectedEntityPartId}
+                onInteractionStart={cancelSeededViewTransition}
                 onViewStateChange={handleAvatarViewStateChange}
                 palette={selectedPalette}
                 pixelEffect={pixelEffect}
@@ -2397,7 +3051,7 @@ function App({
                 showOutline={showOutline}
                 showAvatarShadow={showAvatarShadow}
                 showShadow={showShadow}
-                viewState={avatarViewState}
+                viewState={seededViewTransitionState ?? avatarViewState}
               />
             </div>
           </div>
@@ -2441,6 +3095,10 @@ function App({
           bodyShape={bodyShape}
           cameraBackground={cameraBackground}
           cameraFrame={cameraFrame}
+          catBreedTemplateId={isAvatarCatBreedTemplateId(catBreedTemplateId) ? catBreedTemplateId : null}
+          catEarHeight={resolvedCatEarHeight}
+          catEarWidth={resolvedCatEarWidth}
+          coatPattern={coatPattern}
           controlsWidth={controlsWidth}
           entityParts={entityParts}
           entityPreset={entityPreset}
@@ -2461,6 +3119,7 @@ function App({
           lightElevation={lightElevation}
           pixelEffect={pixelEffect}
           onBackgroundStyleChange={(style) => {
+            markSeedFieldsManual(AVATAR_SEED_FIELD.backgroundStyle)
             setBackgroundStyle(style)
             setCopyState('idle')
           }}
@@ -2469,15 +3128,26 @@ function App({
             setCopyState('idle')
           }}
           onBodyShapeChange={(shape) => {
+            markSeedFieldsManual(
+              AVATAR_SEED_FIELD.entityPreset,
+              AVATAR_SEED_FIELD.catEarWidth,
+              AVATAR_SEED_FIELD.catEarHeight,
+              ...AVATAR_COAT_PATTERN_SEED_FIELDS
+            )
             setBodyShape(shape)
             setEntityParts([])
             setEntityPreset('custom')
+            setCatBreedTemplateId(null)
+            setCatEarHeight(null)
+            setCatEarWidth(null)
+            setCoatPattern(current => ({ ...current, enabled: false }))
             setSelectedEntityPartId(null)
             setSurfaceDecals([])
             setSelectedSurfaceDecalId(null)
             setCopyState('idle')
           }}
           onAddSurfaceDecal={() => {
+            markSeedFieldsManual(...AVATAR_COAT_PATTERN_SEED_FIELDS)
             const id = globalThis.crypto?.randomUUID?.() ?? `decal-${Date.now()}`
             const targetPartId = selectedEntityPartId ?? entityParts.find(part => part.face)?.id ?? null
             setSurfaceDecals(current => [...current, createAvatarSurfaceDecal(id, targetPartId)])
@@ -2486,14 +3156,66 @@ function App({
           onAvatarShadowStyleChange={(nextStyle) => {
             setAvatarShadowStyle(currentStyle => ({ ...currentStyle, ...nextStyle }))
           }}
-          onCameraBackgroundChange={setCameraBackground}
-          onCameraFrameChange={setCameraFrame}
+          onCameraBackgroundChange={(color) => {
+            markSeedFieldsManual(AVATAR_SEED_FIELD.cameraBackground)
+            setCameraBackground(color)
+          }}
+          onCameraFrameChange={(frame) => {
+            setCameraFrame(frame)
+          }}
+          onCatBreedTemplateChange={handleCatBreedTemplateChange}
+          onCatEarHeightChange={(value) => {
+            markSeedFieldsManual(AVATAR_SEED_FIELD.catEarHeight)
+            setCatEarHeight(value)
+            setEntityParts(currentParts => applyCatEarScale(currentParts, undefined, value))
+            setSelectedSavedPresetId(null)
+            setCopyState('idle')
+          }}
+          onCatEarWidthChange={(value) => {
+            markSeedFieldsManual(AVATAR_SEED_FIELD.catEarWidth)
+            setCatEarWidth(value)
+            setEntityParts(currentParts => applyCatEarScale(currentParts, value, undefined))
+            setSelectedSavedPresetId(null)
+            setCopyState('idle')
+          }}
+          onCoatPatternChange={(patch, manualField) => {
+            if (manualField != null) markSeedFieldsManual(manualField)
+            setCoatPattern(current => ({ ...current, ...patch, enabled: true }))
+            setSelectedSavedPresetId(null)
+            setCopyState('idle')
+          }}
+          onConvertCoatPatternToDecals={() => {
+            setSurfaceDecals(current => {
+              const usedIds = new Set(current.map(decal => decal.id))
+              const materialized = generatedCoatDecals
+                .filter(decal => !usedIds.has(decal.id))
+                .map(decal => {
+                  const baseId = `decal-${decal.id}`
+                  let id = baseId
+                  let suffix = 2
+                  while (usedIds.has(id)) {
+                    id = `${baseId}-${suffix}`
+                    suffix += 1
+                  }
+                  usedIds.add(id)
+                  return { ...decal, id }
+                })
+              return [...materialized, ...current]
+            })
+            setCoatPattern(current => ({ ...current, enabled: false }))
+            markSeedFieldsManual(...AVATAR_COAT_PATTERN_SEED_FIELDS)
+            setSelectedSurfaceDecalId(null)
+            setCopyState('idle')
+          }}
           onCollapse={() => setControlsCollapsed(true)}
           onControlsWidthChange={setControlsWidth}
-          onFaceStyleChange={(nextStyle) => {
+          onFaceStyleChange={(nextStyle, mode = 'merge') => {
+            markSeedFieldsManual(AVATAR_SEED_FIELD.facePreset)
             stopAnimationPlayback()
             setActiveAnimationKeyframe(null)
-            const nextFaceStyle = { ...DEFAULT_AVATAR_FACE_STYLE, ...resolvedFaceStyle, ...nextStyle }
+            const nextFaceStyle = mode === 'replace'
+              ? { ...DEFAULT_AVATAR_FACE_STYLE, ...nextStyle }
+              : { ...DEFAULT_AVATAR_FACE_STYLE, ...resolvedFaceStyle, ...nextStyle }
             setFaceStyle(nextFaceStyle)
             setAnimationPreviewFaceStyle(nextFaceStyle)
           }}
@@ -2509,12 +3231,14 @@ function App({
           }}
           onGridDensityChange={setGridDensity}
           onResetFace={() => {
+            markSeedFieldsManual(AVATAR_SEED_FIELD.facePreset)
             stopAnimationPlayback()
             setActiveAnimationKeyframe(null)
             setFaceStyle(DEFAULT_AVATAR_FACE_STYLE)
             setAnimationPreviewFaceStyle(DEFAULT_AVATAR_FACE_STYLE)
           }}
           onDeleteSurfaceDecal={(id) => {
+            markSeedFieldsManual(...AVATAR_COAT_PATTERN_SEED_FIELDS)
             const deletingIndex = surfaceDecals.findIndex(decal => decal.id === id)
             const nextSurfaceDecals = surfaceDecals.filter(decal => decal.id !== id)
             const nextSelectedDecalId = nextSurfaceDecals[
@@ -2526,6 +3250,7 @@ function App({
           }}
           onSelectSurfaceDecal={setSelectedSurfaceDecalId}
           onSurfaceDecalChange={(id, patch) => {
+            markSeedFieldsManual(...AVATAR_COAT_PATTERN_SEED_FIELDS)
             setSurfaceDecals(current => current.map(decal => decal.id === id ? { ...decal, ...patch } : decal))
           }}
           onSavedPresetSelect={handleSavedPresetSelect}
@@ -2534,6 +3259,8 @@ function App({
           onLightDistanceChange={setLightDistance}
           onLightElevationChange={setLightElevation}
           onPaletteChange={(paletteId) => {
+            markSeedFieldsManual(AVATAR_SEED_FIELD.palette)
+            paletteManuallyFixedRef.current = true
             const nextPalette = getAvatarPalette(paletteId)
             stopAnimationPlayback()
             setActiveAnimationKeyframe(null)
@@ -2545,8 +3272,31 @@ function App({
             setPixelEffect(current => ({ ...current, ...patch }))
             setCopyState('idle')
           }}
-          onEntityPresetChange={handleEntityPresetChange}
+          onEntityPresetChange={(preset) => {
+            setGenerationEnabled(true)
+            setSeededFields(current => [
+              ...getApplicableAvatarSeedFields(preset, false),
+              ...current.filter(field => !AVATAR_SEED_FIELDS.includes(field as AvatarSeedField))
+            ])
+            handleEntityPresetChange(preset)
+          }}
           onEntityPartChange={(id, nextPart) => {
+            markSeedFieldsManual(AVATAR_SEED_FIELD.entityPreset)
+            if (/cat-ear-(left|right)/u.test(id) && nextPart.scaleX != null) {
+              markSeedFieldsManual(AVATAR_SEED_FIELD.catEarWidth)
+              setCatEarWidth(null)
+            }
+            if (/cat-ear-(left|right)/u.test(id) && nextPart.scaleY != null) {
+              markSeedFieldsManual(AVATAR_SEED_FIELD.catEarHeight)
+              setCatEarHeight(null)
+            }
+            if (
+              nextPart.baseColor != null || nextPart.highlightColor != null ||
+              nextPart.shadowColor != null || nextPart.foregroundColor != null
+            ) {
+              markSeedFieldsManual(AVATAR_SEED_FIELD.palette)
+              paletteManuallyFixedRef.current = true
+            }
             setEntityParts(currentParts => currentParts.map(part => part.id === id ? { ...part, ...nextPart } : part))
             setCopyState('idle')
           }}
@@ -2563,11 +3313,28 @@ function App({
             setShowShadow(value => !value)
             setCopyState('idle')
           }}
+          onToggleCoatPattern={() => {
+            if (!coatPattern.enabled) {
+              ensureNaturalCoatPalette(
+                normalizeEditorAvatarSeed(seed),
+                seededFields.includes(AVATAR_SEED_FIELD.palette)
+              )
+            }
+            setCoatPattern(current => ({ ...current, enabled: !current.enabled }))
+            if (coatPattern.enabled) markSeedFieldsManual(...AVATAR_COAT_PATTERN_SEED_FIELDS)
+            setSelectedSurfaceDecalId(null)
+            setCopyState('idle')
+          }}
           selectedPalette={selectedPalette}
           selectedEntityPartId={selectedEntityPartId}
           selectedSavedPresetId={selectedSavedPresetId}
           selectedSurfaceDecalId={selectedSurfaceDecalId}
           savedPresets={savedPresets}
+          seed={seed}
+          seededFields={seededFields}
+          onRandomSeed={handleRandomSeed}
+          onSeedChange={handleSeedChange}
+          onSeedFieldToggle={handleSeedFieldToggle}
           showLight={showLight}
           showOutline={showOutline}
           showAvatarShadow={showAvatarShadow}

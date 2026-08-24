@@ -3,15 +3,18 @@ import { AVATAR_SURFACE_DECAL_RANGES } from '@oneworks/avatar'
 export const AVATAR_SURFACE_DECAL_SHAPES = [
   'claude-spark',
   'ellipse',
+  'face-mask',
   'radial-pleats',
   'rounded',
-  'rounded-triangle'
+  'rounded-triangle',
+  'tapered-band'
 ] as const
 
 export type AvatarSurfaceDecalShape = (typeof AVATAR_SURFACE_DECAL_SHAPES)[number]
-export type AvatarSurfaceDecalSide = 'back' | 'front' | 'left' | 'right'
+export type AvatarSurfaceDecalSide = 'back' | 'face' | 'front' | 'left' | 'right'
 
 export interface AvatarSurfaceDecal {
+  readonly bend?: number
   readonly color: string
   readonly height: number
   readonly id: string
@@ -67,7 +70,8 @@ export const serializeAvatarSurfaceDecals = (decals: readonly AvatarSurfaceDecal
     decal.color,
     decal.opacity,
     decal.label,
-    decal.side
+    decal.side,
+    decal.bend
   ]))
 )
 
@@ -90,6 +94,12 @@ export const deserializeAvatarSurfaceDecals = (
         ? requestedTarget
         : null
       return [{
+        bend: finite(
+          item[12],
+          0,
+          AVATAR_SURFACE_DECAL_RANGES.bend.min,
+          AVATAR_SURFACE_DECAL_RANGES.bend.max
+        ),
         color: item[8].toLowerCase(),
         height: finite(
           item[6],
@@ -111,7 +121,7 @@ export const deserializeAvatarSurfaceDecals = (
           AVATAR_SURFACE_DECAL_RANGES.rotation.min,
           AVATAR_SURFACE_DECAL_RANGES.rotation.max
         ),
-        side: item[11] === 'back' || item[11] === 'left' || item[11] === 'right'
+        side: item[11] === 'back' || item[11] === 'face' || item[11] === 'left' || item[11] === 'right'
           ? item[11]
           : 'front',
         shape: item[2] as AvatarSurfaceDecalShape,

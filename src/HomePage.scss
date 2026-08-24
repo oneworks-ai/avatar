@@ -287,6 +287,44 @@
     }
   }
 
+  &__surprise {
+    display: inline-flex;
+    min-height: 50px;
+    align-items: center;
+    gap: 9px;
+    border: 1px solid color-mix(in srgb, var(--text-color) 34%, transparent);
+    border-radius: 15px;
+    padding: 0 18px;
+    background: color-mix(in srgb, var(--bg-color) 84%, transparent);
+    color: var(--text-color);
+    font-size: 14px;
+    font-weight: 720;
+    cursor: pointer;
+    transition: transform 160ms ease, background-color 160ms ease, border-color 160ms ease;
+
+    svg {
+      width: 17px;
+      height: 17px;
+      fill: none;
+      stroke: currentColor;
+      stroke-linecap: round;
+      stroke-linejoin: round;
+      stroke-width: 1.65;
+
+      circle {
+        fill: currentColor;
+        stroke: none;
+      }
+    }
+
+    &:hover,
+    &:focus-visible {
+      border-color: color-mix(in srgb, var(--text-color) 62%, transparent);
+      background: color-mix(in srgb, var(--text-color) 9%, var(--bg-color));
+      transform: translateY(-2px);
+    }
+  }
+
   &__continue {
     display: inline-flex;
     align-items: center;
@@ -383,6 +421,10 @@
     &__continue {
       justify-content: center;
     }
+
+    &__surprise {
+      justify-content: center;
+    }
   }
 }
 
@@ -391,6 +433,11 @@
     &__carousel-card,
     &__carousel-pagination button,
     &__continue {
+      animation: none;
+      transition: none;
+    }
+
+    &__surprise {
       animation: none;
       transition: none;
     }

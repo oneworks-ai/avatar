@@ -11,8 +11,10 @@ import type {
   AvatarAnimationClip,
   AvatarAnimationLibrary,
   AvatarBackgroundStyle,
+  AvatarCoatPattern,
   AvatarDefinition,
   AvatarPixelEffect,
+  AvatarSeedConfiguration,
   AvatarScene,
   AvatarScenePatch
 } from '@oneworks/avatar'
@@ -31,6 +33,7 @@ import { serializeAvatarEntityParts } from './avatarEntityPresets'
 import type { AvatarEntityPart, AvatarEntityPreset } from './avatarEntityPresets'
 import { resolveAvatarFaceStyle } from './avatarGeometry'
 import type { AvatarBodyShape, AvatarFaceShadowStyle, AvatarFaceStyle } from './avatarGeometry'
+import { serializeAvatarSeedFields } from './avatarSeed'
 import { serializeAvatarSurfaceDecals } from './avatarSurfaceDecals'
 import type { AvatarSurfaceDecal } from './avatarSurfaceDecals'
 
@@ -51,6 +54,7 @@ export interface AvatarDefinitionState {
   readonly bodyShape: AvatarBodyShape
   readonly cameraBackground: string
   readonly cameraFrame: AvatarCameraFrame
+  readonly coatPattern?: AvatarCoatPattern
   readonly colorGrade: AvatarColorGrade
   readonly entityParts: readonly AvatarEntityPart[]
   readonly entityPreset: AvatarEntityPreset
@@ -65,6 +69,7 @@ export interface AvatarDefinitionState {
     readonly rightEye: string
   }
   readonly gridDensity: number
+  readonly generation?: AvatarSeedConfiguration
   readonly interactionMode: AvatarInteractionMode
   readonly lightAzimuth: number
   readonly lightDistance: number
@@ -92,6 +97,7 @@ export const avatarDefinitionToState = (definition: AvatarDefinition): AvatarDef
     bodyShape: scene.appearance.bodyShape,
     cameraBackground: scene.camera.background,
     cameraFrame: scene.camera.frame,
+    coatPattern: scene.appearance.coatPattern,
     colorGrade: scene.effects.colorGrade,
     entityParts: scene.entity.parts,
     entityPreset: scene.entity.preset,
@@ -101,6 +107,7 @@ export const avatarDefinitionToState = (definition: AvatarDefinition): AvatarDef
     frameShadowStyle: scene.camera.frameShadow,
     glyph: DEFAULT_EDITOR_GLYPH,
     gridDensity: scene.lighting.gridDensity,
+    generation: definition.metadata?.generation,
     interactionMode: scene.interactionMode,
     lightAzimuth: scene.lighting.azimuth,
     lightDistance: scene.lighting.distance,
@@ -222,6 +229,7 @@ export const createAvatarDefinition = (
   previous?: AvatarDefinition
 ): AvatarDefinition => {
   const pixelEffect = state.pixelEffect ?? DEFAULT_AVATAR_PIXEL_EFFECT
+  const coatPattern = state.coatPattern ?? previous?.scene.appearance.coatPattern
   const preservePixelEffect = previous?.scene.effects.pixelate != null ||
     pixelEffect.enabled ||
     pixelEffect.blockSize !== DEFAULT_AVATAR_PIXEL_EFFECT.blockSize ||
@@ -237,11 +245,16 @@ export const createAvatarDefinition = (
         state.animationTargetKey,
         state.animationLibraryIds
       ),
-    metadata: previous?.metadata,
+    metadata: state.generation == null
+      ? previous?.metadata
+      : { ...previous?.metadata, generation: state.generation },
     scene: {
       appearance: {
         backgroundStyle: state.backgroundStyle,
         bodyShape: state.bodyShape,
+        ...(state.coatPattern?.enabled === true || previous?.scene.appearance.coatPattern != null
+          ? { coatPattern: { ...coatPattern! } }
+          : {}),
         paletteId: state.paletteId
       },
       camera: {
@@ -289,10 +302,35 @@ const setBoolean = (params: URLSearchParams, key: string, value: boolean) => {
 export const avatarDefinitionToSearchParams = (definition: AvatarDefinition) => {
   const { scene } = definition
   const params = new URLSearchParams()
+  if (definition.metadata?.generation != null) {
+    params.set('seed', definition.metadata.generation.seed)
+    const seedFields = serializeAvatarSeedFields(definition.metadata.generation.fields)
+    if (seedFields !== '') params.set('seedFields', seedFields)
+    if (definition.metadata.generation.profileId != null) {
+      params.set('breed', definition.metadata.generation.profileId)
+    }
+  }
   params.set('face', `${DEFAULT_EDITOR_GLYPH.leftEye}${DEFAULT_EDITOR_GLYPH.mouth}${DEFAULT_EDITOR_GLYPH.rightEye}`)
   params.set('palette', scene.appearance.paletteId)
   params.set('bg', scene.appearance.backgroundStyle)
   params.set('shape', scene.appearance.bodyShape)
+  if (scene.appearance.coatPattern != null) {
+    const pattern = scene.appearance.coatPattern
+    setBoolean(params, 'coat', pattern.enabled)
+    params.set('coatAlgorithm', pattern.algorithm)
+    params.set('coatAlgorithmSeed', pattern.algorithmSeed)
+    params.set('coatSeed', pattern.seed)
+    params.set('coatDensity', String(pattern.density))
+    params.set('coatJitter', String(pattern.jitter))
+    params.set('coatLightPatchLength', String(pattern.lightPatchLength ?? 100))
+    params.set('coatLightPatchOffsetY', String(pattern.lightPatchOffsetY ?? 0))
+    params.set('coatLightPatchWidth', String(pattern.lightPatchWidth ?? 100))
+    params.set('coatLightPatchShape', pattern.lightPatchShape ?? 'face-mask')
+    params.set('coatThickness', String(pattern.thickness))
+    params.set('coatSymmetry', String(pattern.symmetry))
+    params.set('coatContrast', String(pattern.contrast))
+    params.set('coatBreakup', String(pattern.breakup))
+  }
   params.set('mode', scene.interactionMode)
   params.set('yaw', String(scene.view.yaw))
   params.set('pitch', String(scene.view.pitch))
@@ -310,6 +348,8 @@ export const avatarDefinitionToSearchParams = (definition: AvatarDefinition) => 
   params.set('eyeH', String(scene.face.height))
   if (scene.face.leftEyeHeight != null) params.set('eyeLeftH', String(scene.face.leftEyeHeight))
   if (scene.face.rightEyeHeight != null) params.set('eyeRightH', String(scene.face.rightEyeHeight))
+  if (scene.face.leftEyeWidth != null) params.set('eyeLeftW', String(scene.face.leftEyeWidth))
+  if (scene.face.rightEyeWidth != null) params.set('eyeRightW', String(scene.face.rightEyeWidth))
   params.set('eyeGap', String(scene.face.gap))
   params.set('eyeRot', String(scene.face.rotation))
   params.set('eyeLeftRot', String(scene.face.leftEyeRotation))

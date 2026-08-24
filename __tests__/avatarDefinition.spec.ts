@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest'
 import {
   applyAvatarScenePatch,
   createDefaultAvatarDefinition,
+  DEFAULT_AVATAR_COAT_PATTERN,
   parseAvatarAnimationClip,
   parseAvatarDefinition
 } from '@oneworks/avatar'
@@ -28,6 +29,45 @@ import {
 } from '../src/avatarEntityPresets'
 import { DEFAULT_AVATAR_FACE_STYLE } from '../src/avatarGeometry'
 describe('Avatar editor public definition bridge', () => {
+  it('preserves a previous coat pattern when the current state omits the optional field', () => {
+    const base = createDefaultAvatarDefinition()
+    const previous = {
+      ...base,
+      scene: {
+        ...base.scene,
+        appearance: {
+          ...base.scene.appearance,
+          coatPattern: { ...DEFAULT_AVATAR_COAT_PATTERN, enabled: true }
+        }
+      }
+    }
+    const { coatPattern: _omitted, ...state } = avatarDefinitionToState(previous)
+    const definition = createAvatarDefinition(state, previous)
+
+    expect(definition.scene.appearance.coatPattern).toEqual(previous.scene.appearance.coatPattern)
+    expect(parseAvatarDefinition(definition)).toEqual(definition)
+  })
+
+  it('preserves Seed authoring metadata while keeping resolved scene values concrete', () => {
+    const base = createDefaultAvatarDefinition()
+    const generation = {
+      fields: ['scene.face.preset', 'scene.camera.frame'],
+      profileId: 'siamese',
+      seed: 'v1-support-agent',
+      version: 1 as const
+    }
+    const definition = createAvatarDefinition({
+      ...avatarDefinitionToState(base),
+      generation
+    }, base)
+
+    expect(parseAvatarDefinition(definition).metadata?.generation).toEqual(generation)
+    const params = avatarDefinitionToSearchParams(definition)
+    expect(params.get('seed')).toBe(generation.seed)
+    expect(params.get('seedFields')).toBe('scene.face.preset')
+    expect(params.get('breed')).toBe('siamese')
+  })
+
   it('keeps every built-in entity scene inside the public definition contract', () => {
     const base = createDefaultAvatarDefinition()
     const baseState = avatarDefinitionToState(base)
@@ -119,7 +159,7 @@ describe('Avatar editor public definition bridge', () => {
       entityPreset: 'custom',
       exportSize: 256,
       faceShadowStyle: { color: '#123456', direction: 50, distance: 4, opacity: 28, softness: 0 },
-      faceStyle: { ...DEFAULT_AVATAR_FACE_STYLE, leftEyeHeight: 52, rightEyeHeight: 44 },
+      faceStyle: { ...DEFAULT_AVATAR_FACE_STYLE, leftEyeHeight: 52, leftEyeWidth: 34, rightEyeHeight: 44, rightEyeWidth: 14 },
       frameShadowStyle: { color: '#654321', direction: 90, distance: 12, opacity: 22, softness: 24 },
       glyph: { leftEye: '0', linkEyes: true, mouth: 'w', rightEye: '0' },
       gridDensity: 100,

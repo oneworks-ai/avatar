@@ -11,6 +11,49 @@ const deepFreeze = <T>(value: T): T => {
 
 export const AVATAR_DEFINITION_SCHEMA = 'oneworks.avatar' as const
 export const AVATAR_DEFINITION_VERSION = 1 as const
+export const AVATAR_BACKGROUND_STYLES = deepFreeze(['solid', 'gradient'] as const)
+export const AVATAR_CAMERA_FRAMES = deepFreeze(['square', 'rounded', 'circle'] as const)
+export const AVATAR_CAMERA_BACKGROUND_PRESETS = deepFreeze([
+  '#111315',
+  '#f2f0eb',
+  '#24334a',
+  '#3f201c',
+  '#173d35',
+  '#382641',
+  '#ff766c',
+  '#0e4fe7',
+  '#f2bd4f',
+  '#7568e7',
+  '#f6b8cf',
+  '#56d6cc',
+  '#c9e76c',
+  '#87bfff',
+  '#f08c46',
+  '#d9c8ff',
+  '#efe5cc',
+  '#8ec5a4'
+] as const)
+export const AVATAR_SEED_FIELD_PATHS = deepFreeze({
+  backgroundStyle: 'scene.appearance.backgroundStyle',
+  cameraBackground: 'scene.camera.background',
+  cameraFrame: 'scene.camera.frame',
+  catEarHeight: 'scene.entity.catEarHeight',
+  catEarWidth: 'scene.entity.catEarWidth',
+  coatPatternAlgorithm: 'scene.appearance.coatPattern.algorithm',
+  coatPatternBreakup: 'scene.appearance.coatPattern.breakup',
+  coatPatternContrast: 'scene.appearance.coatPattern.contrast',
+  coatPatternDensity: 'scene.appearance.coatPattern.density',
+  coatPatternJitter: 'scene.appearance.coatPattern.jitter',
+  coatPatternLightPatchLength: 'scene.appearance.coatPattern.lightPatchLength',
+  coatPatternLightPatchOffsetY: 'scene.appearance.coatPattern.lightPatchOffsetY',
+  coatPatternLightPatchShape: 'scene.appearance.coatPattern.lightPatchShape',
+  coatPatternLightPatchWidth: 'scene.appearance.coatPattern.lightPatchWidth',
+  coatPatternSeed: 'scene.appearance.coatPattern.seed',
+  coatPatternSymmetry: 'scene.appearance.coatPattern.symmetry',
+  coatPatternThickness: 'scene.appearance.coatPattern.thickness',
+  palette: 'scene.appearance.paletteId',
+  viewPose: 'scene.view.pose'
+} as const)
 export const AVATAR_ANIMATION_MIN_SEGMENT_MS = 100
 export const AVATAR_ANIMATION_MAX_SEGMENT_MS = 8000
 export const AVATAR_COLOR_GRADE_RANGES = deepFreeze(
@@ -37,6 +80,7 @@ export const AVATAR_FACE_RANGES = deepFreeze(
     gap: { max: 100, min: 0 },
     height: { max: 112, min: 1 },
     leftEyeHeight: { max: 112, min: 1 },
+    leftEyeWidth: { max: 76, min: 1 },
     leftEyeRotation: { max: 90, min: -90 },
     mouthCurve: { max: 100, min: -100 },
     mouthHeight: { max: 48, min: 4 },
@@ -49,6 +93,7 @@ export const AVATAR_FACE_RANGES = deepFreeze(
     noseY: { max: 50, min: -10 },
     rotation: { max: 90, min: -90 },
     rightEyeHeight: { max: 112, min: 1 },
+    rightEyeWidth: { max: 76, min: 1 },
     rightEyeRotation: { max: 90, min: -90 },
     width: { max: 76, min: 1 }
   } as const
@@ -59,6 +104,18 @@ export const AVATAR_VIEW_RANGES = deepFreeze(
     positionX: { max: 230, min: -230 },
     positionY: { max: 230, min: -230 },
     scale: { max: 2.4, min: .35 }
+  } as const
+)
+export const AVATAR_SEEDED_VIEW_POSE = deepFreeze(
+  {
+    maxPitch: Math.PI / 10,
+    maxPositionX: 120,
+    maxYaw: Math.PI / 3,
+    pitchJitter: Math.PI / 36,
+    positionY: 72,
+    pseudoDepth: 360,
+    scale: 1.72,
+    yawJitter: Math.PI / 36
   } as const
 )
 export const AVATAR_ENTITY_RANGES = deepFreeze(
@@ -115,14 +172,36 @@ export const AVATAR_SHADOW_RANGES = deepFreeze(
 )
 export const AVATAR_SURFACE_DECAL_RANGES = deepFreeze(
   {
-    height: { max: 180, min: 2 },
+    bend: { max: 60, min: -60 },
+    height: { max: 340, min: 2 },
     opacity: { max: 100, min: 0 },
     rotation: { max: 180, min: -180 },
-    width: { max: 180, min: 2 },
+    width: { max: 240, min: 2 },
     x: { max: 180, min: -180 },
     y: { max: 180, min: -180 }
   } as const
 )
+export const AVATAR_COAT_PATTERN_RANGES = deepFreeze({
+  breakup: { max: 100, min: 0 },
+  contrast: { max: 100, min: 20 },
+  density: { max: 100, min: 0 },
+  jitter: { max: 100, min: 0 },
+  lightPatchLength: { max: 200, min: 60 },
+  lightPatchOffsetY: { max: 50, min: -50 },
+  lightPatchWidth: { max: 200, min: 60 },
+  symmetry: { max: 100, min: 0 },
+  thickness: { max: 140, min: 50 }
+} as const)
+export const AVATAR_TABBY_COMPATIBLE_PALETTE_IDS = deepFreeze([
+  'tabby',
+  'white',
+  'gold',
+  'cocoa',
+  'siamese',
+  'british-shorthair',
+  'russian-blue',
+  'orange-tabby'
+] as const)
 
 export type AvatarBackgroundStyle = 'gradient' | 'solid'
 export type AvatarBodyShape =
@@ -138,15 +217,19 @@ export type AvatarBodyShape =
   | 'teardrop'
   | 'trapezoid'
 export type AvatarCameraFrame = 'circle' | 'rounded' | 'square'
+export type AvatarCoatPatternAlgorithm = 'broken-mackerel' | 'classic' | 'mackerel' | 'random' | 'spotted'
+export type AvatarCoatPatternLightPatchShape = 'ellipse' | 'face-mask' | 'rounded'
 export type AvatarEntityPreset = 'bear' | 'bun' | 'cat' | 'cloud' | 'custom' | 'dog' | 'rabbit' | 'sun'
 export type AvatarEyeShape = 'ellipse' | 'rounded'
-export type AvatarSurfaceDecalSide = 'back' | 'front' | 'left' | 'right'
+export type AvatarSurfaceDecalSide = 'back' | 'face' | 'front' | 'left' | 'right'
 export type AvatarSurfaceDecalShape =
   | 'claude-spark'
   | 'ellipse'
+  | 'face-mask'
   | 'radial-pleats'
   | 'rounded'
   | 'rounded-triangle'
+  | 'tapered-band'
 export type AvatarInteractionMode = 'move' | 'rotate'
 export type AvatarMouthShape = 'curve' | 'ellipse' | 'rounded' | 'rounded-triangle'
 export type AvatarNoseShape = 'ellipse' | 'inverted-triangle' | 'rounded'
@@ -181,6 +264,7 @@ export interface AvatarFace {
   readonly gap: number
   readonly height: number
   readonly leftEyeHeight?: number
+  readonly leftEyeWidth?: number
   readonly leftEyeRotation: number
   readonly mouthCurve: number
   readonly mouthEnabled: boolean
@@ -197,6 +281,7 @@ export interface AvatarFace {
   readonly noseY: number
   readonly rotation: number
   readonly rightEyeHeight?: number
+  readonly rightEyeWidth?: number
   readonly rightEyeRotation: number
   readonly width: number
 }
@@ -211,6 +296,7 @@ export interface AvatarEyeHighlight {
 }
 
 export interface AvatarSurfaceDecal {
+  readonly bend?: number
   readonly color: string
   readonly height: number
   readonly id: string
@@ -274,10 +360,28 @@ export interface AvatarPixelEffect {
   readonly sampling: AvatarPixelSampling
 }
 
+export interface AvatarCoatPattern {
+  readonly algorithm: AvatarCoatPatternAlgorithm
+  readonly algorithmSeed: string
+  readonly breakup: number
+  readonly contrast: number
+  readonly density: number
+  readonly enabled: boolean
+  readonly jitter: number
+  readonly lightPatchLength?: number
+  readonly lightPatchOffsetY?: number
+  readonly lightPatchShape?: AvatarCoatPatternLightPatchShape
+  readonly lightPatchWidth?: number
+  readonly seed: string
+  readonly symmetry: number
+  readonly thickness: number
+}
+
 export interface AvatarScene {
   readonly appearance: {
     readonly backgroundStyle: AvatarBackgroundStyle
     readonly bodyShape: AvatarBodyShape
+    readonly coatPattern?: AvatarCoatPattern
     readonly paletteId: string
   }
   readonly camera: {
@@ -352,10 +456,18 @@ export interface AvatarAnimationRef {
   readonly libraryId: string
 }
 
+export interface AvatarSeedConfiguration {
+  readonly fields: readonly string[]
+  readonly profileId?: string
+  readonly seed: string
+  readonly version: 1
+}
+
 export interface AvatarDefinitionV1 {
   readonly animations?: AvatarAnimationLibrary
   readonly metadata?: {
     readonly createdAt?: string
+    readonly generation?: AvatarSeedConfiguration
     readonly id?: string
     readonly name?: string
     readonly updatedAt?: string
@@ -394,6 +506,23 @@ export const DEFAULT_AVATAR_PIXEL_EFFECT: AvatarPixelEffect = deepFreeze({
   enabled: false,
   paletteSize: 64,
   sampling: 'dominant'
+})
+
+export const DEFAULT_AVATAR_COAT_PATTERN: AvatarCoatPattern = deepFreeze({
+  algorithm: 'random',
+  algorithmSeed: 'v1-tabby',
+  breakup: 28,
+  contrast: 88,
+  density: 72,
+  enabled: false,
+  jitter: 68,
+  lightPatchLength: 100,
+  lightPatchOffsetY: 0,
+  lightPatchShape: 'face-mask',
+  lightPatchWidth: 100,
+  seed: 'v1-tabby',
+  symmetry: 74,
+  thickness: 92
 })
 
 export const DEFAULT_AVATAR_FACE: AvatarFace = {
@@ -458,7 +587,7 @@ export const createDefaultAvatarDefinition = (): AvatarDefinition => ({
   version: AVATAR_DEFINITION_VERSION
 })
 
-const hashAvatarSeed = (seed: string) => {
+export const hashAvatarSeed = (seed: string) => {
   let hash = 2166136261
   for (const character of seed) {
     hash ^= character.codePointAt(0) ?? 0
@@ -467,29 +596,389 @@ const hashAvatarSeed = (seed: string) => {
   return hash >>> 0
 }
 
+export const normalizeAvatarSeed = (seed: string) => {
+  const trimmed = seed.trim()
+  if (trimmed === '') return 'v1-0'
+  return /^v\d+-/.test(trimmed) ? trimmed : `v1-${trimmed}`
+}
+
+export const isAvatarSeedFieldPath = (value: unknown): value is string => (
+  typeof value === 'string' && value.length > 0 && value === value.trim() &&
+  !/[\s,]/u.test(value)
+)
+
+export const resolveAvatarSeededInteger = (
+  seed: string,
+  path: string,
+  min: number,
+  max: number
+) => {
+  const lower = Math.ceil(Math.min(min, max))
+  const upper = Math.floor(Math.max(min, max))
+  if (!Number.isFinite(lower) || !Number.isFinite(upper)) {
+    throw new TypeError('Seeded integer bounds must be finite')
+  }
+  if (lower > upper) throw new RangeError('Seeded integer bounds must contain an integer')
+  if (lower === upper) return lower
+  return lower + hashAvatarSeed(`${normalizeAvatarSeed(seed)}\0${path}`) % (upper - lower + 1)
+}
+
+export const resolveAvatarSeededOption = <Value extends string>(
+  seed: string,
+  path: string,
+  options: readonly Value[]
+): Value => {
+  if (options.length === 0) throw new TypeError('Seeded options must not be empty')
+  const normalizedSeed = normalizeAvatarSeed(seed)
+  let selected = options[0]!
+  let selectedScore = -1
+  for (const option of options) {
+    const score = hashAvatarSeed(`${normalizedSeed}\0${path}\0${option}`)
+    if (score > selectedScore) {
+      selected = option
+      selectedScore = score
+    }
+  }
+  return selected
+}
+
+const resolveAvatarSeededUnit = (seed: string, path: string) => (
+  hashAvatarSeed(`${normalizeAvatarSeed(seed)}\0${path}`) / 0x1_0000_0000
+)
+
+const clampAvatarSeededViewAngle = (angle: number, maxTilt: number) => (
+  Math.min(Math.max(angle, -maxTilt), maxTilt)
+)
+
+/** Resolves a lower, horizontally varied Seed pose with a restrained center-facing tilt. */
+export const resolveSeededAvatarView = (
+  seed: string,
+  current: AvatarView
+): AvatarView => {
+  const positionX = (resolveAvatarSeededUnit(seed, `${AVATAR_SEED_FIELD_PATHS.viewPose}.positionX`) * 2 - 1) *
+    AVATAR_SEEDED_VIEW_POSE.maxPositionX
+  const yawJitter = (resolveAvatarSeededUnit(seed, `${AVATAR_SEED_FIELD_PATHS.viewPose}.yaw`) * 2 - 1) *
+    AVATAR_SEEDED_VIEW_POSE.yawJitter
+  const pitchJitter = (resolveAvatarSeededUnit(seed, `${AVATAR_SEED_FIELD_PATHS.viewPose}.pitch`) * 2 - 1) *
+    AVATAR_SEEDED_VIEW_POSE.pitchJitter
+  return {
+    pitch: clampAvatarSeededViewAngle(
+      Math.atan2(-AVATAR_SEEDED_VIEW_POSE.positionY, AVATAR_SEEDED_VIEW_POSE.pseudoDepth) + pitchJitter,
+      AVATAR_SEEDED_VIEW_POSE.maxPitch
+    ),
+    positionX,
+    positionY: AVATAR_SEEDED_VIEW_POSE.positionY,
+    roll: 0,
+    scale: AVATAR_SEEDED_VIEW_POSE.scale,
+    yaw: clampAvatarSeededViewAngle(
+      Math.atan2(-positionX, AVATAR_SEEDED_VIEW_POSE.pseudoDepth) + yawJitter,
+      AVATAR_SEEDED_VIEW_POSE.maxYaw
+    )
+  }
+}
+
+const AVATAR_CONCRETE_COAT_PATTERN_ALGORITHMS = deepFreeze([
+  'mackerel',
+  'classic',
+  'broken-mackerel',
+  'spotted'
+] as const)
+
+const mixAvatarHexColor = (from: string, to: string, amount: number) => {
+  const parse = (color: string) => [1, 3, 5].map(index => Number.parseInt(color.slice(index, index + 2), 16))
+  const left = parse(from)
+  const right = parse(to)
+  const ratio = Math.max(0, Math.min(1, amount))
+  return `#${left.map((channel, index) => (
+    Math.round(channel + (right[index]! - channel) * ratio).toString(16).padStart(2, '0')
+  )).join('')}`
+}
+
+interface AvatarCoatPatternMarkSpec {
+  readonly bend?: number
+  readonly height: number
+  readonly landmark?: boolean
+  readonly id: string
+  readonly rotation: number
+  readonly side?: AvatarSurfaceDecalSide
+  readonly shape: AvatarSurfaceDecalShape
+  readonly target: 'ear-left' | 'ear-right' | 'face'
+  readonly tone?: 'light' | 'shadow'
+  readonly width: number
+  readonly x: number
+  readonly y: number
+}
+
+const AVATAR_TABBY_TONE_GROUPS: readonly (readonly AvatarCoatPatternMarkSpec[])[] = deepFreeze([
+  [
+    { height: 160, id: 'tone-face-to-chin', landmark: true, rotation: 0, shape: 'face-mask', side: 'face', target: 'face', tone: 'light', width: 108, x: 0, y: 70 }
+  ]
+])
+
+const AVATAR_TABBY_LANDMARK_GROUPS: readonly (readonly AvatarCoatPatternMarkSpec[])[] = deepFreeze([
+  [
+    { bend: -3, height: 38, id: 'forehead-outer-left', landmark: true, rotation: -28, shape: 'tapered-band', target: 'face', width: 7, x: -31, y: -55 },
+    { bend: 3, height: 38, id: 'forehead-outer-right', landmark: true, rotation: 28, shape: 'tapered-band', target: 'face', width: 7, x: 31, y: -55 },
+    { bend: 2, height: 31, id: 'forehead-inner-left', landmark: true, rotation: 25, shape: 'tapered-band', target: 'face', width: 6, x: -10, y: -48 },
+    { bend: -2, height: 31, id: 'forehead-inner-right', landmark: true, rotation: -25, shape: 'tapered-band', target: 'face', width: 6, x: 10, y: -48 }
+  ],
+  [
+    { bend: -5, height: 32, id: 'eye-line-left', landmark: true, rotation: -75, shape: 'tapered-band', target: 'face', width: 5, x: -63, y: -13 },
+    { bend: 5, height: 32, id: 'eye-line-right', landmark: true, rotation: 75, shape: 'tapered-band', target: 'face', width: 5, x: 63, y: -13 }
+  ],
+  [
+    { height: 70, id: 'ear-inner-left', landmark: true, rotation: 0, shape: 'rounded-triangle', target: 'ear-left', width: 64, x: 0, y: 16 },
+    { height: 70, id: 'ear-inner-right', landmark: true, rotation: 0, shape: 'rounded-triangle', target: 'ear-right', width: 64, x: 0, y: 16 }
+  ],
+  [
+    { bend: -5, height: 26, id: 'ear-root-left', landmark: true, rotation: -52, shape: 'tapered-band', target: 'face', width: 7, x: -82, y: -50 },
+    { bend: 5, height: 26, id: 'ear-root-right', landmark: true, rotation: 52, shape: 'tapered-band', target: 'face', width: 7, x: 82, y: -50 }
+  ]
+])
+
+const AVATAR_TABBY_VARIABLE_GROUPS: readonly (readonly AvatarCoatPatternMarkSpec[])[] = deepFreeze([
+  [
+    { bend: -14, height: 58, id: 'cheek-upper-left', rotation: -74, shape: 'tapered-band', target: 'face', width: 7, x: -70, y: 6 },
+    { bend: 14, height: 58, id: 'cheek-upper-right', rotation: 74, shape: 'tapered-band', target: 'face', width: 7, x: 70, y: 6 }
+  ],
+  [
+    { bend: -20, height: 84, id: 'side-upper-left', rotation: -76, shape: 'tapered-band', side: 'left', target: 'face', width: 8, x: -10, y: -42 },
+    { bend: 20, height: 84, id: 'side-upper-right', rotation: 76, shape: 'tapered-band', side: 'right', target: 'face', width: 8, x: 10, y: -42 }
+  ],
+  [
+    { bend: -16, height: 76, id: 'back-upper-left', rotation: -72, shape: 'tapered-band', side: 'back', target: 'face', width: 8, x: -48, y: -45 },
+    { bend: 16, height: 76, id: 'back-upper-right', rotation: 72, shape: 'tapered-band', side: 'back', target: 'face', width: 8, x: 48, y: -45 }
+  ],
+  [
+    { bend: 6, height: 128, id: 'back-spine', rotation: 0, shape: 'tapered-band', side: 'back', target: 'face', width: 9, x: 0, y: -18 }
+  ],
+  [
+    { bend: -13, height: 54, id: 'cheek-middle-left', rotation: -84, shape: 'tapered-band', target: 'face', width: 7, x: -73, y: 28 },
+    { bend: 13, height: 54, id: 'cheek-middle-right', rotation: 84, shape: 'tapered-band', target: 'face', width: 7, x: 73, y: 28 }
+  ],
+  [
+    { bend: -18, height: 92, id: 'side-middle-left', rotation: -88, shape: 'tapered-band', side: 'left', target: 'face', width: 8, x: -4, y: 2 },
+    { bend: 18, height: 92, id: 'side-middle-right', rotation: 88, shape: 'tapered-band', side: 'right', target: 'face', width: 8, x: 4, y: 2 }
+  ],
+  [
+    { bend: -14, height: 84, id: 'back-middle-left', rotation: -88, shape: 'tapered-band', side: 'back', target: 'face', width: 8, x: -50, y: -2 },
+    { bend: 14, height: 84, id: 'back-middle-right', rotation: 88, shape: 'tapered-band', side: 'back', target: 'face', width: 8, x: 50, y: -2 }
+  ],
+  [
+    { bend: -11, height: 46, id: 'cheek-lower-left', rotation: -98, shape: 'tapered-band', target: 'face', width: 7, x: -68, y: 49 },
+    { bend: 11, height: 46, id: 'cheek-lower-right', rotation: 98, shape: 'tapered-band', target: 'face', width: 7, x: 68, y: 49 }
+  ],
+  [
+    { bend: -15, height: 78, id: 'side-lower-left', rotation: -100, shape: 'tapered-band', side: 'left', target: 'face', width: 8, x: 8, y: 47 },
+    { bend: 15, height: 78, id: 'side-lower-right', rotation: 100, shape: 'tapered-band', side: 'right', target: 'face', width: 8, x: -8, y: 47 }
+  ],
+  [
+    { bend: -12, height: 72, id: 'back-lower-left', rotation: -104, shape: 'tapered-band', side: 'back', target: 'face', width: 8, x: -48, y: 40 },
+    { bend: 12, height: 72, id: 'back-lower-right', rotation: 104, shape: 'tapered-band', side: 'back', target: 'face', width: 8, x: 48, y: 40 }
+  ],
+  [
+    { bend: -7, height: 36, id: 'temple-left', rotation: -60, shape: 'tapered-band', target: 'face', width: 6, x: -56, y: -34 },
+    { bend: 7, height: 36, id: 'temple-right', rotation: 60, shape: 'tapered-band', target: 'face', width: 6, x: 56, y: -34 }
+  ]
+])
+
+const AVATAR_TABBY_DARK_GROUPS: readonly (readonly AvatarCoatPatternMarkSpec[])[] = deepFreeze([
+  AVATAR_TABBY_LANDMARK_GROUPS[0]!,
+  AVATAR_TABBY_VARIABLE_GROUPS[1]!,
+  AVATAR_TABBY_VARIABLE_GROUPS[2]!,
+  AVATAR_TABBY_LANDMARK_GROUPS[1]!,
+  AVATAR_TABBY_LANDMARK_GROUPS[2]!,
+  AVATAR_TABBY_VARIABLE_GROUPS[0]!,
+  AVATAR_TABBY_LANDMARK_GROUPS[3]!,
+  AVATAR_TABBY_VARIABLE_GROUPS[3]!,
+  AVATAR_TABBY_VARIABLE_GROUPS[4]!,
+  AVATAR_TABBY_VARIABLE_GROUPS[5]!,
+  AVATAR_TABBY_VARIABLE_GROUPS[6]!,
+  AVATAR_TABBY_VARIABLE_GROUPS[7]!,
+  AVATAR_TABBY_VARIABLE_GROUPS[8]!,
+  AVATAR_TABBY_VARIABLE_GROUPS[9]!,
+  AVATAR_TABBY_VARIABLE_GROUPS[10]!
+])
+
+const resolveAvatarCoatPatternAlgorithm = (pattern: AvatarCoatPattern) => (
+  pattern.algorithm === 'random'
+    ? resolveAvatarSeededOption(
+      pattern.algorithmSeed,
+      AVATAR_SEED_FIELD_PATHS.coatPatternAlgorithm,
+      AVATAR_CONCRETE_COAT_PATTERN_ALGORITHMS
+    )
+    : pattern.algorithm
+)
+
+export const resolveAvatarCoatPatternDecals = ({
+  entityParts,
+  entityPreset,
+  paletteId,
+  pattern
+}: {
+  readonly entityParts: readonly AvatarEntityPart[]
+  readonly entityPreset: AvatarEntityPreset
+  readonly paletteId: string
+  readonly pattern: AvatarCoatPattern
+}): readonly AvatarSurfaceDecal[] => {
+  if (!pattern.enabled || entityPreset !== 'cat') return []
+  const facePartId = entityParts.find(part => part.face)?.id
+  if (facePartId == null) return []
+  const leftEarId = entityParts.find(part => /ear-left|left-ear/u.test(part.id))?.id
+  const rightEarId = entityParts.find(part => /ear-right|right-ear/u.test(part.id))?.id
+  const palette = AVATAR_PALETTES.find(candidate => candidate.id === paletteId) ?? AVATAR_PALETTES[0]!
+  const algorithm = resolveAvatarCoatPatternAlgorithm(pattern)
+  const contrast = pattern.contrast / 100
+  const stripeColor = palette.coat?.mark ?? mixAvatarHexColor(palette.background, palette.foreground, contrast)
+  const stripeOpacity = Math.round(70 + contrast * 28)
+  const thicknessScale = pattern.thickness / 100
+  const densityCount = Math.round(AVATAR_TABBY_DARK_GROUPS.length * pattern.density / 100)
+  const breakup = pattern.breakup / 100
+  const asymmetry = (100 - pattern.symmetry) / 100
+  const jitterAmount = pattern.jitter / 100
+  const lightPatchLength = pattern.lightPatchLength ?? 100
+  const lightPatchOffsetY = pattern.lightPatchOffsetY ?? 0
+  const lightPatchWidth = pattern.lightPatchWidth ?? 100
+  const lightPatchShape = pattern.lightPatchShape ?? 'face-mask'
+  const clampDecalValue = (
+    value: number,
+    range: { readonly max: number; readonly min: number }
+  ) => Math.max(range.min, Math.min(range.max, value))
+  const jitter = (path: string, axis: string, amount: number) => Math.round(
+    resolveAvatarSeededInteger(pattern.seed, `coat.${algorithm}.${path}.${axis}`, -100, 100) / 100 * amount * jitterAmount
+  )
+  const selectedGroups = [
+    ...AVATAR_TABBY_TONE_GROUPS,
+    ...AVATAR_TABBY_DARK_GROUPS.slice(0, densityCount)
+  ]
+  return selectedGroups.flatMap(group => group.map(spec => {
+    const isRight = spec.id.includes('right')
+    const pairKey = group.map(mark => mark.id.replace(/left|right/gu, 'side')).join('-')
+    const pairedJitter = (axis: string, amount: number) => {
+      const mirroredAxis = axis === 'bend' || axis === 'rotation' || axis === 'x'
+      const shared = jitter(pairKey, axis, amount) * (isRight && mirroredAxis ? -1 : 1)
+      const independent = jitter(spec.id, axis, amount)
+      return Math.round(shared * (1 - asymmetry) + independent * asymmetry)
+    }
+    const classic = algorithm === 'classic'
+    const broken = algorithm === 'broken-mackerel'
+    const spotted = algorithm === 'spotted'
+    const isTone = spec.tone != null
+    const isDarkMark = !isTone
+    const isVariable = !spec.landmark && isDarkMark
+    const darkWidthScale = classic ? 1.35 : broken ? .72 + breakup * .22 : spotted ? .7 : 1
+    const widthScale = isDarkMark ? darkWidthScale : 1
+    const heightScale = isDarkMark
+      ? classic ? 1.08 : broken ? .46 + (1 - breakup) * .16 : spotted ? .32 : 1
+      : 1
+    const jitterScale = isVariable ? 1 : 0
+    const appliedThicknessScale = isDarkMark ? thicknessScale : 1
+    const color = spec.tone === 'light'
+      ? palette.coat?.patch ?? mixAvatarHexColor(palette.background, palette.gradient[1], .82)
+      : spec.tone === 'shadow'
+        ? mixAvatarHexColor(palette.background, palette.shadow, .52)
+        : stripeColor
+    const opacity = spec.tone === 'light'
+      ? Math.round(50 + contrast * 16)
+      : spec.tone === 'shadow'
+        ? Math.round(22 + contrast * 18)
+        : stripeOpacity
+    const targetPartId = spec.target === 'ear-left'
+      ? leftEarId ?? facePartId
+      : spec.target === 'ear-right'
+        ? rightEarId ?? facePartId
+        : facePartId
+    return {
+      ...(spec.shape === 'tapered-band'
+        ? { bend: Math.max(-60, Math.min(60, (spec.bend ?? 0) + pairedJitter('bend', 12 * jitterScale))) }
+        : {}),
+      color,
+      height: clampDecalValue(
+        isTone
+          ? Math.round(spec.height * lightPatchLength / 100)
+          : Math.round(spec.height * heightScale) + Math.abs(pairedJitter('height', 8 * jitterScale)),
+        AVATAR_SURFACE_DECAL_RANGES.height
+      ),
+      id: `coat-${algorithm}-${spec.id}`,
+      label: isTone ? 'Tabby coat patch' : spotted || broken ? 'Tabby spot' : 'Tabby stripe',
+      opacity,
+      rotation: clampDecalValue(
+        spec.rotation + pairedJitter('rotation', 14 * jitterScale),
+        AVATAR_SURFACE_DECAL_RANGES.rotation
+      ),
+      side: spec.side ?? 'front',
+      shape: isTone
+        ? lightPatchShape
+        : isDarkMark && (spotted || broken) ? 'ellipse' as const : spec.shape,
+      targetPartId,
+      width: clampDecalValue(
+        isTone
+          ? Math.round(spec.width * lightPatchWidth / 100)
+          : Math.round(spec.width * widthScale * appliedThicknessScale) + Math.abs(pairedJitter('width', 6 * jitterScale)),
+        AVATAR_SURFACE_DECAL_RANGES.width
+      ),
+      x: clampDecalValue(spec.x + pairedJitter('x', 12 * jitterScale), AVATAR_SURFACE_DECAL_RANGES.x),
+      y: clampDecalValue(
+        isTone
+          ? spec.y + lightPatchOffsetY
+          : spec.y + pairedJitter('y', 10 * jitterScale),
+        AVATAR_SURFACE_DECAL_RANGES.y
+      )
+    }
+  }))
+}
+
 export const createSeededAvatarDefinition = ({
   name,
   seed
 }: CreateSeededAvatarDefinitionOptions): AvatarDefinition => {
-  const hash = hashAvatarSeed(seed)
-  const palette = AVATAR_PALETTES[hash % AVATAR_PALETTES.length]!
+  const normalizedSeed = normalizeAvatarSeed(seed)
+  const hash = hashAvatarSeed(normalizedSeed)
+  const paletteId = resolveAvatarSeededOption(
+    normalizedSeed,
+    AVATAR_SEED_FIELD_PATHS.palette,
+    AVATAR_PALETTES.map(palette => palette.id)
+  )
+  const backgroundStyle = resolveAvatarSeededOption(
+    normalizedSeed,
+    AVATAR_SEED_FIELD_PATHS.backgroundStyle,
+    AVATAR_BACKGROUND_STYLES
+  )
+  const cameraBackground = resolveAvatarSeededOption(
+    normalizedSeed,
+    AVATAR_SEED_FIELD_PATHS.cameraBackground,
+    AVATAR_CAMERA_BACKGROUND_PRESETS
+  )
+  const palette = AVATAR_PALETTES.find(candidate => candidate.id === paletteId)!
   const definition = createDefaultAvatarDefinition()
   const bodyShapes: readonly AvatarBodyShape[] = ['capsule', 'ellipse', 'rounded', 'sphere', 'teardrop']
   const signed = (shift: number, range: number) => ((hash >>> shift) % (range * 2 + 1)) - range
 
   return {
     ...definition,
-    ...(name == null ? {} : { metadata: { name } }),
+    metadata: {
+      generation: {
+        fields: [
+          AVATAR_SEED_FIELD_PATHS.palette,
+          AVATAR_SEED_FIELD_PATHS.backgroundStyle,
+          AVATAR_SEED_FIELD_PATHS.cameraBackground,
+          AVATAR_SEED_FIELD_PATHS.viewPose
+        ],
+        seed: normalizedSeed,
+        version: 1
+      },
+      ...(name == null ? {} : { name })
+    },
     scene: {
       ...definition.scene,
       appearance: {
-        backgroundStyle: (hash & 1) === 0 ? 'solid' : 'gradient',
+        backgroundStyle,
         bodyShape: bodyShapes[(hash >>> 5) % bodyShapes.length]!,
         paletteId: palette.id
       },
       camera: {
         ...definition.scene.camera,
-        background: palette.gradient[1]
+        background: cameraBackground
       },
       face: {
         ...definition.scene.face,
@@ -498,10 +987,7 @@ export const createSeededAvatarDefinition = ({
         rightEyeRotation: signed(21, 9)
       },
       view: {
-        ...definition.scene.view,
-        pitch: signed(8, 10) / 100,
-        roll: signed(3, 8) / 100,
-        yaw: signed(13, 16) / 100
+        ...resolveSeededAvatarView(normalizedSeed, definition.scene.view)
       }
     }
   }
@@ -571,6 +1057,7 @@ const isAvatarEyeHighlight = (value: unknown): value is AvatarEyeHighlight => (
 
 const isAvatarSurfaceDecal = (value: unknown): value is AvatarSurfaceDecal => (
   isRecord(value) && hasOnlyKeys(value, [
+    'bend',
     'color',
     'height',
     'id',
@@ -595,12 +1082,13 @@ const isAvatarSurfaceDecal = (value: unknown): value is AvatarSurfaceDecal => (
     'width',
     'x',
     'y'
-  ]) && isHexColor(value.color) && isFiniteInRange(value.height, AVATAR_SURFACE_DECAL_RANGES.height) &&
+  ]) && (value.bend === undefined || isFiniteInRange(value.bend, AVATAR_SURFACE_DECAL_RANGES.bend)) &&
+  isHexColor(value.color) && isFiniteInRange(value.height, AVATAR_SURFACE_DECAL_RANGES.height) &&
   isString(value.id) && value.id.trim().length > 0 && isString(value.label) &&
   isFiniteInRange(value.opacity, AVATAR_SURFACE_DECAL_RANGES.opacity) &&
   isFiniteInRange(value.rotation, AVATAR_SURFACE_DECAL_RANGES.rotation) &&
-  (value.side === undefined || isOneOf(value.side, ['back', 'front', 'left', 'right'])) &&
-  isOneOf(value.shape, ['claude-spark', 'ellipse', 'radial-pleats', 'rounded', 'rounded-triangle']) &&
+  (value.side === undefined || isOneOf(value.side, ['back', 'face', 'front', 'left', 'right'])) &&
+  isOneOf(value.shape, ['claude-spark', 'ellipse', 'face-mask', 'radial-pleats', 'rounded', 'rounded-triangle', 'tapered-band']) &&
   (value.targetPartId === null || (isString(value.targetPartId) && value.targetPartId.trim().length > 0)) &&
   isFiniteInRange(value.width, AVATAR_SURFACE_DECAL_RANGES.width) &&
   isFiniteInRange(value.x, AVATAR_SURFACE_DECAL_RANGES.x) &&
@@ -650,6 +1138,48 @@ const isAvatarPixelEffect = (value: unknown): value is AvatarPixelEffect => (
   isOneOf(value.sampling, ['center', 'dominant', 'median', 'slic'])
 )
 
+const isAvatarCoatPattern = (value: unknown): value is AvatarCoatPattern => (
+  isRecord(value) && hasOnlyKeys(value, [
+    'algorithm',
+    'algorithmSeed',
+    'breakup',
+    'contrast',
+    'density',
+    'enabled',
+    'jitter',
+    'lightPatchLength',
+    'lightPatchOffsetY',
+    'lightPatchShape',
+    'lightPatchWidth',
+    'seed',
+    'symmetry',
+    'thickness'
+  ]) && hasOwnKeys(value, [
+    'algorithm',
+    'algorithmSeed',
+    'breakup',
+    'contrast',
+    'density',
+    'enabled',
+    'jitter',
+    'seed',
+    'symmetry',
+    'thickness'
+  ]) && isOneOf(value.algorithm, ['broken-mackerel', 'classic', 'mackerel', 'random', 'spotted']) &&
+  isString(value.algorithmSeed) && value.algorithmSeed.trim().length > 0 &&
+  isFiniteInRange(value.breakup, AVATAR_COAT_PATTERN_RANGES.breakup) &&
+  isFiniteInRange(value.contrast, AVATAR_COAT_PATTERN_RANGES.contrast) &&
+  isFiniteInRange(value.density, AVATAR_COAT_PATTERN_RANGES.density) &&
+  isBoolean(value.enabled) && isFiniteInRange(value.jitter, AVATAR_COAT_PATTERN_RANGES.jitter) &&
+  (value.lightPatchLength === undefined || isFiniteInRange(value.lightPatchLength, AVATAR_COAT_PATTERN_RANGES.lightPatchLength)) &&
+  (value.lightPatchOffsetY === undefined || isFiniteInRange(value.lightPatchOffsetY, AVATAR_COAT_PATTERN_RANGES.lightPatchOffsetY)) &&
+  (value.lightPatchShape === undefined || isOneOf(value.lightPatchShape, ['ellipse', 'face-mask', 'rounded'])) &&
+  (value.lightPatchWidth === undefined || isFiniteInRange(value.lightPatchWidth, AVATAR_COAT_PATTERN_RANGES.lightPatchWidth)) &&
+  isString(value.seed) && value.seed.trim().length > 0 &&
+  isFiniteInRange(value.symmetry, AVATAR_COAT_PATTERN_RANGES.symmetry) &&
+  isFiniteInRange(value.thickness, AVATAR_COAT_PATTERN_RANGES.thickness)
+)
+
 const isAvatarView = (value: unknown): value is AvatarView => (
   isRecord(value) && hasOnlyKeys(value, ['pitch', 'positionX', 'positionY', 'roll', 'scale', 'yaw']) &&
   hasOwnKeys(value, ['pitch', 'positionX', 'positionY', 'roll', 'scale', 'yaw']) &&
@@ -667,6 +1197,7 @@ const isAvatarFace = (value: unknown): value is AvatarFace => (
     'gap',
     'height',
     'leftEyeHeight',
+    'leftEyeWidth',
     'leftEyeRotation',
     'mouthCurve',
     'mouthEnabled',
@@ -683,6 +1214,7 @@ const isAvatarFace = (value: unknown): value is AvatarFace => (
     'noseY',
     'rotation',
     'rightEyeHeight',
+    'rightEyeWidth',
     'rightEyeRotation',
     'width'
   ]) && hasOwnKeys(value, [
@@ -713,6 +1245,7 @@ const isAvatarFace = (value: unknown): value is AvatarFace => (
   isOneOf(value.eyeShape, ['ellipse', 'rounded']) && isFiniteInRange(value.gap, AVATAR_FACE_RANGES.gap) &&
   isFiniteInRange(value.height, AVATAR_FACE_RANGES.height) &&
   (value.leftEyeHeight === undefined || isFiniteInRange(value.leftEyeHeight, AVATAR_FACE_RANGES.leftEyeHeight)) &&
+  (value.leftEyeWidth === undefined || isFiniteInRange(value.leftEyeWidth, AVATAR_FACE_RANGES.leftEyeWidth)) &&
   isFiniteInRange(value.leftEyeRotation, AVATAR_FACE_RANGES.leftEyeRotation) &&
   isFiniteInRange(value.mouthCurve, AVATAR_FACE_RANGES.mouthCurve) &&
   isBoolean(value.mouthEnabled) && isFiniteInRange(value.mouthHeight, AVATAR_FACE_RANGES.mouthHeight) &&
@@ -728,6 +1261,7 @@ const isAvatarFace = (value: unknown): value is AvatarFace => (
   isFiniteInRange(value.rotation, AVATAR_FACE_RANGES.rotation) &&
   (value.rightEyeHeight === undefined ||
     isFiniteInRange(value.rightEyeHeight, AVATAR_FACE_RANGES.rightEyeHeight)) &&
+  (value.rightEyeWidth === undefined || isFiniteInRange(value.rightEyeWidth, AVATAR_FACE_RANGES.rightEyeWidth)) &&
   isFiniteInRange(value.rightEyeRotation, AVATAR_FACE_RANGES.rightEyeRotation) &&
   isFiniteInRange(value.width, AVATAR_FACE_RANGES.width)
 )
@@ -819,6 +1353,7 @@ const isPartialAvatarFace = (value: unknown) => {
     'gap',
     'height',
     'leftEyeHeight',
+    'leftEyeWidth',
     'leftEyeRotation',
     'mouthCurve',
     'mouthHeight',
@@ -831,6 +1366,7 @@ const isPartialAvatarFace = (value: unknown) => {
     'noseY',
     'rotation',
     'rightEyeHeight',
+    'rightEyeWidth',
     'rightEyeRotation',
     'width'
   ]
@@ -945,6 +1481,19 @@ const isAvatarAnimationLibrary = (value: unknown): value is AvatarAnimationLibra
   ))
 )
 
+const isAvatarSeedConfiguration = (value: unknown): value is AvatarSeedConfiguration => (
+  isRecord(value) && hasOnlyKeys(value, ['fields', 'profileId', 'seed', 'version']) &&
+  hasOwnKeys(value, ['fields', 'seed', 'version']) &&
+  value.version === 1 && isString(value.seed) && value.seed.trim().length > 0 &&
+  (value.profileId === undefined || (
+    isString(value.profileId) &&
+    value.profileId.length > 0 &&
+    value.profileId === value.profileId.trim()
+  )) &&
+  isDenseArray<string>(value.fields) && value.fields.every(isAvatarSeedFieldPath) &&
+  new Set(value.fields).size === value.fields.length
+)
+
 const isAvatarDefinitionValue = (value: unknown): value is AvatarDefinition => {
   if (
     !isRecord(value) || !hasOnlyKeys(value, ['animations', 'metadata', 'scene', 'schema', 'version']) ||
@@ -954,9 +1503,10 @@ const isAvatarDefinitionValue = (value: unknown): value is AvatarDefinition => {
   if (value.animations !== undefined && !isAvatarAnimationLibrary(value.animations)) return false
   if (
     value.metadata !== undefined && (!isRecord(value.metadata) ||
-      !hasOnlyKeys(value.metadata, ['createdAt', 'id', 'name', 'updatedAt']) ||
+      !hasOnlyKeys(value.metadata, ['createdAt', 'generation', 'id', 'name', 'updatedAt']) ||
       !isOptionalString(value.metadata.createdAt) || !isOptionalString(value.metadata.id) ||
-      !isOptionalString(value.metadata.name) || !isOptionalString(value.metadata.updatedAt))
+      !isOptionalString(value.metadata.name) || !isOptionalString(value.metadata.updatedAt) ||
+      value.metadata.generation !== undefined && !isAvatarSeedConfiguration(value.metadata.generation))
   ) return false
   if (
     !isRecord(value.scene) || !hasOnlyKeys(value.scene, [
@@ -993,6 +1543,7 @@ const isAvatarDefinitionValue = (value: unknown): value is AvatarDefinition => {
   return isRecord(scene.appearance) && hasOnlyKeys(scene.appearance, [
     'backgroundStyle',
     'bodyShape',
+    'coatPattern',
     'paletteId'
   ]) && hasOwnKeys(scene.appearance, ['backgroundStyle', 'bodyShape', 'paletteId']) &&
     isOneOf(scene.appearance.backgroundStyle, ['gradient', 'solid']) &&
@@ -1008,7 +1559,8 @@ const isAvatarDefinitionValue = (value: unknown): value is AvatarDefinition => {
       'sphere',
       'teardrop',
       'trapezoid'
-    ]) && isString(scene.appearance.paletteId) &&
+    ]) && (scene.appearance.coatPattern === undefined || isAvatarCoatPattern(scene.appearance.coatPattern)) &&
+    isString(scene.appearance.paletteId) &&
     isRecord(scene.camera) && hasOnlyKeys(scene.camera, [
       'background',
       'frame',

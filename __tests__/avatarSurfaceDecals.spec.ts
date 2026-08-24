@@ -14,7 +14,11 @@ describe('avatar surface decal URL state', () => {
       },
       {
         color: '#241915', height: 22, id: 'mouth', label: 'Open smile', opacity: 100,
-        rotation: 0, shape: 'rounded-triangle', targetPartId: 'head', width: 32, x: 0, y: 49
+        rotation: 0, shape: 'rounded-triangle', side: 'face', targetPartId: 'head', width: 32, x: 0, y: 49
+      },
+      {
+        color: '#f3e6d4', height: 160, id: 'face-mask', label: 'Face mask', opacity: 70,
+        rotation: 0, shape: 'face-mask', side: 'face', targetPartId: 'head', width: 108, x: 0, y: 70
       },
       {
         color: '#d9b985', height: 28, id: 'left-pleat', label: 'Left pleat', opacity: 60,
@@ -23,15 +27,21 @@ describe('avatar surface decal URL state', () => {
       {
         color: '#d9b985', height: 28, id: 'right-pleat', label: 'Right pleat', opacity: 60,
         rotation: -20, shape: 'rounded', side: 'right', targetPartId: 'head', width: 5, x: 0, y: -20
+      },
+      {
+        bend: -12, color: '#2f241c', height: 48, id: 'tabby-band', label: 'Tabby band', opacity: 92,
+        rotation: -72, shape: 'tapered-band', targetPartId: 'head', width: 8, x: -60, y: -10
       }
     ])
 
-    expect(deserializeAvatarSurfaceDecals(encoded, ['head']).map(decal => [decal.shape, decal.side]))
+    expect(deserializeAvatarSurfaceDecals(encoded, ['head']).map(decal => [decal.shape, decal.side, decal.bend]))
       .toEqual([
-        ['claude-spark', 'back'],
-        ['rounded-triangle', 'front'],
-        ['rounded', 'left'],
-        ['rounded', 'right']
+        ['claude-spark', 'back', 0],
+        ['rounded-triangle', 'face', 0],
+        ['face-mask', 'face', 0],
+        ['rounded', 'left', 0],
+        ['rounded', 'right', 0],
+        ['tapered-band', 'front', -12]
       ])
   })
 

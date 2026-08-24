@@ -1,17 +1,27 @@
 import { describe, expect, it } from 'vitest'
 
 import {
+  AVATAR_BACKGROUND_STYLES,
+  AVATAR_CAMERA_BACKGROUND_PRESETS,
+  DEFAULT_AVATAR_COAT_PATTERN,
   AVATAR_FACE_RANGES,
+  AVATAR_PALETTES,
+  AVATAR_SEED_FIELD_PATHS,
   anchorAvatarAnimationClip,
   applyAvatarScenePatch,
   createDefaultAvatarDefinition,
   createSeededAvatarDefinition,
+  normalizeAvatarSeed,
   isAvatarDefinition,
   mergeAvatarAnimationLibraries,
   parseAvatarAnimationClip,
   parseAvatarDefinition,
   resolveAvatarAnimationClip,
   resolveAvatarAnimationFrame,
+  resolveAvatarCoatPatternDecals,
+  resolveAvatarSeededInteger,
+  resolveAvatarSeededOption,
+  resolveSeededAvatarView,
   serializeAvatarDefinition
 } from '../src'
 import type { AvatarAnimationClip, AvatarAnimationLibrary } from '../src'
@@ -37,6 +47,109 @@ const supportLibrary: AvatarAnimationLibrary = {
 }
 
 describe('OneWorks Avatar public runtime contract', () => {
+  it('validates and deterministically resolves first-class coat patterns', () => {
+    const definition = createDefaultAvatarDefinition()
+    const parts = [{
+      baseColor: '#9a8267', face: true, foregroundColor: '#2f241c', highlightColor: '#c1ad8f',
+      id: 'cat-head', label: 'Head', scaleX: .7, scaleY: .7, shadowColor: '#5b4635',
+      shape: 'ellipse' as const, x: 0, y: 0, z: 0
+    }]
+    const pattern = { ...DEFAULT_AVATAR_COAT_PATTERN, enabled: true, seed: 'v1-core-tabby' }
+    const decorated = {
+      ...definition,
+      scene: {
+        ...definition.scene,
+        appearance: { ...definition.scene.appearance, coatPattern: pattern, paletteId: 'tabby' },
+        entity: { parts, preset: 'cat' as const }
+      }
+    }
+    expect(isAvatarDefinition(decorated)).toBe(true)
+    const first = resolveAvatarCoatPatternDecals({ entityParts: parts, entityPreset: 'cat', paletteId: 'tabby', pattern })
+    expect(resolveAvatarCoatPatternDecals({ entityParts: parts, entityPreset: 'cat', paletteId: 'tabby', pattern })).toEqual(first)
+    expect(first.length).toBeGreaterThan(0)
+  })
+
+  it('accepts old coat definitions while validating optional light coat patch fields', () => {
+    const definition = createDefaultAvatarDefinition()
+    const oldPattern = { ...DEFAULT_AVATAR_COAT_PATTERN, enabled: true }
+    delete (oldPattern as { lightPatchLength?: number }).lightPatchLength
+    delete (oldPattern as { lightPatchOffsetY?: number }).lightPatchOffsetY
+    delete (oldPattern as { lightPatchShape?: string }).lightPatchShape
+    delete (oldPattern as { lightPatchWidth?: number }).lightPatchWidth
+    const oldDefinition = {
+      ...definition,
+      scene: {
+        ...definition.scene,
+        appearance: { ...definition.scene.appearance, coatPattern: oldPattern }
+      }
+    }
+    expect(isAvatarDefinition(oldDefinition)).toBe(true)
+    expect(isAvatarDefinition({
+      ...oldDefinition,
+      scene: {
+        ...oldDefinition.scene,
+        appearance: {
+          ...oldDefinition.scene.appearance,
+          coatPattern: { ...oldPattern, lightPatchShape: 'rounded-triangle' }
+        }
+      }
+    })).toBe(false)
+    expect(isAvatarDefinition({
+      ...oldDefinition,
+      scene: {
+        ...oldDefinition.scene,
+        appearance: {
+          ...oldDefinition.scene.appearance,
+          coatPattern: { ...oldPattern, lightPatchOffsetY: -51 }
+        }
+      }
+    })).toBe(false)
+    expect(isAvatarDefinition({
+      ...oldDefinition,
+      scene: {
+        ...oldDefinition.scene,
+        appearance: {
+          ...oldDefinition.scene.appearance,
+          coatPattern: { ...oldPattern, lightPatchLength: 59 }
+        }
+      }
+    })).toBe(false)
+  })
+
+  it('validates optional independent eye widths as strict bounded face fields', () => {
+    const definition = createDefaultAvatarDefinition()
+    const withIndependentWidths = {
+      ...definition,
+      scene: {
+        ...definition.scene,
+        face: { ...definition.scene.face, leftEyeWidth: 12, rightEyeWidth: 68 }
+      }
+    }
+
+    expect(isAvatarDefinition(withIndependentWidths)).toBe(true)
+    expect(isAvatarDefinition({
+      ...withIndependentWidths,
+      scene: {
+        ...withIndependentWidths.scene,
+        face: { ...withIndependentWidths.scene.face, leftEyeWidth: 0 }
+      }
+    })).toBe(false)
+    expect(isAvatarDefinition({
+      ...withIndependentWidths,
+      scene: {
+        ...withIndependentWidths.scene,
+        face: { ...withIndependentWidths.scene.face, rightEyeWidth: Number.NaN }
+      }
+    })).toBe(false)
+    expect(isAvatarDefinition({
+      ...withIndependentWidths,
+      scene: {
+        ...withIndependentWidths.scene,
+        face: { ...withIndependentWidths.scene.face, unknownEyeWidth: 24 }
+      }
+    })).toBe(false)
+  })
+
   it('creates deterministic valid 3D definitions from a seed', () => {
     const first = createSeededAvatarDefinition({ name: 'Support', seed: 'agent:support' })
     const second = createSeededAvatarDefinition({ name: 'Support', seed: 'agent:support' })
@@ -45,13 +158,105 @@ describe('OneWorks Avatar public runtime contract', () => {
     expect(first).toEqual(second)
     expect(first).not.toEqual(different)
     expect(first.metadata?.name).toBe('Support')
+    expect(first.metadata?.generation).toEqual(expect.objectContaining({
+      seed: 'v1-agent:support',
+      version: 1
+    }))
+    expect(first.scene.appearance.backgroundStyle).toBe(resolveAvatarSeededOption(
+      'v1-agent:support',
+      AVATAR_SEED_FIELD_PATHS.backgroundStyle,
+      AVATAR_BACKGROUND_STYLES
+    ))
+    expect(first.scene.appearance.paletteId).toBe(resolveAvatarSeededOption(
+      'v1-agent:support',
+      AVATAR_SEED_FIELD_PATHS.palette,
+      AVATAR_PALETTES.map(palette => palette.id)
+    ))
+    expect(first.scene.camera.background).toBe(resolveAvatarSeededOption(
+      'v1-agent:support',
+      AVATAR_SEED_FIELD_PATHS.cameraBackground,
+      AVATAR_CAMERA_BACKGROUND_PRESETS
+    ))
+    expect(first.scene.camera.frame).toBe(createDefaultAvatarDefinition().scene.camera.frame)
+    expect(first.metadata?.generation?.fields).not.toContain(AVATAR_SEED_FIELD_PATHS.cameraFrame)
+    expect(first.metadata?.generation?.fields).toContain(AVATAR_SEED_FIELD_PATHS.viewPose)
+    expect(first.scene.view.scale).toBe(1.72)
+    expect(Math.abs(first.scene.view.yaw - Math.atan2(-first.scene.view.positionX, 360)))
+      .toBeLessThanOrEqual(Math.PI / 36)
+    expect(first.scene.view.positionY).toBe(72)
+    expect(Math.abs(first.scene.view.pitch - Math.atan2(-72, 360)))
+      .toBeLessThanOrEqual(Math.PI / 36)
+    expect(first.scene.view.roll).toBe(0)
     expect(parseAvatarDefinition(serializeAvatarDefinition(first))).toEqual(first)
+  })
+
+  it('keeps Seeded view poses upright in a consistent lower composition with restrained tilt', () => {
+    const current = createDefaultAvatarDefinition().scene.view
+    const views = Array.from({ length: 80 }, (_, index) => resolveSeededAvatarView(`v1-view-${index}`, current))
+    expect(views.some(view => view.positionX < 0)).toBe(true)
+    expect(views.some(view => view.positionX > 0)).toBe(true)
+    expect(new Set(views.map(view => view.pitch.toFixed(4))).size).toBeGreaterThan(20)
+    expect(new Set(views.map(view => view.yaw.toFixed(4))).size).toBeGreaterThan(20)
+    for (const view of views) {
+      expect(view.positionY).toBe(72)
+      expect(Math.abs(view.pitch)).toBeLessThanOrEqual(Math.PI / 10)
+      expect(view.roll).toBe(0)
+      expect(Math.abs(view.yaw - Math.atan2(-view.positionX, 360))).toBeLessThanOrEqual(Math.PI / 36)
+      expect(Math.abs(view.pitch - Math.atan2(-72, 360))).toBeLessThanOrEqual(Math.PI / 36)
+      expect(view.scale).toBe(1.72)
+    }
+  })
+
+  it('resolves seeded fields independently and remains stable when candidates are appended', () => {
+    const seed = normalizeAvatarSeed('agent:support')
+    expect(resolveAvatarSeededInteger(seed, 'face.gap', 32, 48)).toBe(
+      resolveAvatarSeededInteger(seed, 'face.gap', 32, 48)
+    )
+    expect(resolveAvatarSeededInteger(seed, 'face.gap', 32, 48)).not.toBe(
+      resolveAvatarSeededInteger(seed, 'camera.frame', 32, 48)
+    )
+
+    const original = resolveAvatarSeededOption(seed, 'entity.preset', ['cat', 'dog', 'rabbit'])
+    const extended = resolveAvatarSeededOption(seed, 'entity.preset', ['cat', 'dog', 'rabbit', 'bun'])
+    expect(['cat', 'dog', 'rabbit']).toContain(original)
+    expect(extended === 'bun' || extended === original).toBe(true)
+    expect(resolveAvatarSeededOption(seed, 'entity.preset', ['cat', 'dog', 'rabbit'])).toBe(original)
   })
 
   it('round-trips a versioned definition', () => {
     const definition = createDefaultAvatarDefinition()
     expect(parseAvatarDefinition(serializeAvatarDefinition(definition))).toEqual(definition)
+    const profiled = {
+      ...definition,
+      metadata: {
+        generation: {
+          fields: ['scene.face.preset'],
+          profileId: 'future-cat-profile',
+          seed: 'v1-profiled',
+          version: 1 as const
+        }
+      }
+    }
+    expect(parseAvatarDefinition(serializeAvatarDefinition(profiled))).toEqual(profiled)
+    expect(() => parseAvatarDefinition({
+      ...profiled,
+      metadata: {
+        generation: { ...profiled.metadata.generation, profileId: ' future-cat-profile' }
+      }
+    })).toThrow(TypeError)
     expect(() => parseAvatarDefinition({ ...definition, version: 2 })).toThrow(TypeError)
+    expect(() => parseAvatarDefinition({
+      ...definition,
+      metadata: { generation: { fields: ['scene.face', 'scene.face'], seed: 'v1-test', version: 1 } }
+    })).toThrow(TypeError)
+    expect(() => parseAvatarDefinition({
+      ...definition,
+      metadata: { generation: { fields: [' scene.face'], seed: 'v1-test', version: 1 } }
+    })).toThrow(TypeError)
+    expect(() => parseAvatarDefinition({
+      ...definition,
+      metadata: { generation: { fields: ['scene.face,scene.view'], seed: 'v1-test', version: 1 } }
+    })).toThrow(TypeError)
     expect(() => parseAvatarDefinition(Object.create(definition))).toThrow(TypeError)
     const revoked = Proxy.revocable(definition, {})
     revoked.revoke()
@@ -92,6 +297,24 @@ describe('OneWorks Avatar public runtime contract', () => {
       }
     }
     expect(parseAvatarDefinition(serializeAvatarDefinition(decorated))).toEqual(decorated)
+    const withFaceMask = {
+      ...decorated,
+      scene: {
+        ...decorated.scene,
+        decals: [{
+          ...decorated.scene.decals[0]!,
+          height: 160,
+          id: 'face-to-chin',
+          rotation: 0,
+          shape: 'face-mask' as const,
+          side: 'face' as const,
+          width: 108,
+          x: 0,
+          y: 70
+        }]
+      }
+    }
+    expect(parseAvatarDefinition(serializeAvatarDefinition(withFaceMask))).toEqual(withFaceMask)
     expect(() =>
       parseAvatarDefinition({
         ...decorated,

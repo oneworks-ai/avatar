@@ -3,8 +3,10 @@ import { describe, expect, it } from 'vitest'
 import { getAvatarPalette } from '@oneworks/avatar'
 
 import {
+  applyCatEarScale,
   applyAvatarEntityPalette,
   createAvatarEntityParts,
+  getCatEarScale,
   getAvatarEntityPresetFaceStyle,
   getAvatarEntityPresetScene,
   hasMultipleAvatarEntityMaterials
@@ -12,6 +14,17 @@ import {
 import { DEFAULT_AVATAR_FACE_STYLE } from '../src/avatarGeometry'
 
 describe('built-in entity preset scenes', () => {
+  it('changes only the Cat ears when authoring ear size', () => {
+    const base = createAvatarEntityParts('cat')
+    const scaled = applyCatEarScale(base, 90, 86)
+    const baseHead = base.find(part => part.id === 'cat-head')!
+    const scaledHead = scaled.find(part => part.id === 'cat-head')!
+
+    expect(scaledHead.scaleX).toBe(baseHead.scaleX)
+    expect(scaledHead.scaleY).toBe(baseHead.scaleY)
+    expect(getCatEarScale(scaled)).toEqual({ height: 86, width: 90 })
+  })
+
   it('gives every built-in entity a distinct complete camera composition', () => {
     const presets = ['cloud', 'sun', 'cat', 'dog', 'bear', 'rabbit', 'bun'] as const
     const scenes = presets.map(preset => {
@@ -167,6 +180,15 @@ describe('built-in entity preset scenes', () => {
       part.shadowColor === palette.shadow
     ))).toBe(true)
     expect(recolored[0]).not.toBe(cloud[0])
+  })
+
+  it('applies semantic Siamese materials to cat parts and falls back for other entities', () => {
+    const palette = getAvatarPalette('siamese')
+    const cat = applyAvatarEntityPalette(createAvatarEntityParts('cat'), palette)
+    const cloud = applyAvatarEntityPalette(createAvatarEntityParts('cloud'), palette)
+    expect(cat.find(part => part.id === 'cat-head')?.baseColor).toBe('#ead7b8')
+    expect(cat.filter(part => part.id.startsWith('cat-ear')).every(part => part.baseColor === '#3c2118')).toBe(true)
+    expect(cloud.every(part => part.baseColor === palette.background)).toBe(true)
   })
 
   it('detects authored material differences before overwriting them', () => {

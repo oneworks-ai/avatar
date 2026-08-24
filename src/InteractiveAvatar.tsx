@@ -97,6 +97,7 @@ export interface InteractiveAvatarProps {
   readonly lightDistance?: number
   readonly lightDirection: AvatarLightDirection
   readonly onEntityPartSelect?: (id: string | null) => void
+  readonly onInteractionStart?: () => void
   readonly onViewStateChange: (state: AvatarViewState) => void
   readonly palette: AvatarPalette
   readonly pixelEffect?: AvatarPixelEffect
@@ -560,11 +561,17 @@ function EntityPresetBody({
 }
 
 export const EntityPresetPreview = memo(function EntityPresetPreview({
+  entityParts,
   lightDirection,
-  preset
+  preset,
+  previewBackground,
+  surfaceDecals: providedSurfaceDecals
 }: {
+  readonly entityParts?: readonly AvatarEntityPart[]
   readonly lightDirection: AvatarLightDirection
   readonly preset: Exclude<AvatarEntityPreset, 'custom'>
+  readonly previewBackground?: string
+  readonly surfaceDecals?: readonly AvatarSurfaceDecal[]
 }) {
   const rawId = useId()
   const id = rawId.replaceAll(':', '')
@@ -573,13 +580,16 @@ export const EntityPresetPreview = memo(function EntityPresetPreview({
     scene == null
       ? { pitch: -.22, yaw: -.38 }
       : { pitch: scene.viewState.pitch, yaw: scene.viewState.yaw }, [scene])
-  const parts = useMemo(() => createAvatarEntityParts(preset), [preset])
+  const parts = useMemo(
+    () => entityParts ?? createAvatarEntityParts(preset),
+    [entityParts, preset]
+  )
   const faceStyle = useMemo(
     () => getAvatarEntityPresetFaceStyle(preset) ?? ENTITY_PREVIEW_FACE_STYLE,
     [preset]
   )
   const surfaceDecals = useMemo<ProjectedSurfaceDecal[]>(() =>
-    (scene?.surfaceDecals ?? []).flatMap(decal => {
+    (providedSurfaceDecals ?? scene?.surfaceDecals ?? []).flatMap(decal => {
       const targetPart = decal.targetPartId == null
         ? parts.find(part => part.face)
         : parts.find(part => part.id === decal.targetPartId)
@@ -596,7 +606,7 @@ export const EntityPresetPreview = memo(function EntityPresetPreview({
         targetPartId: targetPart.id,
         ...(projected.transform == null ? {} : { transform: projected.transform })
       }]
-    }), [parts, pose, preset, scene])
+    }), [parts, pose, preset, providedSurfaceDecals, scene])
   const geometries = useMemo(
     () => buildEntityPartGeometries(parts, pose, lightDirection, 25),
     [lightDirection, parts, pose]
@@ -622,7 +632,7 @@ export const EntityPresetPreview = memo(function EntityPresetPreview({
     <svg className='avatar-controls__entity-preset-icon' viewBox={`0 0 ${VIEW_SIZE} ${VIEW_SIZE}`} aria-hidden='true'>
       {scene == null
         ? null
-        : <rect width={VIEW_SIZE} height={VIEW_SIZE} rx='34' fill={scene.cameraBackground} />}
+        : <rect width={VIEW_SIZE} height={VIEW_SIZE} rx='34' fill={previewBackground ?? scene.cameraBackground} />}
       {scene == null
         ? null
         : (
@@ -666,6 +676,9 @@ export const EntityPresetPreview = memo(function EntityPresetPreview({
   )
 }, (previous, next) => (
   previous.preset === next.preset &&
+  previous.entityParts === next.entityParts &&
+  previous.previewBackground === next.previewBackground &&
+  previous.surfaceDecals === next.surfaceDecals &&
   previous.lightDirection.azimuth === next.lightDirection.azimuth &&
   previous.lightDirection.elevation === next.lightDirection.elevation
 ))
@@ -706,6 +719,7 @@ const useAnimatedFaceStyle = (target: AvatarFaceStyle, transitionsEnabled: boole
           resolvedTarget.leftEyeHeight ?? resolvedTarget.height,
           easedProgress
         ),
+        leftEyeWidth: interpolate(from.leftEyeWidth ?? from.width, resolvedTarget.leftEyeWidth ?? resolvedTarget.width, easedProgress),
         leftEyeRotation: interpolate(from.leftEyeRotation, resolvedTarget.leftEyeRotation, easedProgress),
         mouthCurve: interpolate(from.mouthCurve, target.mouthCurve, easedProgress),
         mouthEnabled: target.mouthEnabled,
@@ -726,6 +740,7 @@ const useAnimatedFaceStyle = (target: AvatarFaceStyle, transitionsEnabled: boole
           resolvedTarget.rightEyeHeight ?? resolvedTarget.height,
           easedProgress
         ),
+        rightEyeWidth: interpolate(from.rightEyeWidth ?? from.width, resolvedTarget.rightEyeWidth ?? resolvedTarget.width, easedProgress),
         rightEyeRotation: interpolate(from.rightEyeRotation, resolvedTarget.rightEyeRotation, easedProgress),
         width: interpolate(from.width, target.width, easedProgress)
       }
@@ -751,6 +766,7 @@ const useAnimatedFaceStyle = (target: AvatarFaceStyle, transitionsEnabled: boole
     target.gap,
     target.height,
     target.leftEyeHeight,
+    target.leftEyeWidth,
     target.leftEyeRotation,
     target.mouthCurve,
     target.mouthEnabled,
@@ -767,6 +783,7 @@ const useAnimatedFaceStyle = (target: AvatarFaceStyle, transitionsEnabled: boole
     target.noseY,
     target.rotation,
     target.rightEyeHeight,
+    target.rightEyeWidth,
     target.rightEyeRotation,
     target.width,
     transitionsEnabled
@@ -791,6 +808,7 @@ function InteractiveAvatarComponent({
   lightDistance = 0,
   lightDirection,
   onEntityPartSelect,
+  onInteractionStart,
   onViewStateChange,
   palette,
   pixelEffect,
@@ -1062,6 +1080,7 @@ function InteractiveAvatarComponent({
 
   const handlePointerDown = (event: PointerEvent<SVGSVGElement>) => {
     if (event.button !== 0 && event.button !== 2) return
+    onInteractionStart?.()
     if (event.button === 0 && event.target instanceof Element) {
       const partHitTarget = event.target.closest<SVGGElement>('[data-avatar-entity-part-hit]')
       const partId = partHitTarget?.dataset.avatarEntityPartHit
@@ -1316,6 +1335,7 @@ function InteractiveAvatarComponent({
                         {face.eyes.map(eye => (
                           <path
                             key={eye.id}
+                            data-avatar-eye={eye.id}
                             d={eye.path}
                             fill={surfaceForeground}
                           />
@@ -1449,6 +1469,7 @@ const areInteractiveAvatarPropsEqual = (
   previous.interactionMode === next.interactionMode &&
   previous.lightDistance === next.lightDistance &&
   previous.onEntityPartSelect === next.onEntityPartSelect &&
+  previous.onInteractionStart === next.onInteractionStart &&
   previous.onViewStateChange === next.onViewStateChange &&
   previous.palette === next.palette &&
   shallowEqualObject(previous.pixelEffect, next.pixelEffect) &&

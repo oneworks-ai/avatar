@@ -528,6 +528,38 @@ const BUN_PARTS: readonly AvatarEntityPart[] = [
 
 const cloneParts = (parts: readonly AvatarEntityPart[]) => parts.map(part => ({ ...part }))
 
+export const CAT_EAR_SCALE_RANGE = { min: 50, max: 160 } as const
+const CAT_EAR_PARTS = CAT_PARTS.filter(part => (
+  part.id === 'cat-ear-left' || part.id === 'cat-ear-right'
+))
+
+export const applyCatEarScale = (
+  parts: readonly AvatarEntityPart[],
+  width?: number,
+  height?: number
+): AvatarEntityPart[] => parts.map(part => {
+  const base = CAT_EAR_PARTS.find(candidate => candidate.id === part.id)
+  if (base == null) return part
+  return {
+    ...part,
+    ...(width == null ? {} : { scaleX: base.scaleX * width / 100 }),
+    ...(height == null ? {} : { scaleY: base.scaleY * height / 100 })
+  }
+})
+
+export const getCatEarScale = (parts: readonly AvatarEntityPart[]) => {
+  const ears = CAT_EAR_PARTS.flatMap(base => {
+    const part = parts.find(candidate => candidate.id === base.id)
+    return part == null ? [] : [{ base, part }]
+  })
+  if (ears.length === 0) return { height: 100, width: 100 }
+  const average = (values: readonly number[]) => values.reduce((total, value) => total + value, 0) / values.length
+  return {
+    height: Math.round(average(ears.map(({ base, part }) => part.scaleY / base.scaleY * 100))),
+    width: Math.round(average(ears.map(({ base, part }) => part.scaleX / base.scaleX * 100)))
+  }
+}
+
 const getMaterialSignature = (part: AvatarEntityPart) => [
   part.baseColor,
   part.highlightColor,
@@ -542,13 +574,16 @@ export const hasMultipleAvatarEntityMaterials = (parts: readonly AvatarEntityPar
 export const applyAvatarEntityPalette = (
   parts: readonly AvatarEntityPart[],
   palette: AvatarPalette
-): AvatarEntityPart[] => parts.map(part => ({
-  ...part,
-  baseColor: palette.background,
-  foregroundColor: palette.foreground,
-  highlightColor: palette.gradient[0],
-  shadowColor: palette.shadow
-}))
+): AvatarEntityPart[] => parts.map(part => {
+  const material = palette.entityMaterials?.[part.id]
+  return {
+    ...part,
+    baseColor: material?.baseColor ?? palette.background,
+    foregroundColor: material?.foregroundColor ?? palette.foreground,
+    highlightColor: material?.highlightColor ?? palette.gradient[0],
+    shadowColor: material?.shadowColor ?? palette.shadow
+  }
+})
 
 export const resolveAvatarEntityPartScaleZ = (part: AvatarEntityPart) => (
   part.scaleZ ?? Math.min(part.scaleX, part.scaleY)

@@ -5,6 +5,8 @@ export interface AvatarPalette {
   readonly id: string
   readonly name: string
   readonly shadow: string
+  readonly coat?: { readonly patch: string; readonly mark: string }
+  readonly entityMaterials?: Readonly<Record<string, { readonly baseColor: string; readonly foregroundColor: string; readonly highlightColor: string; readonly shadowColor: string }>>
 }
 
 export const AVATAR_PALETTES: readonly AvatarPalette[] = [
@@ -231,6 +233,83 @@ export const AVATAR_PALETTES: readonly AvatarPalette[] = [
     gradient: ['#2a1712', '#a16207'],
     foreground: '#fff7ed',
     shadow: '#854d0e'
+  },
+  {
+    id: 'tabby',
+    name: 'Tabby',
+    background: '#9a8267',
+    gradient: ['#9a8267', '#c1ad8f'],
+    foreground: '#2f241c',
+    shadow: '#5b4635'
+  },
+  {
+    id: 'siamese',
+    name: 'Siamese',
+    background: '#ead7b8',
+    gradient: ['#ead7b8', '#fff2d8'],
+    foreground: '#281913',
+    shadow: '#9b7558',
+    coat: { patch: '#3c2118', mark: '#3c2118' },
+    entityMaterials: {
+      'cat-ear-left': { baseColor: '#3c2118', foregroundColor: '#fff0db', highlightColor: '#61382a', shadowColor: '#24120d' },
+      'cat-ear-right': { baseColor: '#3c2118', foregroundColor: '#fff0db', highlightColor: '#61382a', shadowColor: '#24120d' },
+      'cat-head': { baseColor: '#ead7b8', foregroundColor: '#281913', highlightColor: '#fff2d8', shadowColor: '#9b7558' }
+    }
+  },
+  {
+    id: 'british-shorthair',
+    name: 'British Shorthair',
+    background: '#b89a6b',
+    gradient: ['#b89a6b', '#dec99d'],
+    foreground: '#35291f',
+    shadow: '#806b4e',
+    coat: { patch: '#d7c29a', mark: '#756047' }
+  },
+  {
+    id: 'russian-blue',
+    name: 'Russian Blue',
+    background: '#718493',
+    gradient: ['#718493', '#a9b7c1'],
+    foreground: '#17232c',
+    shadow: '#485b69',
+    coat: { patch: '#718493', mark: '#435663' }
+  },
+  {
+    id: 'orange-tabby',
+    name: 'Orange Tabby',
+    background: '#d98a35',
+    gradient: ['#d98a35', '#f2bc69'],
+    foreground: '#3b2416',
+    shadow: '#9b5423',
+    coat: { patch: '#f1c783', mark: '#8c491f' }
+  },
+  {
+    id: 'cow-cat',
+    name: 'Cow Cat',
+    background: '#171b22',
+    gradient: ['#171b22', '#343c48'],
+    foreground: '#c58b35',
+    shadow: '#07090d',
+    coat: { patch: '#fffdf7', mark: '#080a0e' },
+    entityMaterials: {
+      'cat-ear-left': { baseColor: '#171b22', foregroundColor: '#f7f5ee', highlightColor: '#343c48', shadowColor: '#07090d' },
+      'cat-ear-right': { baseColor: '#171b22', foregroundColor: '#f7f5ee', highlightColor: '#343c48', shadowColor: '#07090d' },
+      'cat-head': { baseColor: '#171b22', foregroundColor: '#c58b35', highlightColor: '#343c48', shadowColor: '#07090d' }
+    }
+  },
+  {
+    id: 'black-cat',
+    name: 'Black Cat',
+    background: '#111419',
+    gradient: ['#111419', '#303844'],
+    foreground: '#eef2f5',
+    shadow: '#05070a',
+    coat: { patch: '#111419', mark: '#080a0d' },
+    entityMaterials: {
+      'cat-ear-left': { baseColor: '#111419', foregroundColor: '#dce3e8', highlightColor: '#303844', shadowColor: '#05070a' },
+      'cat-ear-right': { baseColor: '#111419', foregroundColor: '#dce3e8', highlightColor: '#303844', shadowColor: '#05070a' },
+      'cat-head': { baseColor: '#111419', foregroundColor: '#eef2f5', highlightColor: '#303844', shadowColor: '#05070a' }
+    }
   },
   {
     id: 'ice',

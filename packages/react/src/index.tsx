@@ -10,6 +10,7 @@ import {
   mergeAvatarAnimationLibraries,
   parseAvatarAnimationClip,
   resolveAvatarAnimationClip,
+  resolveAvatarCoatPatternDecals,
   resolveAvatarAnimationFrame
 } from '@oneworks/avatar'
 import type {
@@ -278,6 +279,19 @@ export const Avatar = forwardRef<AvatarHandle, AvatarProps>(function Avatar({
 
   const scene = renderDefinition.scene
   const palette = getAvatarPalette(scene.appearance.paletteId)
+  const generatedCoatDecals = scene.appearance.coatPattern?.enabled
+    ? resolveAvatarCoatPatternDecals({
+      entityParts: scene.entity.parts,
+      entityPreset: scene.entity.preset,
+      paletteId: scene.appearance.paletteId,
+      pattern: scene.appearance.coatPattern
+    })
+    : []
+  const explicitDecalIds = new Set(scene.decals.map(decal => decal.id))
+  const surfaceDecals = [
+    ...generatedCoatDecals.filter(decal => !explicitDecalIds.has(decal.id)),
+    ...scene.decals
+  ]
   const resolvedTheme = theme === 'system' ? systemTheme : theme
   const frameShadowDirection = scene.camera.frameShadow.direction * Math.PI / 180
   const frameShadow = scene.camera.showFrameShadow
@@ -329,7 +343,7 @@ export const Avatar = forwardRef<AvatarHandle, AvatarProps>(function Avatar({
         showLight={scene.lighting.enabled}
         showOutline={scene.effects.showOutline}
         showShadow={scene.effects.showFaceShadow}
-        surfaceDecals={scene.decals}
+        surfaceDecals={surfaceDecals}
         viewState={scene.view}
       />
     </div>
