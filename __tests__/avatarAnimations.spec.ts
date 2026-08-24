@@ -128,11 +128,13 @@ describe('avatar animation keyframes', () => {
       {
         ...DEFAULT_AVATAR_FACE_STYLE,
         eyeShape: 'ellipse',
+        leftEyeWidth: 14,
         leftEyeRotation: -20,
         mouthEnabled: true,
         mouthCurve: -45,
         noseEnabled: true,
         noseShape: 'ellipse',
+        rightEyeWidth: 52,
         rightEyeRotation: 15,
         width: 52
       },
@@ -151,12 +153,14 @@ describe('avatar animation keyframes', () => {
     })
     expect(beforeMidpoint.faceStyle).toMatchObject({
       eyeShape: 'rounded',
+      leftEyeWidth: 24.5,
       leftEyeRotation: -5,
       mouthCurve: 22.5,
       mouthEnabled: false,
       noseEnabled: false,
       noseShape: 'inverted-triangle',
       rightEyeRotation: 3.75,
+      rightEyeWidth: 34,
       width: 34
     })
     expect(midpoint.faceStyle).toMatchObject({
@@ -238,6 +242,17 @@ describe('avatar animation keyframes', () => {
         resolved.keyframes.every(keyframe => keyframe.faceStyle.eyeShape === 'rounded'),
         `${preset.id} should preserve rounded eyes`
       ).toBe(true)
+    }
+  })
+
+  it('uses wide rounded eyes for alert actions without relying on a mouth', () => {
+    const view = { pitch: 0, positionX: 0, positionY: 0, scale: 1, yaw: 0 }
+    for (const id of ['excited', 'surprised'] as const) {
+      const preset = AVATAR_ANIMATION_PRESETS.find(candidate => candidate.id === id)!
+      const resolved = resolveAvatarAnimationPreset(preset, view, DEFAULT_AVATAR_FACE_STYLE)
+      expect(resolved.keyframes.every(frame => frame.faceStyle.eyeShape === 'rounded')).toBe(true)
+      expect(resolved.keyframes.some(frame => frame.faceStyle.height > DEFAULT_AVATAR_FACE_STYLE.height)).toBe(true)
+      expect(resolved.keyframes.filter(frame => frame.faceStyle.mouthEnabled).length).toBeLessThan(resolved.keyframes.length)
     }
   })
 

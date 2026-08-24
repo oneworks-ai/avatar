@@ -5,7 +5,7 @@ import { createRoot } from 'react-dom/client'
 import type { Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-import { createDefaultAvatarDefinition } from '@oneworks/avatar'
+import { DEFAULT_AVATAR_COAT_PATTERN, createDefaultAvatarDefinition } from '@oneworks/avatar'
 
 import { createAvatarEntityParts } from '../../../src/avatarEntityPresets'
 import { Avatar } from '../src'
@@ -36,6 +36,58 @@ afterEach(() => {
 })
 
 describe('OneWorks Avatar React rendering', () => {
+  it('derives procedural coat decals from the public definition', () => {
+    const definition = createDefaultAvatarDefinition()
+    const badge = {
+      color: '#f29a93', height: 18, id: 'user-badge', label: 'User badge', opacity: 90,
+      rotation: -8, shape: 'ellipse' as const, targetPartId: 'cat-head',
+      width: 30, x: -48, y: 30
+    }
+    act(() => root.render(createElement(Avatar, {
+      definition: {
+        ...definition,
+        scene: {
+          ...definition.scene,
+          appearance: {
+            ...definition.scene.appearance,
+            coatPattern: { ...DEFAULT_AVATAR_COAT_PATTERN, enabled: true, algorithm: 'mackerel' },
+            paletteId: 'tabby'
+          },
+          decals: [badge],
+          entity: { parts: createAvatarEntityParts('cat'), preset: 'cat' }
+        }
+      }
+    })))
+    expect(host.querySelectorAll('[data-avatar-surface-decal^="coat-mackerel-"]').length).toBeGreaterThan(0)
+    expect(host.querySelector('[data-avatar-surface-decal="user-badge"]')).not.toBeNull()
+  })
+
+  it('projects procedural coat marks on the back of the head', () => {
+    const definition = createDefaultAvatarDefinition()
+    act(() => root.render(createElement(Avatar, {
+      definition: {
+        ...definition,
+        scene: {
+          ...definition.scene,
+          appearance: {
+            ...definition.scene.appearance,
+            coatPattern: {
+              ...DEFAULT_AVATAR_COAT_PATTERN,
+              algorithm: 'mackerel',
+              density: 100,
+              enabled: true
+            },
+            paletteId: 'tabby'
+          },
+          entity: { parts: createAvatarEntityParts('cat'), preset: 'cat' },
+          view: { ...definition.scene.view, yaw: Math.PI }
+        }
+      }
+    })))
+
+    expect(host.querySelectorAll('[data-avatar-surface-decal*="back-"]').length).toBeGreaterThan(0)
+  })
+
   it('renders every part in a custom multipart definition', () => {
     const definition = createDefaultAvatarDefinition()
     const parts = createAvatarEntityParts('dog')

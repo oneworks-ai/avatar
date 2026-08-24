@@ -12,6 +12,7 @@ const HomeAvatarPreview = lazy(() => import('./HomeAvatarPreview'))
 
 interface HomePageProps {
   readonly onCreate: (template: HomeTemplateId) => void
+  readonly onSurprise: () => void
   readonly onPrepareEditor: () => void
 }
 
@@ -44,6 +45,7 @@ const AvatarPreviewFallback = ({ background }: { readonly background: string }) 
 
 export const HomePage = ({
   onCreate,
+  onSurprise,
   onPrepareEditor
 }: HomePageProps) => {
   const { t } = useAvatarLocale()
@@ -258,6 +260,23 @@ export const HomePage = ({
             >
               {t('Start creating')}
               <svg viewBox='0 0 20 20' aria-hidden='true'><path d='m7 4 6 6-6 6' /></svg>
+            </button>
+            <button
+              className='avatar-home__surprise'
+              type='button'
+              onPointerEnter={onPrepareEditor}
+              onFocus={onPrepareEditor}
+              onClick={onSurprise}
+            >
+              <svg viewBox='0 0 20 20' aria-hidden='true'>
+                <rect x='3.25' y='3.25' width='13.5' height='13.5' rx='3' />
+                <circle cx='7' cy='7' r='1' />
+                <circle cx='13' cy='7' r='1' />
+                <circle cx='10' cy='10' r='1' />
+                <circle cx='7' cy='13' r='1' />
+                <circle cx='13' cy='13' r='1' />
+              </svg>
+              {t('Surprise me')}
             </button>
           </div>
         </div>

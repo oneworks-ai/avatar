@@ -312,8 +312,10 @@ const numericFaceStyleKeys = [
 
 const optionalNumericFaceStyleKeys = [
   'leftEyeHeight',
+  'leftEyeWidth',
   'leftEyeRotation',
   'rightEyeHeight',
+  'rightEyeWidth',
   'rightEyeRotation'
 ] as const satisfies readonly (keyof AvatarFaceStyle)[]
 
@@ -661,9 +663,8 @@ const buildPresetFrames = (
   const focusedFace: Partial<AvatarFaceStyle> = {
     gap: clampPresetValue(faceStyle.gap + 4, 0, 100),
     height: focusedEyeHeight,
-    mouthCurve: 4,
-    mouthEnabled: true,
-    mouthWidth: clampPresetValue(faceStyle.mouthWidth * .62, 18, 58),
+    eyeShape: 'rounded',
+    mouthEnabled: false,
     width: clampPresetValue(faceStyle.width * .9, 12, 72)
   }
   const happyFace: Partial<AvatarFaceStyle> = {
@@ -675,27 +676,21 @@ const buildPresetFrames = (
   const excitedFace: Partial<AvatarFaceStyle> = {
     gap: clampPresetValue(faceStyle.gap + 6, 0, 100),
     height: wideEyeHeight,
-    mouthCurve: 94,
-    mouthEnabled: true,
-    mouthHeight: clampPresetValue(faceStyle.mouthHeight + 3, 6, 28),
-    mouthWidth: clampPresetValue(Math.max(faceStyle.mouthWidth, 70), 24, 100),
+    eyeShape: 'rounded',
+    mouthEnabled: false,
     width: wideEyeWidth
   }
   const surprisedFace: Partial<AvatarFaceStyle> = {
     gap: clampPresetValue(faceStyle.gap + 10, 0, 100),
     height: wideEyeHeight,
-    mouthCurve: 0,
-    mouthEnabled: true,
-    mouthHeight: 18,
-    mouthWidth: 18,
+    eyeShape: 'rounded',
+    mouthEnabled: false,
     width: wideEyeWidth
   }
   const sadFace: Partial<AvatarFaceStyle> = {
     height: clampPresetValue(faceStyle.height * .56, 12, 76),
     leftEyeRotation: clampPresetValue(faceStyle.leftEyeRotation + 7, -90, 90),
-    mouthCurve: -76,
-    mouthEnabled: true,
-    mouthWidth: clampPresetValue(Math.max(faceStyle.mouthWidth, 54), 24, 100),
+    mouthEnabled: false,
     rotation: clampPresetValue(faceStyle.rotation - 5, -90, 90),
     rightEyeRotation: clampPresetValue(faceStyle.rightEyeRotation - 7, -90, 90)
   }
@@ -711,9 +706,7 @@ const buildPresetFrames = (
     gap: clampPresetValue(faceStyle.gap + 6, 0, 100),
     height: clampPresetValue(faceStyle.height * .58, 12, 74),
     leftEyeRotation: clampPresetValue(faceStyle.leftEyeRotation - 18, -90, 90),
-    mouthCurve: -88,
-    mouthEnabled: true,
-    mouthWidth: clampPresetValue(Math.max(faceStyle.mouthWidth, 64), 24, 100),
+    mouthEnabled: false,
     rightEyeRotation: clampPresetValue(faceStyle.rightEyeRotation + 18, -90, 90),
     width: clampPresetValue(faceStyle.width * 1.08, 12, 76)
   }
@@ -1198,6 +1191,7 @@ export const interpolateAvatarAnimationKeyframes = (
         toFaceStyle.leftEyeHeight ?? toFaceStyle.height,
         progress
       ),
+      leftEyeWidth: interpolate(fromFaceStyle.leftEyeWidth ?? fromFaceStyle.width, toFaceStyle.leftEyeWidth ?? toFaceStyle.width, progress),
       leftEyeRotation: interpolate(fromFaceStyle.leftEyeRotation, toFaceStyle.leftEyeRotation, progress),
       mouthCurve: interpolate(from.faceStyle.mouthCurve, to.faceStyle.mouthCurve, progress),
       mouthEnabled: selectDiscrete(from.faceStyle.mouthEnabled, to.faceStyle.mouthEnabled, progress),
@@ -1218,6 +1212,7 @@ export const interpolateAvatarAnimationKeyframes = (
         toFaceStyle.rightEyeHeight ?? toFaceStyle.height,
         progress
       ),
+      rightEyeWidth: interpolate(fromFaceStyle.rightEyeWidth ?? fromFaceStyle.width, toFaceStyle.rightEyeWidth ?? toFaceStyle.width, progress),
       rightEyeRotation: interpolate(fromFaceStyle.rightEyeRotation, toFaceStyle.rightEyeRotation, progress),
       width: interpolate(from.faceStyle.width, to.faceStyle.width, progress)
     },

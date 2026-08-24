@@ -8,9 +8,20 @@ import {
   projectDefaultFace,
   resolveAvatarSurfaceShadeOpacity
 } from '../src/avatarGeometry'
+import { AVATAR_FACE_PRESETS } from '../src/avatarFacePresets'
 
 const POSE = { pitch: -.35, yaw: .4 }
 const LIGHT = { azimuth: -92, elevation: 64 }
+
+const projectedPathExtent = (path: string) => {
+  const values = Array.from(path.matchAll(/-?\d+(?:\.\d+)?/g), match => Number(match[0]))
+  const xs = values.filter((_, index) => index % 2 === 0)
+  const ys = values.filter((_, index) => index % 2 === 1)
+  return {
+    height: Math.max(...ys) - Math.min(...ys),
+    width: Math.max(...xs) - Math.min(...xs)
+  }
+}
 
 describe('avatar surface lighting', () => {
   it('uses stronger near shadows and attenuates all contrast with distance', () => {
@@ -92,6 +103,28 @@ describe('avatar surface lighting', () => {
     expect(face.eyeHighlights).toHaveLength(2)
     expect(face.eyeHighlights.every(highlight => highlight.path.startsWith('M '))).toBe(true)
     expect(decal?.path).toContain(' Z')
+    const fittedTrapezoid = projectAvatarSurfaceDecal({ pitch: 0, yaw: .78 }, 'trapezoid', {
+      bend: 10, color: '#2f241c', height: 42, id: 'fitted', label: 'Fitted stripe', opacity: 90,
+      rotation: -74, shape: 'tapered-band', targetPartId: null, width: 8, x: -76, y: -28
+    }, { roundness: 82, topScale: .62 })
+    const wideTopTrapezoid = projectAvatarSurfaceDecal({ pitch: 0, yaw: .78 }, 'trapezoid', {
+      bend: 10, color: '#2f241c', height: 42, id: 'fitted', label: 'Fitted stripe', opacity: 90,
+      rotation: -74, shape: 'tapered-band', targetPartId: null, width: 8, x: -76, y: -28
+    }, { roundness: 82, topScale: 1.12 })
+    expect(fittedTrapezoid?.path).toContain(' Z')
+    expect(wideTopTrapezoid?.path).toContain(' Z')
+    expect(fittedTrapezoid?.path).not.toBe(wideTopTrapezoid?.path)
+    const centeredHalfCone = projectAvatarSurfaceDecal({ pitch: 0, yaw: 0 }, 'half-cone', {
+      bend: -8, color: '#2f241c', height: 28, id: 'half-cone', label: 'Half-cone stripe', opacity: 90,
+      rotation: -20, shape: 'tapered-band', targetPartId: null, width: 7, x: 0, y: 18
+    }, { cutAngle: 0, roundness: 42 })
+    const rotatedHalfCone = projectAvatarSurfaceDecal({ pitch: 0, yaw: 0 }, 'half-cone', {
+      bend: -8, color: '#2f241c', height: 28, id: 'half-cone', label: 'Half-cone stripe', opacity: 90,
+      rotation: -20, shape: 'tapered-band', targetPartId: null, width: 7, x: 0, y: 18
+    }, { cutAngle: 60, roundness: 42 })
+    expect(centeredHalfCone?.path).toContain(' Z')
+    expect(rotatedHalfCone?.path).toContain(' Z')
+    expect(rotatedHalfCone?.path).not.toBe(centeredHalfCone?.path)
     const officialMark = projectAvatarSurfaceDecal({ pitch: .08, yaw: -.25 }, 'sphere', {
       color: '#d97757', height: 34, id: 'claude', label: 'Official Claude Spark', opacity: 100,
       rotation: 12, shape: 'claude-spark', targetPartId: null, width: 34, x: 48, y: 44
@@ -135,10 +168,56 @@ describe('avatar surface lighting', () => {
     }, { roundness: 46, scaleX: .5, scaleY: .23, scaleZ: .5, topScale: .82 })
     expect(radialPleatPaths[0]?.path).not.toBe(straightPleats?.path)
     expect(openSmile?.path).toContain(' Z')
+    const faceMask = projectAvatarSurfaceDecal({ pitch: -.96, yaw: 1.32 }, 'ellipse', {
+      color: '#f3e6d4', height: 160, id: 'face-mask', label: 'Face mask', opacity: 70,
+      rotation: 0, shape: 'face-mask', side: 'face', targetPartId: null, width: 108, x: 0, y: 70
+    })
+    expect(faceMask?.path).toContain(' Z')
+    expect(faceMask?.path).not.toContain('NaN')
     expect(openSmile?.transform).toBeUndefined()
     expect(projectAvatarSurfaceDecal({ pitch: 0, yaw: Math.PI }, 'teardrop', {
       color: '#f29a93', height: 18, id: 'hidden', label: 'Hidden', opacity: 100,
       rotation: 0, shape: 'ellipse', targetPartId: null, width: 30, x: 0, y: 0
     })).toBeNull()
+  })
+
+  it('projects Mixed signal as an upright left eye and a wide right eye', () => {
+    const mixedSignal = AVATAR_FACE_PRESETS.find(preset => preset.id === 'mixed-signal')
+    expect(mixedSignal).toBeDefined()
+    const face = projectDefaultFace({ pitch: 0, yaw: 0 }, 'sphere', mixedSignal!.style)
+    const left = projectedPathExtent(face.eyes[0]!.path)
+    const right = projectedPathExtent(face.eyes[1]!.path)
+
+    expect(left.height).toBeGreaterThan(left.width)
+    expect(right.width).toBeGreaterThan(right.height)
+  })
+})
+
+describe('avatar face-anchored surface decals', () => {
+  it('uses the same projection as facial features at extreme poses', () => {
+    const pose = { pitch: -.96, yaw: 1.32 }
+    const face = projectDefaultFace(pose, 'sphere', {
+      ...DEFAULT_AVATAR_FACE_STYLE,
+      mouthHeight: 20,
+      mouthShape: 'ellipse',
+      mouthWidth: 20,
+      mouthY: 52
+    })
+    const anchored = projectAvatarSurfaceDecal(pose, 'sphere', {
+      color: '#ffffff',
+      height: 20,
+      id: 'face-anchor',
+      label: 'Face anchor',
+      opacity: 100,
+      rotation: 0,
+      shape: 'ellipse',
+      side: 'face',
+      targetPartId: null,
+      width: 20,
+      x: 0,
+      y: 52
+    })
+
+    expect(anchored?.path).toBe(face.mouth?.path)
   })
 })

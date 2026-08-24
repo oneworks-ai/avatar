@@ -2,16 +2,22 @@ import './AvatarControls.scss'
 
 import {
   AVATAR_ENTITY_RANGES,
+  AVATAR_COAT_PATTERN_RANGES,
   AVATAR_EYE_HIGHLIGHT_RANGES,
   AVATAR_FACE_RANGES,
   AVATAR_LIGHTING_RANGES,
   AVATAR_OUTLINE_RANGES,
+  AVATAR_PALETTES,
   AVATAR_PIXEL_EFFECT_RANGES,
   AVATAR_SHADOW_RANGES,
-  AVATAR_SURFACE_DECAL_RANGES
+  AVATAR_SURFACE_DECAL_RANGES,
+  resolveAvatarCoatPatternDecals
 } from '@oneworks/avatar'
 import type {
   AvatarBackgroundStyle,
+  AvatarCoatPattern,
+  AvatarCoatPatternAlgorithm,
+  AvatarCoatPatternLightPatchShape,
   AvatarPalette,
   AvatarPixelEffect,
   AvatarPixelSampling
@@ -23,6 +29,7 @@ import { AVATAR_BODY_SHAPES, EntityPresetPreview } from './InteractiveAvatar'
 import type { AvatarBodyShape, AvatarDropShadowStyle, AvatarOutlineStyle } from './InteractiveAvatar'
 import {
   AVATAR_BUILT_IN_ENTITY_PRESETS,
+  CAT_EAR_SCALE_RANGE,
   hasMultipleAvatarEntityMaterials,
   resolveAvatarEntityPartScaleZ
 } from './avatarEntityPresets'
@@ -38,6 +45,10 @@ import type {
   AvatarNoseShape
 } from './avatarGeometry'
 import { useAvatarLocale } from './avatarLocale'
+import { AVATAR_CAT_BREED_TEMPLATES, resolveAvatarCatBreedTemplate } from './avatarBreedTemplates'
+import type { AvatarCatBreedTemplateId } from './avatarBreedTemplates'
+import { AVATAR_CAMERA_BACKGROUND_PRESETS, AVATAR_SEED_FIELD } from './avatarSeed'
+import type { AvatarSeedField } from './avatarSeed'
 import {
   loadAvatarPresetUsage,
   persistAvatarPresetUsage,
@@ -50,7 +61,7 @@ import type { SavedAvatarPreset } from './savedAvatarPresets'
 export type AvatarControlTab = 'body' | 'build' | 'effects' | 'style'
 export type AvatarCameraFrame = 'circle' | 'rounded' | 'square'
 type AvatarFacePart = 'eyes' | 'mouth' | 'nose'
-type AvatarPresetBrowser = 'faces' | 'saved'
+type AvatarPresetBrowser = 'entities' | 'faces' | 'saved'
 type AvatarSavedPresetItem =
   | {
     readonly createdAt: number
@@ -80,7 +91,14 @@ type ControlIconName =
   | 'shadow'
   | 'solid'
   | 'transparent'
-type GeometricShapeIconName = 'circle' | 'curve' | 'ellipse' | 'inverted-triangle' | 'rounded' | 'square'
+type GeometricShapeIconName =
+  | 'circle'
+  | 'curve'
+  | 'ellipse'
+  | 'face-mask'
+  | 'inverted-triangle'
+  | 'rounded'
+  | 'square'
 
 interface GeometricShapeOption<T extends string> {
   readonly icon: GeometricShapeIconName
@@ -96,6 +114,10 @@ interface AvatarControlsProps {
   readonly bodyShape: AvatarBodyShape
   readonly cameraBackground: string
   readonly cameraFrame: AvatarCameraFrame
+  readonly catBreedTemplateId: AvatarCatBreedTemplateId | null
+  readonly catEarHeight: number
+  readonly catEarWidth: number
+  readonly coatPattern: AvatarCoatPattern
   readonly controlsWidth: number
   readonly entityParts: readonly AvatarEntityPart[]
   readonly entityPreset: AvatarEntityPreset
@@ -114,9 +136,14 @@ interface AvatarControlsProps {
   readonly onBodyShapeChange: (shape: AvatarBodyShape) => void
   readonly onCameraBackgroundChange: (color: string) => void
   readonly onCameraFrameChange: (frame: AvatarCameraFrame) => void
+  readonly onCatBreedTemplateChange: (id: AvatarCatBreedTemplateId | null) => void
+  readonly onCatEarHeightChange: (value: number) => void
+  readonly onCatEarWidthChange: (value: number) => void
+  readonly onCoatPatternChange: (pattern: Partial<AvatarCoatPattern>, manualField?: AvatarSeedField) => void
+  readonly onConvertCoatPatternToDecals: () => void
   readonly onCollapse: () => void
   readonly onControlsWidthChange: (width: number) => void
-  readonly onFaceStyleChange: (style: Partial<AvatarFaceStyle>) => void
+  readonly onFaceStyleChange: (style: Partial<AvatarFaceStyle>, mode?: 'merge' | 'replace') => void
   readonly onFaceShadowStyleChange: (style: Partial<AvatarFaceShadowStyle>) => void
   readonly onFrameShadowStyleChange: (style: Partial<AvatarDropShadowStyle>) => void
   readonly onGridDensityChange: (value: number) => void
@@ -141,12 +168,15 @@ interface AvatarControlsProps {
   readonly onToggleOutline: () => void
   readonly onToggleFrameShadow: () => void
   readonly onToggleShadow: () => void
+  readonly onToggleCoatPattern: () => void
   readonly selectedPalette: AvatarPalette
   readonly pixelEffect: AvatarPixelEffect
   readonly selectedEntityPartId: string | null
   readonly selectedSavedPresetId: string | null
   readonly selectedSurfaceDecalId: string | null
   readonly savedPresets: readonly SavedAvatarPreset[]
+  readonly seed: string
+  readonly seededFields: readonly string[]
   readonly showLight: boolean
   readonly showAvatarShadow: boolean
   readonly showOutline: boolean
@@ -155,6 +185,9 @@ interface AvatarControlsProps {
   readonly showShadow: boolean
   readonly surfaceDecals: readonly AvatarSurfaceDecal[]
   readonly visiblePalettes: readonly AvatarPalette[]
+  readonly onRandomSeed: () => void
+  readonly onSeedChange: (seed: string) => void
+  readonly onSeedFieldToggle: (field: AvatarSeedField, enabled: boolean) => void
 }
 
 const DEFAULT_CONTROLS_WIDTH = 420
@@ -174,6 +207,34 @@ const CONTROL_TABS: readonly { id: AvatarControlTab; label: string }[] = [
   { id: 'style', label: 'Style' },
   { id: 'effects', label: 'Effects' }
 ]
+
+const COAT_PATTERN_ALGORITHMS: readonly { id: AvatarCoatPatternAlgorithm; label: string }[] = [
+  { id: 'random', label: 'Random' },
+  { id: 'mackerel', label: 'Mackerel' },
+  { id: 'classic', label: 'Classic' },
+  { id: 'broken-mackerel', label: 'Broken' },
+  { id: 'spotted', label: 'Spotted' }
+]
+
+const COAT_LIGHT_PATCH_SHAPES: readonly GeometricShapeOption<AvatarCoatPatternLightPatchShape>[] = [
+  { icon: 'face-mask', id: 'face-mask', label: 'Face mask' },
+  { icon: 'ellipse', id: 'ellipse', label: 'Ellipse' },
+  { icon: 'rounded', id: 'rounded', label: 'Rounded' }
+]
+
+const CoatPatternIcon = ({ algorithm }: { readonly algorithm: AvatarCoatPatternAlgorithm }) => (
+  <svg className='avatar-controls__coat-icon' viewBox='0 0 24 18' aria-hidden='true'>
+    {algorithm === 'spotted'
+      ? <><circle cx='7' cy='6' r='2.5' /><circle cx='16' cy='5' r='2' /><circle cx='12' cy='13' r='2.3' /></>
+      : algorithm === 'classic'
+        ? <><path d='M3 5c5-4 9-4 14 0' /><path d='M5 11c4-3 8-3 13 0' /></>
+        : algorithm === 'broken-mackerel'
+          ? <><path d='M5 2v5m0 4v4M12 2v3m0 4v6M19 2v6m0 3v4' /></>
+          : algorithm === 'random'
+            ? <><path d='M5 3v5m7-5 3 4-3 4v4m7-12v4m0 4v4' /><circle cx='5' cy='13' r='1.5' /></>
+            : <><path d='M5 2v13M12 2v13M19 2v13' /></>}
+  </svg>
+)
 
 const BODY_SHAPE_LABELS: Readonly<Record<AvatarBodyShape, string>> = {
   capsule: 'Capsule',
@@ -209,7 +270,9 @@ const SURFACE_DECAL_SHAPE_OPTIONS: readonly GeometricShapeOption<AvatarSurfaceDe
   { icon: 'ellipse', id: 'ellipse', label: 'Ellipse' },
   { icon: 'rounded', id: 'radial-pleats', label: 'Radial pleats' },
   { icon: 'rounded', id: 'rounded', label: 'Rounded' },
-  { icon: 'inverted-triangle', id: 'rounded-triangle', label: 'Rounded triangle' }
+  { icon: 'inverted-triangle', id: 'rounded-triangle', label: 'Rounded triangle' },
+  { icon: 'face-mask', id: 'face-mask', label: 'Face mask' },
+  { icon: 'curve', id: 'tapered-band', label: 'Tapered band' }
 ]
 
 const NOSE_SHAPE_OPTIONS: readonly GeometricShapeOption<AvatarNoseShape>[] = [
@@ -236,27 +299,7 @@ const getSavedPresetFrame = (query: string): AvatarCameraFrame => {
   return frame === 'circle' || frame === 'square' || frame === 'rounded' ? frame : 'rounded'
 }
 
-const CAMERA_BACKGROUND_PRESETS = [
-  '#111315',
-  '#f2f0eb',
-  '#24334a',
-  '#3f201c',
-  '#173d35',
-  '#382641',
-  '#ff766c',
-  '#0e4fe7',
-  '#f2bd4f',
-  '#7568e7',
-  '#f6b8cf',
-  '#56d6cc',
-  '#c9e76c',
-  '#87bfff',
-  '#f08c46',
-  '#d9c8ff',
-  '#efe5cc',
-  '#8ec5a4'
-] as const
-const DEFAULT_CAMERA_BACKGROUND_COLOR = CAMERA_BACKGROUND_PRESETS[0]
+const DEFAULT_CAMERA_BACKGROUND_COLOR = AVATAR_CAMERA_BACKGROUND_PRESETS[0]
 
 function FacePresetPreview({ preset }: { readonly preset: AvatarFacePreset }) {
   const { style } = preset
@@ -438,6 +481,9 @@ function GeometricShapeIcon({ shape }: { readonly shape: GeometricShapeIconName 
       {shape === 'circle' ? <circle cx='20' cy='16' r='10' /> : null}
       {shape === 'curve' ? <path d='M7 11q13 15 26 0' strokeLinecap='round' strokeWidth='5' /> : null}
       {shape === 'ellipse' ? <ellipse cx='20' cy='16' rx='12' ry='9' /> : null}
+      {shape === 'face-mask'
+        ? <path d='M8 8c3-3 7-5 12-5s9 2 12 5v9c0 7-5 12-12 12S8 24 8 17Z' />
+        : null}
       {shape === 'rounded' ? <rect x='9' y='6' width='22' height='20' rx='5' /> : null}
       {shape === 'square' ? <rect x='10' y='6' width='20' height='20' /> : null}
       {shape === 'inverted-triangle'
@@ -540,6 +586,32 @@ function ToggleRow({ checked, icon, label, onChange }: {
   )
 }
 
+function SeedFieldToggle({ enabled, label, onChange }: {
+  readonly enabled: boolean
+  readonly label: string
+  readonly onChange: () => void
+}) {
+  const { t } = useAvatarLocale()
+  const translatedLabel = t(label)
+  return (
+    <button
+      className='avatar-controls__seed-toggle'
+      type='button'
+      role='switch'
+      aria-checked={enabled}
+      aria-label={`${t('Follow Seed')}: ${translatedLabel}`}
+      title={`${t('Follow Seed')}: ${translatedLabel}`}
+      onClick={onChange}
+    >
+      <svg viewBox='0 0 20 20' aria-hidden='true'>
+        <path d='M10 3v14M4.5 6.2 10 10l5.5-3.8M4.5 13.8 10 10l5.5 3.8' />
+        <circle cx='10' cy='10' r='2.2' />
+      </svg>
+      <span>{t('Seed')}</span>
+    </button>
+  )
+}
+
 function ValueSlider({ ariaLabel, label, max, min, onChange, suffix = '', value }: {
   readonly ariaLabel: string
   readonly label: string
@@ -626,6 +698,10 @@ export function AvatarControls({
   bodyShape,
   cameraBackground,
   cameraFrame,
+  catBreedTemplateId,
+  catEarHeight,
+  catEarWidth,
+  coatPattern,
   controlsWidth,
   entityParts,
   entityPreset,
@@ -645,6 +721,11 @@ export function AvatarControls({
   onBodyShapeChange,
   onCameraBackgroundChange,
   onCameraFrameChange,
+  onCatBreedTemplateChange,
+  onCatEarHeightChange,
+  onCatEarWidthChange,
+  onCoatPatternChange,
+  onConvertCoatPatternToDecals,
   onCollapse,
   onControlsWidthChange,
   onFaceStyleChange,
@@ -656,6 +737,9 @@ export function AvatarControls({
   onLightElevationChange,
   onPaletteChange,
   onPixelEffectChange,
+  onRandomSeed,
+  onSeedChange,
+  onSeedFieldToggle,
   onEntityPresetChange,
   onEntityPartChange,
   onAddSurfaceDecal,
@@ -672,11 +756,14 @@ export function AvatarControls({
   onToggleAvatarShadow,
   onToggleFrameShadow,
   onToggleShadow,
+  onToggleCoatPattern,
   selectedPalette,
   selectedEntityPartId,
   selectedSavedPresetId,
   selectedSurfaceDecalId,
   savedPresets,
+  seed,
+  seededFields,
   showLight,
   showOutline,
   showAvatarShadow,
@@ -693,6 +780,9 @@ export function AvatarControls({
   const [presetSearch, setPresetSearch] = useState('')
   const [presetUsage, setPresetUsage] = useState(loadAvatarPresetUsage)
   const [resizing, setResizing] = useState(false)
+  const [seedSettingsOpen, setSeedSettingsOpen] = useState(false)
+  const [seedDraft, setSeedDraft] = useState(seed)
+  const seedSettingsId = useId()
   const paletteConfirmActionRef = useRef<HTMLButtonElement>(null)
   const presetSearchRef = useRef<HTMLInputElement>(null)
   const resizeStartRef = useRef<{ pointerX: number; width: number } | null>(null)
@@ -703,6 +793,35 @@ export function AvatarControls({
   useEffect(() => {
     if (cameraBackground !== 'transparent') lastCameraColorRef.current = cameraBackground
   }, [cameraBackground])
+
+  useEffect(() => setSeedDraft(seed), [seed])
+
+  const commitSeedDraft = () => {
+    const nextSeed = seedDraft.trim()
+    if (nextSeed === '') {
+      setSeedDraft(seed)
+      return
+    }
+    onSeedChange(nextSeed)
+  }
+
+  const renderSeedFieldHeader = (
+    icon: ControlIconName,
+    label: string,
+    field: AvatarSeedField
+  ) => (
+    <div className='avatar-controls__field-header'>
+      <span className='avatar-controls__label'>
+        <ControlIcon name={icon} />
+        {t(label)}
+      </span>
+      <SeedFieldToggle
+        enabled={seededFields.includes(field)}
+        label={label}
+        onChange={() => onSeedFieldToggle(field, !seededFields.includes(field))}
+      />
+    </div>
+  )
 
   const isDefaultFace = Object.entries(DEFAULT_AVATAR_FACE_STYLE).every(([key, value]) => {
     return faceStyle[key as keyof AvatarFaceStyle] === value
@@ -718,21 +837,23 @@ export function AvatarControls({
     preset => `face:${preset.id}`,
     presetUsage
   )
+  const entityPresetItems = sortAvatarPresetItems<AvatarSavedPresetItem>(
+    AVATAR_BUILT_IN_ENTITY_PRESETS.map(preset => ({
+      createdAt: 0,
+      key: `entity:${preset}`,
+      kind: 'entity' as const,
+      preset
+    })),
+    item => item.key,
+    presetUsage
+  )
   const savedPresetItems = sortAvatarPresetItems<AvatarSavedPresetItem>(
-    [
-      ...AVATAR_BUILT_IN_ENTITY_PRESETS.map(preset => ({
-        createdAt: 0,
-        key: `entity:${preset}`,
-        kind: 'entity' as const,
-        preset
-      })),
-      ...savedPresets.map(preset => ({
-        createdAt: preset.createdAt,
-        key: `saved:${preset.id}`,
-        kind: 'saved' as const,
-        preset
-      }))
-    ],
+    savedPresets.map(preset => ({
+      createdAt: preset.createdAt,
+      key: `saved:${preset.id}`,
+      kind: 'saved' as const,
+      preset
+    })),
     item => item.key,
     presetUsage,
     item => item.createdAt
@@ -743,6 +864,9 @@ export function AvatarControls({
   const compactSavedPresetItems = savedPresetItems.length > compactPresetCapacity
     ? savedPresetItems.slice(0, compactPresetCapacity - 1)
     : savedPresetItems
+  const compactEntityPresetItems = entityPresetItems.length > compactPresetCapacity
+    ? entityPresetItems.slice(0, compactPresetCapacity - 1)
+    : entityPresetItems
 
   useEffect(() => {
     if (pendingPalette != null) paletteConfirmActionRef.current?.focus()
@@ -758,6 +882,25 @@ export function AvatarControls({
       lightDirection={{ azimuth: lightAzimuth, elevation: lightElevation }}
     />
   )
+
+  const renderCatBreedPreview = (template: (typeof AVATAR_CAT_BREED_TEMPLATES)[number]) => {
+    const resolved = resolveAvatarCatBreedTemplate(template, seed)
+    const decals = resolveAvatarCoatPatternDecals({
+      entityParts: resolved.entityParts,
+      entityPreset: 'cat',
+      paletteId: resolved.paletteId,
+      pattern: resolved.coatPattern
+    })
+    return (
+      <EntityPresetPreview
+        entityParts={resolved.entityParts}
+        lightDirection={{ azimuth: lightAzimuth, elevation: lightElevation }}
+        preset='cat'
+        previewBackground={template.previewBackground}
+        surfaceDecals={decals}
+      />
+    )
+  }
 
   const handleResizeStart = (event: PointerEvent<HTMLDivElement>) => {
     if (event.button !== 0) return
@@ -820,7 +963,7 @@ export function AvatarControls({
       onResetFace()
       return
     }
-    onFaceStyleChange(preset.style)
+    onFaceStyleChange(preset.style, 'replace')
   }
 
   const selectSavedPreset = (item: AvatarSavedPresetItem) => {
@@ -922,9 +1065,15 @@ export function AvatarControls({
       : `${t('Saved preset')} ${new Date(item.preset.createdAt).toLocaleString()}`
     return searchableLabel.toLocaleLowerCase().includes(normalizedPresetSearch)
   })
+  const searchedEntityPresetItems = entityPresetItems.filter(item => (
+    item.kind === 'entity' && (
+      normalizedPresetSearch === '' ||
+      t(ENTITY_PRESET_LABELS[item.preset]).toLocaleLowerCase().includes(normalizedPresetSearch)
+    )
+  ))
   const searchedPresetCount = presetBrowser === 'faces'
     ? searchedFacePresets.length
-    : searchedSavedPresetItems.length
+    : presetBrowser === 'entities' ? searchedEntityPresetItems.length : searchedSavedPresetItems.length
 
   return (
     <aside id='avatar-controls' className='avatar-controls' aria-label={t('Avatar controls')} data-resizing={resizing}>
@@ -992,24 +1141,197 @@ export function AvatarControls({
         {activeTab === 'build'
           ? (
             <>
-              <section className='avatar-controls__saved-presets' aria-label='Saved presets'>
-                <span className='avatar-controls__label'>
-                  <ControlIcon name='history' />
-                  {t('Saved presets')}
-                </span>
+              <section
+                className='avatar-controls__seed-settings'
+                aria-labelledby={`${seedSettingsId}-trigger`}
+              >
+                <button
+                  id={`${seedSettingsId}-trigger`}
+                  className='avatar-controls__seed-disclosure'
+                  type='button'
+                  aria-controls={`${seedSettingsId}-content`}
+                  aria-expanded={seedSettingsOpen}
+                  aria-label={t('Seed settings')}
+                  onClick={() => setSeedSettingsOpen(open => !open)}
+                >
+                  <span className='avatar-controls__label'>
+                    <ControlIcon name='build' />
+                    {t('Seed')}
+                  </span>
+                  <span className='avatar-controls__seed-summary'>
+                    <span className='avatar-controls__seed-count'>
+                      {t('Seeded fields')}: {seededFields.length}
+                    </span>
+                    <svg viewBox='0 0 16 16' aria-hidden='true'>
+                      <path d='m4.5 6 3.5 4 3.5-4' />
+                    </svg>
+                  </span>
+                </button>
+                {seedSettingsOpen
+                  ? (
+                    <div
+                      id={`${seedSettingsId}-content`}
+                      className='avatar-controls__seed-input'
+                      aria-labelledby={`${seedSettingsId}-trigger`}
+                    >
+                      <input
+                        type='text'
+                        aria-label={t('Current Seed')}
+                        autoCapitalize='off'
+                        autoComplete='off'
+                        spellCheck='false'
+                        value={seedDraft}
+                        onBlur={commitSeedDraft}
+                        onChange={event => setSeedDraft(event.currentTarget.value)}
+                        onKeyDown={event => {
+                          if (event.key === 'Enter') event.currentTarget.blur()
+                          if (event.key === 'Escape') {
+                            event.preventDefault()
+                            setSeedDraft(seed)
+                          }
+                        }}
+                      />
+                      <button
+                        type='button'
+                        aria-label={t('Generate random Seed')}
+                        title={t('Generate random Seed')}
+                        onClick={onRandomSeed}
+                      >
+                        <svg viewBox='0 0 20 20' aria-hidden='true'>
+                          <rect x='3' y='3' width='14' height='14' rx='4' />
+                          <circle cx='7' cy='7' r='1' />
+                          <circle cx='13' cy='7' r='1' />
+                          <circle cx='10' cy='10' r='1' />
+                          <circle cx='7' cy='13' r='1' />
+                          <circle cx='13' cy='13' r='1' />
+                        </svg>
+                      </button>
+                    </div>
+                  )
+                  : null}
+              </section>
+
+              <section className='avatar-controls__field-group' aria-label={t('View composition')}>
+                {renderSeedFieldHeader('build', 'View composition', AVATAR_SEED_FIELD.viewPose)}
+              </section>
+
+              <section className='avatar-controls__field-group' aria-label={t('Avatar type')}>
+                {renderSeedFieldHeader('build', 'Avatar type', AVATAR_SEED_FIELD.entityPreset)}
                 <div className='avatar-controls__saved-preset-list'>
-                  {compactSavedPresetItems.map(renderSavedPresetItem)}
-                  {savedPresetItems.length > compactPresetCapacity
-                    ? renderMorePresetButton('saved')
+                  {compactEntityPresetItems.map(renderSavedPresetItem)}
+                  {entityPresetItems.length > compactPresetCapacity
+                    ? renderMorePresetButton('entities')
                     : null}
                 </div>
               </section>
 
+              {entityPreset === 'cat'
+                ? (
+                  <section className='avatar-controls__field-group' aria-label={t('Cat types')}>
+                    <div className='avatar-controls__field-header'>
+                      <span className='avatar-controls__label'>
+                        <ControlIcon name='style' />
+                        {t('Cat types')}
+                      </span>
+                    </div>
+                    <div className='avatar-controls__saved-preset-list avatar-controls__cat-breed-list'>
+                      {AVATAR_CAT_BREED_TEMPLATES.map(template => (
+                        <button
+                          key={template.id}
+                          className='avatar-controls__saved-preset avatar-controls__saved-preset--entity-preset avatar-controls__cat-breed-preset'
+                          type='button'
+                          aria-label={t(template.label)}
+                          aria-pressed={catBreedTemplateId === template.id}
+                          data-cat-breed={template.id}
+                          title={t(template.label)}
+                          onClick={() => onCatBreedTemplateChange(
+                            catBreedTemplateId === template.id ? null : template.id
+                          )}
+                        >
+                          {renderCatBreedPreview(template)}
+                        </button>
+                      ))}
+                    </div>
+                  </section>
+                )
+                : null}
+
+              {savedPresetItems.length === 0
+                ? null
+                : (
+                  <section className='avatar-controls__saved-presets' aria-label={t('Saved looks')}>
+                    <span className='avatar-controls__label'>
+                      <ControlIcon name='history' />
+                      {t('Saved looks')}
+                    </span>
+                    <div className='avatar-controls__saved-preset-list'>
+                      {compactSavedPresetItems.map(renderSavedPresetItem)}
+                      {savedPresetItems.length > compactPresetCapacity
+                        ? renderMorePresetButton('saved')
+                        : null}
+                    </div>
+                  </section>
+                )}
+
+              {entityPreset === 'cat'
+                ? (
+                  <section className='avatar-controls__field-group avatar-controls__cat-ear-size' aria-label={t('Cat ear size')}>
+                    <div className='avatar-controls__field-header'>
+                      <span className='avatar-controls__label'>
+                        <ControlIcon name='body' />
+                        {t('Cat ear size')}
+                      </span>
+                    </div>
+                    <div className='avatar-controls__coat-row'>
+                      <div className='avatar-controls__coat-row-header'>
+                        <span>{t('Ear width')}</span>
+                        <SeedFieldToggle
+                          enabled={seededFields.includes(AVATAR_SEED_FIELD.catEarWidth)}
+                          label='Ear width'
+                          onChange={() => onSeedFieldToggle(
+                            AVATAR_SEED_FIELD.catEarWidth,
+                            !seededFields.includes(AVATAR_SEED_FIELD.catEarWidth)
+                          )}
+                        />
+                      </div>
+                      <ValueSlider
+                        ariaLabel='Cat ear width'
+                        label='Width'
+                        min={CAT_EAR_SCALE_RANGE.min}
+                        max={CAT_EAR_SCALE_RANGE.max}
+                        suffix='%'
+                        value={catEarWidth}
+                        onChange={onCatEarWidthChange}
+                      />
+                    </div>
+                    <div className='avatar-controls__coat-row'>
+                      <div className='avatar-controls__coat-row-header'>
+                        <span>{t('Ear height')}</span>
+                        <SeedFieldToggle
+                          enabled={seededFields.includes(AVATAR_SEED_FIELD.catEarHeight)}
+                          label='Ear height'
+                          onChange={() => onSeedFieldToggle(
+                            AVATAR_SEED_FIELD.catEarHeight,
+                            !seededFields.includes(AVATAR_SEED_FIELD.catEarHeight)
+                          )}
+                        />
+                      </div>
+                      <ValueSlider
+                        ariaLabel='Cat ear height'
+                        label='Height'
+                        min={CAT_EAR_SCALE_RANGE.min}
+                        max={CAT_EAR_SCALE_RANGE.max}
+                        suffix='%'
+                        value={catEarHeight}
+                        onChange={onCatEarHeightChange}
+                      />
+                    </div>
+                  </section>
+                )
+                : null}
+
               <div className='avatar-controls__field-group'>
-                <span className='avatar-controls__label'>
-                  <ControlIcon name='eyes' />
-                  {t('Face')}
-                </span>
+                {renderSeedFieldHeader('eyes', 'Face', AVATAR_SEED_FIELD.facePreset)}
                 <div className='avatar-controls__face-presets' role='group' aria-label={t('Face presets')}>
                   {compactFacePresets.map(renderFacePresetButton)}
                   {facePresets.length > compactPresetCapacity
@@ -1330,15 +1652,173 @@ export function AvatarControls({
                   )
                   : null}
               </div>
+              {entityPreset === 'cat'
+                ? (
+                  <div className='avatar-controls__field-group avatar-controls__coat-pattern' data-enabled={coatPattern.enabled}>
+                    <div className='avatar-controls__field-header'>
+                      <span className='avatar-controls__label'>{t('Coat pattern')}</span>
+                      <button
+                        className='avatar-controls__switch'
+                        type='button'
+                        role='switch'
+                        aria-checked={coatPattern.enabled}
+                        aria-label={t('Coat pattern')}
+                        onClick={onToggleCoatPattern}
+                      ><span /></button>
+                    </div>
+                    {coatPattern.enabled
+                      ? (
+                        <div className='avatar-controls__coat-content'>
+                          <div className='avatar-controls__coat-row'>
+                            <div className='avatar-controls__coat-row-header'>
+                              <span>{t('Pattern algorithm')}</span>
+                              <SeedFieldToggle
+                                enabled={seededFields.includes(AVATAR_SEED_FIELD.coatPatternAlgorithm)}
+                                label='Pattern algorithm'
+                                onChange={() => onSeedFieldToggle(
+                                  AVATAR_SEED_FIELD.coatPatternAlgorithm,
+                                  !seededFields.includes(AVATAR_SEED_FIELD.coatPatternAlgorithm)
+                                )}
+                              />
+                            </div>
+                            <div className='avatar-controls__coat-algorithms' role='radiogroup' aria-label={t('Pattern algorithm')}>
+                              {COAT_PATTERN_ALGORITHMS.map(option => (
+                                <button
+                                  key={option.id}
+                                  type='button'
+                                  role='radio'
+                                  aria-checked={coatPattern.algorithm === option.id}
+                                  data-active={coatPattern.algorithm === option.id}
+                                  onClick={() => onCoatPatternChange(
+                                    { algorithm: option.id },
+                                    AVATAR_SEED_FIELD.coatPatternAlgorithm
+                                  )}
+                                >
+                                  <CoatPatternIcon algorithm={option.id} />
+                                  <span>{t(option.label)}</span>
+                                </button>
+                              ))}
+                            </div>
+                          </div>
+                          <div className='avatar-controls__coat-row'>
+                            <div className='avatar-controls__coat-row-header'>
+                              <span>{t('Pattern layout')}</span>
+                              <SeedFieldToggle
+                                enabled={seededFields.includes(AVATAR_SEED_FIELD.coatPatternSeed)}
+                                label='Pattern layout'
+                                onChange={() => onSeedFieldToggle(
+                                  AVATAR_SEED_FIELD.coatPatternSeed,
+                                  !seededFields.includes(AVATAR_SEED_FIELD.coatPatternSeed)
+                                )}
+                              />
+                            </div>
+                          </div>
+                          <div className='avatar-controls__coat-row avatar-controls__coat-light-patch'>
+                            <div className='avatar-controls__coat-row-header'>
+                              <span>{t('Light coat patch')}</span>
+                            </div>
+                            <div className='avatar-controls__coat-row-header'>
+                              <span>{t('Shape')}</span>
+                              <SeedFieldToggle
+                                enabled={seededFields.includes(AVATAR_SEED_FIELD.coatPatternLightPatchShape)}
+                                label='Light coat patch shape'
+                                onChange={() => onSeedFieldToggle(
+                                  AVATAR_SEED_FIELD.coatPatternLightPatchShape,
+                                  !seededFields.includes(AVATAR_SEED_FIELD.coatPatternLightPatchShape)
+                                )}
+                              />
+                            </div>
+                            <GeometricShapePicker
+                              ariaLabel='Light coat patch shape'
+                              options={COAT_LIGHT_PATCH_SHAPES}
+                              value={coatPattern.lightPatchShape ?? 'face-mask'}
+                              onChange={lightPatchShape => onCoatPatternChange(
+                                { lightPatchShape },
+                                AVATAR_SEED_FIELD.coatPatternLightPatchShape
+                              )}
+                            />
+                            {([
+                              ['lightPatchLength', 'Length', AVATAR_SEED_FIELD.coatPatternLightPatchLength, AVATAR_COAT_PATTERN_RANGES.lightPatchLength],
+                              ['lightPatchOffsetY', 'Vertical position', AVATAR_SEED_FIELD.coatPatternLightPatchOffsetY, AVATAR_COAT_PATTERN_RANGES.lightPatchOffsetY],
+                              ['lightPatchWidth', 'Width', AVATAR_SEED_FIELD.coatPatternLightPatchWidth, AVATAR_COAT_PATTERN_RANGES.lightPatchWidth]
+                            ] as const).map(([key, label, field, range]) => (
+                              <div className='avatar-controls__coat-row' key={key}>
+                                <div className='avatar-controls__coat-row-header'>
+                                  <span>{t(label)}</span>
+                                  <SeedFieldToggle
+                                    enabled={seededFields.includes(field)}
+                                    label={label}
+                                    onChange={() => onSeedFieldToggle(field, !seededFields.includes(field))}
+                                  />
+                                </div>
+                                <ValueSlider
+                                  ariaLabel={label}
+                                  label={label}
+                                  min={range.min}
+                                  max={range.max}
+                                  suffix={key === 'lightPatchOffsetY' ? '' : '%'}
+                                  value={key === 'lightPatchOffsetY'
+                                    ? coatPattern.lightPatchOffsetY ?? 0
+                                    : coatPattern[key] ?? 100}
+                                  onChange={value => onCoatPatternChange({ [key]: value }, field)}
+                                />
+                              </div>
+                            ))}
+                          </div>
+                          {([
+                            ['density', 'Density', AVATAR_SEED_FIELD.coatPatternDensity, AVATAR_COAT_PATTERN_RANGES.density],
+                            ['jitter', 'Jitter', AVATAR_SEED_FIELD.coatPatternJitter, AVATAR_COAT_PATTERN_RANGES.jitter],
+                            ['thickness', 'Thickness', AVATAR_SEED_FIELD.coatPatternThickness, AVATAR_COAT_PATTERN_RANGES.thickness],
+                            ['symmetry', 'Symmetry', AVATAR_SEED_FIELD.coatPatternSymmetry, AVATAR_COAT_PATTERN_RANGES.symmetry],
+                            ['contrast', 'Contrast', AVATAR_SEED_FIELD.coatPatternContrast, AVATAR_COAT_PATTERN_RANGES.contrast],
+                            ['breakup', 'Breakup', AVATAR_SEED_FIELD.coatPatternBreakup, AVATAR_COAT_PATTERN_RANGES.breakup]
+                          ] as const).map(([key, label, field, range]) => (
+                            <div className='avatar-controls__coat-row' key={key}>
+                              <div className='avatar-controls__coat-row-header'>
+                                <span>{t(label)}</span>
+                                <SeedFieldToggle
+                                  enabled={seededFields.includes(field)}
+                                  label={label}
+                                  onChange={() => onSeedFieldToggle(field, !seededFields.includes(field))}
+                                />
+                              </div>
+                              <ValueSlider
+                                ariaLabel={label}
+                                label={label}
+                                min={range.min}
+                                max={range.max}
+                                suffix='%'
+                                value={coatPattern[key]}
+                                onChange={value => onCoatPatternChange({ [key]: value }, field)}
+                              />
+                            </div>
+                          ))}
+                          <div className='avatar-controls__coat-actions'>
+                            <button type='button' className='avatar-controls__inline-action' onClick={onConvertCoatPatternToDecals}>
+                              {t('Convert to editable decals')}
+                            </button>
+                          </div>
+                        </div>
+                      )
+                      : null}
+                  </div>
+                )
+                : null}
               <div className='avatar-controls__field-group'>
                 <div className='avatar-controls__field-header'>
                   <span className='avatar-controls__label'>{t('Surface decals')}</span>
-                  <button className='avatar-controls__inline-action' type='button' onClick={onAddSurfaceDecal}>
-                    {t('Add decal')}
-                  </button>
+                  <div className='avatar-controls__field-actions'>
+                    {coatPattern.enabled
+                      ? null
+                      : (
+                        <button className='avatar-controls__inline-action' type='button' onClick={onAddSurfaceDecal}>
+                          {t('Add decal')}
+                        </button>
+                      )}
+                  </div>
                 </div>
-                {surfaceDecals.length === 0
-                  ? <p className='avatar-controls__hint'>{t('Add color shapes that follow the model surface.')}</p>
+                {coatPattern.enabled || surfaceDecals.length === 0
+                  ? null
                   : (
                     <div className='avatar-controls__decal-list' role='listbox' aria-label={t('Surface decals')}>
                       {surfaceDecals.map(decal => (
@@ -1372,7 +1852,7 @@ export function AvatarControls({
                       ))}
                     </div>
                   )}
-                {editingSurfaceDecal == null
+                {editingSurfaceDecal == null || coatPattern.enabled
                   ? null
                   : (
                     <div className='avatar-controls__decal-editor'>
@@ -1397,6 +1877,7 @@ export function AvatarControls({
                             onChange={event =>
                               onSurfaceDecalChange(editingSurfaceDecal.id, {
                                 side: event.currentTarget.value === 'back' ||
+                                    event.currentTarget.value === 'face' ||
                                     event.currentTarget.value === 'left' ||
                                     event.currentTarget.value === 'right'
                                   ? event.currentTarget.value
@@ -1404,6 +1885,7 @@ export function AvatarControls({
                               })}
                           >
                             <option value='front'>{t('Front')}</option>
+                            <option value='face'>{t('Face plane')}</option>
                             <option value='right'>{t('Right')}</option>
                             <option value='back'>{t('Back')}</option>
                             <option value='left'>{t('Left')}</option>
@@ -1486,6 +1968,18 @@ export function AvatarControls({
                           value={editingSurfaceDecal.rotation}
                           onChange={rotation => onSurfaceDecalChange(editingSurfaceDecal.id, { rotation })}
                         />
+                        {editingSurfaceDecal.shape === 'tapered-band'
+                          ? (
+                            <ValueSlider
+                              ariaLabel='Decal bend'
+                              label='Bend'
+                              min={AVATAR_SURFACE_DECAL_RANGES.bend.min}
+                              max={AVATAR_SURFACE_DECAL_RANGES.bend.max}
+                              value={editingSurfaceDecal.bend ?? 0}
+                              onChange={bend => onSurfaceDecalChange(editingSurfaceDecal.id, { bend })}
+                            />
+                          )
+                          : null}
                         <ValueSlider
                           ariaLabel='Decal opacity'
                           label='Opacity'
@@ -1542,10 +2036,7 @@ export function AvatarControls({
                   </div>
                 )}
               <div className='avatar-controls__field-group'>
-                <span className='avatar-controls__label'>
-                  <ControlIcon name='palette' />
-                  {t('Palette')}
-                </span>
+                {renderSeedFieldHeader('palette', 'Palette', AVATAR_SEED_FIELD.palette)}
                 <div className='avatar-controls__swatches'>
                   {visiblePalettes.map((palette) => (
                     <button
@@ -1583,10 +2074,11 @@ export function AvatarControls({
                 ? (
                   <>
                     <div className='avatar-controls__field-group'>
-                      <span className='avatar-controls__label'>
-                        <ControlIcon name='background' />
-                        {t('Background')}
-                      </span>
+                      {renderSeedFieldHeader(
+                        'background',
+                        'Background',
+                        AVATAR_SEED_FIELD.backgroundStyle
+                      )}
                       <div className='avatar-controls__segments'>
                         {(['solid', 'gradient'] satisfies AvatarBackgroundStyle[]).map(style => (
                           <button
@@ -1617,10 +2109,11 @@ export function AvatarControls({
                     </div>
 
                     <div className='avatar-controls__field-group'>
-                      <span className='avatar-controls__label'>
-                        <ControlIcon name='background' />
-                        {t('Camera background')}
-                      </span>
+                      {renderSeedFieldHeader(
+                        'background',
+                        'Camera background',
+                        AVATAR_SEED_FIELD.cameraBackground
+                      )}
                       <div className='avatar-controls__segments'>
                         <button
                           className='avatar-controls__segment'
@@ -1655,7 +2148,7 @@ export function AvatarControls({
                               <output>{cameraBackground.toUpperCase()}</output>
                             </label>
                             <div className='avatar-controls__camera-presets' aria-label='Camera background presets'>
-                              {CAMERA_BACKGROUND_PRESETS.map(color => (
+                              {AVATAR_CAMERA_BACKGROUND_PRESETS.map(color => (
                                 <button
                                   key={color}
                                   type='button'
@@ -2197,7 +2690,9 @@ export function AvatarControls({
             >
               <div className='avatar-controls__preset-browser-header'>
                 <h2 id='avatar-preset-browser-title'>
-                  {t(presetBrowser === 'faces' ? 'Face presets' : 'Saved presets')}
+                  {t(presetBrowser === 'faces'
+                    ? 'Face presets'
+                    : presetBrowser === 'entities' ? 'Avatar templates' : 'Saved presets')}
                 </h2>
                 <button
                   type='button'
@@ -2230,11 +2725,15 @@ export function AvatarControls({
                   <div
                     className='avatar-controls__preset-browser-grid'
                     role='group'
-                    aria-label={t(presetBrowser === 'faces' ? 'Face presets' : 'Saved presets')}
+                    aria-label={t(presetBrowser === 'faces'
+                      ? 'Face presets'
+                      : presetBrowser === 'entities' ? 'Avatar templates' : 'Saved presets')}
                   >
                     {presetBrowser === 'faces'
                       ? searchedFacePresets.map(renderFacePresetButton)
-                      : searchedSavedPresetItems.map(renderSavedPresetItem)}
+                      : presetBrowser === 'entities'
+                        ? searchedEntityPresetItems.map(renderSavedPresetItem)
+                        : searchedSavedPresetItems.map(renderSavedPresetItem)}
                   </div>
                 )}
             </section>
