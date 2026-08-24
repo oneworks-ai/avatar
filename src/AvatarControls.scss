@@ -1102,6 +1102,44 @@
     background: color-mix(in srgb, var(--bg-color) 82%, var(--primary-color));
   }
 
+  &__pixel-controls {
+    gap: 16px;
+  }
+
+  &__pixel-control {
+    display: grid;
+    gap: 8px;
+
+    > span {
+      color: var(--sub-text-color);
+      font-size: 12px;
+    }
+  }
+
+  &__pixel-sampling {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  &__pixel-sampling-icon {
+    display: block;
+    flex: 0 0 18px;
+    width: 18px;
+    height: 18px;
+    fill: none;
+    stroke: currentColor;
+    stroke-linejoin: round;
+    stroke-width: 1.1;
+
+    [data-fill] {
+      fill: currentColor;
+      stroke: none;
+    }
+  }
+
+  &__pixel-palette {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+
   &__value-slider {
     display: grid;
     gap: 8px;

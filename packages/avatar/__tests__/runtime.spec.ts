@@ -66,29 +66,47 @@ describe('OneWorks Avatar public runtime contract', () => {
       scene: {
         ...definition.scene,
         decals: [{
-          color: '#f29a93', height: 18, id: 'blush-left', label: 'Left blush', opacity: 90,
-          rotation: -8, shape: 'ellipse' as const, targetPartId: null, width: 30, x: -48, y: 30
+          color: '#f29a93',
+          height: 18,
+          id: 'blush-left',
+          label: 'Left blush',
+          opacity: 90,
+          rotation: -8,
+          shape: 'ellipse' as const,
+          targetPartId: null,
+          width: 30,
+          x: -48,
+          y: 30
         }],
         face: {
           ...definition.scene.face,
           eyeHighlight: {
-            color: '#ffffff', enabled: true, offsetX: -18, offsetY: -20, opacity: 92, size: 28
+            color: '#ffffff',
+            enabled: true,
+            offsetX: -18,
+            offsetY: -20,
+            opacity: 92,
+            size: 28
           }
         }
       }
     }
     expect(parseAvatarDefinition(serializeAvatarDefinition(decorated))).toEqual(decorated)
-    expect(() => parseAvatarDefinition({
-      ...decorated,
-      scene: { ...decorated.scene, decals: [{ ...decorated.scene.decals[0]!, opacity: 101 }] }
-    })).toThrow(TypeError)
-    expect(() => parseAvatarDefinition({
-      ...decorated,
-      scene: {
-        ...decorated.scene,
-        face: { ...decorated.scene.face, eyeHighlight: { ...decorated.scene.face.eyeHighlight, size: 0 } }
-      }
-    })).toThrow(TypeError)
+    expect(() =>
+      parseAvatarDefinition({
+        ...decorated,
+        scene: { ...decorated.scene, decals: [{ ...decorated.scene.decals[0]!, opacity: 101 }] }
+      })
+    ).toThrow(TypeError)
+    expect(() =>
+      parseAvatarDefinition({
+        ...decorated,
+        scene: {
+          ...decorated.scene,
+          face: { ...decorated.scene.face, eyeHighlight: { ...decorated.scene.face.eyeHighlight, size: 0 } }
+        }
+      })
+    ).toThrow(TypeError)
     const invalidScenes = [
       { ...definition.scene, face: { ...definition.scene.face, width: -1 } },
       { ...definition.scene, view: { ...definition.scene.view, scale: -1 } },
@@ -119,23 +137,25 @@ describe('OneWorks Avatar public runtime contract', () => {
     invalidScenes.forEach(scene => {
       expect(() => parseAvatarDefinition({ ...definition, scene })).toThrow(TypeError)
     })
-    expect(parseAvatarDefinition({
-      ...definition,
-      scene: {
-        ...definition.scene,
-        camera: {
-          ...definition.scene.camera,
-          frameShadow: { ...definition.scene.camera.frameShadow, distance: 40, softness: 48 }
-        },
-        effects: {
-          ...definition.scene.effects,
-          outline: { ...definition.scene.effects.outline, opacity: 100, width: 20 }
-        },
-        face: { ...definition.scene.face, width: 72 },
-        lighting: { ...definition.scene.lighting, gridDensity: 400 },
-        view: { ...definition.scene.view, positionX: -230, positionY: 230, scale: .35 }
-      }
-    }).scene.view.scale).toBe(.35)
+    expect(
+      parseAvatarDefinition({
+        ...definition,
+        scene: {
+          ...definition.scene,
+          camera: {
+            ...definition.scene.camera,
+            frameShadow: { ...definition.scene.camera.frameShadow, distance: 40, softness: 48 }
+          },
+          effects: {
+            ...definition.scene.effects,
+            outline: { ...definition.scene.effects.outline, opacity: 100, width: 20 }
+          },
+          face: { ...definition.scene.face, width: 72 },
+          lighting: { ...definition.scene.lighting, gridDensity: 400 },
+          view: { ...definition.scene.view, positionX: -230, positionY: 230, scale: .35 }
+        }
+      }).scene.view.scale
+    ).toBe(.35)
     const changing = { ...definition }
     let versionReads = 0
     Object.defineProperty(changing, 'version', {
@@ -196,61 +216,69 @@ describe('OneWorks Avatar public runtime contract', () => {
     }
     expect(isAvatarDefinition(invalidWidth)).toBe(false)
     expect(() => {
-      (AVATAR_FACE_RANGES.width as { max: number }).max = 1000
+      ;(AVATAR_FACE_RANGES.width as { max: number }).max = 1000
     }).toThrow(TypeError)
     expect(isAvatarDefinition(invalidWidth)).toBe(false)
-    expect(() => parseAvatarDefinition({
-      ...definition,
-      scene: {
-        ...definition.scene,
-        glyph: { leftEye: '0', linkEyes: true, mouth: 'w', rightEye: '0' }
-      }
-    })).toThrow(TypeError)
-    expect(() => parseAvatarDefinition({
-      ...definition,
-      scene: {
-        ...definition.scene,
-        decals: [{
-          color: '#f29a93',
-          height: 18,
-          id: 'missing-target',
-          label: 'Missing target',
-          opacity: 90,
-          rotation: 0,
-          shape: 'ellipse',
-          targetPartId: 'missing-part',
-          width: 30,
-          x: 0,
-          y: 0
-        }]
-      }
-    })).toThrow(TypeError)
-    expect(() => parseAvatarDefinition({
-      ...definition,
-      scene: {
-        ...definition.scene,
-        decals: [{
-          color: '#f29a93',
-          height: 18,
-          id: 'blank-target',
-          label: 'Blank target',
-          opacity: 90,
-          rotation: 0,
-          shape: 'ellipse',
-          targetPartId: ' ',
-          width: 30,
-          x: 0,
-          y: 0
-        }]
-      }
-    })).toThrow(TypeError)
-    expect(() => parseAvatarDefinition({
-      ...definition,
-      scene: {
-        ...definition.scene,
-        entity: { parts: Array(1), preset: 'custom' }
-      }
-    })).toThrow(TypeError)
+    expect(() =>
+      parseAvatarDefinition({
+        ...definition,
+        scene: {
+          ...definition.scene,
+          glyph: { leftEye: '0', linkEyes: true, mouth: 'w', rightEye: '0' }
+        }
+      })
+    ).toThrow(TypeError)
+    expect(() =>
+      parseAvatarDefinition({
+        ...definition,
+        scene: {
+          ...definition.scene,
+          decals: [{
+            color: '#f29a93',
+            height: 18,
+            id: 'missing-target',
+            label: 'Missing target',
+            opacity: 90,
+            rotation: 0,
+            shape: 'ellipse',
+            targetPartId: 'missing-part',
+            width: 30,
+            x: 0,
+            y: 0
+          }]
+        }
+      })
+    ).toThrow(TypeError)
+    expect(() =>
+      parseAvatarDefinition({
+        ...definition,
+        scene: {
+          ...definition.scene,
+          decals: [{
+            color: '#f29a93',
+            height: 18,
+            id: 'blank-target',
+            label: 'Blank target',
+            opacity: 90,
+            rotation: 0,
+            shape: 'ellipse',
+            targetPartId: ' ',
+            width: 30,
+            x: 0,
+            y: 0
+          }]
+        }
+      })
+    ).toThrow(TypeError)
+    expect(() =>
+      parseAvatarDefinition({
+        ...definition,
+        scene: {
+          ...definition.scene,
+          entity: { parts: Array(1), preset: 'custom' }
+        }
+      })
+    ).toThrow(TypeError)
     const duplicatePart = {
       baseColor: '#111111',
       face: true,
@@ -266,92 +294,112 @@ describe('OneWorks Avatar public runtime contract', () => {
       y: 0,
       z: 0
     }
-    expect(() => parseAvatarDefinition({
-      ...definition,
-      scene: {
-        ...definition.scene,
-        entity: { parts: [{ ...duplicatePart, id: '' }], preset: 'custom' }
-      }
-    })).toThrow(TypeError)
-    expect(() => parseAvatarDefinition({
-      ...definition,
-      scene: {
-        ...definition.scene,
-        entity: { parts: [{ ...duplicatePart, baseColor: 'bogus' }], preset: 'custom' }
-      }
-    })).toThrow(TypeError)
-    expect(() => parseAvatarDefinition({
-      ...definition,
-      scene: {
-        ...definition.scene,
-        entity: { parts: [{ ...duplicatePart, scaleX: 0 }], preset: 'custom' }
-      }
-    })).toThrow(TypeError)
-    expect(() => parseAvatarDefinition({
-      ...definition,
-      scene: {
-        ...definition.scene,
-        entity: {
-          parts: [{ ...duplicatePart, face: false }],
-          preset: 'custom'
+    expect(() =>
+      parseAvatarDefinition({
+        ...definition,
+        scene: {
+          ...definition.scene,
+          entity: { parts: [{ ...duplicatePart, id: '' }], preset: 'custom' }
         }
-      }
-    })).toThrow(TypeError)
-    expect(() => parseAvatarDefinition({
-      ...definition,
-      scene: {
-        ...definition.scene,
-        entity: {
-          parts: [duplicatePart, { ...duplicatePart, id: 'second' }],
-          preset: 'custom'
+      })
+    ).toThrow(TypeError)
+    expect(() =>
+      parseAvatarDefinition({
+        ...definition,
+        scene: {
+          ...definition.scene,
+          entity: { parts: [{ ...duplicatePart, baseColor: 'bogus' }], preset: 'custom' }
         }
-      }
-    })).toThrow(TypeError)
-    expect(() => parseAvatarDefinition({
-      ...definition,
-      scene: {
-        ...definition.scene,
-        entity: {
-          parts: [duplicatePart, { ...duplicatePart }],
-          preset: 'custom'
+      })
+    ).toThrow(TypeError)
+    expect(() =>
+      parseAvatarDefinition({
+        ...definition,
+        scene: {
+          ...definition.scene,
+          entity: { parts: [{ ...duplicatePart, scaleX: 0 }], preset: 'custom' }
         }
-      }
-    })).toThrow(TypeError)
-    expect(() => parseAvatarAnimationClip({
-      anchor: 'absolute',
-      durationMs: 100,
-      keyframes: Array(1),
-      playback: 'once'
-    })).toThrow(TypeError)
+      })
+    ).toThrow(TypeError)
+    expect(() =>
+      parseAvatarDefinition({
+        ...definition,
+        scene: {
+          ...definition.scene,
+          entity: {
+            parts: [{ ...duplicatePart, face: false }],
+            preset: 'custom'
+          }
+        }
+      })
+    ).toThrow(TypeError)
+    expect(() =>
+      parseAvatarDefinition({
+        ...definition,
+        scene: {
+          ...definition.scene,
+          entity: {
+            parts: [duplicatePart, { ...duplicatePart, id: 'second' }],
+            preset: 'custom'
+          }
+        }
+      })
+    ).toThrow(TypeError)
+    expect(() =>
+      parseAvatarDefinition({
+        ...definition,
+        scene: {
+          ...definition.scene,
+          entity: {
+            parts: [duplicatePart, { ...duplicatePart }],
+            preset: 'custom'
+          }
+        }
+      })
+    ).toThrow(TypeError)
+    expect(() =>
+      parseAvatarAnimationClip({
+        anchor: 'absolute',
+        durationMs: 100,
+        keyframes: Array(1),
+        playback: 'once'
+      })
+    ).toThrow(TypeError)
     expect(() => parseAvatarDefinition({ ...definition, extra: true })).toThrow(TypeError)
     expect(() => parseAvatarDefinition({ ...definition, animations: null })).toThrow(TypeError)
     expect(() => parseAvatarDefinition({ ...definition, metadata: null })).toThrow(TypeError)
-    expect(() => parseAvatarDefinition({
-      ...definition,
-      scene: { ...definition.scene, extra: true }
-    })).toThrow(TypeError)
-    expect(() => parseAvatarDefinition({
-      ...definition,
-      scene: { ...definition.scene, view: { ...definition.scene.view, extra: true } }
-    })).toThrow(TypeError)
+    expect(() =>
+      parseAvatarDefinition({
+        ...definition,
+        scene: { ...definition.scene, extra: true }
+      })
+    ).toThrow(TypeError)
+    expect(() =>
+      parseAvatarDefinition({
+        ...definition,
+        scene: { ...definition.scene, view: { ...definition.scene.view, extra: true } }
+      })
+    ).toThrow(TypeError)
     expect(() =>
       parseAvatarDefinition({
         ...definition,
         scene: { ...definition.scene, face: { ...definition.scene.face, width: undefined } }
       })
     ).toThrow(TypeError)
-    expect(() => parseAvatarDefinition({
-      ...definition,
-      animations: {
-        groups: {
-          broken: {
-            clips: { nod },
-            defaultClip: 'missing'
-          }
-        },
-        id: 'broken'
-      }
-    })).toThrow(TypeError)
+    expect(() =>
+      parseAvatarDefinition({
+        ...definition,
+        animations: {
+          groups: {
+            broken: {
+              clips: { nod },
+              defaultClip: 'missing'
+            }
+          },
+          id: 'broken'
+        }
+      })
+    ).toThrow(TypeError)
     expect(() =>
       parseAvatarAnimationClip({
         ...nod,
@@ -553,6 +601,52 @@ describe('OneWorks Avatar public runtime contract', () => {
             }
           },
           id: 'broken'
+        }
+      })
+    ).toThrow(TypeError)
+  })
+
+  it('validates the optional pixel effect and sampling algorithm', () => {
+    const definition = createDefaultAvatarDefinition()
+    const pixelated = {
+      ...definition,
+      scene: {
+        ...definition.scene,
+        effects: {
+          ...definition.scene.effects,
+          pixelate: {
+            blockSize: 12,
+            dithering: 'ordered' as const,
+            enabled: true,
+            paletteSize: 16 as const,
+            sampling: 'slic' as const
+          }
+        }
+      }
+    }
+
+    expect(parseAvatarDefinition(serializeAvatarDefinition(pixelated))).toEqual(pixelated)
+    expect(() =>
+      parseAvatarDefinition({
+        ...pixelated,
+        scene: {
+          ...pixelated.scene,
+          effects: {
+            ...pixelated.scene.effects,
+            pixelate: { ...pixelated.scene.effects.pixelate, sampling: 'bilinear' }
+          }
+        }
+      })
+    ).toThrow(TypeError)
+    expect(() =>
+      parseAvatarDefinition({
+        ...pixelated,
+        scene: {
+          ...pixelated.scene,
+          effects: {
+            ...pixelated.scene.effects,
+            pixelate: { ...pixelated.scene.effects.pixelate, blockSize: 2.5 }
+          }
         }
       })
     ).toThrow(TypeError)

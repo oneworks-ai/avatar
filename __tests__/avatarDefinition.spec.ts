@@ -9,6 +9,8 @@ import {
 import type { AvatarAnimationLibrary } from '@oneworks/avatar'
 
 import { DEFAULT_AVATAR_VIEW_STATE } from '../src/InteractiveAvatar'
+import { AVATAR_ANIMATION_PRESETS, resolveAvatarAnimationPreset } from '../src/avatarAnimations'
+import type { SavedAvatarAnimation } from '../src/avatarAnimations'
 import {
   avatarAnimationClipToSavedAnimation,
   avatarDefinitionToSearchParams,
@@ -17,8 +19,6 @@ import {
   flattenAvatarAnimationLibraries,
   savedAvatarAnimationToClip
 } from '../src/avatarDefinition'
-import { AVATAR_ANIMATION_PRESETS, resolveAvatarAnimationPreset } from '../src/avatarAnimations'
-import type { SavedAvatarAnimation } from '../src/avatarAnimations'
 import {
   AVATAR_BUILT_IN_ENTITY_PRESETS,
   createAvatarEntityParts,
@@ -128,6 +128,13 @@ describe('Avatar editor public definition bridge', () => {
       lightDistance: 0,
       lightElevation: 40,
       paletteId: 'white',
+      pixelEffect: {
+        blockSize: 10,
+        dithering: 'none',
+        enabled: true,
+        paletteSize: 16,
+        sampling: 'center'
+      },
       showAvatarShadow: true,
       showFrameShadow: true,
       showLight: false,
@@ -170,11 +177,37 @@ describe('Avatar editor public definition bridge', () => {
     expect(params.get('shadowColor')).toBe('#123456')
     expect(params.get('frameShadowColor')).toBe('#654321')
     expect(params.get('eyeHighlight')).toBe('0')
+    expect(params.get('pixel')).toBe('1')
+    expect(params.get('pixelSize')).toBe('10')
+    expect(params.get('pixelColors')).toBe('16')
+    expect(params.get('pixelSample')).toBe('center')
+    expect(params.get('pixelDither')).toBe('none')
     expect(params.get('decals')).toContain('blush-left')
     expect(params.get('decals')).toContain('back')
     expect(deserializeAvatarEntityParts(params.get('entityParts'), 'custom')).toMatchObject(customParts)
     expect(parseAvatarDefinition(definition)).toEqual(definition)
     expect(createAvatarDefinition(avatarDefinitionToState(definition), definition)).toEqual(definition)
+  })
+
+  it('preserves explicit disabled pixel settings through the editor bridge', () => {
+    const base = createDefaultAvatarDefinition()
+    const pixelEffect = {
+      blockSize: 18,
+      dithering: 'ordered' as const,
+      enabled: false,
+      paletteSize: 8 as const,
+      sampling: 'median' as const
+    }
+    const definition = {
+      ...base,
+      scene: {
+        ...base.scene,
+        effects: { ...base.scene.effects, pixelate: pixelEffect }
+      }
+    }
+
+    expect(createAvatarDefinition(avatarDefinitionToState(definition), definition)).toEqual(definition)
+    expect(createAvatarDefinition(avatarDefinitionToState(definition)).scene.effects.pixelate).toEqual(pixelEffect)
   })
 
   it('converts external animation groups into editable editor entries', () => {
@@ -317,10 +350,12 @@ describe('Avatar editor public definition bridge', () => {
     expect(externalOverride.animations?.id).toBe('document')
     expect(externalOverride.animations?.groups.primary.clips.second.label).toBe('Second')
     expect(externalOverride.animations?.groups.document.clips.animation.label).toBe('Edited')
-    expect(flattenAvatarAnimationLibraries([
-      externalOverride.animations!,
-      { ...library, groups: { primary: library.groups.primary! } }
-    ], definition.scene).map(entry => entry.libraryId)).toEqual([
+    expect(
+      flattenAvatarAnimationLibraries([
+        externalOverride.animations!,
+        { ...library, groups: { primary: library.groups.primary! } }
+      ], definition.scene).map(entry => entry.libraryId)
+    ).toEqual([
       'document',
       'document',
       'document',

@@ -9,12 +9,19 @@ import {
   AVATAR_LIGHTING_RANGES,
   AVATAR_OUTLINE_RANGES,
   AVATAR_PALETTES,
+  AVATAR_PIXEL_EFFECT_RANGES,
   AVATAR_SHADOW_RANGES,
   DEFAULT_AVATAR_GLYPH_EXPRESSION,
+  DEFAULT_AVATAR_PIXEL_EFFECT,
   getAvatarPalette,
   isSupportedAvatarGlyphExpression
 } from '@oneworks/avatar'
-import type { AvatarAnimationLibrary, AvatarBackgroundStyle, AvatarDefinition } from '@oneworks/avatar'
+import type {
+  AvatarAnimationLibrary,
+  AvatarBackgroundStyle,
+  AvatarDefinition,
+  AvatarPixelEffect
+} from '@oneworks/avatar'
 
 import { AnimationPanel } from './AnimationPanel'
 import { AvatarControls } from './AvatarControls'
@@ -92,20 +99,20 @@ import { createAvatarGif } from './avatarGifExport'
 import { LAST_EDITOR_QUERY_STORAGE_KEY } from './avatarHome'
 import { useAvatarLocale } from './avatarLocale'
 import {
-  captureAvatarScreenshot,
-  loadSavedAvatarPresets,
-  persistSavedAvatarPresets,
-  prependSavedAvatarPreset,
-  renderAvatarPngBlob,
-  serializeAvatarSvg
-} from './savedAvatarPresets'
-import type { SavedAvatarPreset } from './savedAvatarPresets'
-import {
   createAvatarSurfaceDecal,
   deserializeAvatarSurfaceDecals,
   serializeAvatarSurfaceDecals
 } from './avatarSurfaceDecals'
 import type { AvatarSurfaceDecal } from './avatarSurfaceDecals'
+import {
+  captureAvatarScreenshot,
+  loadSavedAvatarPresets,
+  persistSavedAvatarPresets,
+  prependSavedAvatarPreset,
+  renderAvatarPngBlob,
+  renderAvatarSvgSource
+} from './savedAvatarPresets'
+import type { SavedAvatarPreset } from './savedAvatarPresets'
 
 const INITIAL_EMOTICON = DEFAULT_AVATAR_GLYPH_EXPRESSION
 const INITIAL_PARTS = Array.from(INITIAL_EMOTICON)
@@ -141,6 +148,25 @@ const DEFAULT_FRAME_SHADOW_STYLE: AvatarDropShadowStyle = {
 const DEFAULT_CONTROLS_WIDTH = 420
 const SYSTEM_DARK_MEDIA_QUERY = '(prefers-color-scheme: dark)'
 const AVATAR_GITHUB_URL = 'https://github.com/oneworks-ai/avatar'
+
+const parseAvatarPixelSampling = (value: string | null): AvatarPixelEffect['sampling'] => {
+  switch (value) {
+    case 'center':
+    case 'dominant':
+    case 'median':
+    case 'slic':
+      return value
+    case 'nearest':
+      return 'center'
+    case 'box':
+      return 'dominant'
+    case 'lanczos3':
+      return 'slic'
+    default:
+      return DEFAULT_AVATAR_PIXEL_EFFECT.sampling
+  }
+}
+
 type SavePresetState = 'error' | 'idle' | 'saved' | 'saving'
 type GifExportState = 'error' | 'exporting' | 'idle'
 type AvatarTheme = 'dark' | 'light'
@@ -176,6 +202,7 @@ interface AvatarQueryConfig {
   readonly linkEyes: boolean
   readonly leftEye: string
   readonly mouth: string
+  readonly pixelEffect: AvatarPixelEffect
   readonly rightEye: string
   readonly selectedPaletteId: string
   readonly showLight: boolean
@@ -201,6 +228,7 @@ interface AnimationThumbnailCaptureRequest {
   readonly lightDistance: number
   readonly lightElevation: number
   readonly paletteId: string
+  readonly pixelEffect: AvatarPixelEffect
   readonly scale: number
   readonly showLight: boolean
   readonly showOutline: boolean
@@ -419,11 +447,11 @@ const parseQueryConfig = (params: URLSearchParams): AvatarQueryConfig => {
       ),
       leftEyeHeight: params.has('eyeLeftH')
         ? parseRangeValue(
-            params.get('eyeLeftH'),
-            DEFAULT_AVATAR_FACE_STYLE.height,
-            AVATAR_FACE_RANGES.leftEyeHeight.min,
-            AVATAR_FACE_RANGES.leftEyeHeight.max
-          )
+          params.get('eyeLeftH'),
+          DEFAULT_AVATAR_FACE_STYLE.height,
+          AVATAR_FACE_RANGES.leftEyeHeight.min,
+          AVATAR_FACE_RANGES.leftEyeHeight.max
+        )
         : undefined,
       leftEyeRotation: parseRangeValue(
         params.get('eyeLeftRot'),
@@ -503,11 +531,11 @@ const parseQueryConfig = (params: URLSearchParams): AvatarQueryConfig => {
       ),
       rightEyeHeight: params.has('eyeRightH')
         ? parseRangeValue(
-            params.get('eyeRightH'),
-            DEFAULT_AVATAR_FACE_STYLE.height,
-            AVATAR_FACE_RANGES.rightEyeHeight.min,
-            AVATAR_FACE_RANGES.rightEyeHeight.max
-          )
+          params.get('eyeRightH'),
+          DEFAULT_AVATAR_FACE_STYLE.height,
+          AVATAR_FACE_RANGES.rightEyeHeight.min,
+          AVATAR_FACE_RANGES.rightEyeHeight.max
+        )
         : undefined,
       width: parseRangeValue(
         params.get('eyeW'),
@@ -598,6 +626,23 @@ const parseQueryConfig = (params: URLSearchParams): AvatarQueryConfig => {
     leftEye,
     linkEyes,
     mouth,
+    pixelEffect: {
+      blockSize: Math.round(parseRangeValue(
+        params.get('pixelSize'),
+        DEFAULT_AVATAR_PIXEL_EFFECT.blockSize,
+        AVATAR_PIXEL_EFFECT_RANGES.blockSize.min,
+        AVATAR_PIXEL_EFFECT_RANGES.blockSize.max
+      )),
+      dithering: params.get('pixelDither') === 'ordered'
+        ? 'ordered'
+        : DEFAULT_AVATAR_PIXEL_EFFECT.dithering,
+      enabled: parseShadow(params.get('pixel')),
+      paletteSize:
+        AVATAR_PIXEL_EFFECT_RANGES.paletteSizes.includes(Number(params.get('pixelColors')) as 8 | 16 | 32 | 64)
+          ? Number(params.get('pixelColors')) as 8 | 16 | 32 | 64
+          : DEFAULT_AVATAR_PIXEL_EFFECT.paletteSize,
+      sampling: parseAvatarPixelSampling(params.get('pixelSample'))
+    },
     rightEye,
     selectedPaletteId,
     showLight: parseLight(params.get('light')),
@@ -662,6 +707,7 @@ const getInitialQueryConfig = (definition?: AvatarDefinition) => {
       lightElevation: state.lightElevation,
       linkEyes: state.glyph.linkEyes,
       mouth: state.glyph.mouth,
+      pixelEffect: state.pixelEffect,
       rightEye: state.glyph.rightEye,
       selectedPaletteId: state.paletteId,
       showAvatarShadow: state.showAvatarShadow,
@@ -782,6 +828,7 @@ function App({
   const [faceShadowStyle, setFaceShadowStyle] = useState<AvatarFaceShadowStyle>(initialConfig.faceShadowStyle)
   const [avatarShadowStyle, setAvatarShadowStyle] = useState<AvatarDropShadowStyle>(initialConfig.avatarShadowStyle)
   const [avatarOutlineStyle, setAvatarOutlineStyle] = useState<AvatarOutlineStyle>(initialConfig.avatarOutlineStyle)
+  const [pixelEffect, setPixelEffect] = useState<AvatarPixelEffect>(initialConfig.pixelEffect)
   const [frameShadowStyle, setFrameShadowStyle] = useState<AvatarDropShadowStyle>(initialConfig.frameShadowStyle)
   const [gridDensity, setGridDensity] = useState(initialConfig.gridDensity)
   const [showLight, setShowLight] = useState(initialConfig.showLight)
@@ -927,6 +974,7 @@ function App({
       lightDistance,
       lightElevation,
       paletteId: selectedPaletteId,
+      pixelEffect,
       showAvatarShadow,
       showFrameShadow,
       showLight,
@@ -959,6 +1007,7 @@ function App({
     lightElevation,
     linkEyes,
     mouth,
+    pixelEffect,
     resolvedFaceShadowStyle,
     resolvedFaceStyle,
     rightEye,
@@ -1135,6 +1184,11 @@ function App({
     params.set('outlineColor', avatarOutlineStyle.color)
     params.set('outlineWidth', String(avatarOutlineStyle.width))
     params.set('outlineOpacity', String(avatarOutlineStyle.opacity))
+    params.set('pixel', pixelEffect.enabled ? '1' : '0')
+    params.set('pixelSize', String(pixelEffect.blockSize))
+    params.set('pixelColors', String(pixelEffect.paletteSize))
+    params.set('pixelSample', pixelEffect.sampling)
+    params.set('pixelDither', pixelEffect.dithering)
     params.set('frameShadow', showFrameShadow ? '1' : '0')
     params.set('frameShadowDir', String(frameShadowStyle.direction))
     params.set('frameShadowDist', String(frameShadowStyle.distance))
@@ -1207,6 +1261,7 @@ function App({
     interactionMode,
     linkEyes,
     previewEmoticon,
+    pixelEffect,
     resolvedFaceStyle,
     resolvedFaceShadowStyle,
     selectedPalette.id,
@@ -1255,6 +1310,7 @@ function App({
       setAnimationOpen(config.animationOpen)
       setAvatarOutlineStyle(config.avatarOutlineStyle)
       setAvatarShadowStyle(config.avatarShadowStyle)
+      setPixelEffect(config.pixelEffect)
       setAvatarViewState(config.viewState)
       setAnimationPreviewViewState(config.viewState)
       setBackgroundStyle(config.backgroundStyle)
@@ -1329,6 +1385,7 @@ function App({
     lightAzimuth,
     lightDistance,
     lightElevation,
+    pixelEffect,
     savedPresets,
     selectedPaletteId,
     selectedSavedPresetId,
@@ -1355,7 +1412,11 @@ function App({
       }
 
       void Promise.all(
-        sourceSvgs.map(sourceSvg => captureAvatarScreenshot(sourceSvg))
+        sourceSvgs.map(sourceSvg =>
+          captureAvatarScreenshot(sourceSvg, {
+            pixelEffect: captureRequest.pixelEffect
+          })
+        )
       ).then(screenshots => {
         if (cancelled || animationThumbnailCaptureIdRef.current !== captureRequest.id) return
         const capturedKeyframes = captureRequest.keyframes.map((keyframe, index) => ({
@@ -1415,6 +1476,7 @@ function App({
       ...frameShadowStyle,
       color: frameShadowStyle.color ?? selectedPalette.shadow
     },
+    pixelEffect,
     showFrameShadow
   }
 
@@ -1452,6 +1514,7 @@ function App({
       setLightAzimuth(nextScene.lightAzimuth)
       setLightDistance(nextScene.lightDistance)
       setLightElevation(nextScene.lightElevation)
+      setPixelEffect(DEFAULT_AVATAR_PIXEL_EFFECT)
       setSelectedPaletteId(nextScene.paletteId)
       setShowAvatarShadow(nextScene.showAvatarShadow)
       setShowFrameShadow(nextScene.showFrameShadow)
@@ -1466,23 +1529,24 @@ function App({
   const handleCopy = async () => {
     const sourceSvg = avatarFrameRef.current?.querySelector<SVGSVGElement>('svg.interactive-avatar__canvas')
     if (sourceSvg == null) return
-    await navigator.clipboard.writeText(serializeAvatarSvg(sourceSvg, exportSize, {
-      ...avatarCaptureOptions
-    }))
+    await navigator.clipboard.writeText(
+      await renderAvatarSvgSource(sourceSvg, exportSize, {
+        ...avatarCaptureOptions
+      })
+    )
     setCopyState('copied')
     window.setTimeout(() => setCopyState('idle'), 1400)
   }
 
-  const handleDownload = () => {
+  const handleDownload = async () => {
     const sourceSvg = avatarFrameRef.current?.querySelector<SVGSVGElement>('svg.interactive-avatar__canvas')
     if (sourceSvg == null) return
+    const source = await renderAvatarSvgSource(sourceSvg, exportSize, {
+      ...avatarCaptureOptions
+    })
     downloadBlob(
       `oneworks-avatar-${entityPreset}-${exportSize}.svg`,
-      new Blob([
-        serializeAvatarSvg(sourceSvg, exportSize, {
-          ...avatarCaptureOptions
-        })
-      ], { type: 'image/svg+xml;charset=utf-8' })
+      new Blob([source], { type: 'image/svg+xml;charset=utf-8' })
     )
   }
 
@@ -1591,6 +1655,7 @@ function App({
     setAvatarShadowStyle(config.avatarShadowStyle)
     setFaceShadowStyle(config.faceShadowStyle)
     setFaceStyle(config.faceStyle)
+    setPixelEffect(config.pixelEffect)
     setAnimationPreviewFaceStyle(config.faceStyle)
     setFrameShadowStyle(config.frameShadowStyle)
     setGridDensity(config.gridDensity)
@@ -1643,7 +1708,7 @@ function App({
     const viewStateSnapshot = avatarViewState
     const faceStyleSnapshot = resolvedFaceStyle
     try {
-      const screenshot = await captureAvatarScreenshot(sourceSvg)
+      const screenshot = await captureAvatarScreenshot(sourceSvg, { pixelEffect })
       const keyframe = createAvatarAnimationKeyframe(
         viewStateSnapshot,
         faceStyleSnapshot,
@@ -2016,6 +2081,7 @@ function App({
       lightDistance,
       lightElevation,
       paletteId: selectedPaletteId,
+      pixelEffect,
       scale: avatarViewState.scale,
       showLight,
       showOutline,
@@ -2049,6 +2115,7 @@ function App({
         lightDirection={lightDirection}
         onViewStateChange={ignoreAvatarViewStateChange}
         palette={selectedPalette}
+        pixelEffect={pixelEffect}
         renderSurfaceCells={false}
         shadowStyle={resolvedFaceShadowStyle}
         showLight={showLight}
@@ -2074,6 +2141,7 @@ function App({
     lightDistance,
     resolvedFaceShadowStyle,
     selectedPalette,
+    pixelEffect,
     showLight,
     showOutline,
     showShadow
@@ -2322,6 +2390,7 @@ function App({
                 onEntityPartSelect={setSelectedEntityPartId}
                 onViewStateChange={handleAvatarViewStateChange}
                 palette={selectedPalette}
+                pixelEffect={pixelEffect}
                 selectedEntityPartId={selectedEntityPartId}
                 shadowStyle={resolvedFaceShadowStyle}
                 showLight={showLight}
@@ -2390,6 +2459,7 @@ function App({
           lightAzimuth={lightAzimuth}
           lightDistance={lightDistance}
           lightElevation={lightElevation}
+          pixelEffect={pixelEffect}
           onBackgroundStyleChange={(style) => {
             setBackgroundStyle(style)
             setCopyState('idle')
@@ -2469,6 +2539,10 @@ function App({
             setActiveAnimationKeyframe(null)
             setSelectedPaletteId(paletteId)
             setEntityParts(currentParts => applyAvatarEntityPalette(currentParts, nextPalette))
+            setCopyState('idle')
+          }}
+          onPixelEffectChange={(patch) => {
+            setPixelEffect(current => ({ ...current, ...patch }))
             setCopyState('idle')
           }}
           onEntityPresetChange={handleEntityPresetChange}

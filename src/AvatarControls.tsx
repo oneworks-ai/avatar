@@ -6,15 +6,29 @@ import {
   AVATAR_FACE_RANGES,
   AVATAR_LIGHTING_RANGES,
   AVATAR_OUTLINE_RANGES,
+  AVATAR_PIXEL_EFFECT_RANGES,
   AVATAR_SHADOW_RANGES,
   AVATAR_SURFACE_DECAL_RANGES
 } from '@oneworks/avatar'
-import type { AvatarBackgroundStyle, AvatarPalette } from '@oneworks/avatar'
+import type {
+  AvatarBackgroundStyle,
+  AvatarPalette,
+  AvatarPixelEffect,
+  AvatarPixelSampling
+} from '@oneworks/avatar'
 import { useEffect, useId, useRef, useState } from 'react'
 import type { CSSProperties, KeyboardEvent, PointerEvent, ReactNode } from 'react'
 
 import { AVATAR_BODY_SHAPES, EntityPresetPreview } from './InteractiveAvatar'
 import type { AvatarBodyShape, AvatarDropShadowStyle, AvatarOutlineStyle } from './InteractiveAvatar'
+import {
+  AVATAR_BUILT_IN_ENTITY_PRESETS,
+  hasMultipleAvatarEntityMaterials,
+  resolveAvatarEntityPartScaleZ
+} from './avatarEntityPresets'
+import type { AvatarEntityPart, AvatarEntityPreset } from './avatarEntityPresets'
+import { AVATAR_FACE_PRESETS, DEFAULT_AVATAR_FACE_PRESET, isAvatarFacePresetSelected } from './avatarFacePresets'
+import type { AvatarFacePreset } from './avatarFacePresets'
 import { DEFAULT_AVATAR_FACE_STYLE, projectDefaultFace } from './avatarGeometry'
 import type {
   AvatarEyeShape,
@@ -25,25 +39,13 @@ import type {
 } from './avatarGeometry'
 import { useAvatarLocale } from './avatarLocale'
 import {
-  AVATAR_FACE_PRESETS,
-  DEFAULT_AVATAR_FACE_PRESET,
-  isAvatarFacePresetSelected
-} from './avatarFacePresets'
-import type { AvatarFacePreset } from './avatarFacePresets'
-import {
-  AVATAR_BUILT_IN_ENTITY_PRESETS,
-  hasMultipleAvatarEntityMaterials,
-  resolveAvatarEntityPartScaleZ
-} from './avatarEntityPresets'
-import type { AvatarEntityPart, AvatarEntityPreset } from './avatarEntityPresets'
-import {
   loadAvatarPresetUsage,
   persistAvatarPresetUsage,
   sortAvatarPresetItems,
   touchAvatarPresetUsage
 } from './avatarPresetUsage'
-import type { SavedAvatarPreset } from './savedAvatarPresets'
 import type { AvatarSurfaceDecal, AvatarSurfaceDecalShape } from './avatarSurfaceDecals'
+import type { SavedAvatarPreset } from './savedAvatarPresets'
 
 export type AvatarControlTab = 'body' | 'build' | 'effects' | 'style'
 export type AvatarCameraFrame = 'circle' | 'rounded' | 'square'
@@ -74,6 +76,7 @@ type ControlIconName =
   | 'nose'
   | 'outline'
   | 'palette'
+  | 'pixel'
   | 'shadow'
   | 'solid'
   | 'transparent'
@@ -121,6 +124,7 @@ interface AvatarControlsProps {
   readonly onLightDistanceChange: (value: number) => void
   readonly onLightElevationChange: (value: number) => void
   readonly onPaletteChange: (paletteId: string) => void
+  readonly onPixelEffectChange: (effect: Partial<AvatarPixelEffect>) => void
   readonly onEntityPresetChange: (preset: AvatarEntityPreset) => void
   readonly onEntityPartChange: (id: string, part: Partial<AvatarEntityPart>) => void
   readonly onResetFace: () => void
@@ -138,6 +142,7 @@ interface AvatarControlsProps {
   readonly onToggleFrameShadow: () => void
   readonly onToggleShadow: () => void
   readonly selectedPalette: AvatarPalette
+  readonly pixelEffect: AvatarPixelEffect
   readonly selectedEntityPartId: string | null
   readonly selectedSavedPresetId: string | null
   readonly selectedSurfaceDecalId: string | null
@@ -232,9 +237,24 @@ const getSavedPresetFrame = (query: string): AvatarCameraFrame => {
 }
 
 const CAMERA_BACKGROUND_PRESETS = [
-  '#111315', '#f2f0eb', '#24334a', '#3f201c', '#173d35', '#382641',
-  '#ff766c', '#0e4fe7', '#f2bd4f', '#7568e7', '#f6b8cf', '#56d6cc',
-  '#c9e76c', '#87bfff', '#f08c46', '#d9c8ff', '#efe5cc', '#8ec5a4'
+  '#111315',
+  '#f2f0eb',
+  '#24334a',
+  '#3f201c',
+  '#173d35',
+  '#382641',
+  '#ff766c',
+  '#0e4fe7',
+  '#f2bd4f',
+  '#7568e7',
+  '#f6b8cf',
+  '#56d6cc',
+  '#c9e76c',
+  '#87bfff',
+  '#f08c46',
+  '#d9c8ff',
+  '#efe5cc',
+  '#8ec5a4'
 ] as const
 const DEFAULT_CAMERA_BACKGROUND_COLOR = CAMERA_BACKGROUND_PRESETS[0]
 
@@ -318,6 +338,16 @@ function ControlIcon({ name }: { readonly name: ControlIconName }) {
           <>
             <circle cx='10' cy='10' r='3.2' />
             <path d='M10 2.2v2M10 15.8v2M2.2 10h2M15.8 10h2M4.5 4.5 6 6M14 14l1.5 1.5M15.5 4.5 14 6M6 14l-1.5 1.5' />
+          </>
+        )
+        : null}
+      {name === 'pixel'
+        ? (
+          <>
+            <rect x='3' y='3' width='5' height='5' rx='.6' />
+            <rect x='12' y='3' width='5' height='5' rx='.6' />
+            <rect x='3' y='12' width='5' height='5' rx='.6' />
+            <rect x='12' y='12' width='5' height='5' rx='.6' />
           </>
         )
         : null}
@@ -410,7 +440,49 @@ function GeometricShapeIcon({ shape }: { readonly shape: GeometricShapeIconName 
       {shape === 'ellipse' ? <ellipse cx='20' cy='16' rx='12' ry='9' /> : null}
       {shape === 'rounded' ? <rect x='9' y='6' width='22' height='20' rx='5' /> : null}
       {shape === 'square' ? <rect x='10' y='6' width='20' height='20' /> : null}
-      {shape === 'inverted-triangle' ? <path d='M7 9C10 3 30 3 33 9c3 6-6 17-11.5 20q-1.5 1-3 0C13 26 4 15 7 9Z' /> : null}
+      {shape === 'inverted-triangle'
+        ? <path d='M7 9C10 3 30 3 33 9c3 6-6 17-11.5 20q-1.5 1-3 0C13 26 4 15 7 9Z' />
+        : null}
+    </svg>
+  )
+}
+
+function PixelSamplingIcon({ sampling }: { readonly sampling: AvatarPixelSampling }) {
+  return (
+    <svg className='avatar-controls__pixel-sampling-icon' viewBox='0 0 20 20' aria-hidden='true'>
+      {sampling === 'center'
+        ? (
+          <>
+            <path d='M3 3h4v4H3zm5 0h4v4H8zm5 0h4v4h-4zM3 8h4v4H3zm10 0h4v4h-4zM3 13h4v4H3zm5 0h4v4H8zm5 0h4v4h-4z' />
+            <rect data-fill x='8' y='8' width='4' height='4' />
+          </>
+        )
+        : null}
+      {sampling === 'dominant'
+        ? (
+          <>
+            <path d='M3 3h4v4H3zm10 0h4v4h-4zM3 13h4v4H3zm10 0h4v4h-4z' />
+            <path data-fill d='M8 3h4v4H8zM3 8h4v4H3zm5 0h4v4H8zm5 0h4v4h-4zM8 13h4v4H8z' />
+          </>
+        )
+        : null}
+      {sampling === 'median'
+        ? (
+          <>
+            <rect x='3' y='3' width='14' height='3.5' />
+            <rect data-fill x='3' y='8.25' width='14' height='3.5' />
+            <rect x='3' y='13.5' width='14' height='3.5' />
+          </>
+        )
+        : null}
+      {sampling === 'slic'
+        ? (
+          <>
+            <path d='m3 3 6 1 1 5-6 1-1-7Zm7 1 7-1v6l-7 1V4ZM4 10l6-1 1 7-8 1 1-7Zm6-1 7 1v7l-6-1-1-7Z' />
+            <rect data-fill x='8.5' y='7.5' width='3' height='3' rx='.4' />
+          </>
+        )
+        : null}
     </svg>
   )
 }
@@ -566,6 +638,7 @@ export function AvatarControls({
   lightAzimuth,
   lightDistance,
   lightElevation,
+  pixelEffect,
   onBackgroundStyleChange,
   onAvatarOutlineStyleChange,
   onAvatarShadowStyleChange,
@@ -582,6 +655,7 @@ export function AvatarControls({
   onLightDistanceChange,
   onLightElevationChange,
   onPaletteChange,
+  onPixelEffectChange,
   onEntityPresetChange,
   onEntityPartChange,
   onAddSurfaceDecal,
@@ -644,20 +718,25 @@ export function AvatarControls({
     preset => `face:${preset.id}`,
     presetUsage
   )
-  const savedPresetItems = sortAvatarPresetItems<AvatarSavedPresetItem>([
-    ...AVATAR_BUILT_IN_ENTITY_PRESETS.map(preset => ({
-      createdAt: 0,
-      key: `entity:${preset}`,
-      kind: 'entity' as const,
-      preset
-    })),
-    ...savedPresets.map(preset => ({
-      createdAt: preset.createdAt,
-      key: `saved:${preset.id}`,
-      kind: 'saved' as const,
-      preset
-    }))
-  ], item => item.key, presetUsage, item => item.createdAt)
+  const savedPresetItems = sortAvatarPresetItems<AvatarSavedPresetItem>(
+    [
+      ...AVATAR_BUILT_IN_ENTITY_PRESETS.map(preset => ({
+        createdAt: 0,
+        key: `entity:${preset}`,
+        kind: 'entity' as const,
+        preset
+      })),
+      ...savedPresets.map(preset => ({
+        createdAt: preset.createdAt,
+        key: `saved:${preset.id}`,
+        kind: 'saved' as const,
+        preset
+      }))
+    ],
+    item => item.key,
+    presetUsage,
+    item => item.createdAt
+  )
   const compactFacePresets = facePresets.length > compactPresetCapacity
     ? facePresets.slice(0, compactPresetCapacity - 1)
     : facePresets
@@ -1035,12 +1114,13 @@ export function AvatarControls({
                         checked={faceStyle.eyeHighlight.enabled}
                         icon='eyes'
                         label='Eye highlights'
-                        onChange={() => onFaceStyleChange({
-                          eyeHighlight: {
-                            ...faceStyle.eyeHighlight,
-                            enabled: !faceStyle.eyeHighlight.enabled
-                          }
-                        })}
+                        onChange={() =>
+                          onFaceStyleChange({
+                            eyeHighlight: {
+                              ...faceStyle.eyeHighlight,
+                              enabled: !faceStyle.eyeHighlight.enabled
+                            }
+                          })}
                       />
                       {faceStyle.eyeHighlight.enabled
                         ? (
@@ -1051,9 +1131,10 @@ export function AvatarControls({
                                 type='color'
                                 aria-label={t('Highlight color')}
                                 value={faceStyle.eyeHighlight.color}
-                                onChange={event => onFaceStyleChange({
-                                  eyeHighlight: { ...faceStyle.eyeHighlight, color: event.currentTarget.value }
-                                })}
+                                onChange={event =>
+                                  onFaceStyleChange({
+                                    eyeHighlight: { ...faceStyle.eyeHighlight, color: event.currentTarget.value }
+                                  })}
                               />
                             </label>
                             <ValueSlider
@@ -1063,9 +1144,10 @@ export function AvatarControls({
                               max={AVATAR_EYE_HIGHLIGHT_RANGES.size.max}
                               suffix='%'
                               value={faceStyle.eyeHighlight.size}
-                              onChange={size => onFaceStyleChange({
-                                eyeHighlight: { ...faceStyle.eyeHighlight, size }
-                              })}
+                              onChange={size =>
+                                onFaceStyleChange({
+                                  eyeHighlight: { ...faceStyle.eyeHighlight, size }
+                                })}
                             />
                             <ValueSlider
                               ariaLabel='Eye highlight horizontal position'
@@ -1074,9 +1156,10 @@ export function AvatarControls({
                               max={AVATAR_EYE_HIGHLIGHT_RANGES.offsetX.max}
                               suffix='%'
                               value={faceStyle.eyeHighlight.offsetX}
-                              onChange={offsetX => onFaceStyleChange({
-                                eyeHighlight: { ...faceStyle.eyeHighlight, offsetX }
-                              })}
+                              onChange={offsetX =>
+                                onFaceStyleChange({
+                                  eyeHighlight: { ...faceStyle.eyeHighlight, offsetX }
+                                })}
                             />
                             <ValueSlider
                               ariaLabel='Eye highlight vertical position'
@@ -1085,9 +1168,10 @@ export function AvatarControls({
                               max={AVATAR_EYE_HIGHLIGHT_RANGES.offsetY.max}
                               suffix='%'
                               value={faceStyle.eyeHighlight.offsetY}
-                              onChange={offsetY => onFaceStyleChange({
-                                eyeHighlight: { ...faceStyle.eyeHighlight, offsetY }
-                              })}
+                              onChange={offsetY =>
+                                onFaceStyleChange({
+                                  eyeHighlight: { ...faceStyle.eyeHighlight, offsetY }
+                                })}
                             />
                             <ValueSlider
                               ariaLabel='Eye highlight opacity'
@@ -1096,9 +1180,10 @@ export function AvatarControls({
                               max={AVATAR_EYE_HIGHLIGHT_RANGES.opacity.max}
                               suffix='%'
                               value={faceStyle.eyeHighlight.opacity}
-                              onChange={opacity => onFaceStyleChange({
-                                eyeHighlight: { ...faceStyle.eyeHighlight, opacity }
-                              })}
+                              onChange={opacity =>
+                                onFaceStyleChange({
+                                  eyeHighlight: { ...faceStyle.eyeHighlight, opacity }
+                                })}
                             />
                           </div>
                         )
@@ -1295,9 +1380,10 @@ export function AvatarControls({
                         <span>{t('Target part')}</span>
                         <select
                           value={editingSurfaceDecal.targetPartId ?? ''}
-                          onChange={event => onSurfaceDecalChange(editingSurfaceDecal.id, {
-                            targetPartId: event.currentTarget.value || null
-                          })}
+                          onChange={event =>
+                            onSurfaceDecalChange(editingSurfaceDecal.id, {
+                              targetPartId: event.currentTarget.value || null
+                            })}
                         >
                           <option value=''>{t('Body')}</option>
                           {entityParts.map(part => <option key={part.id} value={part.id}>{t(part.label)}</option>)}
@@ -1308,13 +1394,14 @@ export function AvatarControls({
                           <span>{t('Surface side')}</span>
                           <select
                             value={editingSurfaceDecal.side ?? 'front'}
-                            onChange={event => onSurfaceDecalChange(editingSurfaceDecal.id, {
-                              side: event.currentTarget.value === 'back' ||
-                                event.currentTarget.value === 'left' ||
-                                event.currentTarget.value === 'right'
-                                ? event.currentTarget.value
-                                : 'front'
-                            })}
+                            onChange={event =>
+                              onSurfaceDecalChange(editingSurfaceDecal.id, {
+                                side: event.currentTarget.value === 'back' ||
+                                    event.currentTarget.value === 'left' ||
+                                    event.currentTarget.value === 'right'
+                                  ? event.currentTarget.value
+                                  : 'front'
+                              })}
                           >
                             <option value='front'>{t('Front')}</option>
                             <option value='right'>{t('Right')}</option>
@@ -1335,47 +1422,79 @@ export function AvatarControls({
                           type='color'
                           aria-label={t('Color')}
                           value={editingSurfaceDecal.color}
-                          onChange={event => onSurfaceDecalChange(editingSurfaceDecal.id, {
-                            color: event.currentTarget.value
-                          })}
+                          onChange={event =>
+                            onSurfaceDecalChange(editingSurfaceDecal.id, {
+                              color: event.currentTarget.value
+                            })}
                         />
                       </label>
                       <div className='avatar-controls__parameter-controls'>
-                        {editingSurfaceDecal.shape === 'radial-pleats' ? (
-                          <ValueSlider ariaLabel='Pleat curvature' label='Curvature'
-                            min={-60} max={60} suffix='°'
-                            value={editingSurfaceDecal.x}
-                            onChange={x => onSurfaceDecalChange(editingSurfaceDecal.id, { x })} />
-                        ) : (
-                          <>
-                            <ValueSlider ariaLabel='Decal position X' label='Position X'
-                              min={AVATAR_SURFACE_DECAL_RANGES.x.min} max={AVATAR_SURFACE_DECAL_RANGES.x.max}
+                        {editingSurfaceDecal.shape === 'radial-pleats'
+                          ? (
+                            <ValueSlider
+                              ariaLabel='Pleat curvature'
+                              label='Curvature'
+                              min={-60}
+                              max={60}
+                              suffix='°'
                               value={editingSurfaceDecal.x}
-                              onChange={x => onSurfaceDecalChange(editingSurfaceDecal.id, { x })} />
-                            <ValueSlider ariaLabel='Decal position Y' label='Position Y'
-                              min={AVATAR_SURFACE_DECAL_RANGES.y.min} max={AVATAR_SURFACE_DECAL_RANGES.y.max}
-                              value={editingSurfaceDecal.y}
-                              onChange={y => onSurfaceDecalChange(editingSurfaceDecal.id, { y })} />
-                          </>
-                        )}
-                        <ValueSlider ariaLabel='Decal width' label='Width'
-                          min={AVATAR_SURFACE_DECAL_RANGES.width.min} max={AVATAR_SURFACE_DECAL_RANGES.width.max}
+                              onChange={x => onSurfaceDecalChange(editingSurfaceDecal.id, { x })}
+                            />
+                          )
+                          : (
+                            <>
+                              <ValueSlider
+                                ariaLabel='Decal position X'
+                                label='Position X'
+                                min={AVATAR_SURFACE_DECAL_RANGES.x.min}
+                                max={AVATAR_SURFACE_DECAL_RANGES.x.max}
+                                value={editingSurfaceDecal.x}
+                                onChange={x => onSurfaceDecalChange(editingSurfaceDecal.id, { x })}
+                              />
+                              <ValueSlider
+                                ariaLabel='Decal position Y'
+                                label='Position Y'
+                                min={AVATAR_SURFACE_DECAL_RANGES.y.min}
+                                max={AVATAR_SURFACE_DECAL_RANGES.y.max}
+                                value={editingSurfaceDecal.y}
+                                onChange={y => onSurfaceDecalChange(editingSurfaceDecal.id, { y })}
+                              />
+                            </>
+                          )}
+                        <ValueSlider
+                          ariaLabel='Decal width'
+                          label='Width'
+                          min={AVATAR_SURFACE_DECAL_RANGES.width.min}
+                          max={AVATAR_SURFACE_DECAL_RANGES.width.max}
                           value={editingSurfaceDecal.width}
-                          onChange={width => onSurfaceDecalChange(editingSurfaceDecal.id, { width })} />
-                        <ValueSlider ariaLabel='Decal height' label='Height'
-                          min={AVATAR_SURFACE_DECAL_RANGES.height.min} max={AVATAR_SURFACE_DECAL_RANGES.height.max}
+                          onChange={width => onSurfaceDecalChange(editingSurfaceDecal.id, { width })}
+                        />
+                        <ValueSlider
+                          ariaLabel='Decal height'
+                          label='Height'
+                          min={AVATAR_SURFACE_DECAL_RANGES.height.min}
+                          max={AVATAR_SURFACE_DECAL_RANGES.height.max}
                           value={editingSurfaceDecal.height}
-                          onChange={height => onSurfaceDecalChange(editingSurfaceDecal.id, { height })} />
-                        <ValueSlider ariaLabel='Decal rotation' label='Rotation'
+                          onChange={height => onSurfaceDecalChange(editingSurfaceDecal.id, { height })}
+                        />
+                        <ValueSlider
+                          ariaLabel='Decal rotation'
+                          label='Rotation'
                           min={AVATAR_SURFACE_DECAL_RANGES.rotation.min}
-                          max={AVATAR_SURFACE_DECAL_RANGES.rotation.max} suffix='°'
+                          max={AVATAR_SURFACE_DECAL_RANGES.rotation.max}
+                          suffix='°'
                           value={editingSurfaceDecal.rotation}
-                          onChange={rotation => onSurfaceDecalChange(editingSurfaceDecal.id, { rotation })} />
-                        <ValueSlider ariaLabel='Decal opacity' label='Opacity'
+                          onChange={rotation => onSurfaceDecalChange(editingSurfaceDecal.id, { rotation })}
+                        />
+                        <ValueSlider
+                          ariaLabel='Decal opacity'
+                          label='Opacity'
                           min={AVATAR_SURFACE_DECAL_RANGES.opacity.min}
-                          max={AVATAR_SURFACE_DECAL_RANGES.opacity.max} suffix='%'
+                          max={AVATAR_SURFACE_DECAL_RANGES.opacity.max}
+                          suffix='%'
                           value={editingSurfaceDecal.opacity}
-                          onChange={opacity => onSurfaceDecalChange(editingSurfaceDecal.id, { opacity })} />
+                          onChange={opacity => onSurfaceDecalChange(editingSurfaceDecal.id, { opacity })}
+                        />
                       </div>
                       <button
                         className='avatar-controls__danger-action'
@@ -1412,9 +1531,10 @@ export function AvatarControls({
                             type='color'
                             aria-label={t(label)}
                             value={editingEntityPart[key]}
-                            onChange={event => onEntityPartChange(editingEntityPart.id, {
-                              [key]: event.currentTarget.value
-                            })}
+                            onChange={event =>
+                              onEntityPartChange(editingEntityPart.id, {
+                                [key]: event.currentTarget.value
+                              })}
                           />
                         </label>
                       ))}
@@ -1570,9 +1690,10 @@ export function AvatarControls({
                         aria-label={t(BODY_SHAPE_LABELS[shape])}
                         aria-pressed={(editingEntityPart?.shape ?? bodyShape) === shape}
                         title={t(BODY_SHAPE_LABELS[shape])}
-                        onClick={() => editingEntityPart == null
-                          ? onBodyShapeChange(shape)
-                          : onEntityPartChange(editingEntityPart.id, { shape })}
+                        onClick={() =>
+                          editingEntityPart == null
+                            ? onBodyShapeChange(shape)
+                            : onEntityPartChange(editingEntityPart.id, { shape })}
                       >
                         <BodyShapeIcon shape={shape} />
                       </button>
@@ -1584,25 +1705,74 @@ export function AvatarControls({
                 ? null
                 : (
                   <div className='avatar-controls__parameter-controls'>
-                    <NumberField ariaLabel='Part position X' label='Position X' value={editingEntityPart.x} onChange={x => onEntityPartChange(editingEntityPart.id, { x })} />
-                    <NumberField ariaLabel='Part position Y' label='Position Y' value={editingEntityPart.y} onChange={y => onEntityPartChange(editingEntityPart.id, { y })} />
-                    <NumberField ariaLabel='Part position Z' label='Position Z' value={editingEntityPart.z} onChange={z => onEntityPartChange(editingEntityPart.id, { z })} />
-                    <ValueSlider ariaLabel='Part width' label='Width'
-                      min={AVATAR_ENTITY_RANGES.scaleX.min * 100} max={AVATAR_ENTITY_RANGES.scaleX.max * 100}
-                      suffix='%' value={editingEntityPart.scaleX * 100}
-                      onChange={value => onEntityPartChange(editingEntityPart.id, { scaleX: value / 100 })} />
-                    <ValueSlider ariaLabel='Part height' label='Height'
-                      min={AVATAR_ENTITY_RANGES.scaleY.min * 100} max={AVATAR_ENTITY_RANGES.scaleY.max * 100}
-                      suffix='%' value={editingEntityPart.scaleY * 100}
-                      onChange={value => onEntityPartChange(editingEntityPart.id, { scaleY: value / 100 })} />
-                    <ValueSlider ariaLabel='Part depth' label='Depth'
-                      min={AVATAR_ENTITY_RANGES.scaleZ.min * 100} max={AVATAR_ENTITY_RANGES.scaleZ.max * 100}
-                      suffix='%' value={resolveAvatarEntityPartScaleZ(editingEntityPart) * 100}
-                      onChange={value => onEntityPartChange(editingEntityPart.id, { scaleZ: value / 100 })} />
-                    <NumberField ariaLabel='Part rotation X' label='Rotation X' suffix='°' value={editingEntityPart.rotationX ?? 0} onChange={rotationX => onEntityPartChange(editingEntityPart.id, { rotationX })} />
-                    <NumberField ariaLabel='Part rotation Y' label='Rotation Y' suffix='°' value={editingEntityPart.rotationY ?? 0} onChange={rotationY => onEntityPartChange(editingEntityPart.id, { rotationY })} />
-                    <NumberField ariaLabel='Part rotation Z' label='Rotation Z' suffix='°' value={editingEntityPart.rotationZ ?? 0} onChange={rotationZ => onEntityPartChange(editingEntityPart.id, { rotationZ })} />
-                    {editingEntityPart.shape === 'cone' || editingEntityPart.shape === 'frustum' || editingEntityPart.shape === 'half-cone'
+                    <NumberField
+                      ariaLabel='Part position X'
+                      label='Position X'
+                      value={editingEntityPart.x}
+                      onChange={x => onEntityPartChange(editingEntityPart.id, { x })}
+                    />
+                    <NumberField
+                      ariaLabel='Part position Y'
+                      label='Position Y'
+                      value={editingEntityPart.y}
+                      onChange={y => onEntityPartChange(editingEntityPart.id, { y })}
+                    />
+                    <NumberField
+                      ariaLabel='Part position Z'
+                      label='Position Z'
+                      value={editingEntityPart.z}
+                      onChange={z => onEntityPartChange(editingEntityPart.id, { z })}
+                    />
+                    <ValueSlider
+                      ariaLabel='Part width'
+                      label='Width'
+                      min={AVATAR_ENTITY_RANGES.scaleX.min * 100}
+                      max={AVATAR_ENTITY_RANGES.scaleX.max * 100}
+                      suffix='%'
+                      value={editingEntityPart.scaleX * 100}
+                      onChange={value => onEntityPartChange(editingEntityPart.id, { scaleX: value / 100 })}
+                    />
+                    <ValueSlider
+                      ariaLabel='Part height'
+                      label='Height'
+                      min={AVATAR_ENTITY_RANGES.scaleY.min * 100}
+                      max={AVATAR_ENTITY_RANGES.scaleY.max * 100}
+                      suffix='%'
+                      value={editingEntityPart.scaleY * 100}
+                      onChange={value => onEntityPartChange(editingEntityPart.id, { scaleY: value / 100 })}
+                    />
+                    <ValueSlider
+                      ariaLabel='Part depth'
+                      label='Depth'
+                      min={AVATAR_ENTITY_RANGES.scaleZ.min * 100}
+                      max={AVATAR_ENTITY_RANGES.scaleZ.max * 100}
+                      suffix='%'
+                      value={resolveAvatarEntityPartScaleZ(editingEntityPart) * 100}
+                      onChange={value => onEntityPartChange(editingEntityPart.id, { scaleZ: value / 100 })}
+                    />
+                    <NumberField
+                      ariaLabel='Part rotation X'
+                      label='Rotation X'
+                      suffix='°'
+                      value={editingEntityPart.rotationX ?? 0}
+                      onChange={rotationX => onEntityPartChange(editingEntityPart.id, { rotationX })}
+                    />
+                    <NumberField
+                      ariaLabel='Part rotation Y'
+                      label='Rotation Y'
+                      suffix='°'
+                      value={editingEntityPart.rotationY ?? 0}
+                      onChange={rotationY => onEntityPartChange(editingEntityPart.id, { rotationY })}
+                    />
+                    <NumberField
+                      ariaLabel='Part rotation Z'
+                      label='Rotation Z'
+                      suffix='°'
+                      value={editingEntityPart.rotationZ ?? 0}
+                      onChange={rotationZ => onEntityPartChange(editingEntityPart.id, { rotationZ })}
+                    />
+                    {editingEntityPart.shape === 'cone' || editingEntityPart.shape === 'frustum' ||
+                        editingEntityPart.shape === 'half-cone'
                       ? (
                         <>
                           <ValueSlider
@@ -1625,7 +1795,10 @@ export function AvatarControls({
                             checked={editingEntityPart.hollow ?? false}
                             icon='body'
                             label='Hollow'
-                            onChange={() => onEntityPartChange(editingEntityPart.id, { hollow: !(editingEntityPart.hollow ?? false) })}
+                            onChange={() =>
+                              onEntityPartChange(editingEntityPart.id, {
+                                hollow: !(editingEntityPart.hollow ?? false)
+                              })}
                           />
                         </>
                       )
@@ -1652,6 +1825,102 @@ export function AvatarControls({
         {activeTab === 'effects'
           ? (
             <>
+              <ToggleRow
+                checked={pixelEffect.enabled}
+                icon='pixel'
+                label='Pixel style'
+                onChange={() => onPixelEffectChange({ enabled: !pixelEffect.enabled })}
+              />
+              {pixelEffect.enabled
+                ? (
+                  <div className='avatar-controls__parameter-controls avatar-controls__pixel-controls'>
+                    <ValueSlider
+                      ariaLabel='Pixel size'
+                      label='Pixel size'
+                      min={AVATAR_PIXEL_EFFECT_RANGES.blockSize.min}
+                      max={AVATAR_PIXEL_EFFECT_RANGES.blockSize.max}
+                      suffix='px'
+                      value={pixelEffect.blockSize}
+                      onChange={blockSize => onPixelEffectChange({ blockSize })}
+                    />
+                    <div className='avatar-controls__pixel-control'>
+                      <span>{t('Sampling')}</span>
+                      <div
+                        className='avatar-controls__segments avatar-controls__pixel-sampling'
+                        role='radiogroup'
+                        aria-label={t('Pixel sampling')}
+                      >
+                        {([
+                          ['center', 'Center'],
+                          ['dominant', 'Dominant'],
+                          ['median', 'Median'],
+                          ['slic', 'SLIC']
+                        ] as const).map(([sampling, label]) => (
+                          <button
+                            key={sampling}
+                            className='avatar-controls__segment'
+                            type='button'
+                            role='radio'
+                            aria-checked={pixelEffect.sampling === sampling}
+                            aria-pressed={pixelEffect.sampling === sampling}
+                            onClick={() => onPixelEffectChange({ sampling })}
+                          >
+                            <PixelSamplingIcon sampling={sampling} />
+                            <span>{t(label)}</span>
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                    <div className='avatar-controls__pixel-control'>
+                      <span>{t('Colors')}</span>
+                      <div
+                        className='avatar-controls__segments avatar-controls__pixel-palette'
+                        role='radiogroup'
+                        aria-label={t('Pixel color count')}
+                      >
+                        {AVATAR_PIXEL_EFFECT_RANGES.paletteSizes.map(paletteSize => (
+                          <button
+                            key={paletteSize}
+                            className='avatar-controls__segment'
+                            type='button'
+                            role='radio'
+                            aria-checked={pixelEffect.paletteSize === paletteSize}
+                            aria-pressed={pixelEffect.paletteSize === paletteSize}
+                            onClick={() => onPixelEffectChange({ paletteSize })}
+                          >
+                            {paletteSize}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                    <div className='avatar-controls__pixel-control'>
+                      <span>{t('Dithering')}</span>
+                      <div
+                        className='avatar-controls__segments'
+                        role='radiogroup'
+                        aria-label={t('Pixel dithering')}
+                      >
+                        {([
+                          ['none', 'Off'],
+                          ['ordered', 'Ordered']
+                        ] as const).map(([dithering, label]) => (
+                          <button
+                            key={dithering}
+                            className='avatar-controls__segment'
+                            type='button'
+                            role='radio'
+                            aria-checked={pixelEffect.dithering === dithering}
+                            aria-pressed={pixelEffect.dithering === dithering}
+                            onClick={() => onPixelEffectChange({ dithering })}
+                          >
+                            {t(label)}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                )
+                : null}
               <ToggleRow checked={showLight} icon='light' label='Light source' onChange={onToggleLight} />
               {showLight
                 ? (

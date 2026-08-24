@@ -4,16 +4,24 @@ import { memo, useEffect, useId, useMemo, useRef, useState } from 'react'
 import type { KeyboardEvent, PointerEvent, WheelEvent } from 'react'
 
 import { AVATAR_VIEW_RANGES } from '@oneworks/avatar'
-import type { AvatarBackgroundStyle, AvatarPalette } from '@oneworks/avatar'
+import type { AvatarBackgroundStyle, AvatarPalette, AvatarPixelEffect } from '@oneworks/avatar'
 import { applyAvatarColorGrade } from './avatarColorGrade'
 import type { AvatarColorGrade } from './avatarColorGrade'
+import { paintPixelatedAvatarCanvas } from './avatarPixelation'
 
+import {
+  createAvatarEntityParts,
+  getAvatarEntityPresetFaceStyle,
+  getAvatarEntityPresetScene,
+  resolveAvatarEntityPartScaleZ
+} from './avatarEntityPresets'
+import type { AvatarEntityPart, AvatarEntityPreset } from './avatarEntityPresets'
 import {
   AVATAR_BODY_SHAPES,
   AVATAR_GRID_DENSITY,
-  buildAvatarBodyGeometry,
   DEFAULT_AVATAR_FACE_SHADOW_STYLE,
   DEFAULT_AVATAR_FACE_STYLE,
+  buildAvatarBodyGeometry,
   projectAvatarSurfaceDecal,
   projectDefaultFace,
   resolveAvatarFaceStyle,
@@ -22,20 +30,13 @@ import {
 import type {
   AvatarBodyGeometryOptions,
   AvatarBodyShape,
-  BodyGeometry,
   AvatarFaceShadowStyle,
   AvatarFaceStyle,
   AvatarLightDirection,
   AvatarPose,
+  BodyGeometry,
   ProjectedFace
 } from './avatarGeometry'
-import {
-  createAvatarEntityParts,
-  getAvatarEntityPresetFaceStyle,
-  getAvatarEntityPresetScene,
-  resolveAvatarEntityPartScaleZ
-} from './avatarEntityPresets'
-import type { AvatarEntityPart, AvatarEntityPreset } from './avatarEntityPresets'
 import type { AvatarSurfaceDecal } from './avatarSurfaceDecals'
 
 export { AVATAR_BODY_SHAPES }
@@ -98,6 +99,7 @@ export interface InteractiveAvatarProps {
   readonly onEntityPartSelect?: (id: string | null) => void
   readonly onViewStateChange: (state: AvatarViewState) => void
   readonly palette: AvatarPalette
+  readonly pixelEffect?: AvatarPixelEffect
   readonly renderSurfaceCells?: boolean
   readonly shadowStyle: AvatarFaceShadowStyle
   readonly selectedEntityPartId?: string | null
@@ -350,13 +352,15 @@ function EntityPresetBody({
           : null}
         {facePart == null || faceGeometry == null
           ? null
-          : projectedParts.filter(isOccludedByFace).map(part => geometries[part.id].occlusionPath == null
-            ? null
-            : (
-              <clipPath key={`occlusion-clip-${part.id}`} id={occlusionClipId(part)}>
-                <path d={geometries[part.id].occlusionPath} transform={partTransform(part)} />
-              </clipPath>
-              ))}
+          : projectedParts.filter(isOccludedByFace).map(part =>
+            geometries[part.id].occlusionPath == null
+              ? null
+              : (
+                <clipPath key={`occlusion-clip-${part.id}`} id={occlusionClipId(part)}>
+                  <path d={geometries[part.id].occlusionPath} transform={partTransform(part)} />
+                </clipPath>
+              )
+          )}
         {facePart == null || faceGeometry == null
           ? null
           : projectedParts.filter(isOccludedByFace).map(part => (
@@ -376,7 +380,7 @@ function EntityPresetBody({
                   <g clipPath={`url(#${occlusionClipId(part)})`}>
                     <path d={faceGeometry.outlinePath} fill='black' transform={partTransform(facePart)} />
                   </g>
-                  )}
+                )}
             </mask>
           ))}
         {face.eyes.map(eye => (
@@ -485,16 +489,16 @@ function EntityPresetBody({
               ))
               : null}
             {face.eyes.map(eye => <path key={eye.id} d={eye.path} fill={facePart.foregroundColor} />)}
-              {face.eyeHighlights.map(highlight => (
-                <path
-                  key={highlight.id}
-                  data-avatar-eye-highlight={highlight.id}
-                  clipPath={`url(#${idPrefix}-entity-${highlight.id.replace('eye-highlight-', 'eye-')}-highlight-clip)`}
-                  d={highlight.path}
-                  fill={faceStyle.eyeHighlight.color}
-                  fillOpacity={faceStyle.eyeHighlight.opacity / 100}
-                />
-              ))}
+            {face.eyeHighlights.map(highlight => (
+              <path
+                key={highlight.id}
+                data-avatar-eye-highlight={highlight.id}
+                clipPath={`url(#${idPrefix}-entity-${highlight.id.replace('eye-highlight-', 'eye-')}-highlight-clip)`}
+                d={highlight.path}
+                fill={faceStyle.eyeHighlight.color}
+                fillOpacity={faceStyle.eyeHighlight.opacity / 100}
+              />
+            ))}
             {!faceStyle.noseEnabled || face.nose == null
               ? null
               : (
@@ -565,44 +569,47 @@ export const EntityPresetPreview = memo(function EntityPresetPreview({
   const rawId = useId()
   const id = rawId.replaceAll(':', '')
   const scene = useMemo(() => getAvatarEntityPresetScene(preset), [preset])
-  const pose = useMemo<AvatarPose>(() => scene == null
-    ? { pitch: -.22, yaw: -.38 }
-    : { pitch: scene.viewState.pitch, yaw: scene.viewState.yaw }, [scene])
+  const pose = useMemo<AvatarPose>(() =>
+    scene == null
+      ? { pitch: -.22, yaw: -.38 }
+      : { pitch: scene.viewState.pitch, yaw: scene.viewState.yaw }, [scene])
   const parts = useMemo(() => createAvatarEntityParts(preset), [preset])
   const faceStyle = useMemo(
     () => getAvatarEntityPresetFaceStyle(preset) ?? ENTITY_PREVIEW_FACE_STYLE,
     [preset]
   )
-  const surfaceDecals = useMemo<ProjectedSurfaceDecal[]>(() => (scene?.surfaceDecals ?? []).flatMap(decal => {
-    const targetPart = decal.targetPartId == null
-      ? parts.find(part => part.face)
-      : parts.find(part => part.id === decal.targetPartId)
-    if (targetPart == null) return []
-    const projected = projectAvatarSurfaceDecal(
-      pose,
-      targetPart.shape,
-      decal,
-      getEntityFaceGeometryOptions(targetPart, preset)
-    )
-    return projected == null ? [] : [{
-      ...decal,
-      path: projected.path,
-      targetPartId: targetPart.id,
-      ...(projected.transform == null ? {} : { transform: projected.transform })
-    }]
-  }), [parts, pose, preset, scene])
+  const surfaceDecals = useMemo<ProjectedSurfaceDecal[]>(() =>
+    (scene?.surfaceDecals ?? []).flatMap(decal => {
+      const targetPart = decal.targetPartId == null
+        ? parts.find(part => part.face)
+        : parts.find(part => part.id === decal.targetPartId)
+      if (targetPart == null) return []
+      const projected = projectAvatarSurfaceDecal(
+        pose,
+        targetPart.shape,
+        decal,
+        getEntityFaceGeometryOptions(targetPart, preset)
+      )
+      return projected == null ? [] : [{
+        ...decal,
+        path: projected.path,
+        targetPartId: targetPart.id,
+        ...(projected.transform == null ? {} : { transform: projected.transform })
+      }]
+    }), [parts, pose, preset, scene])
   const geometries = useMemo(
     () => buildEntityPartGeometries(parts, pose, lightDirection, 25),
     [lightDirection, parts, pose]
   )
   const facePart = parts.find(part => part.face)
   const face = useMemo(
-    () => projectDefaultFace(
-      pose,
-      facePart?.shape ?? 'sphere',
-      faceStyle,
-      facePart == null ? {} : getEntityFaceGeometryOptions(facePart, preset)
-    ),
+    () =>
+      projectDefaultFace(
+        pose,
+        facePart?.shape ?? 'sphere',
+        faceStyle,
+        facePart == null ? {} : getEntityFaceGeometryOptions(facePart, preset)
+      ),
     [facePart, faceStyle, pose, preset]
   )
   const previewTransform = scene == null
@@ -630,7 +637,7 @@ export const EntityPresetPreview = memo(function EntityPresetPreview({
               />
             </filter>
           </defs>
-          )}
+        )}
       <g
         filter={scene?.showAvatarShadow ? `url(#${id}-preview-avatar-shadow)` : undefined}
         transform={previewTransform}
@@ -786,6 +793,7 @@ function InteractiveAvatarComponent({
   onEntityPartSelect,
   onViewStateChange,
   palette,
+  pixelEffect,
   renderSurfaceCells = true,
   selectedEntityPartId,
   shadowStyle,
@@ -822,6 +830,16 @@ function InteractiveAvatarComponent({
   const dragOriginRef = useRef<DragOrigin>()
   const pendingDragViewStateRef = useRef<AvatarViewState>()
   const dragRenderFrameRef = useRef<number>()
+  const pixelEffectRef = useRef(pixelEffect)
+  pixelEffectRef.current = pixelEffect
+  const pixelCanvasRef = useRef<HTMLCanvasElement>(null)
+  const pixelRenderEpochRef = useRef(0)
+  const pixelRenderFrameRef = useRef<number>()
+  const pixelRenderInFlightRef = useRef(false)
+  const pixelRenderMountedRef = useRef(true)
+  const pixelRenderPendingRef = useRef(false)
+  const sourceSvgRef = useRef<SVGSVGElement>(null)
+  const [pixelReady, setPixelReady] = useState(false)
   const rawId = useId()
   const id = rawId.replaceAll(':', '')
   const animatedFaceStyle = useAnimatedFaceStyle(faceStyle, faceStyleTransitionsEnabled)
@@ -843,12 +861,13 @@ function InteractiveAvatarComponent({
   )
   const usesEntityParts = sourceEntityParts.length > 0
   const resolvedEntityParts = useMemo(
-    () => sourceEntityParts.map(part => ({
-      ...part,
-      baseColor: applyAvatarColorGrade(part.baseColor, colorGrade),
-      highlightColor: applyAvatarColorGrade(part.highlightColor, colorGrade),
-      shadowColor: applyAvatarColorGrade(part.shadowColor, colorGrade)
-    })),
+    () =>
+      sourceEntityParts.map(part => ({
+        ...part,
+        baseColor: applyAvatarColorGrade(part.baseColor, colorGrade),
+        highlightColor: applyAvatarColorGrade(part.highlightColor, colorGrade),
+        shadowColor: applyAvatarColorGrade(part.shadowColor, colorGrade)
+      })),
     [colorGrade, sourceEntityParts]
   )
   const entityGeometries = useMemo(
@@ -857,41 +876,43 @@ function InteractiveAvatarComponent({
   )
   const entityFacePart = sourceEntityParts.find(part => part.face)
   const entityFace = useMemo(
-    () => projectDefaultFace(
-      pose,
-      entityFacePart?.shape ?? 'sphere',
-      animatedFaceStyle,
-      entityFacePart == null ? {} : getEntityFaceGeometryOptions(entityFacePart, entityPreset)
-    ),
+    () =>
+      projectDefaultFace(
+        pose,
+        entityFacePart?.shape ?? 'sphere',
+        animatedFaceStyle,
+        entityFacePart == null ? {} : getEntityFaceGeometryOptions(entityFacePart, entityPreset)
+      ),
     [animatedFaceStyle, entityFacePart, entityPreset, pose]
   )
-  const projectedSurfaceDecals = useMemo<ProjectedSurfaceDecal[]>(() => surfaceDecals.flatMap(decal => {
-    if (!usesEntityParts) {
-      if (decal.targetPartId != null) return []
-      const projected = projectAvatarSurfaceDecal(pose, bodyShape, decal)
+  const projectedSurfaceDecals = useMemo<ProjectedSurfaceDecal[]>(() =>
+    surfaceDecals.flatMap(decal => {
+      if (!usesEntityParts) {
+        if (decal.targetPartId != null) return []
+        const projected = projectAvatarSurfaceDecal(pose, bodyShape, decal)
+        return projected == null ? [] : [{
+          ...decal,
+          path: projected.path,
+          ...(projected.transform == null ? {} : { transform: projected.transform })
+        }]
+      }
+      const targetPart = decal.targetPartId == null
+        ? entityFacePart
+        : sourceEntityParts.find(part => part.id === decal.targetPartId)
+      if (targetPart == null) return []
+      const projected = projectAvatarSurfaceDecal(
+        pose,
+        targetPart.shape,
+        decal,
+        getEntityFaceGeometryOptions(targetPart, entityPreset)
+      )
       return projected == null ? [] : [{
         ...decal,
         path: projected.path,
+        targetPartId: targetPart.id,
         ...(projected.transform == null ? {} : { transform: projected.transform })
       }]
-    }
-    const targetPart = decal.targetPartId == null
-      ? entityFacePart
-      : sourceEntityParts.find(part => part.id === decal.targetPartId)
-    if (targetPart == null) return []
-    const projected = projectAvatarSurfaceDecal(
-      pose,
-      targetPart.shape,
-      decal,
-      getEntityFaceGeometryOptions(targetPart, entityPreset)
-    )
-    return projected == null ? [] : [{
-      ...decal,
-      path: projected.path,
-      targetPartId: targetPart.id,
-      ...(projected.transform == null ? {} : { transform: projected.transform })
-    }]
-  }), [bodyShape, entityFacePart, entityPreset, pose, sourceEntityParts, surfaceDecals, usesEntityParts])
+    }), [bodyShape, entityFacePart, entityPreset, pose, sourceEntityParts, surfaceDecals, usesEntityParts])
   const surfaceMid = applyAvatarColorGrade(
     backgroundStyle === 'gradient' ? palette.gradient[1] : palette.background,
     colorGrade
@@ -922,9 +943,75 @@ function InteractiveAvatarComponent({
     avatarScaleRef.current = avatarScale
   }, [avatarRoll, avatarScale, pose, position, transientViewState])
 
-  useEffect(() => () => {
-    if (dragRenderFrameRef.current != null) window.cancelAnimationFrame(dragRenderFrameRef.current)
+  const runPixelRender = () => {
+    pixelRenderFrameRef.current = undefined
+    if (!pixelRenderPendingRef.current) return
+    pixelRenderPendingRef.current = false
+    const currentPixelEffect = pixelEffectRef.current
+    if (currentPixelEffect?.enabled !== true) return
+    const sourceSvg = sourceSvgRef.current
+    const targetCanvas = pixelCanvasRef.current
+    if (sourceSvg == null || targetCanvas == null) return
+    const epoch = pixelRenderEpochRef.current
+    pixelRenderInFlightRef.current = true
+    const renderedCanvas = document.createElement('canvas')
+    void paintPixelatedAvatarCanvas(sourceSvg, renderedCanvas, VIEW_SIZE, currentPixelEffect).then(() => {
+      if (!pixelRenderMountedRef.current || pixelRenderEpochRef.current !== epoch) return
+      targetCanvas.width = VIEW_SIZE
+      targetCanvas.height = VIEW_SIZE
+      const context = targetCanvas.getContext('2d')
+      if (context == null) return
+      context.imageSmoothingEnabled = false
+      context.clearRect(0, 0, VIEW_SIZE, VIEW_SIZE)
+      context.drawImage(renderedCanvas, 0, 0)
+      setPixelReady(true)
+    }).catch(() => {
+      if (pixelRenderMountedRef.current && pixelRenderEpochRef.current === epoch) setPixelReady(false)
+    }).finally(() => {
+      pixelRenderInFlightRef.current = false
+      if (
+        pixelRenderMountedRef.current &&
+        pixelRenderPendingRef.current &&
+        pixelEffectRef.current?.enabled === true &&
+        pixelRenderFrameRef.current == null
+      ) {
+        pixelRenderFrameRef.current = window.requestAnimationFrame(runPixelRender)
+      }
+    })
+  }
+
+  const schedulePixelRender = () => {
+    if (pixelRenderInFlightRef.current || pixelRenderFrameRef.current != null) return
+    pixelRenderFrameRef.current = window.requestAnimationFrame(runPixelRender)
+  }
+
+  useEffect(() => {
+    pixelRenderMountedRef.current = true
+    return () => {
+      pixelRenderMountedRef.current = false
+      pixelRenderEpochRef.current += 1
+      if (dragRenderFrameRef.current != null) window.cancelAnimationFrame(dragRenderFrameRef.current)
+      if (pixelRenderFrameRef.current != null) {
+        window.cancelAnimationFrame(pixelRenderFrameRef.current)
+        pixelRenderFrameRef.current = undefined
+      }
+    }
   }, [])
+
+  useEffect(() => {
+    if (pixelEffect?.enabled !== true) {
+      pixelRenderPendingRef.current = false
+      pixelRenderEpochRef.current += 1
+      if (pixelRenderFrameRef.current != null) {
+        window.cancelAnimationFrame(pixelRenderFrameRef.current)
+        pixelRenderFrameRef.current = undefined
+      }
+      setPixelReady(false)
+      return
+    }
+    pixelRenderPendingRef.current = true
+    schedulePixelRender()
+  })
 
   const scheduleDragViewState = (nextState: AvatarViewState) => {
     pendingDragViewStateRef.current = nextState
@@ -1115,12 +1202,14 @@ function InteractiveAvatarComponent({
       data-pitch={pose.pitch}
       data-position-x={position.x}
       data-position-y={position.y}
+      data-pixel-ready={pixelEffect?.enabled === true && pixelReady}
       data-roll={avatarRoll}
       data-visible-marks={face.eyes.length + (face.nose != null && animatedFaceStyle.noseEnabled ? 1 : 0) +
         (face.mouth != null && animatedFaceStyle.mouthEnabled ? 1 : 0)}
       data-yaw={pose.yaw}
     >
       <svg
+        ref={sourceSvgRef}
         className='interactive-avatar__canvas'
         viewBox={`0 0 ${VIEW_SIZE} ${VIEW_SIZE}`}
         role={interactive ? 'img' : undefined}
@@ -1166,114 +1255,114 @@ function InteractiveAvatarComponent({
 
         <g
           filter={showAvatarShadow ? `url(#${id}-avatar-shadow)` : undefined}
-          transform={`translate(${position.x} ${position.y}) translate(${VIEW_SIZE / 2} ${
-            VIEW_SIZE / 2
-          }) rotate(${avatarRoll * 180 / Math.PI}) scale(${avatarScale}) translate(${-VIEW_SIZE / 2} ${-VIEW_SIZE / 2})`}
+          transform={`translate(${position.x} ${position.y}) translate(${VIEW_SIZE / 2} ${VIEW_SIZE / 2}) rotate(${
+            avatarRoll * 180 / Math.PI
+          }) scale(${avatarScale}) translate(${-VIEW_SIZE / 2} ${-VIEW_SIZE / 2})`}
         >
           {!usesEntityParts
             ? (
               <>
                 <g clipPath={`url(#${id}-clip)`}>
-            <path d={bodyGeometry.outlinePath} fill={surfaceMid} />
-            {showLight && renderSurfaceCells
-              ? bodyGeometry.cells.map(cell => (
-                <polygon
-                  key={cell.id}
-                  points={cell.points}
-                  fill={cell.shade >= 0 ? surfaceHighlight : surfaceShadow}
-                  fillOpacity={resolveAvatarSurfaceShadeOpacity(cell.shade, lightDistance)}
-                />
-              ))
-              : null}
-
-            {projectedSurfaceDecals.filter(decal => decal.targetPartId == null).map(decal => (
-              <path
-                key={decal.id}
-                data-avatar-surface-decal={decal.id}
-                d={decal.path}
-                fill={decal.color}
-                fillOpacity={decal.opacity / 100}
-              />
-            ))}
-
-            {dragging
-              ? bodyGeometry.cells.map(cell => (
-                <polygon
-                  key={`grid-${cell.id}`}
-                  points={cell.points}
-                  fill='none'
-                  stroke='#fff'
-                  strokeOpacity='.09'
-                  strokeWidth='.55'
-                />
-              ))
-              : null}
-
-            {face.visible
-              ? (
-                <g>
-                  {showShadow
-                    ? face.eyes.map(eye => (
-                      <path
-                        key={`shadow-${eye.id}`}
-                        d={eye.path}
-                        transform={getFaceShadowTransform(eye.depth)}
-                        fill={faceShadowColor}
-                        filter={shadowFilter}
-                        opacity={getFaceShadowOpacity(eye.depth)}
+                  <path d={bodyGeometry.outlinePath} fill={surfaceMid} />
+                  {showLight && renderSurfaceCells
+                    ? bodyGeometry.cells.map(cell => (
+                      <polygon
+                        key={cell.id}
+                        points={cell.points}
+                        fill={cell.shade >= 0 ? surfaceHighlight : surfaceShadow}
+                        fillOpacity={resolveAvatarSurfaceShadeOpacity(cell.shade, lightDistance)}
                       />
                     ))
                     : null}
-                  {face.eyes.map(eye => (
+
+                  {projectedSurfaceDecals.filter(decal => decal.targetPartId == null).map(decal => (
                     <path
-                      key={eye.id}
-                      d={eye.path}
-                      fill={surfaceForeground}
+                      key={decal.id}
+                      data-avatar-surface-decal={decal.id}
+                      d={decal.path}
+                      fill={decal.color}
+                      fillOpacity={decal.opacity / 100}
                     />
                   ))}
-                  {face.eyeHighlights.map(highlight => (
-                    <path
-                      key={highlight.id}
-                      data-avatar-eye-highlight={highlight.id}
-                      clipPath={`url(#${id}-${highlight.id.replace('eye-highlight-', 'eye-')}-highlight-clip)`}
-                      d={highlight.path}
-                      fill={animatedFaceStyle.eyeHighlight.color}
-                      fillOpacity={animatedFaceStyle.eyeHighlight.opacity / 100}
-                    />
-                  ))}
-                  {[
-                    { enabled: animatedFaceStyle.noseEnabled, part: face.nose },
-                    { enabled: animatedFaceStyle.mouthEnabled, part: face.mouth }
-                  ].map(({ enabled, part }) =>
-                    part == null
-                      ? null
-                      : (
-                        <g
-                          key={part.id}
-                          className='interactive-avatar__face-part'
-                          opacity={enabled ? 1 : 0}
-                        >
-                          {showShadow
-                            ? (
-                              <path
-                                d={part.path}
-                                transform={getFaceShadowTransform(part.depth)}
-                                fill={faceShadowColor}
-                                filter={shadowFilter}
-                                opacity={getFaceShadowOpacity(part.depth)}
-                              />
-                            )
-                            : null}
+
+                  {dragging
+                    ? bodyGeometry.cells.map(cell => (
+                      <polygon
+                        key={`grid-${cell.id}`}
+                        points={cell.points}
+                        fill='none'
+                        stroke='#fff'
+                        strokeOpacity='.09'
+                        strokeWidth='.55'
+                      />
+                    ))
+                    : null}
+
+                  {face.visible
+                    ? (
+                      <g>
+                        {showShadow
+                          ? face.eyes.map(eye => (
+                            <path
+                              key={`shadow-${eye.id}`}
+                              d={eye.path}
+                              transform={getFaceShadowTransform(eye.depth)}
+                              fill={faceShadowColor}
+                              filter={shadowFilter}
+                              opacity={getFaceShadowOpacity(eye.depth)}
+                            />
+                          ))
+                          : null}
+                        {face.eyes.map(eye => (
                           <path
-                            d={part.path}
+                            key={eye.id}
+                            d={eye.path}
                             fill={surfaceForeground}
                           />
-                        </g>
-                      )
-                  )}
-                </g>
-              )
-              : null}
+                        ))}
+                        {face.eyeHighlights.map(highlight => (
+                          <path
+                            key={highlight.id}
+                            data-avatar-eye-highlight={highlight.id}
+                            clipPath={`url(#${id}-${highlight.id.replace('eye-highlight-', 'eye-')}-highlight-clip)`}
+                            d={highlight.path}
+                            fill={animatedFaceStyle.eyeHighlight.color}
+                            fillOpacity={animatedFaceStyle.eyeHighlight.opacity / 100}
+                          />
+                        ))}
+                        {[
+                          { enabled: animatedFaceStyle.noseEnabled, part: face.nose },
+                          { enabled: animatedFaceStyle.mouthEnabled, part: face.mouth }
+                        ].map(({ enabled, part }) =>
+                          part == null
+                            ? null
+                            : (
+                              <g
+                                key={part.id}
+                                className='interactive-avatar__face-part'
+                                opacity={enabled ? 1 : 0}
+                              >
+                                {showShadow
+                                  ? (
+                                    <path
+                                      d={part.path}
+                                      transform={getFaceShadowTransform(part.depth)}
+                                      fill={faceShadowColor}
+                                      filter={shadowFilter}
+                                      opacity={getFaceShadowOpacity(part.depth)}
+                                    />
+                                  )
+                                  : null}
+                                <path
+                                  d={part.path}
+                                  fill={surfaceForeground}
+                                />
+                              </g>
+                            )
+                        )}
+                      </g>
+                    )
+                    : null}
                 </g>
                 {showOutline && avatarOutlineStyle != null && avatarOutlineStyle.width > 0
                   ? (
@@ -1327,6 +1416,9 @@ function InteractiveAvatarComponent({
             )}
         </g>
       </svg>
+      {pixelEffect?.enabled === true
+        ? <canvas ref={pixelCanvasRef} className='interactive-avatar__pixel-canvas' aria-hidden='true' />
+        : null}
     </div>
   )
 }
@@ -1359,6 +1451,7 @@ const areInteractiveAvatarPropsEqual = (
   previous.onEntityPartSelect === next.onEntityPartSelect &&
   previous.onViewStateChange === next.onViewStateChange &&
   previous.palette === next.palette &&
+  shallowEqualObject(previous.pixelEffect, next.pixelEffect) &&
   previous.renderSurfaceCells === next.renderSurfaceCells &&
   previous.selectedEntityPartId === next.selectedEntityPartId &&
   previous.showLight === next.showLight &&

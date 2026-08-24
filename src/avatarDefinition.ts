@@ -1,6 +1,7 @@
 import {
   AVATAR_DEFINITION_SCHEMA,
   AVATAR_DEFINITION_VERSION,
+  DEFAULT_AVATAR_PIXEL_EFFECT,
   anchorAvatarAnimationClip,
   applyAvatarScenePatch,
   mergeAvatarAnimationLibraries,
@@ -11,6 +12,7 @@ import type {
   AvatarAnimationLibrary,
   AvatarBackgroundStyle,
   AvatarDefinition,
+  AvatarPixelEffect,
   AvatarScene,
   AvatarScenePatch
 } from '@oneworks/avatar'
@@ -68,6 +70,7 @@ export interface AvatarDefinitionState {
   readonly lightDistance: number
   readonly lightElevation: number
   readonly paletteId: string
+  readonly pixelEffect: AvatarPixelEffect
   readonly showAvatarShadow: boolean
   readonly showFrameShadow: boolean
   readonly showLight: boolean
@@ -103,6 +106,7 @@ export const avatarDefinitionToState = (definition: AvatarDefinition): AvatarDef
     lightDistance: scene.lighting.distance,
     lightElevation: scene.lighting.elevation,
     paletteId: scene.appearance.paletteId,
+    pixelEffect: scene.effects.pixelate ?? DEFAULT_AVATAR_PIXEL_EFFECT,
     showAvatarShadow: scene.effects.showAvatarShadow,
     showFrameShadow: scene.camera.showFrameShadow,
     showLight: scene.lighting.enabled,
@@ -216,57 +220,67 @@ const mergeEmbeddedAnimation = (
 export const createAvatarDefinition = (
   state: AvatarDefinitionState,
   previous?: AvatarDefinition
-): AvatarDefinition => ({
-  animations: state.animation == null
-    ? previous?.animations
-    : mergeEmbeddedAnimation(
-      previous?.animations,
-      state.animation,
-      state.animationTargetKey,
-      state.animationLibraryIds
-    ),
-  metadata: previous?.metadata,
-  scene: {
-    appearance: {
-      backgroundStyle: state.backgroundStyle,
-      bodyShape: state.bodyShape,
-      paletteId: state.paletteId
+): AvatarDefinition => {
+  const pixelEffect = state.pixelEffect ?? DEFAULT_AVATAR_PIXEL_EFFECT
+  const preservePixelEffect = previous?.scene.effects.pixelate != null ||
+    pixelEffect.enabled ||
+    pixelEffect.blockSize !== DEFAULT_AVATAR_PIXEL_EFFECT.blockSize ||
+    pixelEffect.dithering !== DEFAULT_AVATAR_PIXEL_EFFECT.dithering ||
+    pixelEffect.paletteSize !== DEFAULT_AVATAR_PIXEL_EFFECT.paletteSize ||
+    pixelEffect.sampling !== DEFAULT_AVATAR_PIXEL_EFFECT.sampling
+  return ({
+    animations: state.animation == null
+      ? previous?.animations
+      : mergeEmbeddedAnimation(
+        previous?.animations,
+        state.animation,
+        state.animationTargetKey,
+        state.animationLibraryIds
+      ),
+    metadata: previous?.metadata,
+    scene: {
+      appearance: {
+        backgroundStyle: state.backgroundStyle,
+        bodyShape: state.bodyShape,
+        paletteId: state.paletteId
+      },
+      camera: {
+        background: state.cameraBackground,
+        frame: state.cameraFrame,
+        frameShadow: state.frameShadowStyle,
+        showFrameShadow: state.showFrameShadow,
+        size: state.exportSize
+      },
+      effects: {
+        avatarShadow: state.avatarShadowStyle,
+        colorGrade: state.colorGrade,
+        faceShadow: state.faceShadowStyle,
+        outline: state.avatarOutlineStyle,
+        ...(preservePixelEffect ? { pixelate: pixelEffect } : {}),
+        showAvatarShadow: state.showAvatarShadow,
+        showFaceShadow: state.showShadow,
+        showOutline: state.showOutline
+      },
+      decals: (state.surfaceDecals ?? []).map(decal => ({ ...decal })),
+      entity: {
+        parts: state.entityParts.map(toPublicPart),
+        preset: state.entityPreset
+      },
+      face: state.faceStyle,
+      interactionMode: state.interactionMode,
+      lighting: {
+        azimuth: state.lightAzimuth,
+        distance: state.lightDistance,
+        elevation: state.lightElevation,
+        enabled: state.showLight,
+        gridDensity: state.gridDensity
+      },
+      view: state.viewState
     },
-    camera: {
-      background: state.cameraBackground,
-      frame: state.cameraFrame,
-      frameShadow: state.frameShadowStyle,
-      showFrameShadow: state.showFrameShadow,
-      size: state.exportSize
-    },
-    effects: {
-      avatarShadow: state.avatarShadowStyle,
-      colorGrade: state.colorGrade,
-      faceShadow: state.faceShadowStyle,
-      outline: state.avatarOutlineStyle,
-      showAvatarShadow: state.showAvatarShadow,
-      showFaceShadow: state.showShadow,
-      showOutline: state.showOutline
-    },
-    decals: (state.surfaceDecals ?? []).map(decal => ({ ...decal })),
-    entity: {
-      parts: state.entityParts.map(toPublicPart),
-      preset: state.entityPreset
-    },
-    face: state.faceStyle,
-    interactionMode: state.interactionMode,
-    lighting: {
-      azimuth: state.lightAzimuth,
-      distance: state.lightDistance,
-      elevation: state.lightElevation,
-      enabled: state.showLight,
-      gridDensity: state.gridDensity
-    },
-    view: state.viewState
-  },
-  schema: AVATAR_DEFINITION_SCHEMA,
-  version: AVATAR_DEFINITION_VERSION
-})
+    schema: AVATAR_DEFINITION_SCHEMA,
+    version: AVATAR_DEFINITION_VERSION
+  })
+}
 
 const setBoolean = (params: URLSearchParams, key: string, value: boolean) => {
   params.set(key, value ? '1' : '0')
@@ -341,6 +355,12 @@ export const avatarDefinitionToSearchParams = (definition: AvatarDefinition) => 
   params.set('outlineColor', scene.effects.outline.color)
   params.set('outlineWidth', String(scene.effects.outline.width))
   params.set('outlineOpacity', String(scene.effects.outline.opacity))
+  const pixelEffect = scene.effects.pixelate ?? DEFAULT_AVATAR_PIXEL_EFFECT
+  setBoolean(params, 'pixel', pixelEffect.enabled)
+  params.set('pixelSize', String(pixelEffect.blockSize))
+  params.set('pixelColors', String(pixelEffect.paletteSize))
+  params.set('pixelSample', pixelEffect.sampling)
+  params.set('pixelDither', pixelEffect.dithering)
   setBoolean(params, 'frameShadow', scene.camera.showFrameShadow)
   params.set('frameShadowDir', String(scene.camera.frameShadow.direction))
   params.set('frameShadowDist', String(scene.camera.frameShadow.distance))

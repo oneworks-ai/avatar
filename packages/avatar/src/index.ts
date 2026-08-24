@@ -13,92 +13,116 @@ export const AVATAR_DEFINITION_SCHEMA = 'oneworks.avatar' as const
 export const AVATAR_DEFINITION_VERSION = 1 as const
 export const AVATAR_ANIMATION_MIN_SEGMENT_MS = 100
 export const AVATAR_ANIMATION_MAX_SEGMENT_MS = 8000
-export const AVATAR_COLOR_GRADE_RANGES = deepFreeze({
-  brightness: { max: 1.8, min: .35 },
-  saturation: { max: 2, min: 0 },
-  tintAmount: { max: 1, min: 0 },
-  tintB: { max: 255, min: 0 },
-  tintG: { max: 255, min: 0 },
-  tintR: { max: 255, min: 0 }
-} as const)
-export const AVATAR_EYE_HIGHLIGHT_RANGES = deepFreeze({
-  offsetX: { max: 35, min: -35 },
-  offsetY: { max: 35, min: -35 },
-  opacity: { max: 100, min: 0 },
-  size: { max: 50, min: 8 }
-} as const)
-export const AVATAR_FACE_RANGES = deepFreeze({
-  eyeRoundness: { max: 100, min: 0 },
-  gap: { max: 100, min: 0 },
-  height: { max: 112, min: 1 },
-  leftEyeHeight: { max: 112, min: 1 },
-  leftEyeRotation: { max: 90, min: -90 },
-  mouthCurve: { max: 100, min: -100 },
-  mouthHeight: { max: 48, min: 4 },
-  mouthRotation: { max: 180, min: -180 },
-  mouthWidth: { max: 100, min: 12 },
-  mouthY: { max: 90, min: 24 },
-  noseHeight: { max: 48, min: 6 },
-  noseRotation: { max: 180, min: -180 },
-  noseWidth: { max: 36, min: 6 },
-  noseY: { max: 50, min: -10 },
-  rotation: { max: 90, min: -90 },
-  rightEyeHeight: { max: 112, min: 1 },
-  rightEyeRotation: { max: 90, min: -90 },
-  width: { max: 76, min: 1 }
-} as const)
+export const AVATAR_COLOR_GRADE_RANGES = deepFreeze(
+  {
+    brightness: { max: 1.8, min: .35 },
+    saturation: { max: 2, min: 0 },
+    tintAmount: { max: 1, min: 0 },
+    tintB: { max: 255, min: 0 },
+    tintG: { max: 255, min: 0 },
+    tintR: { max: 255, min: 0 }
+  } as const
+)
+export const AVATAR_EYE_HIGHLIGHT_RANGES = deepFreeze(
+  {
+    offsetX: { max: 35, min: -35 },
+    offsetY: { max: 35, min: -35 },
+    opacity: { max: 100, min: 0 },
+    size: { max: 50, min: 8 }
+  } as const
+)
+export const AVATAR_FACE_RANGES = deepFreeze(
+  {
+    eyeRoundness: { max: 100, min: 0 },
+    gap: { max: 100, min: 0 },
+    height: { max: 112, min: 1 },
+    leftEyeHeight: { max: 112, min: 1 },
+    leftEyeRotation: { max: 90, min: -90 },
+    mouthCurve: { max: 100, min: -100 },
+    mouthHeight: { max: 48, min: 4 },
+    mouthRotation: { max: 180, min: -180 },
+    mouthWidth: { max: 100, min: 12 },
+    mouthY: { max: 90, min: 24 },
+    noseHeight: { max: 48, min: 6 },
+    noseRotation: { max: 180, min: -180 },
+    noseWidth: { max: 36, min: 6 },
+    noseY: { max: 50, min: -10 },
+    rotation: { max: 90, min: -90 },
+    rightEyeHeight: { max: 112, min: 1 },
+    rightEyeRotation: { max: 90, min: -90 },
+    width: { max: 76, min: 1 }
+  } as const
+)
 export const AVATAR_ANIMATION_FACE_RANGES = AVATAR_FACE_RANGES
-export const AVATAR_VIEW_RANGES = deepFreeze({
-  positionX: { max: 230, min: -230 },
-  positionY: { max: 230, min: -230 },
-  scale: { max: 2.4, min: .35 }
-} as const)
-export const AVATAR_ENTITY_RANGES = deepFreeze({
-  occlusionAmount: { max: 100, min: 0 },
-  roundness: { max: 100, min: 0 },
-  scaleX: { max: 1.5, min: .08 },
-  scaleY: { max: 1.5, min: .08 },
-  scaleZ: { max: 1.5, min: .08 },
-  topScale: { max: 1.2, min: .4 }
-} as const)
-export const AVATAR_LIGHTING_RANGES = deepFreeze({
-  azimuth: { max: 180, min: -180 },
-  distance: { max: 100, min: 0 },
-  elevation: { max: 80, min: -80 },
-  gridDensity: { max: 400, min: 25 }
-} as const)
-export const AVATAR_OUTLINE_RANGES = deepFreeze({
-  opacity: { max: 100, min: 0 },
-  width: { max: 20, min: 1 }
-} as const)
-export const AVATAR_SHADOW_RANGES = deepFreeze({
-  avatar: {
-    direction: { max: 180, min: -180 },
-    distance: { max: 40, min: 0 },
+export const AVATAR_VIEW_RANGES = deepFreeze(
+  {
+    positionX: { max: 230, min: -230 },
+    positionY: { max: 230, min: -230 },
+    scale: { max: 2.4, min: .35 }
+  } as const
+)
+export const AVATAR_ENTITY_RANGES = deepFreeze(
+  {
+    occlusionAmount: { max: 100, min: 0 },
+    roundness: { max: 100, min: 0 },
+    scaleX: { max: 1.5, min: .08 },
+    scaleY: { max: 1.5, min: .08 },
+    scaleZ: { max: 1.5, min: .08 },
+    topScale: { max: 1.2, min: .4 }
+  } as const
+)
+export const AVATAR_LIGHTING_RANGES = deepFreeze(
+  {
+    azimuth: { max: 180, min: -180 },
+    distance: { max: 100, min: 0 },
+    elevation: { max: 80, min: -80 },
+    gridDensity: { max: 400, min: 25 }
+  } as const
+)
+export const AVATAR_OUTLINE_RANGES = deepFreeze(
+  {
     opacity: { max: 100, min: 0 },
-    softness: { max: 40, min: 0 }
-  },
-  face: {
-    direction: { max: 180, min: -180 },
-    distance: { max: 24, min: 0 },
+    width: { max: 20, min: 1 }
+  } as const
+)
+export const AVATAR_PIXEL_EFFECT_RANGES = deepFreeze(
+  {
+    blockSize: { max: 32, min: 2 },
+    paletteSizes: [8, 16, 32, 64]
+  } as const
+)
+export const AVATAR_SHADOW_RANGES = deepFreeze(
+  {
+    avatar: {
+      direction: { max: 180, min: -180 },
+      distance: { max: 40, min: 0 },
+      opacity: { max: 100, min: 0 },
+      softness: { max: 40, min: 0 }
+    },
+    face: {
+      direction: { max: 180, min: -180 },
+      distance: { max: 24, min: 0 },
+      opacity: { max: 100, min: 0 },
+      softness: { max: 12, min: 0 }
+    },
+    frame: {
+      direction: { max: 180, min: -180 },
+      distance: { max: 40, min: 0 },
+      opacity: { max: 100, min: 0 },
+      softness: { max: 48, min: 0 }
+    }
+  } as const
+)
+export const AVATAR_SURFACE_DECAL_RANGES = deepFreeze(
+  {
+    height: { max: 180, min: 2 },
     opacity: { max: 100, min: 0 },
-    softness: { max: 12, min: 0 }
-  },
-  frame: {
-    direction: { max: 180, min: -180 },
-    distance: { max: 40, min: 0 },
-    opacity: { max: 100, min: 0 },
-    softness: { max: 48, min: 0 }
-  }
-} as const)
-export const AVATAR_SURFACE_DECAL_RANGES = deepFreeze({
-  height: { max: 180, min: 2 },
-  opacity: { max: 100, min: 0 },
-  rotation: { max: 180, min: -180 },
-  width: { max: 180, min: 2 },
-  x: { max: 180, min: -180 },
-  y: { max: 180, min: -180 }
-} as const)
+    rotation: { max: 180, min: -180 },
+    width: { max: 180, min: 2 },
+    x: { max: 180, min: -180 },
+    y: { max: 180, min: -180 }
+  } as const
+)
 
 export type AvatarBackgroundStyle = 'gradient' | 'solid'
 export type AvatarBodyShape =
@@ -127,6 +151,8 @@ export type AvatarInteractionMode = 'move' | 'rotate'
 export type AvatarMouthShape = 'curve' | 'ellipse' | 'rounded' | 'rounded-triangle'
 export type AvatarNoseShape = 'ellipse' | 'inverted-triangle' | 'rounded'
 export type AvatarPlaybackMode = 'loop' | 'once'
+export type AvatarPixelDithering = 'none' | 'ordered'
+export type AvatarPixelSampling = 'center' | 'dominant' | 'median' | 'slic'
 export type AvatarAnimationAnchor = 'absolute' | 'relative'
 export type AvatarAnimationEasing = 'ease-in' | 'ease-in-out' | 'ease-out' | 'linear'
 
@@ -240,6 +266,14 @@ export interface AvatarOutline {
   readonly width: number
 }
 
+export interface AvatarPixelEffect {
+  readonly blockSize: number
+  readonly dithering: AvatarPixelDithering
+  readonly enabled: boolean
+  readonly paletteSize: 8 | 16 | 32 | 64
+  readonly sampling: AvatarPixelSampling
+}
+
 export interface AvatarScene {
   readonly appearance: {
     readonly backgroundStyle: AvatarBackgroundStyle
@@ -258,6 +292,7 @@ export interface AvatarScene {
     readonly colorGrade: AvatarColorGrade
     readonly faceShadow: AvatarShadow
     readonly outline: AvatarOutline
+    readonly pixelate?: AvatarPixelEffect
     readonly showAvatarShadow: boolean
     readonly showFaceShadow: boolean
     readonly showOutline: boolean
@@ -352,6 +387,14 @@ export const DEFAULT_AVATAR_COLOR_GRADE: AvatarColorGrade = {
   tintG: 0,
   tintR: 0
 }
+
+export const DEFAULT_AVATAR_PIXEL_EFFECT: AvatarPixelEffect = deepFreeze({
+  blockSize: 8,
+  dithering: 'none',
+  enabled: false,
+  paletteSize: 64,
+  sampling: 'dominant'
+})
 
 export const DEFAULT_AVATAR_FACE: AvatarFace = {
   eyeHighlight: {
@@ -596,6 +639,15 @@ const isAvatarOutline = (value: unknown): value is AvatarOutline => (
   hasOwnKeys(value, ['color', 'opacity', 'width']) &&
   isHexColor(value.color) && isFiniteInRange(value.opacity, AVATAR_OUTLINE_RANGES.opacity) &&
   isFiniteInRange(value.width, AVATAR_OUTLINE_RANGES.width)
+)
+
+const isAvatarPixelEffect = (value: unknown): value is AvatarPixelEffect => (
+  isRecord(value) && hasOnlyKeys(value, ['blockSize', 'dithering', 'enabled', 'paletteSize', 'sampling']) &&
+  hasOwnKeys(value, ['blockSize', 'dithering', 'enabled', 'paletteSize', 'sampling']) &&
+  Number.isInteger(value.blockSize) && isFiniteInRange(value.blockSize, AVATAR_PIXEL_EFFECT_RANGES.blockSize) &&
+  isOneOf(value.dithering, ['none', 'ordered']) && isBoolean(value.enabled) &&
+  AVATAR_PIXEL_EFFECT_RANGES.paletteSizes.includes(value.paletteSize as 8 | 16 | 32 | 64) &&
+  isOneOf(value.sampling, ['center', 'dominant', 'median', 'slic'])
 )
 
 const isAvatarView = (value: unknown): value is AvatarView => (
@@ -906,27 +958,29 @@ const isAvatarDefinitionValue = (value: unknown): value is AvatarDefinition => {
       !isOptionalString(value.metadata.createdAt) || !isOptionalString(value.metadata.id) ||
       !isOptionalString(value.metadata.name) || !isOptionalString(value.metadata.updatedAt))
   ) return false
-  if (!isRecord(value.scene) || !hasOnlyKeys(value.scene, [
-    'appearance',
-    'camera',
-    'decals',
-    'effects',
-    'entity',
-    'face',
-    'interactionMode',
-    'lighting',
-    'view'
-  ]) || !hasOwnKeys(value.scene, [
-    'appearance',
-    'camera',
-    'decals',
-    'effects',
-    'entity',
-    'face',
-    'interactionMode',
-    'lighting',
-    'view'
-  ])) return false
+  if (
+    !isRecord(value.scene) || !hasOnlyKeys(value.scene, [
+      'appearance',
+      'camera',
+      'decals',
+      'effects',
+      'entity',
+      'face',
+      'interactionMode',
+      'lighting',
+      'view'
+    ]) || !hasOwnKeys(value.scene, [
+      'appearance',
+      'camera',
+      'decals',
+      'effects',
+      'entity',
+      'face',
+      'interactionMode',
+      'lighting',
+      'view'
+    ])
+  ) return false
   const scene = value.scene
   if (!isDenseArray<AvatarSurfaceDecal>(scene.decals) || !scene.decals.every(isAvatarSurfaceDecal)) return false
   if (new Set(scene.decals.map(decal => decal.id)).size !== scene.decals.length) return false
@@ -977,6 +1031,7 @@ const isAvatarDefinitionValue = (value: unknown): value is AvatarDefinition => {
       'colorGrade',
       'faceShadow',
       'outline',
+      'pixelate',
       'showAvatarShadow',
       'showFaceShadow',
       'showOutline'
@@ -991,7 +1046,9 @@ const isAvatarDefinitionValue = (value: unknown): value is AvatarDefinition => {
     ]) && isAvatarShadow(scene.effects.avatarShadow, AVATAR_SHADOW_RANGES.avatar) &&
     isAvatarColorGrade(scene.effects.colorGrade) &&
     isAvatarShadow(scene.effects.faceShadow, AVATAR_SHADOW_RANGES.face) &&
-    isAvatarOutline(scene.effects.outline) && isBoolean(scene.effects.showAvatarShadow) &&
+    isAvatarOutline(scene.effects.outline) &&
+    (scene.effects.pixelate === undefined || isAvatarPixelEffect(scene.effects.pixelate)) &&
+    isBoolean(scene.effects.showAvatarShadow) &&
     isBoolean(scene.effects.showFaceShadow) && isBoolean(scene.effects.showOutline) &&
     isRecord(scene.entity) && hasOnlyKeys(scene.entity, ['parts', 'preset']) &&
     hasOwnKeys(scene.entity, ['parts', 'preset']) &&

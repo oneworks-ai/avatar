@@ -1,5 +1,8 @@
+import type { AvatarPixelEffect } from '@oneworks/avatar'
+
 import type { AvatarCameraFrame } from './AvatarControls'
 import type { AvatarDropShadowStyle } from './InteractiveAvatar'
+import { renderPixelatedAvatarDataUrl } from './avatarPixelation'
 
 const SAVED_PRESETS_STORAGE_KEY = 'oneworks-avatar-saved-presets-v1'
 const MAX_SAVED_PRESETS = 12
@@ -17,6 +20,7 @@ export interface AvatarCaptureOptions {
   readonly background?: string
   readonly frame?: AvatarCameraFrame
   readonly frameShadow?: AvatarDropShadowStyle
+  readonly pixelEffect?: AvatarPixelEffect
   readonly showFrameShadow?: boolean
 }
 
@@ -61,21 +65,19 @@ const getAvatarFramePath = (width: number, height: number, frame: AvatarCameraFr
   const innerHeight = Math.max(height - inset * 2, 1)
   if (frame === 'circle') {
     const radius = Math.min(innerWidth, innerHeight) / 2
-    return `M ${width / 2} ${height / 2 - radius} A ${radius} ${radius} 0 1 1 ${
-      width / 2
-    } ${height / 2 + radius} A ${radius} ${radius} 0 1 1 ${width / 2} ${height / 2 - radius} Z`
+    return `M ${width / 2} ${height / 2 - radius} A ${radius} ${radius} 0 1 1 ${width / 2} ${
+      height / 2 + radius
+    } A ${radius} ${radius} 0 1 1 ${width / 2} ${height / 2 - radius} Z`
   }
   if (frame === 'rounded') {
     const right = width - inset
     const bottom = height - inset
     const radius = Math.min(innerWidth, innerHeight) * 18 / SCREENSHOT_SIZE
-    return `M ${inset + radius} ${inset} H ${right - radius} Q ${right} ${inset} ${right} ${
-      inset + radius
-    } V ${bottom - radius} Q ${right} ${bottom} ${right - radius} ${bottom} H ${
-      inset + radius
-    } Q ${inset} ${bottom} ${inset} ${bottom - radius} V ${inset + radius} Q ${inset} ${inset} ${
-      inset + radius
-    } ${inset} Z`
+    return `M ${inset + radius} ${inset} H ${right - radius} Q ${right} ${inset} ${right} ${inset + radius} V ${
+      bottom - radius
+    } Q ${right} ${bottom} ${right - radius} ${bottom} H ${inset + radius} Q ${inset} ${bottom} ${inset} ${
+      bottom - radius
+    } V ${inset + radius} Q ${inset} ${inset} ${inset + radius} ${inset} Z`
   }
   return `M ${inset} ${inset} H ${width - inset} V ${height - inset} H ${inset} Z`
 }
@@ -186,12 +188,39 @@ export const serializeAvatarSvg = (
   return new XMLSerializer().serializeToString(clonedSvg)
 }
 
+export const renderAvatarSvgSource = async (
+  sourceSvg: SVGSVGElement,
+  size: number,
+  options: AvatarCaptureOptions = {}
+) => {
+  if (options.pixelEffect?.enabled !== true) return serializeAvatarSvg(sourceSvg, size, options)
+
+  const dataUrl = await renderPixelatedAvatarDataUrl(sourceSvg, size, options.pixelEffect)
+  const clonedSvg = sourceSvg.cloneNode(false) as SVGSVGElement
+  clonedSvg.setAttribute('xmlns', 'http://www.w3.org/2000/svg')
+  clonedSvg.setAttribute('width', String(size))
+  clonedSvg.setAttribute('height', String(size))
+  clonedSvg.removeAttribute('aria-label')
+  clonedSvg.removeAttribute('role')
+  clonedSvg.removeAttribute('tabindex')
+  const image = clonedSvg.ownerDocument.createElementNS('http://www.w3.org/2000/svg', 'image')
+  const viewBox = sourceSvg.viewBox.baseVal
+  image.setAttribute('href', dataUrl)
+  image.setAttribute('width', String(viewBox.width || size))
+  image.setAttribute('height', String(viewBox.height || size))
+  image.setAttribute('preserveAspectRatio', 'none')
+  image.setAttribute('style', 'image-rendering:pixelated')
+  clonedSvg.append(image)
+  applyAvatarCaptureFrame(clonedSvg, options)
+  return new XMLSerializer().serializeToString(clonedSvg)
+}
+
 export const renderAvatarCaptureCanvas = async (
   sourceSvg: SVGSVGElement,
   size: number,
   options: AvatarCaptureOptions = {}
 ) => {
-  const svgSource = serializeAvatarSvg(sourceSvg, size, options)
+  const svgSource = await renderAvatarSvgSource(sourceSvg, size, options)
   const sourceUrl = URL.createObjectURL(new Blob([svgSource], { type: 'image/svg+xml;charset=utf-8' }))
   try {
     const image = new Image()

@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 
-import { getAvatarPalette } from '@oneworks/avatar'
+import { DEFAULT_AVATAR_PIXEL_EFFECT, getAvatarPalette } from '@oneworks/avatar'
 import { act, createElement } from 'react'
 import type { ComponentProps } from 'react'
 import { createRoot } from 'react-dom/client'
@@ -68,6 +68,7 @@ const createProps = (): ComponentProps<typeof AvatarControls> => ({
   onLightDistanceChange: vi.fn(),
   onLightElevationChange: vi.fn(),
   onPaletteChange: vi.fn(),
+  onPixelEffectChange: vi.fn(),
   onResetFace: vi.fn(),
   onSavedPresetRemove: vi.fn(),
   onSavedPresetSelect: vi.fn(),
@@ -83,6 +84,7 @@ const createProps = (): ComponentProps<typeof AvatarControls> => ({
   savedPresets: [],
   selectedEntityPartId: null,
   selectedPalette: getAvatarPalette('white'),
+  pixelEffect: DEFAULT_AVATAR_PIXEL_EFFECT,
   selectedSavedPresetId: null,
   selectedSurfaceDecalId: 'left',
   showAvatarShadow: false,
@@ -121,5 +123,33 @@ describe('AvatarControls surface decals', () => {
 
     act(() => options[1]?.click())
     expect(props.onSelectSurfaceDecal).toHaveBeenCalledWith('right')
+  })
+})
+
+describe('AvatarControls pixel style', () => {
+  it('exposes grain, sampling, palette, and dithering controls when enabled', () => {
+    const props = {
+      ...createProps(),
+      activeTab: 'effects' as const,
+      pixelEffect: { ...DEFAULT_AVATAR_PIXEL_EFFECT, enabled: true }
+    }
+    act(() => {
+      root.render(createElement(
+        AvatarLocaleProvider,
+        { initialLocale: 'en', persist: false },
+        createElement(AvatarControls, props)
+      ))
+    })
+
+    const sampling = host.querySelector('[aria-label="Pixel sampling"]')
+    const palette = host.querySelector('[aria-label="Pixel color count"]')
+    const dithering = host.querySelector('[aria-label="Pixel dithering"]')
+    expect(sampling?.querySelectorAll('[role="radio"]')).toHaveLength(4)
+    expect(sampling?.querySelectorAll('.avatar-controls__pixel-sampling-icon')).toHaveLength(4)
+    expect(palette?.querySelectorAll('[role="radio"]')).toHaveLength(4)
+    expect(dithering?.querySelectorAll('[role="radio"]')).toHaveLength(2)
+
+    act(() => sampling?.querySelectorAll<HTMLButtonElement>('[role="radio"]')[3]?.click())
+    expect(props.onPixelEffectChange).toHaveBeenCalledWith({ sampling: 'slic' })
   })
 })
