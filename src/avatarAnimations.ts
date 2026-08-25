@@ -349,7 +349,9 @@ const isAvatarFaceStyle = (value: unknown): value is AvatarFaceStyle => {
   const highlight = value.eyeHighlight
   return numericFaceStyleKeys.every(key => isFiniteNumber(value[key])) &&
     optionalNumericFaceStyleKeys.every(key => value[key] == null || isFiniteNumber(value[key])) &&
-    (value.eyeShape === 'ellipse' || value.eyeShape === 'rounded') &&
+    (value.eyeShape === 'ellipse' || value.eyeShape === 'rounded' || value.eyeShape === 'chevron') &&
+    (value.leftEyeShape == null || value.leftEyeShape === 'ellipse' || value.leftEyeShape === 'rounded' || value.leftEyeShape === 'chevron') &&
+    (value.rightEyeShape == null || value.rightEyeShape === 'ellipse' || value.rightEyeShape === 'rounded' || value.rightEyeShape === 'chevron') &&
     typeof value.mouthEnabled === 'boolean' &&
     (value.mouthShape == null ||
       value.mouthShape === 'curve' ||
@@ -1184,6 +1186,8 @@ export const interpolateAvatarAnimationKeyframes = (
       },
       eyeRoundness: interpolate(from.faceStyle.eyeRoundness, to.faceStyle.eyeRoundness, progress),
       eyeShape: selectDiscrete(from.faceStyle.eyeShape, to.faceStyle.eyeShape, progress),
+      leftEyeShape: selectDiscrete(fromFaceStyle.leftEyeShape, toFaceStyle.leftEyeShape, progress),
+      rightEyeShape: selectDiscrete(fromFaceStyle.rightEyeShape, toFaceStyle.rightEyeShape, progress),
       gap: interpolate(from.faceStyle.gap, to.faceStyle.gap, progress),
       height: interpolate(from.faceStyle.height, to.faceStyle.height, progress),
       leftEyeHeight: interpolate(

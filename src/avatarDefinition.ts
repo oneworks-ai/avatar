@@ -350,6 +350,8 @@ export const avatarDefinitionToSearchParams = (definition: AvatarDefinition) => 
   if (scene.face.rightEyeHeight != null) params.set('eyeRightH', String(scene.face.rightEyeHeight))
   if (scene.face.leftEyeWidth != null) params.set('eyeLeftW', String(scene.face.leftEyeWidth))
   if (scene.face.rightEyeWidth != null) params.set('eyeRightW', String(scene.face.rightEyeWidth))
+  if (scene.face.leftEyeShape != null) params.set('eyeLeftShape', scene.face.leftEyeShape)
+  if (scene.face.rightEyeShape != null) params.set('eyeRightShape', scene.face.rightEyeShape)
   params.set('eyeGap', String(scene.face.gap))
   params.set('eyeRot', String(scene.face.rotation))
   params.set('eyeLeftRot', String(scene.face.leftEyeRotation))

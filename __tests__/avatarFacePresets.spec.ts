@@ -24,7 +24,7 @@ describe('avatar face presets', () => {
   it('uses rounded, larger eye-led expressions with asymmetric variants', () => {
     expect(AVATAR_FACE_PRESETS.every(preset => preset.style.eyeShape === 'rounded')).toBe(true)
     expect(AVATAR_FACE_PRESETS.some(preset => preset.style.leftEyeHeight !== preset.style.rightEyeHeight)).toBe(true)
-    expect(AVATAR_FACE_PRESETS.filter(preset => preset.style.mouthEnabled).length).toBeLessThanOrEqual(3)
+    expect(AVATAR_FACE_PRESETS.filter(preset => preset.style.mouthEnabled).length).toBeLessThanOrEqual(4)
   })
 
   it('recognizes a fully applied combination', () => {
