@@ -3645,7 +3645,23 @@ function App({
               markSeedFieldsManual(AVATAR_SEED_FIELD.palette)
               paletteManuallyFixedRef.current = true
             }
-            setEntityParts(currentParts => currentParts.map(part => part.id === id ? { ...part, ...nextPart } : part))
+            setEntityParts(currentParts => {
+              let nextParts = currentParts
+              if (
+                entityPreset === 'dog' && id === 'primary' &&
+                (nextPart.scaleX != null || nextPart.scaleY != null)
+              ) {
+                const neutralHead = createAvatarEntityParts('dog').find(part => part.face)
+                if (neutralHead != null) {
+                  nextParts = applyDogHeadScale(
+                    currentParts,
+                    nextPart.scaleX == null ? undefined : nextPart.scaleX / neutralHead.scaleX * 100,
+                    nextPart.scaleY == null ? undefined : nextPart.scaleY / neutralHead.scaleY * 100
+                  )
+                }
+              }
+              return nextParts.map(part => part.id === id ? { ...part, ...nextPart } : part)
+            })
             setCopyState('idle')
           }}
           onShowMorePalettesChange={() => setShowMorePalettes(value => !value)}

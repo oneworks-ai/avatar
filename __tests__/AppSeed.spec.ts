@@ -21,7 +21,8 @@ import { avatarDefinitionToSearchParams, avatarDefinitionToState, createAvatarDe
 import {
   applyDogHeadScale,
   createAvatarEntityParts,
-  deserializeAvatarEntityParts
+  deserializeAvatarEntityParts,
+  serializeAvatarEntityParts
 } from '../src/avatarEntityPresets'
 import {
   AVATAR_SEED_FIELD,
@@ -441,6 +442,85 @@ describe('App Seed authoring', () => {
     expect(deserializeAvatarEntityParts(reloaded.get('entityParts'), 'dog')
       .find(part => part.id === 'primary' && part.face)).toEqual(head)
     expect(reloaded.get('seedFields')).toBe(rerolled.get('seedFields'))
+  })
+
+  it('moves legacy Dog ears outside a broad head and restores their real attachment positions after reload', async () => {
+    const legacyParts = createAvatarEntityParts('dog').map(part => part.face
+      ? { ...part, scaleX: .72 * 1.15, scaleY: .8 * 1.38 }
+      : part)
+    const params = new URLSearchParams({
+      dogEarHeight: '131',
+      dogEarWidth: '61',
+      dogHeadHeight: '138',
+      dogHeadWidth: '115',
+      entity: 'dog',
+      entityParts: serializeAvatarEntityParts(legacyParts),
+      seed: 'v1-legacy-dog-ears'
+    })
+    window.history.replaceState(null, '', `/?${params.toString()}`)
+    await renderApp()
+
+    const first = new URLSearchParams(window.location.search)
+    const firstParts = deserializeAvatarEntityParts(first.get('entityParts'), 'dog')
+    expect(firstParts.find(part => part.id === 'ear-left')?.x).toBeCloseTo(-72 * 1.15)
+    expect(firstParts.find(part => part.id === 'ear-right')?.x).toBeCloseTo(72 * 1.15)
+    expect(firstParts.find(part => part.id === 'ear-left')?.y).toBeCloseTo(15 - 67 * 1.38)
+
+    act(() => root.unmount())
+    root = createRoot(host)
+    await renderApp()
+
+    const reloaded = new URLSearchParams(window.location.search)
+    expect(deserializeAvatarEntityParts(reloaded.get('entityParts'), 'dog')).toEqual(firstParts)
+    expect(reloaded.get('dogHeadWidth')).toBe('115')
+    expect(reloaded.get('dogHeadHeight')).toBe('138')
+  })
+
+  it('keeps Dog ears outside the head when its real part dimensions are edited and restored', async () => {
+    window.history.replaceState(null, '', '/?entity=dog&seed=v1-corgi-part-dimensions')
+    await renderApp()
+    act(() => host.querySelector<HTMLButtonElement>('[data-dog-breed="corgi"]')?.click())
+    await flushEffects()
+
+    act(() => host.querySelector<HTMLButtonElement>('#avatar-controls-tab-body')?.click())
+    await flushEffects()
+
+    const setPartDimension = async (label: 'Part width' | 'Part height', value: string) => {
+      const input = host.querySelector<HTMLInputElement>(`[aria-label="${label}"]`)
+      expect(input).not.toBeNull()
+      act(() => {
+        const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')?.set
+        setter?.call(input, value)
+        input?.dispatchEvent(new Event('input', { bubbles: true }))
+        input?.dispatchEvent(new Event('change', { bubbles: true }))
+      })
+      await flushEffects()
+    }
+
+    await setPartDimension('Part width', '108')
+    await setPartDimension('Part height', '112')
+
+    const manual = new URLSearchParams(window.location.search)
+    expect(manual.get('dogHeadWidth')).toBeNull()
+    expect(manual.get('dogHeadHeight')).toBeNull()
+    expect(manual.get('seedFields')).not.toContain(AVATAR_SEED_FIELD.dogHeadWidth)
+    expect(manual.get('seedFields')).not.toContain(AVATAR_SEED_FIELD.dogHeadHeight)
+
+    const parts = deserializeAvatarEntityParts(manual.get('entityParts'), 'dog')
+    expect(parts.find(part => part.id === 'primary')?.scaleX).toBeCloseTo(1.08)
+    expect(parts.find(part => part.id === 'primary')?.scaleY).toBeCloseTo(1.12)
+    expect(parts.find(part => part.id === 'ear-left')?.x).toBeCloseTo(-90)
+    expect(parts.find(part => part.id === 'ear-right')?.x).toBeCloseTo(90)
+    expect(parts.find(part => part.id === 'ear-left')?.y).toBeCloseTo(-115.2)
+
+    act(() => root.unmount())
+    root = createRoot(host)
+    await renderApp()
+
+    const reloaded = new URLSearchParams(window.location.search)
+    expect(deserializeAvatarEntityParts(reloaded.get('entityParts'), 'dog')).toEqual(parts)
+    expect(reloaded.get('dogHeadWidth')).toBeNull()
+    expect(reloaded.get('dogHeadHeight')).toBeNull()
   })
 
   it('removes Cat-only ear bindings when switching to a Dog type and rerolling its breed', async () => {

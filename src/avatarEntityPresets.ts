@@ -564,6 +564,45 @@ export const getCatEarScale = (parts: readonly AvatarEntityPart[]) => {
 export const DOG_EAR_SCALE_RANGE = { min: 50, max: 160 } as const
 const DOG_EAR_PARTS = DOG_PARTS.filter(part => part.id === 'ear-left' || part.id === 'ear-right')
 
+const DOG_EAR_STYLE_ATTACHMENTS = {
+  floppy: { distanceX: 78, rotationZ: 30, roundness: 82, shape: 'teardrop', y: -48, z: -5 },
+  'half-drop': { distanceX: 68, rotationZ: 42, roundness: 70, shape: 'teardrop', y: -60, z: -7 },
+  upright: { distanceX: 60, rotationZ: -8, roundness: 50, shape: 'cone', y: -78, z: -10 }
+} as const
+
+export type AvatarDogEarStyle = keyof typeof DOG_EAR_STYLE_ATTACHMENTS
+
+export const applyDogEarStyle = (
+  parts: readonly AvatarEntityPart[],
+  style: AvatarDogEarStyle
+): AvatarEntityPart[] => parts.map(part => {
+  if (part.id !== 'ear-left' && part.id !== 'ear-right') return part
+  const attachment = DOG_EAR_STYLE_ATTACHMENTS[style]
+  const side = part.id === 'ear-left' ? -1 : 1
+  return {
+    ...part,
+    rotationZ: -side * attachment.rotationZ,
+    roundness: attachment.roundness,
+    shape: attachment.shape,
+    x: side * attachment.distanceX,
+    y: attachment.y,
+    z: attachment.z
+  }
+})
+
+const getDogEarNeutralAttachment = (part: AvatarEntityPart) => {
+  const base = DOG_EAR_PARTS.find(candidate => candidate.id === part.id)
+  if (base == null) return null
+  const style = Object.values(DOG_EAR_STYLE_ATTACHMENTS).find(candidate => (
+    part.shape === candidate.shape && part.roundness === candidate.roundness
+  ))
+  if (style == null) return base
+  return {
+    x: part.id === 'ear-left' ? -style.distanceX : style.distanceX,
+    y: style.y
+  }
+}
+
 export const applyDogEarScale = (
   parts: readonly AvatarEntityPart[],
   width?: number,
@@ -599,14 +638,54 @@ export const applyDogHeadScale = (
   parts: readonly AvatarEntityPart[],
   width?: number,
   height?: number
-): AvatarEntityPart[] => parts.map(part => {
-  if (part.id !== DOG_HEAD_PART.id || !part.face) return part
-  return {
-    ...part,
-    ...(width == null ? {} : { scaleX: DOG_HEAD_PART.scaleX * width / 100 }),
-    ...(height == null ? {} : { scaleY: DOG_HEAD_PART.scaleY * height / 100 })
-  }
-})
+): AvatarEntityPart[] => {
+  if (width == null && height == null) return [...parts]
+  const head = parts.find(part => part.id === DOG_HEAD_PART.id && part.face)
+  if (head == null) return [...parts]
+
+  const previousWidthScale = head.scaleX / DOG_HEAD_PART.scaleX
+  const previousHeightScale = head.scaleY / DOG_HEAD_PART.scaleY
+  const nextWidthScale = width == null ? previousWidthScale : width / 100
+  const nextHeightScale = height == null ? previousHeightScale : height / 100
+
+  return parts.map(part => {
+    if (part.id === head.id && part.face) {
+      return {
+        ...part,
+        ...(width == null ? {} : { scaleX: DOG_HEAD_PART.scaleX * nextWidthScale }),
+        ...(height == null ? {} : { scaleY: DOG_HEAD_PART.scaleY * nextHeightScale })
+      }
+    }
+
+    const attachment = getDogEarNeutralAttachment(part)
+    if (attachment == null) return part
+
+    const authoredOffsetX = attachment.x - DOG_HEAD_PART.x
+    const authoredOffsetY = attachment.y - DOG_HEAD_PART.y
+    const currentOffsetX = part.x - head.x
+    const currentOffsetY = part.y - head.y
+    const usesNeutralOffsetX = Math.abs(currentOffsetX - authoredOffsetX) < .000001
+    const usesNeutralOffsetY = Math.abs(currentOffsetY - authoredOffsetY) < .000001
+    const normalizedOffsetX = usesNeutralOffsetX
+      ? authoredOffsetX
+      : currentOffsetX / previousWidthScale
+    const normalizedOffsetY = usesNeutralOffsetY
+      ? authoredOffsetY
+      : currentOffsetY / previousHeightScale
+    const repairLegacyX = usesNeutralOffsetX && Math.abs(previousWidthScale - 1) >= .000001
+    const repairLegacyY = usesNeutralOffsetY && Math.abs(previousHeightScale - 1) >= .000001
+
+    return {
+      ...part,
+      x: Math.abs(previousWidthScale - nextWidthScale) < .000001 && !repairLegacyX
+        ? part.x
+        : head.x + normalizedOffsetX * nextWidthScale,
+      y: Math.abs(previousHeightScale - nextHeightScale) < .000001 && !repairLegacyY
+        ? part.y
+        : head.y + normalizedOffsetY * nextHeightScale
+    }
+  })
+}
 
 export const getDogHeadScale = (parts: readonly AvatarEntityPart[]) => {
   const head = parts.find(part => part.id === DOG_HEAD_PART.id && part.face)

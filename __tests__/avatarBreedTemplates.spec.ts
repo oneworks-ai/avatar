@@ -18,6 +18,7 @@ import {
 } from '../src/avatarBreedTemplates'
 import {
   applyDogEarScale,
+  applyDogEarStyle,
   applyDogHeadScale,
   createAvatarEntityParts,
   getDogEarScale,
@@ -194,6 +195,13 @@ describe('dog type Seed constraint profiles', () => {
       expect(resolved.entityParts.filter(part => !part.face).every(part => (
         template.earStyle === 'upright' ? part.shape === 'cone' : part.shape === 'teardrop'
       ))).toBe(true)
+
+      const neutralEars = applyDogEarStyle(createAvatarEntityParts('dog'), template.earStyle)
+      for (const ear of resolved.entityParts.filter(part => !part.face)) {
+        const neutralEar = neutralEars.find(part => part.id === ear.id)!
+        expect(ear.x).toBeCloseTo(neutralEar.x * resolved.dogHeadWidth / 100)
+        expect(ear.y).toBeCloseTo(15 + (neutralEar.y - 15) * resolved.dogHeadHeight / 100)
+      }
     }
     expect(headSilhouettes.size).toBeGreaterThanOrEqual(5)
     const corgi = resolveAvatarDogBreedTemplate(getAvatarDogBreedTemplate('corgi')!, 'v1-dog-profile')
@@ -339,14 +347,56 @@ describe('dog type Seed constraint profiles', () => {
     expect(scaled.find(part => part.face)).toEqual(base.find(part => part.face))
   })
 
-  it('scales only the true dog head from its neutral three-dimensional geometry', () => {
+  it('moves both Dog ears with the head perimeter while scaling their true three-dimensional head', () => {
     const base = createAvatarEntityParts('dog')
     const scaled = applyDogHeadScale(base, 124, 86)
 
     expect(getDogHeadScale(scaled)).toEqual({ height: 86, width: 124 })
     expect(scaled.find(part => part.face)?.scaleX).toBeCloseTo(.72 * 1.24)
     expect(scaled.find(part => part.face)?.scaleY).toBeCloseTo(.8 * .86)
-    expect(scaled.filter(part => !part.face)).toEqual(base.filter(part => !part.face))
-    expect(getDogHeadScale(applyDogHeadScale(scaled, 92))).toEqual({ height: 86, width: 92 })
+    expect(scaled.find(part => part.id === 'ear-left')).toMatchObject({
+      scaleX: .18,
+      scaleY: .34,
+      x: -72 * 1.24,
+      y: 15 - 67 * .86
+    })
+    expect(scaled.find(part => part.id === 'ear-right')).toMatchObject({
+      scaleX: .18,
+      scaleY: .34,
+      x: 72 * 1.24,
+      y: 15 - 67 * .86
+    })
+
+    const resized = applyDogHeadScale(scaled, 92)
+    expect(getDogHeadScale(resized)).toEqual({ height: 86, width: 92 })
+    expect(resized.find(part => part.id === 'ear-left')?.x).toBeCloseTo(-72 * .92)
+    expect(resized.find(part => part.id === 'ear-left')?.y).toBeCloseTo(15 - 67 * .86)
+    expect(applyDogHeadScale(resized, 92, 86)).toEqual(resized)
+  })
+
+  it('repairs legacy broad heads whose narrow Dog ears still use unscaled attachment coordinates', () => {
+    const legacy = applyDogEarScale(createAvatarEntityParts('dog'), 61, 131).map(part => (
+      part.face ? { ...part, scaleX: .72 * 1.15, scaleY: .8 * 1.38 } : part
+    ))
+    const repaired = applyDogHeadScale(legacy, 115, 138)
+    const leftEar = repaired.find(part => part.id === 'ear-left')!
+
+    expect(leftEar.scaleX).toBeCloseTo(.18 * .61)
+    expect(leftEar.scaleY).toBeCloseTo(.34 * 1.31)
+    expect(leftEar.x).toBeCloseTo(-72 * 1.15)
+    expect(leftEar.y).toBeCloseTo(15 - 67 * 1.38)
+    expect(repaired.find(part => part.id === 'ear-right')?.x).toBeCloseTo(72 * 1.15)
+    expect(applyDogHeadScale(repaired, 115, 138)).toEqual(repaired)
+  })
+
+  it('keeps manually positioned Dog ears proportional when the head is resized again', () => {
+    const scaled = applyDogHeadScale(createAvatarEntityParts('dog'), 120, 110)
+    const positioned = scaled.map(part => part.id === 'ear-left'
+      ? { ...part, x: -108, y: -73 }
+      : part)
+    const resized = applyDogHeadScale(positioned, 135, 130)
+
+    expect(resized.find(part => part.id === 'ear-left')?.x).toBeCloseTo(-108 / 1.2 * 1.35)
+    expect(resized.find(part => part.id === 'ear-left')?.y).toBeCloseTo(15 + (-73 - 15) / 1.1 * 1.3)
   })
 })

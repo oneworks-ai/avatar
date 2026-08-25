@@ -5,10 +5,11 @@ import {
   applyAvatarEntityPalette,
   applyCatEarScale,
   applyDogEarScale,
+  applyDogEarStyle,
   applyDogHeadScale,
   createAvatarEntityParts
 } from './avatarEntityPresets'
-import type { AvatarEntityPart } from './avatarEntityPresets'
+import type { AvatarDogEarStyle, AvatarEntityPart } from './avatarEntityPresets'
 import {
   AVATAR_SEED_FIELD,
   resolveSeededAvatarCatEarScale,
@@ -361,7 +362,7 @@ export const AVATAR_DOG_BREED_TEMPLATE_IDS = [
 export type AvatarDogBreedTemplateId = (typeof AVATAR_DOG_BREED_TEMPLATE_IDS)[number]
 
 export interface AvatarDogBreedTemplate {
-  readonly earStyle: 'floppy' | 'half-drop' | 'upright'
+  readonly earStyle: AvatarDogEarStyle
   readonly fixed: {
     readonly coatPattern: Partial<AvatarCoatPattern>
     readonly dogEarHeight: number
@@ -512,23 +513,6 @@ export interface ResolvedAvatarDogBreedTemplate {
   readonly paletteId: string
 }
 
-const applyDogEarStyle = (
-  parts: readonly AvatarEntityPart[],
-  style: AvatarDogBreedTemplate['earStyle']
-): AvatarEntityPart[] => parts.map(part => {
-  if (part.id !== 'ear-left' && part.id !== 'ear-right') return part
-  const left = part.id === 'ear-left'
-  if (style === 'upright') return {
-    ...part, shape: 'cone', roundness: 50, rotationZ: left ? -8 : 8, x: left ? -60 : 60, y: -78, z: -10
-  }
-  if (style === 'half-drop') return {
-    ...part, shape: 'teardrop', roundness: 70, rotationZ: left ? 42 : -42, x: left ? -68 : 68, y: -60, z: -7
-  }
-  return {
-    ...part, shape: 'teardrop', roundness: 82, rotationZ: left ? 30 : -30, x: left ? -78 : 78, y: -48, z: -5
-  }
-})
-
 export const resolveAvatarDogBreedTemplate = (
   template: AvatarDogBreedTemplate,
   seed: string,
@@ -549,14 +533,14 @@ export const resolveAvatarDogBreedTemplate = (
     ? resolveSeededAvatarDogHeadScale(seed, 'height', template.seedDomain)
     : template.fixed.dogHeadHeight
   const palette = getAvatarPalette(template.fixed.paletteId)
-  const entityParts = applyDogEarStyle(applyAvatarEntityPalette(
-    applyDogHeadScale(
+  const entityParts = applyAvatarEntityPalette(applyDogHeadScale(
+    applyDogEarStyle(
       applyDogEarScale(createAvatarEntityParts('dog'), dogEarWidth, dogEarHeight),
-      dogHeadWidth,
-      dogHeadHeight
+      template.earStyle
     ),
-    palette
-  ), template.earStyle)
+    dogHeadWidth,
+    dogHeadHeight
+  ), palette)
   return {
     coatPattern,
     dogEarHeight,
