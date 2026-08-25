@@ -17,7 +17,7 @@ interface HomePageProps {
 }
 
 const getWrappedIndex = (index: number) => (
-  (index + HOME_TEMPLATES.length) % HOME_TEMPLATES.length
+  ((index % HOME_TEMPLATES.length) + HOME_TEMPLATES.length) % HOME_TEMPLATES.length
 )
 
 const CAROUSEL_OFFSETS = [-3, -2, -1, 0, 1, 2, 3] as const
