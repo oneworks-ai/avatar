@@ -1,6 +1,6 @@
 ---
 name: oneworks-avatar
-description: Create, refine, debug, export, and integrate editable OneWorks 3D geometric avatars. Use for avatars, mascots, bot or agent portraits, multipart 3D characters, cat breeds, character presets, expressive eyes, coat patterns, controlled Seed variation, avatar composition, OneWorks Avatar share URLs, transparent SVG or PNG, animated GIF, developer handoff, React or JavaScript integration, embed questions, @oneworks/avatar integration, or investigation of pose, projection, depth, camera, export, and animation issues. Do not use for photorealistic portraits or arbitrary raster illustration.
+description: Create, refine, debug, export, and integrate editable OneWorks 3D geometric avatars. Use for avatars, mascots, bot or agent portraits, multipart 3D characters, reference-image model design, cat breeds, character presets, expressive eyes, coat patterns, controlled Seed variation, avatar composition, OneWorks Avatar share URLs, transparent SVG or PNG, animated GIF, developer handoff, React or JavaScript integration, embed questions, @oneworks/avatar integration, or investigation of pose, projection, depth, camera, export, and animation issues. Do not use for photorealistic portraits or arbitrary raster illustration.
 ---
 
 # OneWorks Avatar
@@ -9,7 +9,9 @@ Work with the official OneWorks 3D geometric avatar system. Treat the editor URL
 
 ## Route the task
 
-- For creating, refining, or exporting an avatar, read [references/editor-workflow.md](references/editor-workflow.md). Also read [references/export-verification.md](references/export-verification.md) whenever files are requested.
+- To compose existing avatar types, character profiles, expressions, placement, or animation, read [references/editor-workflow.md](references/editor-workflow.md) and [references/preset-composition.md](references/preset-composition.md). Use this route when available models already support the requested identity, including reference images used only to communicate mood or composition.
+- To design an original editable 3D character from a reference image, sketch, mascot, or new silhouette, read [references/editor-workflow.md](references/editor-workflow.md) and [references/reference-modeling.md](references/reference-modeling.md). Translate distinguishing features into actual supported geometry, materials, and model-bound details.
+- For any requested exported file, also read [references/export-verification.md](references/export-verification.md).
 - For developer integration, read [references/developer-integration.md](references/developer-integration.md). Read it before recommending npm, React, Vue, JavaScript, Web Components, iframe, embed, JSON, or runtime APIs so package and product boundaries stay accurate.
 - For editor implementation or debugging, read [references/3d-debugging.md](references/3d-debugging.md). Also read the workflow or export reference when the bug touches those surfaces.
 - For a request spanning routes, read each applicable reference once and keep one shared source of truth for the scene.
