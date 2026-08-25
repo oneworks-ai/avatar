@@ -12,6 +12,10 @@ permissions:
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: 'true'
 
+concurrency:
+  group: avatar-sdk-ci-${{ github.event_name == 'pull_request' && format('pr-{0}', github.event.pull_request.number) || format('{0}-{1}', github.event_name, github.ref) }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 jobs:
   sdk:
     name: build-test-pack
@@ -302,6 +306,10 @@ jobs:
         with:
           node-version-file: app-source/.node-version
           registry-url: https://registry.npmjs.org
+          cache: pnpm
+          cache-dependency-path: |
+            pnpm-lock.yaml
+            app-source/pnpm-lock.yaml
 
       - name: Install dependencies
         if: steps.scope.outputs.scope != 'documentation'
