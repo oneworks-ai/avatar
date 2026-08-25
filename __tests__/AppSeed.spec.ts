@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 
 import {
+  AVATAR_DOG_COMPATIBLE_PALETTE_IDS,
   AVATAR_TABBY_COMPATIBLE_PALETTE_IDS,
   createDefaultAvatarDefinition,
   createSeededAvatarDefinition,
@@ -17,7 +18,11 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import App from '../src/App'
 import { AvatarLocaleProvider } from '../src/avatarLocale'
 import { avatarDefinitionToSearchParams, avatarDefinitionToState, createAvatarDefinition } from '../src/avatarDefinition'
-import { createAvatarEntityParts } from '../src/avatarEntityPresets'
+import {
+  applyDogHeadScale,
+  createAvatarEntityParts,
+  deserializeAvatarEntityParts
+} from '../src/avatarEntityPresets'
 import {
   AVATAR_SEED_FIELD,
   AVATAR_SEED_FIELDS,
@@ -117,11 +122,20 @@ describe('App Seed authoring', () => {
     const params = new URLSearchParams(window.location.search)
     const entity = params.get('entity')
     const expectedFields = AVATAR_SEED_FIELDS.filter(field => (
-      entity === 'cat' || (
-        field !== AVATAR_SEED_FIELD.catEarWidth &&
-        field !== AVATAR_SEED_FIELD.catEarHeight &&
-        !field.startsWith('scene.appearance.coatPattern.')
-      )
+      entity === 'cat'
+        ? field !== AVATAR_SEED_FIELD.dogEarWidth &&
+          field !== AVATAR_SEED_FIELD.dogEarHeight &&
+          field !== AVATAR_SEED_FIELD.dogHeadWidth &&
+          field !== AVATAR_SEED_FIELD.dogHeadHeight
+        : entity === 'dog'
+          ? field !== AVATAR_SEED_FIELD.catEarWidth && field !== AVATAR_SEED_FIELD.catEarHeight
+          : field !== AVATAR_SEED_FIELD.catEarWidth &&
+            field !== AVATAR_SEED_FIELD.catEarHeight &&
+            field !== AVATAR_SEED_FIELD.dogEarWidth &&
+            field !== AVATAR_SEED_FIELD.dogEarHeight &&
+            field !== AVATAR_SEED_FIELD.dogHeadWidth &&
+            field !== AVATAR_SEED_FIELD.dogHeadHeight &&
+            !field.startsWith('scene.appearance.coatPattern.')
     ))
     expect(params.get('seedFields')).toBe(serializeAvatarSeedFields(expectedFields))
     expect(entity).not.toBeNull()
@@ -341,6 +355,201 @@ describe('App Seed authoring', () => {
       palette: rerolled.get('palette'),
       shape: rerolled.get('coatLightPatchShape')
     }).toEqual(fixed)
+  })
+
+  it('applies a Dog type as a deterministic constrained profile with Dog-only ear fields', async () => {
+    window.history.replaceState(null, '', '/?entity=dog&seed=v1-husky-a')
+    await renderApp()
+    act(() => host.querySelector<HTMLButtonElement>('[data-dog-breed="husky"]')?.click())
+    await flushEffects()
+
+    const selected = new URLSearchParams(window.location.search)
+    expect(selected.get('entity')).toBe('dog')
+    expect(selected.get('breed')).toBe('husky')
+    expect(selected.get('palette')).toBe('husky')
+    expect(selected.get('seedFields')).toContain(AVATAR_SEED_FIELD.dogEarWidth)
+    expect(selected.get('seedFields')).toContain(AVATAR_SEED_FIELD.dogEarHeight)
+    expect(selected.get('seedFields')).toContain(AVATAR_SEED_FIELD.dogHeadWidth)
+    expect(selected.get('seedFields')).toContain(AVATAR_SEED_FIELD.dogHeadHeight)
+    expect(Number(selected.get('dogHeadWidth'))).toBeGreaterThanOrEqual(100)
+    expect(Number(selected.get('dogHeadWidth'))).toBeLessThanOrEqual(112)
+    expect(Number(selected.get('dogHeadHeight'))).toBeGreaterThanOrEqual(102)
+    expect(Number(selected.get('dogHeadHeight'))).toBeLessThanOrEqual(116)
+    expect(selected.get('seedFields')).not.toContain(AVATAR_SEED_FIELD.catEarWidth)
+    expect(selected.get('seedFields')).not.toContain(AVATAR_SEED_FIELD.catEarHeight)
+
+    const fixed = {
+      algorithm: selected.get('coatAlgorithm'),
+      offset: selected.get('coatLightPatchOffsetY'),
+      palette: selected.get('palette'),
+      shape: selected.get('coatLightPatchShape')
+    }
+    act(() => host.querySelector<HTMLButtonElement>('[aria-label="Generate random Seed"]')?.click())
+    await flushEffects()
+    const rerolled = new URLSearchParams(window.location.search)
+    expect(rerolled.get('breed')).toBe('husky')
+    expect({
+      algorithm: rerolled.get('coatAlgorithm'),
+      offset: rerolled.get('coatLightPatchOffsetY'),
+      palette: rerolled.get('palette'),
+      shape: rerolled.get('coatLightPatchShape')
+    }).toEqual(fixed)
+  })
+
+  it('freezes an independently edited Dog head width across Seed rerolls and URL reloads', async () => {
+    window.history.replaceState(null, '', '/?entity=dog&seed=v1-corgi-head')
+    await renderApp()
+    act(() => host.querySelector<HTMLButtonElement>('[data-dog-breed="corgi"]')?.click())
+    await flushEffects()
+
+    const selected = new URLSearchParams(window.location.search)
+    expect(selected.get('seedFields')).toContain(AVATAR_SEED_FIELD.dogHeadWidth)
+    expect(selected.get('seedFields')).toContain(AVATAR_SEED_FIELD.dogHeadHeight)
+
+    act(() => {
+      const width = host.querySelector<HTMLInputElement>('[aria-label="Dog head width"]')
+      const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')?.set
+      setter?.call(width, '132')
+      width?.dispatchEvent(new Event('input', { bubbles: true }))
+      width?.dispatchEvent(new Event('change', { bubbles: true }))
+    })
+    await flushEffects()
+
+    const manual = new URLSearchParams(window.location.search)
+    expect(manual.get('breed')).toBe('corgi')
+    expect(manual.get('dogHeadWidth')).toBe('132')
+    expect(manual.get('seedFields')).not.toContain(AVATAR_SEED_FIELD.dogHeadWidth)
+    expect(manual.get('seedFields')).toContain(AVATAR_SEED_FIELD.dogHeadHeight)
+
+    act(() => host.querySelector<HTMLButtonElement>('[aria-label="Generate random Seed"]')?.click())
+    await flushEffects()
+    const rerolled = new URLSearchParams(window.location.search)
+    expect(rerolled.get('dogHeadWidth')).toBe('132')
+    expect(Number(rerolled.get('dogHeadHeight'))).toBeGreaterThanOrEqual(84)
+    expect(Number(rerolled.get('dogHeadHeight'))).toBeLessThanOrEqual(98)
+    const head = deserializeAvatarEntityParts(rerolled.get('entityParts'), 'dog')
+      .find(part => part.id === 'primary' && part.face)
+    expect(head?.scaleX).toBeCloseTo(.72 * 1.32)
+    expect(head?.scaleY).toBeCloseTo(.8 * Number(rerolled.get('dogHeadHeight')) / 100)
+
+    act(() => root.unmount())
+    root = createRoot(host)
+    await renderApp()
+    const reloaded = new URLSearchParams(window.location.search)
+    expect(reloaded.get('dogHeadWidth')).toBe('132')
+    expect(reloaded.get('dogHeadHeight')).toBe(rerolled.get('dogHeadHeight'))
+    expect(deserializeAvatarEntityParts(reloaded.get('entityParts'), 'dog')
+      .find(part => part.id === 'primary' && part.face)).toEqual(head)
+    expect(reloaded.get('seedFields')).toBe(rerolled.get('seedFields'))
+  })
+
+  it('removes Cat-only ear bindings when switching to a Dog type and rerolling its breed', async () => {
+    const seededFields = serializeAvatarSeedFields([
+      AVATAR_SEED_FIELD.catEarWidth,
+      AVATAR_SEED_FIELD.catEarHeight,
+      AVATAR_SEED_FIELD.facePreset
+    ])
+    window.history.replaceState(null, '', `/?entity=cat&seed=v1-cross-species-cat&seedFields=${seededFields}`)
+    await renderApp()
+
+    act(() => host.querySelector<HTMLButtonElement>('[data-entity-preset="dog"]')?.click())
+    await flushEffects()
+    let params = new URLSearchParams(window.location.search)
+    expect(params.get('entity')).toBe('dog')
+    expect(params.get('seedFields')).not.toContain(AVATAR_SEED_FIELD.catEarWidth)
+    expect(params.get('seedFields')).not.toContain(AVATAR_SEED_FIELD.catEarHeight)
+
+    act(() => host.querySelector<HTMLButtonElement>('[data-dog-breed="husky"]')?.click())
+    await flushEffects()
+    act(() => host.querySelector<HTMLButtonElement>('[aria-label="Generate random Seed"]')?.click())
+    await flushEffects()
+    params = new URLSearchParams(window.location.search)
+    expect(params.get('breed')).toBe('husky')
+    expect(params.get('seedFields')).toContain(AVATAR_SEED_FIELD.dogEarWidth)
+    expect(params.get('seedFields')).toContain(AVATAR_SEED_FIELD.dogEarHeight)
+    expect(params.get('seedFields')).not.toContain(AVATAR_SEED_FIELD.catEarWidth)
+    expect(params.get('seedFields')).not.toContain(AVATAR_SEED_FIELD.catEarHeight)
+    expect(params.has('catEarWidth')).toBe(false)
+    expect(params.has('catEarHeight')).toBe(false)
+  })
+
+  it('removes Dog-only ear bindings when switching to a Cat type and rerolling its breed', async () => {
+    const seededFields = serializeAvatarSeedFields([
+      AVATAR_SEED_FIELD.dogEarWidth,
+      AVATAR_SEED_FIELD.dogEarHeight,
+      AVATAR_SEED_FIELD.dogHeadWidth,
+      AVATAR_SEED_FIELD.dogHeadHeight,
+      AVATAR_SEED_FIELD.facePreset
+    ])
+    window.history.replaceState(null, '', `/?entity=dog&seed=v1-cross-species-dog&seedFields=${seededFields}`)
+    await renderApp()
+
+    act(() => host.querySelector<HTMLButtonElement>('[data-entity-preset="cat"]')?.click())
+    await flushEffects()
+    let params = new URLSearchParams(window.location.search)
+    expect(params.get('entity')).toBe('cat')
+    expect(params.get('seedFields')).not.toContain(AVATAR_SEED_FIELD.dogEarWidth)
+    expect(params.get('seedFields')).not.toContain(AVATAR_SEED_FIELD.dogEarHeight)
+    expect(params.get('seedFields')).not.toContain(AVATAR_SEED_FIELD.dogHeadWidth)
+    expect(params.get('seedFields')).not.toContain(AVATAR_SEED_FIELD.dogHeadHeight)
+
+    act(() => host.querySelector<HTMLButtonElement>('[data-cat-breed="russian-blue"]')?.click())
+    await flushEffects()
+    act(() => host.querySelector<HTMLButtonElement>('[aria-label="Generate random Seed"]')?.click())
+    await flushEffects()
+    params = new URLSearchParams(window.location.search)
+    expect(params.get('breed')).toBe('russian-blue')
+    expect(params.get('seedFields')).toContain(AVATAR_SEED_FIELD.catEarWidth)
+    expect(params.get('seedFields')).toContain(AVATAR_SEED_FIELD.catEarHeight)
+    expect(params.get('seedFields')).not.toContain(AVATAR_SEED_FIELD.dogEarWidth)
+    expect(params.get('seedFields')).not.toContain(AVATAR_SEED_FIELD.dogEarHeight)
+    expect(params.get('seedFields')).not.toContain(AVATAR_SEED_FIELD.dogHeadWidth)
+    expect(params.get('seedFields')).not.toContain(AVATAR_SEED_FIELD.dogHeadHeight)
+    expect(params.has('dogEarWidth')).toBe(false)
+    expect(params.has('dogEarHeight')).toBe(false)
+    expect(params.has('dogHeadWidth')).toBe(false)
+    expect(params.has('dogHeadHeight')).toBe(false)
+  })
+
+  it('keeps an unprofiled seeded Dog coat inside the Dog palette domain after URL reloads', async () => {
+    const seededFields = serializeAvatarSeedFields([
+      AVATAR_SEED_FIELD.palette,
+      AVATAR_SEED_FIELD.coatPatternSeed
+    ])
+    window.history.replaceState(null, '', `/?entity=dog&coat=1&seed=v1-dog-coat-domain&seedFields=${seededFields}`)
+    await renderApp()
+
+    const first = new URLSearchParams(window.location.search)
+    expect(AVATAR_DOG_COMPATIBLE_PALETTE_IDS).toContain(first.get('palette'))
+    expect(AVATAR_TABBY_COMPATIBLE_PALETTE_IDS).not.toContain(first.get('palette'))
+
+    act(() => root.unmount())
+    root = createRoot(host)
+    await renderApp()
+    const second = new URLSearchParams(window.location.search)
+    expect(second.get('palette')).toBe(first.get('palette'))
+    expect(AVATAR_DOG_COMPATIBLE_PALETTE_IDS).toContain(second.get('palette'))
+    expect(AVATAR_TABBY_COMPATIBLE_PALETTE_IDS).not.toContain(second.get('palette'))
+  })
+
+  it('cancels a Dog type without changing its concrete appearance', async () => {
+    window.history.replaceState(null, '', '/?entity=dog&seed=v1-shiba-cancel')
+    await renderApp()
+    act(() => host.querySelector<HTMLButtonElement>('[data-dog-breed="shiba-inu"]')?.click())
+    await flushEffects()
+    const selected = new URLSearchParams(window.location.search)
+    const concrete = {
+      ears: selected.get('entityParts'),
+      palette: selected.get('palette'),
+      width: selected.get('coatLightPatchWidth')
+    }
+    act(() => host.querySelector<HTMLButtonElement>('[data-dog-breed="shiba-inu"]')?.click())
+    await flushEffects()
+    const cancelled = new URLSearchParams(window.location.search)
+    expect(cancelled.get('breed')).toBeNull()
+    expect(cancelled.get('entityParts')).toBe(concrete.ears)
+    expect(cancelled.get('palette')).toBe(concrete.palette)
+    expect(cancelled.get('coatLightPatchWidth')).toBe(concrete.width)
   })
 
   it('locks Cow Cat colors and centered patch while its permitted patch size follows Seed', async () => {
@@ -885,6 +1094,43 @@ describe('App Seed authoring', () => {
     await flushEffects()
 
     expect(onDefinitionChange).not.toHaveBeenCalled()
+  })
+
+  it('restores actual embedded Dog head dimensions without emitting a pseudo-change', async () => {
+    const base = createDefaultAvatarDefinition()
+    const definition: AvatarDefinition = {
+      ...base,
+      metadata: {
+        generation: {
+          fields: [AVATAR_SEED_FIELD.dogHeadWidth, AVATAR_SEED_FIELD.dogHeadHeight],
+          profileId: 'corgi',
+          seed: 'v1-embedded-dog-head',
+          version: 1
+        }
+      },
+      scene: {
+        ...base.scene,
+        entity: {
+          ...base.scene.entity,
+          parts: applyDogHeadScale(createAvatarEntityParts('dog'), 124, 88),
+          preset: 'dog'
+        }
+      }
+    }
+    expect(isAvatarDefinition(definition)).toBe(true)
+    const onDefinitionChange = vi.fn<(next: AvatarDefinition) => void>()
+    await act(async () => {
+      root.render(createElement(
+        AvatarLocaleProvider,
+        { initialLocale: 'en', persist: false },
+        createElement(App, { definition, embedded: true, onDefinitionChange })
+      ))
+    })
+    await flushEffects()
+
+    expect(onDefinitionChange).not.toHaveBeenCalled()
+    expect(host.querySelector<HTMLInputElement>('[aria-label="Dog head width"]')?.value).toBe('124')
+    expect(host.querySelector<HTMLInputElement>('[aria-label="Dog head height"]')?.value).toBe('88')
   })
 
   it('preserves an unknown future Cat profile as an embedded authoring hint', async () => {

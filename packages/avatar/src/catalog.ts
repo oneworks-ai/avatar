@@ -5,7 +5,12 @@ export interface AvatarPalette {
   readonly id: string
   readonly name: string
   readonly shadow: string
-  readonly coat?: { readonly patch: string; readonly mark: string }
+  readonly coat?: {
+    readonly mark: string
+    /** Declarative coat geometry interpreted by the shared 3D decal resolver. */
+    readonly marking?: 'blaze' | 'mask' | 'muzzle' | 'spots'
+    readonly patch: string
+  }
   readonly entityMaterials?: Readonly<Record<string, { readonly baseColor: string; readonly foregroundColor: string; readonly highlightColor: string; readonly shadowColor: string }>>
 }
 
@@ -309,6 +314,90 @@ export const AVATAR_PALETTES: readonly AvatarPalette[] = [
       'cat-ear-left': { baseColor: '#111419', foregroundColor: '#dce3e8', highlightColor: '#303844', shadowColor: '#05070a' },
       'cat-ear-right': { baseColor: '#111419', foregroundColor: '#dce3e8', highlightColor: '#303844', shadowColor: '#05070a' },
       'cat-head': { baseColor: '#111419', foregroundColor: '#eef2f5', highlightColor: '#303844', shadowColor: '#05070a' }
+    }
+  },
+  {
+    id: 'shiba-inu',
+    name: 'Shiba Inu',
+    background: '#c96f32',
+    gradient: ['#c96f32', '#efb66d'],
+    foreground: '#322017',
+    shadow: '#7a3b1b',
+    coat: { mark: '#8b431c', marking: 'muzzle', patch: '#f5ddba' },
+    entityMaterials: {
+      'ear-left': { baseColor: '#9f4a20', foregroundColor: '#322017', highlightColor: '#db8550', shadowColor: '#51200d' },
+      'ear-right': { baseColor: '#9f4a20', foregroundColor: '#322017', highlightColor: '#db8550', shadowColor: '#51200d' },
+      primary: { baseColor: '#c96f32', foregroundColor: '#322017', highlightColor: '#efb66d', shadowColor: '#7a3b1b' }
+    }
+  },
+  {
+    id: 'husky',
+    name: 'Husky',
+    background: '#64717c',
+    gradient: ['#64717c', '#aebbc2'],
+    foreground: '#182128',
+    shadow: '#35434c',
+    coat: { mark: '#29343d', marking: 'mask', patch: '#f5f3ec' },
+    entityMaterials: {
+      'ear-left': { baseColor: '#29343d', foregroundColor: '#182128', highlightColor: '#596975', shadowColor: '#131a1f' },
+      'ear-right': { baseColor: '#29343d', foregroundColor: '#182128', highlightColor: '#596975', shadowColor: '#131a1f' },
+      primary: { baseColor: '#64717c', foregroundColor: '#182128', highlightColor: '#aebbc2', shadowColor: '#35434c' }
+    }
+  },
+  {
+    id: 'corgi',
+    name: 'Corgi',
+    background: '#be7135',
+    gradient: ['#be7135', '#e8ad70'],
+    foreground: '#352218',
+    shadow: '#744020',
+    coat: { mark: '#934f25', marking: 'blaze', patch: '#f7e3c3' },
+    entityMaterials: {
+      'ear-left': { baseColor: '#b15f2d', foregroundColor: '#352218', highlightColor: '#df9353', shadowColor: '#663215' },
+      'ear-right': { baseColor: '#b15f2d', foregroundColor: '#352218', highlightColor: '#df9353', shadowColor: '#663215' },
+      primary: { baseColor: '#be7135', foregroundColor: '#352218', highlightColor: '#e8ad70', shadowColor: '#744020' }
+    }
+  },
+  {
+    id: 'golden-retriever',
+    name: 'Golden Retriever',
+    background: '#d8a34d',
+    gradient: ['#d8a34d', '#f4d68a'],
+    foreground: '#3a2a16',
+    shadow: '#8a5a21',
+    coat: { mark: '#b67a2e', marking: 'muzzle', patch: '#f3d39a' },
+    entityMaterials: {
+      'ear-left': { baseColor: '#bc7e30', foregroundColor: '#3a2a16', highlightColor: '#dcaa59', shadowColor: '#714216' },
+      'ear-right': { baseColor: '#bc7e30', foregroundColor: '#3a2a16', highlightColor: '#dcaa59', shadowColor: '#714216' },
+      primary: { baseColor: '#d8a34d', foregroundColor: '#3a2a16', highlightColor: '#f4d68a', shadowColor: '#8a5a21' }
+    }
+  },
+  {
+    id: 'border-collie',
+    name: 'Border Collie',
+    background: '#22262a',
+    gradient: ['#22262a', '#4a535a'],
+    foreground: '#b77a38',
+    shadow: '#0d1114',
+    coat: { mark: '#101417', marking: 'blaze', patch: '#f7f4eb' },
+    entityMaterials: {
+      'ear-left': { baseColor: '#171b1f', foregroundColor: '#b77a38', highlightColor: '#3d464d', shadowColor: '#07090b' },
+      'ear-right': { baseColor: '#171b1f', foregroundColor: '#b77a38', highlightColor: '#3d464d', shadowColor: '#07090b' },
+      primary: { baseColor: '#22262a', foregroundColor: '#b77a38', highlightColor: '#4a535a', shadowColor: '#0d1114' }
+    }
+  },
+  {
+    id: 'dalmatian',
+    name: 'Dalmatian',
+    background: '#f1eee5',
+    gradient: ['#f1eee5', '#ffffff'],
+    foreground: '#202328',
+    shadow: '#b5b3aa',
+    coat: { mark: '#596571', marking: 'spots', patch: '#f8f6ee' },
+    entityMaterials: {
+      'ear-left': { baseColor: '#f1eee5', foregroundColor: '#202328', highlightColor: '#ffffff', shadowColor: '#b5b3aa' },
+      'ear-right': { baseColor: '#f1eee5', foregroundColor: '#202328', highlightColor: '#ffffff', shadowColor: '#b5b3aa' },
+      primary: { baseColor: '#f1eee5', foregroundColor: '#202328', highlightColor: '#ffffff', shadowColor: '#b5b3aa' }
     }
   },
   {

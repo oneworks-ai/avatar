@@ -39,6 +39,10 @@ export const AVATAR_SEED_FIELD_PATHS = deepFreeze({
   cameraFrame: 'scene.camera.frame',
   catEarHeight: 'scene.entity.catEarHeight',
   catEarWidth: 'scene.entity.catEarWidth',
+  dogEarHeight: 'scene.entity.dogEarHeight',
+  dogEarWidth: 'scene.entity.dogEarWidth',
+  dogHeadHeight: 'scene.entity.dogHeadHeight',
+  dogHeadWidth: 'scene.entity.dogHeadWidth',
   coatPatternAlgorithm: 'scene.appearance.coatPattern.algorithm',
   coatPatternBreakup: 'scene.appearance.coatPattern.breakup',
   coatPatternContrast: 'scene.appearance.coatPattern.contrast',
@@ -201,6 +205,14 @@ export const AVATAR_TABBY_COMPATIBLE_PALETTE_IDS = deepFreeze([
   'british-shorthair',
   'russian-blue',
   'orange-tabby'
+] as const)
+export const AVATAR_DOG_COMPATIBLE_PALETTE_IDS = deepFreeze([
+  'shiba-inu',
+  'husky',
+  'corgi',
+  'golden-retriever',
+  'border-collie',
+  'dalmatian'
 ] as const)
 
 export type AvatarBackgroundStyle = 'gradient' | 'solid'
@@ -800,6 +812,119 @@ const AVATAR_TABBY_DARK_GROUPS: readonly (readonly AvatarCoatPatternMarkSpec[])[
   AVATAR_TABBY_VARIABLE_GROUPS[10]!
 ])
 
+const resolveAvatarDogCoatPatternDecals = ({
+  facePartId,
+  leftEarId,
+  palette,
+  pattern,
+  rightEarId
+}: {
+  readonly facePartId: string
+  readonly leftEarId: string | undefined
+  readonly palette: (typeof AVATAR_PALETTES)[number]
+  readonly pattern: AvatarCoatPattern
+  readonly rightEarId: string | undefined
+}): readonly AvatarSurfaceDecal[] => {
+  const marking = palette.coat?.marking
+  if (marking == null) return []
+  const patch = palette.coat?.patch ?? palette.gradient[1]
+  const mark = palette.coat?.mark ?? palette.foreground
+  const contrast = pattern.contrast / 100
+  const opacity = Math.round(76 + contrast * 20)
+  const width = pattern.lightPatchWidth ?? 100
+  const length = pattern.lightPatchLength ?? 100
+  const offsetY = pattern.lightPatchOffsetY ?? 0
+  const fixed = (
+    id: string,
+    label: string,
+    color: string,
+    shape: AvatarSurfaceDecalShape,
+    x: number,
+    y: number,
+    decalWidth: number,
+    height: number,
+    rotation = 0,
+    side: AvatarSurfaceDecalSide = 'face',
+    targetPartId = facePartId
+  ): AvatarSurfaceDecal => ({
+    color,
+    height: Math.max(AVATAR_SURFACE_DECAL_RANGES.height.min, Math.min(AVATAR_SURFACE_DECAL_RANGES.height.max, Math.round(height))),
+    id: `coat-dog-${marking}-${id}`,
+    label,
+    opacity: color === patch ? 100 : opacity,
+    rotation,
+    shape,
+    side,
+    targetPartId,
+    width: Math.max(AVATAR_SURFACE_DECAL_RANGES.width.min, Math.min(AVATAR_SURFACE_DECAL_RANGES.width.max, Math.round(decalWidth))),
+    x,
+    y
+  })
+  if (marking === 'muzzle') {
+    return [fixed('muzzle', 'Dog cream muzzle', patch, 'ellipse', 0, 42 + offsetY, width * 1.05, length * .66)]
+  }
+  if (marking === 'blaze') {
+    return [
+      fixed('blaze', 'Dog face blaze', patch, 'rounded', 0, -45 + offsetY, width * .32, length * 1.22),
+      fixed('muzzle', 'Dog cream muzzle', patch, 'ellipse', 0, 40 + offsetY, width * .96, length * .58)
+    ]
+  }
+  if (marking === 'mask') {
+    return [fixed('mask', 'Dog face mask', patch, 'face-mask', 0, 40 + offsetY, width * 1.08, length * 1.12)]
+  }
+  const count = Math.max(8, Math.round(10 + pattern.density / 100 * 16))
+  const headSides = ['front', 'front', 'left', 'front', 'right', 'front', 'back', 'front'] as const
+  return Array.from({ length: count }, (_, index) => {
+    const earPartId = index % 12 === 0 ? leftEarId : index % 12 === 1 ? rightEarId : undefined
+    const side = earPartId == null ? headSides[index % headSides.length]! : 'front'
+    const isEarSpot = earPartId != null
+    const rawX = resolveAvatarSeededInteger(
+      pattern.seed,
+      `coat.dog.spots.${index}.x`,
+      isEarSpot ? -34 : side === 'front' ? -118 : -70,
+      isEarSpot ? 34 : side === 'front' ? 118 : 70
+    )
+    const y = resolveAvatarSeededInteger(
+      pattern.seed,
+      `coat.dog.spots.${index}.y`,
+      isEarSpot ? -44 : -112,
+      isEarSpot ? 46 : 112
+    )
+    const spotWidth = resolveAvatarSeededInteger(
+      pattern.seed,
+      `coat.dog.spots.${index}.width`,
+      isEarSpot ? 13 : 16,
+      isEarSpot ? 24 : 34
+    ) * pattern.thickness / 100
+    const spotHeight = resolveAvatarSeededInteger(
+      pattern.seed,
+      `coat.dog.spots.${index}.height`,
+      isEarSpot ? 16 : 18,
+      isEarSpot ? 28 : 42
+    ) * pattern.thickness / 100
+    const overlapsFacialFeatures = !isEarSpot && side === 'front' &&
+      Math.abs(rawX) < 64 + Math.ceil(spotWidth) / 2 &&
+      y > -24 - Math.ceil(spotHeight) / 2 && y < 60 + Math.ceil(spotHeight) / 2
+    const x = overlapsFacialFeatures
+      ? (rawX < 0 ? -1 : 1) * (90 + Math.abs(rawX) % 20)
+      : rawX
+    const rotation = resolveAvatarSeededInteger(pattern.seed, `coat.dog.spots.${index}.rotation`, -55, 55)
+    return fixed(
+      `spot-${index + 1}`,
+      'Dalmatian coat spot',
+      mark,
+      'ellipse',
+      x,
+      y,
+      spotWidth,
+      spotHeight,
+      rotation,
+      side,
+      earPartId
+    )
+  })
+}
+
 const resolveAvatarCoatPatternAlgorithm = (pattern: AvatarCoatPattern) => (
   pattern.algorithm === 'random'
     ? resolveAvatarSeededOption(
@@ -821,12 +946,19 @@ export const resolveAvatarCoatPatternDecals = ({
   readonly paletteId: string
   readonly pattern: AvatarCoatPattern
 }): readonly AvatarSurfaceDecal[] => {
-  if (!pattern.enabled || entityPreset !== 'cat') return []
+  if (!pattern.enabled || (entityPreset !== 'cat' && entityPreset !== 'dog')) return []
   const facePartId = entityParts.find(part => part.face)?.id
   if (facePartId == null) return []
   const leftEarId = entityParts.find(part => /ear-left|left-ear/u.test(part.id))?.id
   const rightEarId = entityParts.find(part => /ear-right|right-ear/u.test(part.id))?.id
   const palette = AVATAR_PALETTES.find(candidate => candidate.id === paletteId) ?? AVATAR_PALETTES[0]!
+  if (entityPreset === 'dog') return resolveAvatarDogCoatPatternDecals({
+    facePartId,
+    leftEarId,
+    palette,
+    pattern,
+    rightEarId
+  })
   const algorithm = resolveAvatarCoatPatternAlgorithm(pattern)
   const contrast = pattern.contrast / 100
   const stripeColor = palette.coat?.mark ?? mixAvatarHexColor(palette.background, palette.foreground, contrast)

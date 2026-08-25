@@ -30,6 +30,8 @@ import type { AvatarBodyShape, AvatarDropShadowStyle, AvatarOutlineStyle } from 
 import {
   AVATAR_BUILT_IN_ENTITY_PRESETS,
   CAT_EAR_SCALE_RANGE,
+  DOG_EAR_SCALE_RANGE,
+  DOG_HEAD_SCALE_RANGE,
   hasMultipleAvatarEntityMaterials,
   resolveAvatarEntityPartScaleZ
 } from './avatarEntityPresets'
@@ -45,8 +47,13 @@ import type {
   AvatarNoseShape
 } from './avatarGeometry'
 import { useAvatarLocale } from './avatarLocale'
-import { AVATAR_CAT_BREED_TEMPLATES, resolveAvatarCatBreedTemplate } from './avatarBreedTemplates'
-import type { AvatarCatBreedTemplateId } from './avatarBreedTemplates'
+import {
+  AVATAR_CAT_BREED_TEMPLATES,
+  AVATAR_DOG_BREED_TEMPLATES,
+  resolveAvatarCatBreedTemplate,
+  resolveAvatarDogBreedTemplate
+} from './avatarBreedTemplates'
+import type { AvatarCatBreedTemplateId, AvatarDogBreedTemplateId } from './avatarBreedTemplates'
 import { AVATAR_CAMERA_BACKGROUND_PRESETS, AVATAR_SEED_FIELD } from './avatarSeed'
 import type { AvatarSeedField } from './avatarSeed'
 import {
@@ -121,6 +128,11 @@ interface AvatarControlsProps {
   readonly controlsWidth: number
   readonly entityParts: readonly AvatarEntityPart[]
   readonly entityPreset: AvatarEntityPreset
+  readonly dogBreedTemplateId: AvatarDogBreedTemplateId | null
+  readonly dogEarHeight: number
+  readonly dogEarWidth: number
+  readonly dogHeadHeight: number
+  readonly dogHeadWidth: number
   readonly faceStyle: AvatarFaceStyle
   readonly faceShadowStyle: AvatarFaceShadowStyle
   readonly frameShadowStyle: AvatarDropShadowStyle
@@ -139,6 +151,11 @@ interface AvatarControlsProps {
   readonly onCatBreedTemplateChange: (id: AvatarCatBreedTemplateId | null) => void
   readonly onCatEarHeightChange: (value: number) => void
   readonly onCatEarWidthChange: (value: number) => void
+  readonly onDogBreedTemplateChange: (id: AvatarDogBreedTemplateId | null) => void
+  readonly onDogEarHeightChange: (value: number) => void
+  readonly onDogEarWidthChange: (value: number) => void
+  readonly onDogHeadHeightChange: (value: number) => void
+  readonly onDogHeadWidthChange: (value: number) => void
   readonly onCoatPatternChange: (pattern: Partial<AvatarCoatPattern>, manualField?: AvatarSeedField) => void
   readonly onConvertCoatPatternToDecals: () => void
   readonly onCollapse: () => void
@@ -705,6 +722,11 @@ export function AvatarControls({
   controlsWidth,
   entityParts,
   entityPreset,
+  dogBreedTemplateId,
+  dogEarHeight,
+  dogEarWidth,
+  dogHeadHeight,
+  dogHeadWidth,
   faceStyle,
   faceShadowStyle,
   frameShadowStyle,
@@ -724,6 +746,11 @@ export function AvatarControls({
   onCatBreedTemplateChange,
   onCatEarHeightChange,
   onCatEarWidthChange,
+  onDogBreedTemplateChange,
+  onDogEarHeightChange,
+  onDogEarWidthChange,
+  onDogHeadHeightChange,
+  onDogHeadWidthChange,
   onCoatPatternChange,
   onConvertCoatPatternToDecals,
   onCollapse,
@@ -896,6 +923,25 @@ export function AvatarControls({
         entityParts={resolved.entityParts}
         lightDirection={{ azimuth: lightAzimuth, elevation: lightElevation }}
         preset='cat'
+        previewBackground={template.previewBackground}
+        surfaceDecals={decals}
+      />
+    )
+  }
+
+  const renderDogBreedPreview = (template: (typeof AVATAR_DOG_BREED_TEMPLATES)[number]) => {
+    const resolved = resolveAvatarDogBreedTemplate(template, seed)
+    const decals = resolveAvatarCoatPatternDecals({
+      entityParts: resolved.entityParts,
+      entityPreset: 'dog',
+      paletteId: resolved.paletteId,
+      pattern: resolved.coatPattern
+    })
+    return (
+      <EntityPresetPreview
+        entityParts={resolved.entityParts}
+        lightDirection={{ azimuth: lightAzimuth, elevation: lightElevation }}
+        preset='dog'
         previewBackground={template.previewBackground}
         surfaceDecals={decals}
       />
@@ -1256,6 +1302,37 @@ export function AvatarControls({
                 )
                 : null}
 
+              {entityPreset === 'dog'
+                ? (
+                  <section className='avatar-controls__field-group' aria-label={t('Dog types')}>
+                    <div className='avatar-controls__field-header'>
+                      <span className='avatar-controls__label'>
+                        <ControlIcon name='style' />
+                        {t('Dog types')}
+                      </span>
+                    </div>
+                    <div className='avatar-controls__saved-preset-list avatar-controls__dog-breed-list'>
+                      {AVATAR_DOG_BREED_TEMPLATES.map(template => (
+                        <button
+                          key={template.id}
+                          className='avatar-controls__saved-preset avatar-controls__saved-preset--entity-preset avatar-controls__dog-breed-preset'
+                          type='button'
+                          aria-label={t(template.label)}
+                          aria-pressed={dogBreedTemplateId === template.id}
+                          data-dog-breed={template.id}
+                          title={t(template.label)}
+                          onClick={() => onDogBreedTemplateChange(
+                            dogBreedTemplateId === template.id ? null : template.id
+                          )}
+                        >
+                          {renderDogBreedPreview(template)}
+                        </button>
+                      ))}
+                    </div>
+                  </section>
+                )
+                : null}
+
               {savedPresetItems.length === 0
                 ? null
                 : (
@@ -1324,6 +1401,120 @@ export function AvatarControls({
                         suffix='%'
                         value={catEarHeight}
                         onChange={onCatEarHeightChange}
+                      />
+                    </div>
+                  </section>
+                )
+                : null}
+
+              {entityPreset === 'dog'
+                ? (
+                  <section className='avatar-controls__field-group avatar-controls__dog-head-size' aria-label={t('Dog head size')}>
+                    <div className='avatar-controls__field-header'>
+                      <span className='avatar-controls__label'>
+                        <ControlIcon name='body' />
+                        {t('Dog head size')}
+                      </span>
+                    </div>
+                    <div className='avatar-controls__coat-row'>
+                      <div className='avatar-controls__coat-row-header'>
+                        <span>{t('Head width')}</span>
+                        <SeedFieldToggle
+                          enabled={seededFields.includes(AVATAR_SEED_FIELD.dogHeadWidth)}
+                          label='Head width'
+                          onChange={() => onSeedFieldToggle(
+                            AVATAR_SEED_FIELD.dogHeadWidth,
+                            !seededFields.includes(AVATAR_SEED_FIELD.dogHeadWidth)
+                          )}
+                        />
+                      </div>
+                      <ValueSlider
+                        ariaLabel='Dog head width'
+                        label='Width'
+                        min={DOG_HEAD_SCALE_RANGE.min}
+                        max={DOG_HEAD_SCALE_RANGE.max}
+                        suffix='%'
+                        value={dogHeadWidth}
+                        onChange={onDogHeadWidthChange}
+                      />
+                    </div>
+                    <div className='avatar-controls__coat-row'>
+                      <div className='avatar-controls__coat-row-header'>
+                        <span>{t('Head height')}</span>
+                        <SeedFieldToggle
+                          enabled={seededFields.includes(AVATAR_SEED_FIELD.dogHeadHeight)}
+                          label='Head height'
+                          onChange={() => onSeedFieldToggle(
+                            AVATAR_SEED_FIELD.dogHeadHeight,
+                            !seededFields.includes(AVATAR_SEED_FIELD.dogHeadHeight)
+                          )}
+                        />
+                      </div>
+                      <ValueSlider
+                        ariaLabel='Dog head height'
+                        label='Height'
+                        min={DOG_HEAD_SCALE_RANGE.min}
+                        max={DOG_HEAD_SCALE_RANGE.max}
+                        suffix='%'
+                        value={dogHeadHeight}
+                        onChange={onDogHeadHeightChange}
+                      />
+                    </div>
+                  </section>
+                )
+                : null}
+
+              {entityPreset === 'dog'
+                ? (
+                  <section className='avatar-controls__field-group avatar-controls__dog-ear-size' aria-label={t('Dog ear size')}>
+                    <div className='avatar-controls__field-header'>
+                      <span className='avatar-controls__label'>
+                        <ControlIcon name='body' />
+                        {t('Dog ear size')}
+                      </span>
+                    </div>
+                    <div className='avatar-controls__coat-row'>
+                      <div className='avatar-controls__coat-row-header'>
+                        <span>{t('Ear width')}</span>
+                        <SeedFieldToggle
+                          enabled={seededFields.includes(AVATAR_SEED_FIELD.dogEarWidth)}
+                          label='Ear width'
+                          onChange={() => onSeedFieldToggle(
+                            AVATAR_SEED_FIELD.dogEarWidth,
+                            !seededFields.includes(AVATAR_SEED_FIELD.dogEarWidth)
+                          )}
+                        />
+                      </div>
+                      <ValueSlider
+                        ariaLabel='Dog ear width'
+                        label='Width'
+                        min={DOG_EAR_SCALE_RANGE.min}
+                        max={DOG_EAR_SCALE_RANGE.max}
+                        suffix='%'
+                        value={dogEarWidth}
+                        onChange={onDogEarWidthChange}
+                      />
+                    </div>
+                    <div className='avatar-controls__coat-row'>
+                      <div className='avatar-controls__coat-row-header'>
+                        <span>{t('Ear height')}</span>
+                        <SeedFieldToggle
+                          enabled={seededFields.includes(AVATAR_SEED_FIELD.dogEarHeight)}
+                          label='Ear height'
+                          onChange={() => onSeedFieldToggle(
+                            AVATAR_SEED_FIELD.dogEarHeight,
+                            !seededFields.includes(AVATAR_SEED_FIELD.dogEarHeight)
+                          )}
+                        />
+                      </div>
+                      <ValueSlider
+                        ariaLabel='Dog ear height'
+                        label='Height'
+                        min={DOG_EAR_SCALE_RANGE.min}
+                        max={DOG_EAR_SCALE_RANGE.max}
+                        suffix='%'
+                        value={dogEarHeight}
+                        onChange={onDogEarHeightChange}
                       />
                     </div>
                   </section>
@@ -1652,7 +1843,7 @@ export function AvatarControls({
                   )
                   : null}
               </div>
-              {entityPreset === 'cat'
+              {entityPreset === 'cat' || entityPreset === 'dog'
                 ? (
                   <div className='avatar-controls__field-group avatar-controls__coat-pattern' data-enabled={coatPattern.enabled}>
                     <div className='avatar-controls__field-header'>

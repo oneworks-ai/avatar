@@ -560,6 +560,63 @@ export const getCatEarScale = (parts: readonly AvatarEntityPart[]) => {
   }
 }
 
+/** Dog ears have their own neutral geometry so breed profiles can keep their silhouette intact. */
+export const DOG_EAR_SCALE_RANGE = { min: 50, max: 160 } as const
+const DOG_EAR_PARTS = DOG_PARTS.filter(part => part.id === 'ear-left' || part.id === 'ear-right')
+
+export const applyDogEarScale = (
+  parts: readonly AvatarEntityPart[],
+  width?: number,
+  height?: number
+): AvatarEntityPart[] => parts.map(part => {
+  const base = DOG_EAR_PARTS.find(candidate => candidate.id === part.id)
+  if (base == null) return part
+  return {
+    ...part,
+    ...(width == null ? {} : { scaleX: base.scaleX * width / 100 }),
+    ...(height == null ? {} : { scaleY: base.scaleY * height / 100 })
+  }
+})
+
+export const getDogEarScale = (parts: readonly AvatarEntityPart[]) => {
+  const ears = DOG_EAR_PARTS.flatMap(base => {
+    const part = parts.find(candidate => candidate.id === base.id)
+    return part == null ? [] : [{ base, part }]
+  })
+  if (ears.length === 0) return { height: 100, width: 100 }
+  const average = (values: readonly number[]) => values.reduce((total, value) => total + value, 0) / values.length
+  return {
+    height: Math.round(average(ears.map(({ base, part }) => part.scaleY / base.scaleY * 100))),
+    width: Math.round(average(ears.map(({ base, part }) => part.scaleX / base.scaleX * 100)))
+  }
+}
+
+/** Dog head dimensions remain local 3D scales instead of screen-space transforms. */
+export const DOG_HEAD_SCALE_RANGE = { min: 70, max: 140 } as const
+const DOG_HEAD_PART = DOG_PARTS.find(part => part.face)!
+
+export const applyDogHeadScale = (
+  parts: readonly AvatarEntityPart[],
+  width?: number,
+  height?: number
+): AvatarEntityPart[] => parts.map(part => {
+  if (part.id !== DOG_HEAD_PART.id || !part.face) return part
+  return {
+    ...part,
+    ...(width == null ? {} : { scaleX: DOG_HEAD_PART.scaleX * width / 100 }),
+    ...(height == null ? {} : { scaleY: DOG_HEAD_PART.scaleY * height / 100 })
+  }
+})
+
+export const getDogHeadScale = (parts: readonly AvatarEntityPart[]) => {
+  const head = parts.find(part => part.id === DOG_HEAD_PART.id && part.face)
+  if (head == null) return { height: 100, width: 100 }
+  return {
+    height: Math.round(head.scaleY / DOG_HEAD_PART.scaleY * 100),
+    width: Math.round(head.scaleX / DOG_HEAD_PART.scaleX * 100)
+  }
+}
+
 const getMaterialSignature = (part: AvatarEntityPart) => [
   part.baseColor,
   part.highlightColor,

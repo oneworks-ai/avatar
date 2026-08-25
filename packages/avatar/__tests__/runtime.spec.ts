@@ -238,6 +238,18 @@ describe('OneWorks Avatar public runtime contract', () => {
       }
     }
     expect(parseAvatarDefinition(serializeAvatarDefinition(profiled))).toEqual(profiled)
+    const dogHeadProfile = {
+      ...profiled,
+      metadata: {
+        generation: {
+          ...profiled.metadata.generation,
+          fields: [AVATAR_SEED_FIELD_PATHS.dogHeadWidth, AVATAR_SEED_FIELD_PATHS.dogHeadHeight],
+          profileId: 'corgi'
+        }
+      }
+    }
+    expect(isAvatarDefinition(dogHeadProfile)).toBe(true)
+    expect(parseAvatarDefinition(serializeAvatarDefinition(dogHeadProfile))).toEqual(dogHeadProfile)
     expect(() => parseAvatarDefinition({
       ...profiled,
       metadata: {

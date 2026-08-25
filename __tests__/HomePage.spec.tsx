@@ -85,6 +85,28 @@ describe('HomePage calls to action', () => {
   })
 })
 
+describe('HomePage carousel navigation', () => {
+  it('keeps wrapping when navigating backward through multiple complete loops', async () => {
+    await renderHomePage('en')
+    const carousel = host.querySelector<HTMLElement>('.avatar-home__carousel-shell')
+
+    expect(carousel).not.toBeNull()
+
+    for (let step = 0; step < 18; step += 1) {
+      act(() => {
+        carousel?.dispatchEvent(new KeyboardEvent('keydown', {
+          bubbles: true,
+          key: 'ArrowLeft'
+        }))
+      })
+
+      expect(host.querySelector('.avatar-home__carousel-shell')).not.toBeNull()
+    }
+
+    expect(host.querySelector('[role="tab"][aria-selected="true"]')?.getAttribute('aria-label')).toBe('Dog')
+  })
+})
+
 describe('random editor query', () => {
   it('persists the supplied seed and every supported seeded field', () => {
     const query = createRandomAvatarEditorQuery(

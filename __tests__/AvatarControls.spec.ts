@@ -44,6 +44,11 @@ const createProps = (): ComponentProps<typeof AvatarControls> => ({
   controlsWidth: 420,
   entityParts: [],
   entityPreset: 'custom',
+  dogBreedTemplateId: null,
+  dogEarHeight: 100,
+  dogEarWidth: 100,
+  dogHeadHeight: 100,
+  dogHeadWidth: 100,
   faceShadowStyle: DEFAULT_AVATAR_FACE_SHADOW_STYLE,
   faceStyle: DEFAULT_AVATAR_FACE_STYLE,
   frameShadowStyle: { color: '#000000', direction: 90, distance: 12, opacity: 20, softness: 24 },
@@ -63,6 +68,11 @@ const createProps = (): ComponentProps<typeof AvatarControls> => ({
   onCatBreedTemplateChange: vi.fn(),
   onCatEarHeightChange: vi.fn(),
   onCatEarWidthChange: vi.fn(),
+  onDogBreedTemplateChange: vi.fn(),
+  onDogEarHeightChange: vi.fn(),
+  onDogEarWidthChange: vi.fn(),
+  onDogHeadHeightChange: vi.fn(),
+  onDogHeadWidthChange: vi.fn(),
   onCoatPatternChange: vi.fn(),
   onConvertCoatPatternToDecals: vi.fn(),
   onCollapse: vi.fn(),
@@ -308,6 +318,48 @@ describe('AvatarControls Seed authoring', () => {
     expect(host.querySelector('[aria-label="Camera frame shape"]')).not.toBeNull()
   })
 
+  it('keeps dog types as a peer library with real previews and a cancellable selection', () => {
+    const props = {
+      ...createProps(),
+      entityParts: createAvatarEntityParts('dog'),
+      entityPreset: 'dog' as const
+    }
+    act(() => root.render(createElement(
+      AvatarLocaleProvider,
+      { initialLocale: 'en', persist: false },
+      createElement(AvatarControls, props)
+    )))
+
+    const avatarType = host.querySelector<HTMLElement>('[aria-label="Avatar type"]')
+    const dogTypes = host.querySelector<HTMLElement>('[aria-label="Dog types"]')
+    expect(avatarType).not.toBeNull()
+    expect(dogTypes).not.toBeNull()
+    expect(avatarType?.contains(dogTypes ?? null)).toBe(false)
+    expect(dogTypes?.querySelectorAll('[data-dog-breed]')).toHaveLength(6)
+    expect(host.querySelector('[aria-label="Cat types"]')).toBeNull()
+    const shiba = dogTypes?.querySelector<HTMLButtonElement>('[data-dog-breed="shiba-inu"]')
+    const dalmatian = dogTypes?.querySelector<HTMLButtonElement>('[data-dog-breed="dalmatian"]')
+    const dog = avatarType?.querySelector<HTMLButtonElement>('[data-entity-preset="dog"]')
+    expect(shiba?.classList.contains('avatar-controls__saved-preset')).toBe(true)
+    expect(shiba?.querySelector('svg')?.getAttribute('viewBox')).toBe(dog?.querySelector('svg')?.getAttribute('viewBox'))
+    expect(shiba?.textContent).toBe('')
+    expect(shiba?.getAttribute('aria-label')).toBe('Shiba Inu')
+    expect(shiba?.getAttribute('title')).toBe('Shiba Inu')
+    expect(dalmatian?.getAttribute('aria-label')).toBe('Dalmatian')
+    expect(dalmatian?.querySelector('svg rect')?.getAttribute('fill')).toBe('#536f86')
+
+    act(() => shiba?.click())
+    expect(props.onDogBreedTemplateChange).toHaveBeenCalledWith('shiba-inu')
+
+    act(() => root.render(createElement(
+      AvatarLocaleProvider,
+      { initialLocale: 'en', persist: false },
+      createElement(AvatarControls, { ...props, dogBreedTemplateId: 'shiba-inu' })
+    )))
+    act(() => host.querySelector<HTMLButtonElement>('[data-dog-breed="shiba-inu"]')?.click())
+    expect(props.onDogBreedTemplateChange).toHaveBeenLastCalledWith(null)
+  })
+
   it('exposes independent cat ear dimensions and Seed bindings only for the cat template', () => {
     const props = {
       ...createProps(),
@@ -338,6 +390,85 @@ describe('AvatarControls Seed authoring', () => {
       width?.dispatchEvent(new Event('change', { bubbles: true }))
     })
     expect(props.onCatEarWidthChange).toHaveBeenCalledWith(150)
+  })
+
+  it('exposes independent dog ear dimensions and Seed bindings only for the dog template', () => {
+    const props = {
+      ...createProps(),
+      dogEarHeight: 80,
+      dogEarWidth: 140,
+      entityParts: createAvatarEntityParts('dog'),
+      entityPreset: 'dog' as const
+    }
+    act(() => root.render(createElement(
+      AvatarLocaleProvider,
+      { initialLocale: 'en', persist: false },
+      createElement(AvatarControls, props)
+    )))
+
+    const width = host.querySelector<HTMLInputElement>('[aria-label="Dog ear width"]')
+    const height = host.querySelector<HTMLInputElement>('[aria-label="Dog ear height"]')
+    expect(width?.value).toBe('140')
+    expect(height?.value).toBe('80')
+    expect(width?.min).toBe('50')
+    expect(width?.max).toBe('160')
+    expect(host.querySelector('[aria-label="Cat ear width"]')).toBeNull()
+    expect(host.querySelector('[aria-label="Follow Seed: Ear width"]')).not.toBeNull()
+    expect(host.querySelector('[aria-label="Follow Seed: Ear height"]')).not.toBeNull()
+
+    act(() => {
+      const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')?.set
+      setter?.call(width, '150')
+      width?.dispatchEvent(new Event('input', { bubbles: true }))
+      width?.dispatchEvent(new Event('change', { bubbles: true }))
+    })
+    expect(props.onDogEarWidthChange).toHaveBeenCalledWith(150)
+  })
+
+  it('exposes independently Seed-following dog head width and height only for dogs', () => {
+    const props = {
+      ...createProps(),
+      dogHeadHeight: 88,
+      dogHeadWidth: 124,
+      entityParts: createAvatarEntityParts('dog'),
+      entityPreset: 'dog' as const
+    }
+    act(() => root.render(createElement(
+      AvatarLocaleProvider,
+      { initialLocale: 'en', persist: false },
+      createElement(AvatarControls, props)
+    )))
+
+    const width = host.querySelector<HTMLInputElement>('[aria-label="Dog head width"]')
+    const height = host.querySelector<HTMLInputElement>('[aria-label="Dog head height"]')
+    expect(width?.value).toBe('124')
+    expect(height?.value).toBe('88')
+    expect(width?.min).toBe('70')
+    expect(width?.max).toBe('140')
+    expect(host.querySelector('[aria-label="Follow Seed: Head width"]')).not.toBeNull()
+    expect(host.querySelector('[aria-label="Follow Seed: Head height"]')).not.toBeNull()
+
+    act(() => host.querySelector<HTMLButtonElement>('[aria-label="Follow Seed: Head width"]')?.click())
+    expect(props.onSeedFieldToggle).toHaveBeenCalledWith('scene.entity.dogHeadWidth', true)
+
+    act(() => {
+      const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')?.set
+      setter?.call(width, '130')
+      width?.dispatchEvent(new Event('input', { bubbles: true }))
+      width?.dispatchEvent(new Event('change', { bubbles: true }))
+    })
+    expect(props.onDogHeadWidthChange).toHaveBeenCalledWith(130)
+
+    act(() => root.render(createElement(
+      AvatarLocaleProvider,
+      { initialLocale: 'en', persist: false },
+      createElement(AvatarControls, {
+        ...props,
+        entityParts: createAvatarEntityParts('cat'),
+        entityPreset: 'cat'
+      })
+    )))
+    expect(host.querySelector('[aria-label="Dog head size"]')).toBeNull()
   })
 })
 

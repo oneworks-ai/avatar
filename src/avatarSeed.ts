@@ -16,7 +16,9 @@ import type { AvatarCoatPatternAlgorithm, AvatarCoatPatternLightPatchShape } fro
 
 import {
   AVATAR_BUILT_IN_ENTITY_PRESETS,
-  CAT_EAR_SCALE_RANGE
+  CAT_EAR_SCALE_RANGE,
+  DOG_EAR_SCALE_RANGE,
+  DOG_HEAD_SCALE_RANGE
 } from './avatarEntityPresets'
 import type { AvatarEntityPreset } from './avatarEntityPresets'
 import { AVATAR_FACE_PRESETS, DEFAULT_AVATAR_FACE_PRESET } from './avatarFacePresets'
@@ -25,6 +27,10 @@ export const AVATAR_SEED_FIELDS = [
   'scene.entity.preset',
   AVATAR_SEED_FIELD_PATHS.catEarWidth,
   AVATAR_SEED_FIELD_PATHS.catEarHeight,
+  AVATAR_SEED_FIELD_PATHS.dogEarWidth,
+  AVATAR_SEED_FIELD_PATHS.dogEarHeight,
+  AVATAR_SEED_FIELD_PATHS.dogHeadWidth,
+  AVATAR_SEED_FIELD_PATHS.dogHeadHeight,
   'scene.face.preset',
   'scene.appearance.paletteId',
   AVATAR_SEED_FIELD_PATHS.coatPatternAlgorithm,
@@ -62,6 +68,10 @@ export const AVATAR_SEED_FIELD = {
   cameraBackground: AVATAR_SEED_FIELD_PATHS.cameraBackground,
   catEarHeight: AVATAR_SEED_FIELD_PATHS.catEarHeight,
   catEarWidth: AVATAR_SEED_FIELD_PATHS.catEarWidth,
+  dogEarHeight: AVATAR_SEED_FIELD_PATHS.dogEarHeight,
+  dogEarWidth: AVATAR_SEED_FIELD_PATHS.dogEarWidth,
+  dogHeadHeight: AVATAR_SEED_FIELD_PATHS.dogHeadHeight,
+  dogHeadWidth: AVATAR_SEED_FIELD_PATHS.dogHeadWidth,
   coatPatternAlgorithm: AVATAR_SEED_FIELD_PATHS.coatPatternAlgorithm,
   coatPatternBreakup: AVATAR_SEED_FIELD_PATHS.coatPatternBreakup,
   coatPatternContrast: AVATAR_SEED_FIELD_PATHS.coatPatternContrast,
@@ -121,6 +131,27 @@ export const resolveSeededAvatarCatEarScale = (
 ) => {
   const path = field === 'width' ? AVATAR_SEED_FIELD.catEarWidth : AVATAR_SEED_FIELD.catEarHeight
   const range = domain?.ranges?.[path] ?? CAT_EAR_SCALE_RANGE
+  return resolveAvatarSeededInteger(seed, path, range.min, range.max)
+}
+
+/** Resolves the virtual dog-ear controls without changing the concrete 3D parts. */
+export const resolveSeededAvatarDogEarScale = (
+  seed: string,
+  field: 'height' | 'width',
+  domain?: AvatarSeedDomain
+) => {
+  const path = field === 'width' ? AVATAR_SEED_FIELD.dogEarWidth : AVATAR_SEED_FIELD.dogEarHeight
+  const range = domain?.ranges?.[path] ?? DOG_EAR_SCALE_RANGE
+  return resolveAvatarSeededInteger(seed, path, range.min, range.max)
+}
+
+export const resolveSeededAvatarDogHeadScale = (
+  seed: string,
+  field: 'height' | 'width',
+  domain?: AvatarSeedDomain
+) => {
+  const path = field === 'width' ? AVATAR_SEED_FIELD.dogHeadWidth : AVATAR_SEED_FIELD.dogHeadHeight
+  const range = domain?.ranges?.[path] ?? DOG_HEAD_SCALE_RANGE
   return resolveAvatarSeededInteger(seed, path, range.min, range.max)
 }
 

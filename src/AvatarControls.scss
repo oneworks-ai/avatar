@@ -397,11 +397,13 @@
     overflow: hidden;
   }
 
-  &__cat-breed-list {
+  &__cat-breed-list,
+  &__dog-breed-list {
     grid-template-columns: repeat(auto-fill, minmax(48px, 52px));
   }
 
-  &__cat-breed-preset {
+  &__cat-breed-preset,
+  &__dog-breed-preset {
     border-radius: 8px;
   }
 
@@ -590,12 +592,16 @@
 
   &__coat-content,
   &__coat-row,
-  &__cat-ear-size {
+  &__cat-ear-size,
+  &__dog-ear-size,
+  &__dog-head-size {
     display: grid;
     gap: 8px;
   }
 
-  &__cat-ear-size {
+  &__cat-ear-size,
+  &__dog-ear-size,
+  &__dog-head-size {
     border-top: 1px solid var(--border-color);
     padding-top: 18px;
   }
