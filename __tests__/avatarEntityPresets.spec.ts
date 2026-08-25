@@ -256,21 +256,23 @@ describe('built-in entity preset scenes', () => {
       id: 'otter-head',
       roundness: 100,
       scaleX: .78,
-      scaleY: .7,
+      scaleY: .66,
       shape: 'trapezoid',
       topScale: .86
     })
     expect(face).toMatchObject({
-      eyeHighlight: { enabled: true },
-      eyeShape: 'ellipse',
-      mouthEnabled: true,
+      eyeHighlight: { enabled: false },
+      eyeShape: 'rounded',
+      height: DEFAULT_AVATAR_FACE_STYLE.height,
+      mouthEnabled: false,
       noseEnabled: true,
-      noseShape: 'inverted-triangle'
+      noseShape: 'inverted-triangle',
+      width: DEFAULT_AVATAR_FACE_STYLE.width
     })
     expect(scene.cameraBackground).toBe('#72cbd0')
     expect(scene.paletteId).toBe('cocoa')
     expect(scene.surfaceDecals.filter(decal => decal.id.startsWith('otter-muzzle-'))).toHaveLength(2)
-    expect(scene.surfaceDecals.filter(decal => decal.id.startsWith('otter-whisker-'))).toHaveLength(4)
+    expect(scene.surfaceDecals).toHaveLength(2)
   })
 
   it('uses the clean large-eye face on the rabbit', () => {

@@ -158,31 +158,15 @@ const DOG_FACE_STYLE: AvatarFaceStyle = {
 
 const OTTER_FACE_STYLE: AvatarFaceStyle = {
   ...DEFAULT_AVATAR_FACE_STYLE,
-  eyeHighlight: {
-    color: '#ffffff',
-    enabled: true,
-    offsetX: -20,
-    offsetY: -22,
-    opacity: 94,
-    size: 28
-  },
-  eyeRoundness: 100,
-  eyeShape: 'ellipse',
-  gap: 48,
-  height: 46,
-  leftEyeRotation: -3,
-  mouthCurve: 12,
-  mouthEnabled: true,
-  mouthHeight: 5,
-  mouthWidth: 28,
-  mouthY: 51,
+  gap: 46,
+  leftEyeRotation: 4,
+  mouthEnabled: false,
   noseEnabled: true,
-  noseHeight: 15,
+  noseHeight: 13,
   noseShape: 'inverted-triangle',
-  noseWidth: 24,
-  noseY: 25,
-  rightEyeRotation: 3,
-  width: 25
+  noseWidth: 20,
+  noseY: 27,
+  rightEyeRotation: -4
 } as const
 
 const BUN_FACE_STYLE: AvatarFaceStyle = {
@@ -422,22 +406,15 @@ const OTTER_PRESET_SCENE = {
   showOutline: true,
   showShadow: false,
   surfaceDecals: [
-    { color: '#b97e62', height: 98, id: 'otter-inner-ear-left', label: 'Left inner ear', opacity: 100, rotation: 0, shape: 'ellipse', side: 'front', targetPartId: 'otter-ear-left', width: 96, x: 0, y: 3 },
-    { color: '#b97e62', height: 98, id: 'otter-inner-ear-right', label: 'Right inner ear', opacity: 100, rotation: 0, shape: 'ellipse', side: 'front', targetPartId: 'otter-ear-right', width: 96, x: 0, y: 3 },
-    { color: '#efd7ac', height: 52, id: 'otter-muzzle-left', label: 'Left muzzle', opacity: 100, rotation: -6, shape: 'ellipse', side: 'front', targetPartId: 'otter-head', width: 62, x: -24, y: 34 },
-    { color: '#efd7ac', height: 52, id: 'otter-muzzle-right', label: 'Right muzzle', opacity: 100, rotation: 6, shape: 'ellipse', side: 'front', targetPartId: 'otter-head', width: 62, x: 24, y: 34 },
-    { color: '#f4e2bf', height: 26, id: 'otter-chin', label: 'Chin', opacity: 100, rotation: 0, shape: 'ellipse', side: 'front', targetPartId: 'otter-head', width: 46, x: 0, y: 56 },
-    { bend: -4, color: '#3a241a', height: 34, id: 'otter-whisker-upper-left', label: 'Upper left whisker', opacity: 64, rotation: 74, shape: 'tapered-band', side: 'front', targetPartId: 'otter-head', width: 3, x: -55, y: 33 },
-    { bend: 4, color: '#3a241a', height: 32, id: 'otter-whisker-lower-left', label: 'Lower left whisker', opacity: 56, rotation: 84, shape: 'tapered-band', side: 'front', targetPartId: 'otter-head', width: 3, x: -55, y: 45 },
-    { bend: 4, color: '#3a241a', height: 34, id: 'otter-whisker-upper-right', label: 'Upper right whisker', opacity: 64, rotation: -74, shape: 'tapered-band', side: 'front', targetPartId: 'otter-head', width: 3, x: 55, y: 33 },
-    { bend: -4, color: '#3a241a', height: 32, id: 'otter-whisker-lower-right', label: 'Lower right whisker', opacity: 56, rotation: -84, shape: 'tapered-band', side: 'front', targetPartId: 'otter-head', width: 3, x: 55, y: 45 }
+    { color: '#efd7ac', height: 48, id: 'otter-muzzle-left', label: 'Left muzzle', opacity: 100, rotation: -5, shape: 'ellipse', side: 'front', targetPartId: 'otter-head', width: 64, x: -23, y: 36 },
+    { color: '#efd7ac', height: 48, id: 'otter-muzzle-right', label: 'Right muzzle', opacity: 100, rotation: 5, shape: 'ellipse', side: 'front', targetPartId: 'otter-head', width: 64, x: 23, y: 36 }
   ],
   viewState: {
     pitch: -.06,
-    positionX: -12,
-    positionY: 48,
-    roll: -.05,
-    scale: 1.58,
+    positionX: -26,
+    positionY: 84,
+    roll: -.08,
+    scale: 1.76,
     yaw: -.12
   }
 } as const satisfies AvatarEntityPresetScene
@@ -598,7 +575,7 @@ const BEAR_PARTS: readonly AvatarEntityPart[] = [
 const OTTER_PARTS: readonly AvatarEntityPart[] = [
   { ...OTTER_EAR_MATERIAL, face: false, id: 'otter-ear-left', label: 'Left ear', occludedByFace: true, occlusionAmount: 9, occlusionPole: 'bottom', rotationX: -5, rotationY: -8, rotationZ: -8, scaleX: .15, scaleY: .18, scaleZ: .14, shape: 'sphere', x: -68, y: -56, z: -16 },
   { ...OTTER_EAR_MATERIAL, face: false, id: 'otter-ear-right', label: 'Right ear', occludedByFace: true, occlusionAmount: 9, occlusionPole: 'bottom', rotationX: -5, rotationY: 8, rotationZ: 8, scaleX: .15, scaleY: .18, scaleZ: .14, shape: 'sphere', x: 68, y: -56, z: -16 },
-  { ...OTTER_MATERIAL, face: true, id: 'otter-head', label: 'Head', roundness: 100, scaleX: .78, scaleY: .7, scaleZ: .68, shape: 'trapezoid', topScale: .86, x: 0, y: 16, z: 0 }
+  { ...OTTER_MATERIAL, face: true, id: 'otter-head', label: 'Head', roundness: 100, scaleX: .78, scaleY: .66, scaleZ: .68, shape: 'trapezoid', topScale: .86, x: 0, y: 16, z: 0 }
 ]
 
 const RABBIT_PARTS: readonly AvatarEntityPart[] = [
@@ -693,7 +670,7 @@ export const getAvatarEntityPresetFaceStyle = (preset: AvatarEntityPreset): Avat
   if (preset === 'cat') return { ...CAT_FACE_STYLE }
   if (preset === 'dog') return { ...DOG_FACE_STYLE }
   if (preset === 'bear') return { ...BEAR_FACE_STYLE }
-  if (preset === 'otter') return { ...OTTER_FACE_STYLE, eyeHighlight: { ...OTTER_FACE_STYLE.eyeHighlight } }
+  if (preset === 'otter') return { ...OTTER_FACE_STYLE }
   if (preset === 'rabbit') return { ...RABBIT_FACE_STYLE }
   if (preset === 'bun') return { ...BUN_FACE_STYLE, eyeHighlight: { ...BUN_FACE_STYLE.eyeHighlight } }
   return null
