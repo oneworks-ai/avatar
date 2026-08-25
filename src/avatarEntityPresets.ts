@@ -5,11 +5,11 @@ import { AVATAR_BODY_SHAPES, DEFAULT_AVATAR_FACE_STYLE } from './avatarGeometry'
 import type { AvatarBodyShape, AvatarFaceStyle } from './avatarGeometry'
 import type { AvatarSurfaceDecal } from './avatarSurfaceDecals'
 
-export const AVATAR_ENTITY_PRESETS = ['custom', 'cloud', 'sun', 'cat', 'dog', 'bear', 'otter', 'rabbit', 'bun'] as const
+export const AVATAR_ENTITY_PRESETS = ['custom', 'cloud', 'sun', 'cat', 'dog', 'bear', 'red-panda', 'hamster', 'otter', 'rabbit', 'bun'] as const
 
 export type AvatarEntityPreset = (typeof AVATAR_ENTITY_PRESETS)[number]
 
-export const AVATAR_BUILT_IN_ENTITY_PRESETS = ['cloud', 'sun', 'cat', 'dog', 'bear', 'otter', 'rabbit', 'bun'] as const satisfies readonly AvatarEntityPreset[]
+export const AVATAR_BUILT_IN_ENTITY_PRESETS = ['cloud', 'sun', 'cat', 'dog', 'bear', 'red-panda', 'hamster', 'otter', 'rabbit', 'bun'] as const satisfies readonly AvatarEntityPreset[]
 
 export interface AvatarEntityPart {
   readonly baseColor: string
@@ -117,17 +117,45 @@ const BEAR_ACCENT_MATERIAL = {
 } as const
 
 const OTTER_MATERIAL = {
-  baseColor: '#8f5d3f',
+  baseColor: '#806149',
   foregroundColor: '#24150f',
-  highlightColor: '#c9966a',
-  shadowColor: '#513326'
+  highlightColor: '#ad8768',
+  shadowColor: '#453328'
 } as const
 
 const OTTER_EAR_MATERIAL = {
   ...OTTER_MATERIAL,
-  baseColor: '#68412f',
-  highlightColor: '#9b6a4d',
-  shadowColor: '#382119'
+  baseColor: '#5b4234',
+  highlightColor: '#80614d',
+  shadowColor: '#32251e'
+} as const
+
+const RED_PANDA_MATERIAL = {
+  baseColor: '#a96343',
+  foregroundColor: '#231714',
+  highlightColor: '#d9956c',
+  shadowColor: '#613b2e'
+} as const
+
+const RED_PANDA_EAR_MATERIAL = {
+  ...RED_PANDA_MATERIAL,
+  baseColor: '#4d2f2b',
+  highlightColor: '#765047',
+  shadowColor: '#2b1c19'
+} as const
+
+const HAMSTER_MATERIAL = {
+  baseColor: '#d8a164',
+  foregroundColor: '#2b1a14',
+  highlightColor: '#f0c38b',
+  shadowColor: '#9a6342'
+} as const
+
+const HAMSTER_EAR_MATERIAL = {
+  ...HAMSTER_MATERIAL,
+  baseColor: '#b8756b',
+  highlightColor: '#dc9a8e',
+  shadowColor: '#75463f'
 } as const
 
 const BEAR_FACE_STYLE: AvatarFaceStyle = {
@@ -158,15 +186,41 @@ const DOG_FACE_STYLE: AvatarFaceStyle = {
 
 const OTTER_FACE_STYLE: AvatarFaceStyle = {
   ...DEFAULT_AVATAR_FACE_STYLE,
+  gap: 44,
+  leftEyeRotation: 2,
+  mouthEnabled: false,
+  noseEnabled: true,
+  noseHeight: 14,
+  noseShape: 'inverted-triangle',
+  noseWidth: 23,
+  noseY: 29,
+  rightEyeRotation: -2
+} as const
+
+const RED_PANDA_FACE_STYLE: AvatarFaceStyle = {
+  ...DEFAULT_AVATAR_FACE_STYLE,
   gap: 46,
-  leftEyeRotation: 4,
+  leftEyeRotation: 5,
   mouthEnabled: false,
   noseEnabled: true,
   noseHeight: 13,
   noseShape: 'inverted-triangle',
-  noseWidth: 20,
+  noseWidth: 19,
+  noseY: 28,
+  rightEyeRotation: -5
+} as const
+
+const HAMSTER_FACE_STYLE: AvatarFaceStyle = {
+  ...DEFAULT_AVATAR_FACE_STYLE,
+  gap: 40,
+  leftEyeRotation: -2,
+  mouthEnabled: false,
+  noseEnabled: true,
+  noseHeight: 10,
+  noseShape: 'ellipse',
+  noseWidth: 14,
   noseY: 27,
-  rightEyeRotation: -4
+  rightEyeRotation: 2
 } as const
 
 const BUN_FACE_STYLE: AvatarFaceStyle = {
@@ -406,16 +460,76 @@ const OTTER_PRESET_SCENE = {
   showOutline: true,
   showShadow: false,
   surfaceDecals: [
-    { color: '#efd7ac', height: 48, id: 'otter-muzzle-left', label: 'Left muzzle', opacity: 100, rotation: -5, shape: 'ellipse', side: 'front', targetPartId: 'otter-head', width: 64, x: -23, y: 36 },
-    { color: '#efd7ac', height: 48, id: 'otter-muzzle-right', label: 'Right muzzle', opacity: 100, rotation: 5, shape: 'ellipse', side: 'front', targetPartId: 'otter-head', width: 64, x: 23, y: 36 }
+    { color: '#e8d2aa', height: 46, id: 'otter-muzzle', label: 'Muzzle', opacity: 100, rotation: 0, shape: 'ellipse', side: 'front', targetPartId: 'otter-head', width: 102, x: 0, y: 38 }
   ],
   viewState: {
     pitch: -.06,
-    positionX: -26,
-    positionY: 84,
-    roll: -.08,
-    scale: 1.76,
-    yaw: -.12
+    positionX: -20,
+    positionY: 76,
+    roll: -.06,
+    scale: 1.78,
+    yaw: -.1
+  }
+} as const satisfies AvatarEntityPresetScene
+
+const RED_PANDA_PRESET_SCENE = {
+  ...DEFAULT_PRESET_LIGHTING,
+  avatarOutlineStyle: { color: '#231714', opacity: 88, width: 4 },
+  avatarShadowStyle: { color: '#102f2d', direction: 128, distance: 11, opacity: 28, softness: 16 },
+  backgroundStyle: 'solid',
+  cameraBackground: '#214b45',
+  cameraFrame: 'rounded',
+  cameraMode: true,
+  frameShadowStyle: { direction: 90, distance: 12, opacity: 20, softness: 24 },
+  interactionMode: 'rotate',
+  paletteId: 'ember',
+  showAvatarShadow: true,
+  showFrameShadow: true,
+  showLight: false,
+  showOutline: true,
+  showShadow: false,
+  surfaceDecals: [
+    { color: '#f3dfc4', height: 92, id: 'red-panda-eye-mask-left', label: 'Left eye mask', opacity: 100, rotation: -12, shape: 'ellipse', side: 'front', targetPartId: 'red-panda-head', width: 58, x: -32, y: -4 },
+    { color: '#f3dfc4', height: 92, id: 'red-panda-eye-mask-right', label: 'Right eye mask', opacity: 100, rotation: 12, shape: 'ellipse', side: 'front', targetPartId: 'red-panda-head', width: 58, x: 32, y: -4 },
+    { color: '#f7e8d1', height: 44, id: 'red-panda-muzzle', label: 'Muzzle', opacity: 100, rotation: 0, shape: 'ellipse', side: 'front', targetPartId: 'red-panda-head', width: 88, x: 0, y: 39 }
+  ],
+  viewState: {
+    pitch: -.09,
+    positionX: 34,
+    positionY: 92,
+    roll: .1,
+    scale: 1.78,
+    yaw: .13
+  }
+} as const satisfies AvatarEntityPresetScene
+
+const HAMSTER_PRESET_SCENE = {
+  ...DEFAULT_PRESET_LIGHTING,
+  avatarOutlineStyle: { color: '#2b1a14', opacity: 86, width: 4 },
+  avatarShadowStyle: { color: '#66508d', direction: 134, distance: 10, opacity: 24, softness: 18 },
+  backgroundStyle: 'solid',
+  cameraBackground: '#c2b4e7',
+  cameraFrame: 'rounded',
+  cameraMode: true,
+  frameShadowStyle: { direction: 90, distance: 12, opacity: 20, softness: 24 },
+  interactionMode: 'rotate',
+  paletteId: 'peach',
+  showAvatarShadow: true,
+  showFrameShadow: true,
+  showLight: false,
+  showOutline: true,
+  showShadow: false,
+  surfaceDecals: [
+    { color: '#f8ddb0', height: 66, id: 'hamster-cheek-left', label: 'Left cheek', opacity: 100, rotation: -4, shape: 'ellipse', side: 'front', targetPartId: 'hamster-head', width: 80, x: -36, y: 34 },
+    { color: '#f8ddb0', height: 66, id: 'hamster-cheek-right', label: 'Right cheek', opacity: 100, rotation: 4, shape: 'ellipse', side: 'front', targetPartId: 'hamster-head', width: 80, x: 36, y: 34 }
+  ],
+  viewState: {
+    pitch: -.04,
+    positionX: 26,
+    positionY: 74,
+    roll: .07,
+    scale: 1.72,
+    yaw: .09
   }
 } as const satisfies AvatarEntityPresetScene
 
@@ -573,9 +687,21 @@ const BEAR_PARTS: readonly AvatarEntityPart[] = [
 ]
 
 const OTTER_PARTS: readonly AvatarEntityPart[] = [
-  { ...OTTER_EAR_MATERIAL, face: false, id: 'otter-ear-left', label: 'Left ear', occludedByFace: true, occlusionAmount: 9, occlusionPole: 'bottom', rotationX: -5, rotationY: -8, rotationZ: -8, scaleX: .15, scaleY: .18, scaleZ: .14, shape: 'sphere', x: -68, y: -56, z: -16 },
-  { ...OTTER_EAR_MATERIAL, face: false, id: 'otter-ear-right', label: 'Right ear', occludedByFace: true, occlusionAmount: 9, occlusionPole: 'bottom', rotationX: -5, rotationY: 8, rotationZ: 8, scaleX: .15, scaleY: .18, scaleZ: .14, shape: 'sphere', x: 68, y: -56, z: -16 },
-  { ...OTTER_MATERIAL, face: true, id: 'otter-head', label: 'Head', roundness: 100, scaleX: .78, scaleY: .66, scaleZ: .68, shape: 'trapezoid', topScale: .86, x: 0, y: 16, z: 0 }
+  { ...OTTER_EAR_MATERIAL, face: false, id: 'otter-ear-left', label: 'Left ear', occludedByFace: true, occlusionAmount: 8, occlusionPole: 'bottom', rotationX: -4, rotationY: -8, rotationZ: -7, scaleX: .11, scaleY: .13, scaleZ: .11, shape: 'sphere', x: -78, y: -28, z: -14 },
+  { ...OTTER_EAR_MATERIAL, face: false, id: 'otter-ear-right', label: 'Right ear', occludedByFace: true, occlusionAmount: 8, occlusionPole: 'bottom', rotationX: -4, rotationY: 8, rotationZ: 7, scaleX: .11, scaleY: .13, scaleZ: .11, shape: 'sphere', x: 78, y: -28, z: -14 },
+  { ...OTTER_MATERIAL, face: true, id: 'otter-head', label: 'Head', scaleX: .82, scaleY: .6, scaleZ: .62, shape: 'ellipse', x: 0, y: 16, z: 0 }
+]
+
+const RED_PANDA_PARTS: readonly AvatarEntityPart[] = [
+  { ...RED_PANDA_EAR_MATERIAL, face: false, id: 'red-panda-ear-left', label: 'Left ear', occludedByFace: true, occlusionAmount: 9, occlusionPole: 'bottom', rotationX: -4, rotationY: -8, rotationZ: -8, scaleX: .16, scaleY: .19, scaleZ: .15, shape: 'sphere', x: -61, y: -59, z: -16 },
+  { ...RED_PANDA_EAR_MATERIAL, face: false, id: 'red-panda-ear-right', label: 'Right ear', occludedByFace: true, occlusionAmount: 9, occlusionPole: 'bottom', rotationX: -4, rotationY: 8, rotationZ: 8, scaleX: .16, scaleY: .19, scaleZ: .15, shape: 'sphere', x: 61, y: -59, z: -16 },
+  { ...RED_PANDA_MATERIAL, face: true, id: 'red-panda-head', label: 'Head', roundness: 100, scaleX: .76, scaleY: .68, scaleZ: .67, shape: 'trapezoid', topScale: .86, x: 0, y: 16, z: 0 }
+]
+
+const HAMSTER_PARTS: readonly AvatarEntityPart[] = [
+  { ...HAMSTER_EAR_MATERIAL, face: false, id: 'hamster-ear-left', label: 'Left ear', occludedByFace: true, occlusionAmount: 8, occlusionPole: 'bottom', rotationX: -4, rotationY: -6, rotationZ: -7, scaleX: .12, scaleY: .15, scaleZ: .12, shape: 'sphere', x: -55, y: -62, z: -14 },
+  { ...HAMSTER_EAR_MATERIAL, face: false, id: 'hamster-ear-right', label: 'Right ear', occludedByFace: true, occlusionAmount: 8, occlusionPole: 'bottom', rotationX: -4, rotationY: 6, rotationZ: 7, scaleX: .12, scaleY: .15, scaleZ: .12, shape: 'sphere', x: 55, y: -62, z: -14 },
+  { ...HAMSTER_MATERIAL, face: true, id: 'hamster-head', label: 'Head', scaleX: .71, scaleY: .7, scaleZ: .66, shape: 'sphere', x: 0, y: 18, z: 0 }
 ]
 
 const RABBIT_PARTS: readonly AvatarEntityPart[] = [
@@ -658,6 +784,8 @@ export const createAvatarEntityParts = (preset: AvatarEntityPreset): AvatarEntit
   if (preset === 'cat') return cloneParts(CAT_PARTS)
   if (preset === 'dog') return cloneParts(DOG_PARTS)
   if (preset === 'bear') return cloneParts(BEAR_PARTS)
+  if (preset === 'red-panda') return cloneParts(RED_PANDA_PARTS)
+  if (preset === 'hamster') return cloneParts(HAMSTER_PARTS)
   if (preset === 'otter') return cloneParts(OTTER_PARTS)
   if (preset === 'rabbit') return cloneParts(RABBIT_PARTS)
   if (preset === 'bun') return cloneParts(BUN_PARTS)
@@ -670,6 +798,8 @@ export const getAvatarEntityPresetFaceStyle = (preset: AvatarEntityPreset): Avat
   if (preset === 'cat') return { ...CAT_FACE_STYLE }
   if (preset === 'dog') return { ...DOG_FACE_STYLE }
   if (preset === 'bear') return { ...BEAR_FACE_STYLE }
+  if (preset === 'red-panda') return { ...RED_PANDA_FACE_STYLE }
+  if (preset === 'hamster') return { ...HAMSTER_FACE_STYLE }
   if (preset === 'otter') return { ...OTTER_FACE_STYLE }
   if (preset === 'rabbit') return { ...RABBIT_FACE_STYLE }
   if (preset === 'bun') return { ...BUN_FACE_STYLE, eyeHighlight: { ...BUN_FACE_STYLE.eyeHighlight } }
@@ -682,8 +812,10 @@ const ENTITY_PRESET_SCENES: Partial<Record<AvatarEntityPreset, AvatarEntityPrese
   cat: CAT_PRESET_SCENE,
   cloud: CLOUD_PRESET_SCENE,
   dog: DOG_PRESET_SCENE,
+  hamster: HAMSTER_PRESET_SCENE,
   otter: OTTER_PRESET_SCENE,
   rabbit: RABBIT_PRESET_SCENE,
+  'red-panda': RED_PANDA_PRESET_SCENE,
   sun: SUN_PRESET_SCENE
 }
 

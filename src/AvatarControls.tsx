@@ -256,8 +256,10 @@ const ENTITY_PRESET_LABELS: Readonly<Record<Exclude<AvatarEntityPreset, 'custom'
   cat: 'Cat',
   cloud: 'Cloud',
   dog: 'Dog',
+  hamster: 'Hamster',
   otter: 'Otter',
   rabbit: 'Rabbit',
+  'red-panda': 'Red panda',
   sun: 'Sun'
 }
 

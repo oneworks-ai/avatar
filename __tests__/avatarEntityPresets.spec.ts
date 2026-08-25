@@ -26,7 +26,7 @@ describe('built-in entity preset scenes', () => {
   })
 
   it('gives every built-in entity a distinct complete camera composition', () => {
-    const presets = ['cloud', 'sun', 'cat', 'dog', 'bear', 'otter', 'rabbit', 'bun'] as const
+    const presets = ['cloud', 'sun', 'cat', 'dog', 'bear', 'red-panda', 'hamster', 'otter', 'rabbit', 'bun'] as const
     const scenes = presets.map(preset => {
       const scene = getAvatarEntityPresetScene(preset)
       expect(scene).not.toBeNull()
@@ -254,11 +254,10 @@ describe('built-in entity preset scenes', () => {
     ))).toBe(true)
     expect(otter.find(part => part.face)).toMatchObject({
       id: 'otter-head',
-      roundness: 100,
-      scaleX: .78,
-      scaleY: .66,
-      shape: 'trapezoid',
-      topScale: .86
+      scaleX: .82,
+      scaleY: .6,
+      scaleZ: .62,
+      shape: 'ellipse'
     })
     expect(face).toMatchObject({
       eyeHighlight: { enabled: false },
@@ -271,8 +270,52 @@ describe('built-in entity preset scenes', () => {
     })
     expect(scene.cameraBackground).toBe('#72cbd0')
     expect(scene.paletteId).toBe('cocoa')
-    expect(scene.surfaceDecals.filter(decal => decal.id.startsWith('otter-muzzle-'))).toHaveLength(2)
-    expect(scene.surfaceDecals).toHaveLength(2)
+    expect(scene.surfaceDecals).toMatchObject([{
+      id: 'otter-muzzle',
+      shape: 'ellipse',
+      targetPartId: 'otter-head',
+      width: 102
+    }])
+  })
+
+  it('keeps the red panda, hamster, and otter as distinct authored silhouettes', () => {
+    const redPanda = createAvatarEntityParts('red-panda')
+    const hamster = createAvatarEntityParts('hamster')
+    const otter = createAvatarEntityParts('otter')
+    const redPandaScene = getAvatarEntityPresetScene('red-panda')!
+    const hamsterScene = getAvatarEntityPresetScene('hamster')!
+
+    expect(redPanda.find(part => part.face)).toMatchObject({
+      id: 'red-panda-head',
+      scaleX: .76,
+      scaleY: .68,
+      shape: 'trapezoid'
+    })
+    expect(redPandaScene.surfaceDecals.map(decal => decal.id)).toEqual([
+      'red-panda-eye-mask-left',
+      'red-panda-eye-mask-right',
+      'red-panda-muzzle'
+    ])
+
+    expect(hamster.find(part => part.face)).toMatchObject({
+      id: 'hamster-head',
+      scaleX: .71,
+      scaleY: .7,
+      shape: 'sphere'
+    })
+    expect(hamsterScene.surfaceDecals.map(decal => decal.id)).toEqual([
+      'hamster-cheek-left',
+      'hamster-cheek-right'
+    ])
+
+    const otterEars = otter.filter(part => !part.face)
+    expect(otter.find(part => part.face)).toMatchObject({
+      id: 'otter-head',
+      scaleX: .82,
+      scaleY: .6,
+      shape: 'ellipse'
+    })
+    expect(otterEars.every(part => part.y === -28 && part.scaleX === .11)).toBe(true)
   })
 
   it('uses the clean large-eye face on the rabbit', () => {
