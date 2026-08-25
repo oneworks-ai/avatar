@@ -26,7 +26,7 @@ describe('built-in entity preset scenes', () => {
   })
 
   it('gives every built-in entity a distinct complete camera composition', () => {
-    const presets = ['cloud', 'sun', 'cat', 'dog', 'bear', 'rabbit', 'bun'] as const
+    const presets = ['cloud', 'sun', 'cat', 'dog', 'bear', 'otter', 'rabbit', 'bun'] as const
     const scenes = presets.map(preset => {
       const scene = getAvatarEntityPresetScene(preset)
       expect(scene).not.toBeNull()
@@ -238,6 +238,39 @@ describe('built-in entity preset scenes', () => {
       scale: 1.8604,
       yaw: .0827
     })
+  })
+
+  it('builds the otter from inset round ears, a broad head, and a cream muzzle', () => {
+    const otter = createAvatarEntityParts('otter')
+    const scene = getAvatarEntityPresetScene('otter')!
+    const face = getAvatarEntityPresetFaceStyle('otter')!
+    const ears = otter.filter(part => !part.face)
+
+    expect(otter).toHaveLength(3)
+    expect(ears.every(part => (
+      part.shape === 'sphere' &&
+      part.occludedByFace === true &&
+      part.id.startsWith('otter-ear-')
+    ))).toBe(true)
+    expect(otter.find(part => part.face)).toMatchObject({
+      id: 'otter-head',
+      roundness: 100,
+      scaleX: .78,
+      scaleY: .7,
+      shape: 'trapezoid',
+      topScale: .86
+    })
+    expect(face).toMatchObject({
+      eyeHighlight: { enabled: true },
+      eyeShape: 'ellipse',
+      mouthEnabled: true,
+      noseEnabled: true,
+      noseShape: 'inverted-triangle'
+    })
+    expect(scene.cameraBackground).toBe('#72cbd0')
+    expect(scene.paletteId).toBe('cocoa')
+    expect(scene.surfaceDecals.filter(decal => decal.id.startsWith('otter-muzzle-'))).toHaveLength(2)
+    expect(scene.surfaceDecals.filter(decal => decal.id.startsWith('otter-whisker-'))).toHaveLength(4)
   })
 
   it('uses the clean large-eye face on the rabbit', () => {

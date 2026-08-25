@@ -156,6 +156,7 @@ const ZH_HANS_TRANSLATIONS: Readonly<Record<string, string>> = {
   'Open Avatar on GitHub': '在 GitHub 打开 Avatar',
   'OneWorks Avatar home': 'OneWorks Avatar 首页',
   'Opening editor': '正在打开编辑器',
+  'Otter': '水獭',
   'Palette': '配色',
   'Pixel color count': '像素色彩数量',
   'Pixel dithering': '像素抖动',

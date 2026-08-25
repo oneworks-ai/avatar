@@ -5,11 +5,11 @@ import { AVATAR_BODY_SHAPES, DEFAULT_AVATAR_FACE_STYLE } from './avatarGeometry'
 import type { AvatarBodyShape, AvatarFaceStyle } from './avatarGeometry'
 import type { AvatarSurfaceDecal } from './avatarSurfaceDecals'
 
-export const AVATAR_ENTITY_PRESETS = ['custom', 'cloud', 'sun', 'cat', 'dog', 'bear', 'rabbit', 'bun'] as const
+export const AVATAR_ENTITY_PRESETS = ['custom', 'cloud', 'sun', 'cat', 'dog', 'bear', 'otter', 'rabbit', 'bun'] as const
 
 export type AvatarEntityPreset = (typeof AVATAR_ENTITY_PRESETS)[number]
 
-export const AVATAR_BUILT_IN_ENTITY_PRESETS = ['cloud', 'sun', 'cat', 'dog', 'bear', 'rabbit', 'bun'] as const satisfies readonly AvatarEntityPreset[]
+export const AVATAR_BUILT_IN_ENTITY_PRESETS = ['cloud', 'sun', 'cat', 'dog', 'bear', 'otter', 'rabbit', 'bun'] as const satisfies readonly AvatarEntityPreset[]
 
 export interface AvatarEntityPart {
   readonly baseColor: string
@@ -116,6 +116,20 @@ const BEAR_ACCENT_MATERIAL = {
   shadowColor: '#693b30'
 } as const
 
+const OTTER_MATERIAL = {
+  baseColor: '#8f5d3f',
+  foregroundColor: '#24150f',
+  highlightColor: '#c9966a',
+  shadowColor: '#513326'
+} as const
+
+const OTTER_EAR_MATERIAL = {
+  ...OTTER_MATERIAL,
+  baseColor: '#68412f',
+  highlightColor: '#9b6a4d',
+  shadowColor: '#382119'
+} as const
+
 const BEAR_FACE_STYLE: AvatarFaceStyle = {
   ...DEFAULT_AVATAR_FACE_STYLE,
   gap: 50,
@@ -140,6 +154,35 @@ const DOG_FACE_STYLE: AvatarFaceStyle = {
   noseShape: 'inverted-triangle',
   noseWidth: 18,
   noseY: 25
+} as const
+
+const OTTER_FACE_STYLE: AvatarFaceStyle = {
+  ...DEFAULT_AVATAR_FACE_STYLE,
+  eyeHighlight: {
+    color: '#ffffff',
+    enabled: true,
+    offsetX: -20,
+    offsetY: -22,
+    opacity: 94,
+    size: 28
+  },
+  eyeRoundness: 100,
+  eyeShape: 'ellipse',
+  gap: 48,
+  height: 46,
+  leftEyeRotation: -3,
+  mouthCurve: 12,
+  mouthEnabled: true,
+  mouthHeight: 5,
+  mouthWidth: 28,
+  mouthY: 51,
+  noseEnabled: true,
+  noseHeight: 15,
+  noseShape: 'inverted-triangle',
+  noseWidth: 24,
+  noseY: 25,
+  rightEyeRotation: 3,
+  width: 25
 } as const
 
 const BUN_FACE_STYLE: AvatarFaceStyle = {
@@ -362,6 +405,43 @@ const BEAR_PRESET_SCENE = {
   }
 } as const satisfies AvatarEntityPresetScene
 
+const OTTER_PRESET_SCENE = {
+  ...DEFAULT_PRESET_LIGHTING,
+  avatarOutlineStyle: { color: '#24150f', opacity: 88, width: 4 },
+  avatarShadowStyle: { color: '#173d44', direction: 132, distance: 11, opacity: 27, softness: 16 },
+  backgroundStyle: 'solid',
+  cameraBackground: '#72cbd0',
+  cameraFrame: 'rounded',
+  cameraMode: true,
+  frameShadowStyle: { direction: 90, distance: 12, opacity: 20, softness: 24 },
+  interactionMode: 'rotate',
+  paletteId: 'cocoa',
+  showAvatarShadow: true,
+  showFrameShadow: true,
+  showLight: false,
+  showOutline: true,
+  showShadow: false,
+  surfaceDecals: [
+    { color: '#b97e62', height: 98, id: 'otter-inner-ear-left', label: 'Left inner ear', opacity: 100, rotation: 0, shape: 'ellipse', side: 'front', targetPartId: 'otter-ear-left', width: 96, x: 0, y: 3 },
+    { color: '#b97e62', height: 98, id: 'otter-inner-ear-right', label: 'Right inner ear', opacity: 100, rotation: 0, shape: 'ellipse', side: 'front', targetPartId: 'otter-ear-right', width: 96, x: 0, y: 3 },
+    { color: '#efd7ac', height: 52, id: 'otter-muzzle-left', label: 'Left muzzle', opacity: 100, rotation: -6, shape: 'ellipse', side: 'front', targetPartId: 'otter-head', width: 62, x: -24, y: 34 },
+    { color: '#efd7ac', height: 52, id: 'otter-muzzle-right', label: 'Right muzzle', opacity: 100, rotation: 6, shape: 'ellipse', side: 'front', targetPartId: 'otter-head', width: 62, x: 24, y: 34 },
+    { color: '#f4e2bf', height: 26, id: 'otter-chin', label: 'Chin', opacity: 100, rotation: 0, shape: 'ellipse', side: 'front', targetPartId: 'otter-head', width: 46, x: 0, y: 56 },
+    { bend: -4, color: '#3a241a', height: 34, id: 'otter-whisker-upper-left', label: 'Upper left whisker', opacity: 64, rotation: 74, shape: 'tapered-band', side: 'front', targetPartId: 'otter-head', width: 3, x: -55, y: 33 },
+    { bend: 4, color: '#3a241a', height: 32, id: 'otter-whisker-lower-left', label: 'Lower left whisker', opacity: 56, rotation: 84, shape: 'tapered-band', side: 'front', targetPartId: 'otter-head', width: 3, x: -55, y: 45 },
+    { bend: 4, color: '#3a241a', height: 34, id: 'otter-whisker-upper-right', label: 'Upper right whisker', opacity: 64, rotation: -74, shape: 'tapered-band', side: 'front', targetPartId: 'otter-head', width: 3, x: 55, y: 33 },
+    { bend: -4, color: '#3a241a', height: 32, id: 'otter-whisker-lower-right', label: 'Lower right whisker', opacity: 56, rotation: -84, shape: 'tapered-band', side: 'front', targetPartId: 'otter-head', width: 3, x: 55, y: 45 }
+  ],
+  viewState: {
+    pitch: -.06,
+    positionX: -12,
+    positionY: 48,
+    roll: -.05,
+    scale: 1.58,
+    yaw: -.12
+  }
+} as const satisfies AvatarEntityPresetScene
+
 const RABBIT_PRESET_SCENE = {
   ...DEFAULT_PRESET_LIGHTING,
   avatarOutlineStyle: { color: '#292724', opacity: 82, width: 4 },
@@ -515,6 +595,12 @@ const BEAR_PARTS: readonly AvatarEntityPart[] = [
   { ...BEAR_MATERIAL, face: true, id: 'primary', label: 'Primary', roundness: 78, scaleX: .74, scaleY: .72, shape: 'trapezoid', x: 0, y: 20, z: 0 }
 ]
 
+const OTTER_PARTS: readonly AvatarEntityPart[] = [
+  { ...OTTER_EAR_MATERIAL, face: false, id: 'otter-ear-left', label: 'Left ear', occludedByFace: true, occlusionAmount: 9, occlusionPole: 'bottom', rotationX: -5, rotationY: -8, rotationZ: -8, scaleX: .15, scaleY: .18, scaleZ: .14, shape: 'sphere', x: -68, y: -56, z: -16 },
+  { ...OTTER_EAR_MATERIAL, face: false, id: 'otter-ear-right', label: 'Right ear', occludedByFace: true, occlusionAmount: 9, occlusionPole: 'bottom', rotationX: -5, rotationY: 8, rotationZ: 8, scaleX: .15, scaleY: .18, scaleZ: .14, shape: 'sphere', x: 68, y: -56, z: -16 },
+  { ...OTTER_MATERIAL, face: true, id: 'otter-head', label: 'Head', roundness: 100, scaleX: .78, scaleY: .7, scaleZ: .68, shape: 'trapezoid', topScale: .86, x: 0, y: 16, z: 0 }
+]
+
 const RABBIT_PARTS: readonly AvatarEntityPart[] = [
   { ...RABBIT_MATERIAL, face: false, id: 'ear-left', label: 'Left ear', occludedByFace: true, rotationX: -3, rotationY: -5, rotationZ: -8, roundness: 100, scaleX: .18, scaleY: .6, shape: 'trapezoid', topScale: .9, x: -50, y: -76, z: -22 },
   { ...RABBIT_MATERIAL, face: false, id: 'ear-right', label: 'Right ear', occludedByFace: true, rotationX: -4, rotationY: 7, rotationZ: 11, roundness: 100, scaleX: .17, scaleY: .62, shape: 'trapezoid', topScale: .9, x: 48, y: -79, z: -24 },
@@ -595,6 +681,7 @@ export const createAvatarEntityParts = (preset: AvatarEntityPreset): AvatarEntit
   if (preset === 'cat') return cloneParts(CAT_PARTS)
   if (preset === 'dog') return cloneParts(DOG_PARTS)
   if (preset === 'bear') return cloneParts(BEAR_PARTS)
+  if (preset === 'otter') return cloneParts(OTTER_PARTS)
   if (preset === 'rabbit') return cloneParts(RABBIT_PARTS)
   if (preset === 'bun') return cloneParts(BUN_PARTS)
   return []
@@ -606,6 +693,7 @@ export const getAvatarEntityPresetFaceStyle = (preset: AvatarEntityPreset): Avat
   if (preset === 'cat') return { ...CAT_FACE_STYLE }
   if (preset === 'dog') return { ...DOG_FACE_STYLE }
   if (preset === 'bear') return { ...BEAR_FACE_STYLE }
+  if (preset === 'otter') return { ...OTTER_FACE_STYLE, eyeHighlight: { ...OTTER_FACE_STYLE.eyeHighlight } }
   if (preset === 'rabbit') return { ...RABBIT_FACE_STYLE }
   if (preset === 'bun') return { ...BUN_FACE_STYLE, eyeHighlight: { ...BUN_FACE_STYLE.eyeHighlight } }
   return null
@@ -617,6 +705,7 @@ const ENTITY_PRESET_SCENES: Partial<Record<AvatarEntityPreset, AvatarEntityPrese
   cat: CAT_PRESET_SCENE,
   cloud: CLOUD_PRESET_SCENE,
   dog: DOG_PRESET_SCENE,
+  otter: OTTER_PRESET_SCENE,
   rabbit: RABBIT_PRESET_SCENE,
   sun: SUN_PRESET_SCENE
 }

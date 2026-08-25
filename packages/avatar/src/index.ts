@@ -219,7 +219,7 @@ export type AvatarBodyShape =
 export type AvatarCameraFrame = 'circle' | 'rounded' | 'square'
 export type AvatarCoatPatternAlgorithm = 'broken-mackerel' | 'classic' | 'mackerel' | 'random' | 'spotted'
 export type AvatarCoatPatternLightPatchShape = 'ellipse' | 'face-mask' | 'rounded'
-export type AvatarEntityPreset = 'bear' | 'bun' | 'cat' | 'cloud' | 'custom' | 'dog' | 'rabbit' | 'sun'
+export type AvatarEntityPreset = 'bear' | 'bun' | 'cat' | 'cloud' | 'custom' | 'dog' | 'otter' | 'rabbit' | 'sun'
 export type AvatarEyeShape = 'chevron' | 'ellipse' | 'rounded'
 export type AvatarSurfaceDecalSide = 'back' | 'face' | 'front' | 'left' | 'right'
 export type AvatarSurfaceDecalShape =
@@ -1619,7 +1619,7 @@ const isAvatarDefinitionValue = (value: unknown): value is AvatarDefinition => {
     new Set(scene.entity.parts.map(part => part.id)).size === scene.entity.parts.length &&
     (scene.entity.parts.length === 0 || scene.entity.parts.filter(part => part.face).length === 1) &&
     decalTargetsAreValid &&
-    isOneOf(scene.entity.preset, ['bear', 'bun', 'cat', 'cloud', 'custom', 'dog', 'rabbit', 'sun']) &&
+    isOneOf(scene.entity.preset, ['bear', 'bun', 'cat', 'cloud', 'custom', 'dog', 'otter', 'rabbit', 'sun']) &&
     isAvatarFace(scene.face) && isOneOf(scene.interactionMode, ['move', 'rotate']) &&
     isRecord(scene.lighting) && hasOnlyKeys(scene.lighting, [
       'azimuth',
