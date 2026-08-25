@@ -168,10 +168,12 @@ describe('OneWorks Avatar React rendering', () => {
     expect(frame?.style.boxShadow).toBe('none')
   })
 
-  it('captures the definition camera frame shadow in SVG', async () => {
+  it('keeps the camera frame shadow in the preview and out of captured SVG', async () => {
     const definition = createDefaultAvatarDefinition()
     const ref = createRef<AvatarHandle>()
     act(() => root.render(createElement(Avatar, { definition, ref })))
+
+    expect(host.querySelector<HTMLElement>('.oneworks-avatar')?.style.boxShadow).toContain('12.00px')
 
     const blob = await ref.current!.capture({ format: 'svg', size: 256 })
     const source = await new Promise<string>((resolve, reject) => {
@@ -180,10 +182,8 @@ describe('OneWorks Avatar React rendering', () => {
       reader.onload = () => resolve(String(reader.result))
       reader.readAsText(blob)
     })
-    expect(source).toContain('oneworks-avatar-export-frame-shadow')
-    expect(source).toContain('flood-opacity="0.22"')
-    expect(source).toContain('operator="out"')
-    expect(source).toContain('in2="SourceAlpha"')
-    expect(source).toContain('translate(36 36) scale(')
+    expect(source).toContain('oneworks-avatar-export-frame')
+    expect(source).not.toContain('oneworks-avatar-export-frame-shadow')
+    expect(source).not.toContain('translate(36 36) scale(')
   })
 })

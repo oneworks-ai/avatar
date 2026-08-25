@@ -60,26 +60,22 @@ export const prependSavedAvatarPreset = (
   preset: SavedAvatarPreset
 ) => [preset, ...presets].slice(0, MAX_SAVED_PRESETS)
 
-const getAvatarFramePath = (width: number, height: number, frame: AvatarCameraFrame, inset = 0) => {
-  const innerWidth = Math.max(width - inset * 2, 1)
-  const innerHeight = Math.max(height - inset * 2, 1)
+const getAvatarFramePath = (width: number, height: number, frame: AvatarCameraFrame) => {
   if (frame === 'circle') {
-    const radius = Math.min(innerWidth, innerHeight) / 2
+    const radius = Math.min(width, height) / 2
     return `M ${width / 2} ${height / 2 - radius} A ${radius} ${radius} 0 1 1 ${width / 2} ${
       height / 2 + radius
     } A ${radius} ${radius} 0 1 1 ${width / 2} ${height / 2 - radius} Z`
   }
   if (frame === 'rounded') {
-    const right = width - inset
-    const bottom = height - inset
-    const radius = Math.min(innerWidth, innerHeight) * 18 / SCREENSHOT_SIZE
-    return `M ${inset + radius} ${inset} H ${right - radius} Q ${right} ${inset} ${right} ${inset + radius} V ${
-      bottom - radius
-    } Q ${right} ${bottom} ${right - radius} ${bottom} H ${inset + radius} Q ${inset} ${bottom} ${inset} ${
-      bottom - radius
-    } V ${inset + radius} Q ${inset} ${inset} ${inset + radius} ${inset} Z`
+    const radius = Math.min(width, height) * 18 / SCREENSHOT_SIZE
+    return `M ${radius} 0 H ${width - radius} Q ${width} 0 ${width} ${radius} V ${
+      height - radius
+    } Q ${width} ${height} ${width - radius} ${height} H ${radius} Q 0 ${height} 0 ${
+      height - radius
+    } V ${radius} Q 0 0 ${radius} 0 Z`
   }
-  return `M ${inset} ${inset} H ${width - inset} V ${height - inset} H ${inset} Z`
+  return `M 0 0 H ${width} V ${height} H 0 Z`
 }
 
 const applyAvatarCaptureFrame = (svg: SVGSVGElement, options: AvatarCaptureOptions) => {
@@ -92,83 +88,27 @@ const applyAvatarCaptureFrame = (svg: SVGSVGElement, options: AvatarCaptureOptio
   const document = svg.ownerDocument
   const namespace = 'http://www.w3.org/2000/svg'
   const clipId = 'oneworks-avatar-export-frame'
-  const shadowFilterId = 'oneworks-avatar-export-frame-shadow'
   const defs = document.createElementNS(namespace, 'defs')
   const clipPath = document.createElementNS(namespace, 'clipPath')
   const framePath = document.createElementNS(namespace, 'path')
   const content = document.createElementNS(namespace, 'g')
   const scene = document.createElementNS(namespace, 'g')
-  const shadowInset = options.showFrameShadow && options.frameShadow != null && options.frameShadow.opacity > 0
-    ? Math.min(
-      Math.max(options.frameShadow.distance + options.frameShadow.softness, 1),
-      Math.min(width, height) / 4
-    )
-    : 0
 
   clipPath.setAttribute('id', clipId)
-  framePath.setAttribute('d', getAvatarFramePath(width, height, frame, shadowInset))
+  framePath.setAttribute('d', getAvatarFramePath(width, height, frame))
   clipPath.append(framePath)
   defs.append(clipPath)
-
-  let shadowPath: SVGPathElement | null = null
-  if (options.showFrameShadow && options.frameShadow != null) {
-    const direction = options.frameShadow.direction * Math.PI / 180
-    const filter = document.createElementNS(namespace, 'filter')
-    const blur = document.createElementNS(namespace, 'feGaussianBlur')
-    const offset = document.createElementNS(namespace, 'feOffset')
-    const flood = document.createElementNS(namespace, 'feFlood')
-    const outside = document.createElementNS(namespace, 'feComposite')
-    const colorize = document.createElementNS(namespace, 'feComposite')
-    filter.setAttribute('id', shadowFilterId)
-    filter.setAttribute('x', '-50%')
-    filter.setAttribute('y', '-50%')
-    filter.setAttribute('width', '200%')
-    filter.setAttribute('height', '200%')
-    blur.setAttribute('in', 'SourceAlpha')
-    blur.setAttribute('stdDeviation', String(options.frameShadow.softness / 2))
-    blur.setAttribute('result', 'blur')
-    offset.setAttribute('in', 'blur')
-    offset.setAttribute('dx', String(Math.cos(direction) * options.frameShadow.distance))
-    offset.setAttribute('dy', String(Math.sin(direction) * options.frameShadow.distance))
-    offset.setAttribute('result', 'offset')
-    flood.setAttribute('flood-color', options.frameShadow.color ?? '#000000')
-    flood.setAttribute('flood-opacity', String(options.frameShadow.opacity / 100))
-    flood.setAttribute('result', 'color')
-    outside.setAttribute('in', 'offset')
-    outside.setAttribute('in2', 'SourceAlpha')
-    outside.setAttribute('operator', 'out')
-    outside.setAttribute('result', 'outside')
-    colorize.setAttribute('in', 'color')
-    colorize.setAttribute('in2', 'outside')
-    colorize.setAttribute('operator', 'in')
-    filter.append(blur, offset, outside, flood, colorize)
-    defs.append(filter)
-
-    shadowPath = document.createElementNS(namespace, 'path')
-    shadowPath.setAttribute('d', getAvatarFramePath(width, height, frame, shadowInset))
-    shadowPath.setAttribute('fill', '#000000')
-    shadowPath.setAttribute('filter', `url(#${shadowFilterId})`)
-  }
 
   content.setAttribute('clip-path', `url(#${clipId})`)
   if (options.background != null) {
     const background = document.createElementNS(namespace, 'path')
-    background.setAttribute('d', getAvatarFramePath(width, height, frame, shadowInset))
+    background.setAttribute('d', getAvatarFramePath(width, height, frame))
     background.setAttribute('fill', options.background)
     content.append(background)
-  }
-  if (shadowInset > 0) {
-    scene.setAttribute(
-      'transform',
-      `translate(${shadowInset} ${shadowInset}) scale(${(width - shadowInset * 2) / width} ${
-        (height - shadowInset * 2) / height
-      })`
-    )
   }
   while (svg.firstChild != null) scene.append(svg.firstChild)
   content.append(scene)
   svg.append(defs)
-  if (shadowPath != null) svg.append(shadowPath)
   svg.append(content)
 }
 

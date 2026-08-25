@@ -42,7 +42,7 @@ Use this workflow for creating or refining a OneWorks 3D Avatar through the edit
 
 - Camera mode alone defines export background and crop. The editing surface may show geometry beyond the nominal viewport, so only trust Camera view for edge clearance.
 - Entering Camera mode, changing frame, or opening Animation should not move the character. Treat a shift as a state bug instead of manually repositioning per mode.
-- Choose square, rounded-square, or circle based on the destination. Rounded and circle frames clip camera content at their outer corners regardless of camera background; when frame shadow is enabled, its intentional outside pixels may still reach those corners.
+- Choose square, rounded-square, or circle based on the destination. Rounded and circle frames clip camera content at their outer corners regardless of camera background. Frame shadow remains in the public camera definition and appears in editor/framework on-screen previews, but is never included in exported assets or saved thumbnails.
 - For a transparent asset, select `Transparent` under Style → Camera background and confirm the URL contains `cameraBg=transparent`. The checkerboard is only a UI preview and must not appear in exports.
 
 ## Animation
