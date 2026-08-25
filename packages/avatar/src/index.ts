@@ -37,12 +37,54 @@ export const AVATAR_SEED_FIELD_PATHS = deepFreeze({
   backgroundStyle: 'scene.appearance.backgroundStyle',
   cameraBackground: 'scene.camera.background',
   cameraFrame: 'scene.camera.frame',
+  capybaraEarHeight: 'scene.entity.capybaraEarHeight',
+  capybaraEarWidth: 'scene.entity.capybaraEarWidth',
+  capybaraHeadHeight: 'scene.entity.capybaraHeadHeight',
+  capybaraHeadWidth: 'scene.entity.capybaraHeadWidth',
   catEarHeight: 'scene.entity.catEarHeight',
   catEarWidth: 'scene.entity.catEarWidth',
   dogEarHeight: 'scene.entity.dogEarHeight',
   dogEarWidth: 'scene.entity.dogEarWidth',
   dogHeadHeight: 'scene.entity.dogHeadHeight',
   dogHeadWidth: 'scene.entity.dogHeadWidth',
+  deerAntlerSize: 'scene.entity.deerAntlerSize',
+  deerAntlerStyle: 'scene.entity.deerAntlerStyle',
+  deerEarHeight: 'scene.entity.deerEarHeight',
+  deerEarWidth: 'scene.entity.deerEarWidth',
+  deerHeadHeight: 'scene.entity.deerHeadHeight',
+  deerHeadWidth: 'scene.entity.deerHeadWidth',
+  foxEarHeight: 'scene.entity.foxEarHeight',
+  foxEarStyle: 'scene.entity.foxEarStyle',
+  foxEarWidth: 'scene.entity.foxEarWidth',
+  foxHeadHeight: 'scene.entity.foxHeadHeight',
+  foxHeadTaper: 'scene.entity.foxHeadTaper',
+  foxHeadWidth: 'scene.entity.foxHeadWidth',
+  hamsterEarHeight: 'scene.entity.hamsterEarHeight',
+  hamsterEarWidth: 'scene.entity.hamsterEarWidth',
+  hamsterHeadHeight: 'scene.entity.hamsterHeadHeight',
+  hamsterHeadWidth: 'scene.entity.hamsterHeadWidth',
+  otterEarHeight: 'scene.entity.otterEarHeight',
+  otterEarWidth: 'scene.entity.otterEarWidth',
+  otterHeadHeight: 'scene.entity.otterHeadHeight',
+  otterHeadWidth: 'scene.entity.otterHeadWidth',
+  pigEarHeight: 'scene.entity.pigEarHeight',
+  pigEarWidth: 'scene.entity.pigEarWidth',
+  pigHeadHeight: 'scene.entity.pigHeadHeight',
+  pigHeadWidth: 'scene.entity.pigHeadWidth',
+  bearEarHeight: 'scene.entity.bearEarHeight',
+  bearEarWidth: 'scene.entity.bearEarWidth',
+  bearHeadHeight: 'scene.entity.bearHeadHeight',
+  bearHeadWidth: 'scene.entity.bearHeadWidth',
+  rabbitEarHeight: 'scene.entity.rabbitEarHeight',
+  rabbitEarWidth: 'scene.entity.rabbitEarWidth',
+  rabbitHeadHeight: 'scene.entity.rabbitHeadHeight',
+  rabbitHeadWidth: 'scene.entity.rabbitHeadWidth',
+  sheepEarHeight: 'scene.entity.sheepEarHeight',
+  sheepEarWidth: 'scene.entity.sheepEarWidth',
+  sheepHeadHeight: 'scene.entity.sheepHeadHeight',
+  sheepHeadWidth: 'scene.entity.sheepHeadWidth',
+  sheepHornSize: 'scene.entity.sheepHornSize',
+  sheepHornStyle: 'scene.entity.sheepHornStyle',
   coatPatternAlgorithm: 'scene.appearance.coatPattern.algorithm',
   coatPatternBreakup: 'scene.appearance.coatPattern.breakup',
   coatPatternContrast: 'scene.appearance.coatPattern.contrast',
@@ -124,6 +166,7 @@ export const AVATAR_SEEDED_VIEW_POSE = deepFreeze(
 )
 export const AVATAR_ENTITY_RANGES = deepFreeze(
   {
+    bottomTaper: { max: 100, min: 0 },
     occlusionAmount: { max: 100, min: 0 },
     roundness: { max: 100, min: 0 },
     scaleX: { max: 1.5, min: .08 },
@@ -214,6 +257,18 @@ export const AVATAR_DOG_COMPATIBLE_PALETTE_IDS = deepFreeze([
   'border-collie',
   'dalmatian'
 ] as const)
+export const AVATAR_RABBIT_COMPATIBLE_PALETTE_IDS = deepFreeze([
+  'holland-lop',
+  'netherland-dwarf',
+  'dutch-rabbit',
+  'himalayan-rabbit',
+  'lionhead-rabbit',
+  'english-spot'
+] as const)
+export const AVATAR_BEAR_COMPATIBLE_PALETTE_IDS = deepFreeze([
+  'brown-bear', 'polar-bear', 'asian-black-bear', 'giant-panda', 'spectacled-bear', 'sun-bear',
+  'red-panda', 'koala', 'raccoon', 'wombat', 'teddy-bear'
+] as const)
 
 export type AvatarBackgroundStyle = 'gradient' | 'solid'
 export type AvatarBodyShape =
@@ -231,7 +286,10 @@ export type AvatarBodyShape =
 export type AvatarCameraFrame = 'circle' | 'rounded' | 'square'
 export type AvatarCoatPatternAlgorithm = 'broken-mackerel' | 'classic' | 'mackerel' | 'random' | 'spotted'
 export type AvatarCoatPatternLightPatchShape = 'ellipse' | 'face-mask' | 'rounded'
-export type AvatarEntityPreset = 'bear' | 'bun' | 'cat' | 'cloud' | 'custom' | 'dog' | 'rabbit' | 'sun'
+export type AvatarEntityPreset = 'bear' | 'bun' | 'capybara' | 'cat' | 'cloud' | 'custom' | 'deer' | 'dog' | 'fox' | 'hamster' | 'otter' | 'pig' | 'rabbit' | 'sheep' | 'sun'
+export type AvatarDeerAntlerStyle = 'branched' | 'forked' | 'none' | 'reindeer' | 'spike'
+export type AvatarFoxEarStyle = 'fennec' | 'pointed' | 'rounded'
+export type AvatarSheepHornStyle = 'curled' | 'curved' | 'none' | 'straight'
 export type AvatarEyeShape = 'ellipse' | 'rounded'
 export type AvatarSurfaceDecalSide = 'back' | 'face' | 'front' | 'left' | 'right'
 export type AvatarSurfaceDecalShape =
@@ -307,6 +365,10 @@ export interface AvatarEyeHighlight {
   readonly size: number
 }
 
+export type AvatarFaceOverride = Partial<Omit<AvatarFace, 'eyeHighlight'>> & {
+  readonly eyeHighlight?: Partial<AvatarEyeHighlight>
+}
+
 export interface AvatarSurfaceDecal {
   readonly bend?: number
   readonly color: string
@@ -325,6 +387,7 @@ export interface AvatarSurfaceDecal {
 
 export interface AvatarEntityPart {
   readonly baseColor: string
+  readonly bottomTaper?: number
   readonly cutAngle?: number
   readonly face: boolean
   readonly foregroundColor: string
@@ -393,6 +456,7 @@ export interface AvatarScene {
   readonly appearance: {
     readonly backgroundStyle: AvatarBackgroundStyle
     readonly bodyShape: AvatarBodyShape
+    readonly bottomTaper?: number
     readonly coatPattern?: AvatarCoatPattern
     readonly paletteId: string
   }
@@ -817,13 +881,15 @@ const resolveAvatarDogCoatPatternDecals = ({
   leftEarId,
   palette,
   pattern,
-  rightEarId
+  rightEarId,
+  species = 'dog'
 }: {
   readonly facePartId: string
   readonly leftEarId: string | undefined
   readonly palette: (typeof AVATAR_PALETTES)[number]
   readonly pattern: AvatarCoatPattern
   readonly rightEarId: string | undefined
+  readonly species?: 'bear' | 'deer' | 'dog' | 'pig' | 'rabbit'
 }): readonly AvatarSurfaceDecal[] => {
   const marking = palette.coat?.marking
   if (marking == null) return []
@@ -834,6 +900,7 @@ const resolveAvatarDogCoatPatternDecals = ({
   const width = pattern.lightPatchWidth ?? 100
   const length = pattern.lightPatchLength ?? 100
   const offsetY = pattern.lightPatchOffsetY ?? 0
+  const speciesLabel = species.charAt(0).toUpperCase() + species.slice(1)
   const fixed = (
     id: string,
     label: string,
@@ -849,7 +916,7 @@ const resolveAvatarDogCoatPatternDecals = ({
   ): AvatarSurfaceDecal => ({
     color,
     height: Math.max(AVATAR_SURFACE_DECAL_RANGES.height.min, Math.min(AVATAR_SURFACE_DECAL_RANGES.height.max, Math.round(height))),
-    id: `coat-dog-${marking}-${id}`,
+    id: `coat-${species}-${marking}-${id}`,
     label,
     opacity: color === patch ? 100 : opacity,
     rotation,
@@ -861,16 +928,16 @@ const resolveAvatarDogCoatPatternDecals = ({
     y
   })
   if (marking === 'muzzle') {
-    return [fixed('muzzle', 'Dog cream muzzle', patch, 'ellipse', 0, 42 + offsetY, width * 1.05, length * .66)]
+    return [fixed('muzzle', `${speciesLabel} cream muzzle`, patch, 'ellipse', 0, 42 + offsetY, width * 1.05, length * .66)]
   }
   if (marking === 'blaze') {
     return [
-      fixed('blaze', 'Dog face blaze', patch, 'rounded', 0, -45 + offsetY, width * .32, length * 1.22),
-      fixed('muzzle', 'Dog cream muzzle', patch, 'ellipse', 0, 40 + offsetY, width * .96, length * .58)
+      fixed('blaze', `${speciesLabel} face blaze`, patch, 'rounded', 0, -45 + offsetY, width * .32, length * 1.22),
+      fixed('muzzle', `${speciesLabel} cream muzzle`, patch, 'ellipse', 0, 40 + offsetY, width * .96, length * .58)
     ]
   }
   if (marking === 'mask') {
-    return [fixed('mask', 'Dog face mask', patch, 'face-mask', 0, 40 + offsetY, width * 1.08, length * 1.12)]
+    return [fixed('mask', `${speciesLabel} face mask`, patch, 'face-mask', 0, 40 + offsetY, width * 1.08, length * 1.12)]
   }
   const count = Math.max(8, Math.round(10 + pattern.density / 100 * 16))
   const headSides = ['front', 'front', 'left', 'front', 'right', 'front', 'back', 'front'] as const
@@ -880,25 +947,25 @@ const resolveAvatarDogCoatPatternDecals = ({
     const isEarSpot = earPartId != null
     const rawX = resolveAvatarSeededInteger(
       pattern.seed,
-      `coat.dog.spots.${index}.x`,
+      `coat.${species}.spots.${index}.x`,
       isEarSpot ? -34 : side === 'front' ? -118 : -70,
       isEarSpot ? 34 : side === 'front' ? 118 : 70
     )
     const y = resolveAvatarSeededInteger(
       pattern.seed,
-      `coat.dog.spots.${index}.y`,
+      `coat.${species}.spots.${index}.y`,
       isEarSpot ? -44 : -112,
       isEarSpot ? 46 : 112
     )
     const spotWidth = resolveAvatarSeededInteger(
       pattern.seed,
-      `coat.dog.spots.${index}.width`,
+      `coat.${species}.spots.${index}.width`,
       isEarSpot ? 13 : 16,
       isEarSpot ? 24 : 34
     ) * pattern.thickness / 100
     const spotHeight = resolveAvatarSeededInteger(
       pattern.seed,
-      `coat.dog.spots.${index}.height`,
+      `coat.${species}.spots.${index}.height`,
       isEarSpot ? 16 : 18,
       isEarSpot ? 28 : 42
     ) * pattern.thickness / 100
@@ -908,10 +975,10 @@ const resolveAvatarDogCoatPatternDecals = ({
     const x = overlapsFacialFeatures
       ? (rawX < 0 ? -1 : 1) * (90 + Math.abs(rawX) % 20)
       : rawX
-    const rotation = resolveAvatarSeededInteger(pattern.seed, `coat.dog.spots.${index}.rotation`, -55, 55)
+    const rotation = resolveAvatarSeededInteger(pattern.seed, `coat.${species}.spots.${index}.rotation`, -55, 55)
     return fixed(
       `spot-${index + 1}`,
-      'Dalmatian coat spot',
+      species === 'dog' ? 'Dalmatian coat spot' : `${speciesLabel} coat spot`,
       mark,
       'ellipse',
       x,
@@ -923,6 +990,41 @@ const resolveAvatarDogCoatPatternDecals = ({
       earPartId
     )
   })
+}
+
+const resolveAvatarBearCoatPatternDecals = ({ facePartId, palette, pattern }: {
+  readonly facePartId: string
+  readonly palette: (typeof AVATAR_PALETTES)[number]
+  readonly pattern: AvatarCoatPattern
+}): readonly AvatarSurfaceDecal[] => {
+  const marking = palette.coat?.marking
+  const mark = palette.coat?.mark ?? palette.foreground
+  const patch = palette.coat?.patch ?? palette.gradient[1]
+  const fixed = (id: string, label: string, color: string, shape: AvatarSurfaceDecalShape, x: number, y: number, width: number, height: number, rotation = 0): AvatarSurfaceDecal => ({
+    color, height: Math.max(10, Math.round(height)), id: `coat-bear-${marking}-${id}`, label, opacity: 100, rotation, shape, side: 'face', targetPartId: facePartId, width: Math.max(10, Math.round(width)), x, y
+  })
+  if (marking === 'panda') return [
+    fixed('eye-left', 'Panda left eye patch', mark, 'ellipse', -48, -4, 62, 76, -20),
+    fixed('eye-right', 'Panda right eye patch', mark, 'ellipse', 48, -4, 62, 76, 20),
+    fixed('muzzle', 'Panda cream muzzle', patch, 'ellipse', 0, 44, 104, 54)
+  ]
+  if (marking === 'spectacles') return [
+    fixed('ring-left', 'Spectacled bear left eye ring', mark, 'ellipse', -48, -4, 52, 55, 0),
+    fixed('ring-right', 'Spectacled bear right eye ring', mark, 'ellipse', 48, -4, 52, 55, 0),
+    fixed('muzzle', 'Spectacled bear muzzle', patch, 'ellipse', 0, 43, 100, 48)
+  ]
+  if (marking === 'moon') return [fixed('moon', 'Asian black bear moon chest', patch, 'rounded-triangle', 0, 50, 88, 54, 180)]
+  if (marking === 'sun') return [fixed('sun', 'Sun bear chest crescent', patch, 'rounded-triangle', 0, 48, 76, 52, 180)]
+  if (marking === 'red-panda') return [
+    fixed('brow-left', 'Red panda left brow', patch, 'rounded', -48, -37, 42, 18, -16),
+    fixed('brow-right', 'Red panda right brow', patch, 'rounded', 48, -37, 42, 18, 16),
+    fixed('cheek-left', 'Red panda left cheek', patch, 'ellipse', -52, 37, 58, 54, -18),
+    fixed('cheek-right', 'Red panda right cheek', patch, 'ellipse', 52, 37, 58, 54, 18),
+    fixed('muzzle', 'Red panda muzzle', '#fff2d8', 'ellipse', 0, 44, 78, 40)
+  ]
+  if (marking === 'raccoon') return [fixed('mask', 'Raccoon eye mask', mark, 'face-mask', 0, 2, 146, 76), fixed('muzzle', 'Raccoon muzzle', patch, 'ellipse', 0, 47, 88, 44)]
+  if (marking === 'wombat') return [fixed('muzzle', 'Wombat broad muzzle', patch, 'ellipse', 0, 43, 122, 54)]
+  return resolveAvatarDogCoatPatternDecals({ facePartId, leftEarId: undefined, palette, pattern, rightEarId: undefined, species: 'bear' })
 }
 
 const resolveAvatarCoatPatternAlgorithm = (pattern: AvatarCoatPattern) => (
@@ -946,18 +1048,27 @@ export const resolveAvatarCoatPatternDecals = ({
   readonly paletteId: string
   readonly pattern: AvatarCoatPattern
 }): readonly AvatarSurfaceDecal[] => {
-  if (!pattern.enabled || (entityPreset !== 'cat' && entityPreset !== 'dog')) return []
+  if (!pattern.enabled || (
+    entityPreset !== 'cat' && entityPreset !== 'dog' && entityPreset !== 'rabbit' &&
+    entityPreset !== 'bear' && entityPreset !== 'deer' && entityPreset !== 'pig'
+  )) return []
   const facePartId = entityParts.find(part => part.face)?.id
   if (facePartId == null) return []
   const leftEarId = entityParts.find(part => /ear-left|left-ear/u.test(part.id))?.id
   const rightEarId = entityParts.find(part => /ear-right|right-ear/u.test(part.id))?.id
   const palette = AVATAR_PALETTES.find(candidate => candidate.id === paletteId) ?? AVATAR_PALETTES[0]!
-  if (entityPreset === 'dog') return resolveAvatarDogCoatPatternDecals({
+  if (entityPreset === 'bear') return resolveAvatarBearCoatPatternDecals({ facePartId, palette, pattern })
+  if ((entityPreset === 'deer' || entityPreset === 'pig') && palette.coat?.marking !== 'spots') return []
+  if (
+    entityPreset === 'dog' || entityPreset === 'rabbit' ||
+    entityPreset === 'deer' || entityPreset === 'pig'
+  ) return resolveAvatarDogCoatPatternDecals({
     facePartId,
     leftEarId,
     palette,
     pattern,
-    rightEarId
+    rightEarId,
+    species: entityPreset
   })
   const algorithm = resolveAvatarCoatPatternAlgorithm(pattern)
   const contrast = pattern.contrast / 100
@@ -1401,6 +1512,7 @@ const isAvatarFace = (value: unknown): value is AvatarFace => (
 const isAvatarEntityPart = (value: unknown): value is AvatarEntityPart => (
   isRecord(value) && hasOnlyKeys(value, [
     'baseColor',
+    'bottomTaper',
     'cutAngle',
     'face',
     'foregroundColor',
@@ -1438,7 +1550,9 @@ const isAvatarEntityPart = (value: unknown): value is AvatarEntityPart => (
     'x',
     'y',
     'z'
-  ]) && isHexColor(value.baseColor) && isOptionalNumber(value.cutAngle) &&
+  ]) && isHexColor(value.baseColor) &&
+  (value.bottomTaper === undefined || isFiniteInRange(value.bottomTaper, AVATAR_ENTITY_RANGES.bottomTaper)) &&
+  isOptionalNumber(value.cutAngle) &&
   isBoolean(value.face) && isHexColor(value.foregroundColor) && isHexColor(value.highlightColor) &&
   (value.hollow === undefined || isBoolean(value.hollow)) && isString(value.id) && value.id.trim().length > 0 &&
   isString(value.label) &&
@@ -1675,6 +1789,7 @@ const isAvatarDefinitionValue = (value: unknown): value is AvatarDefinition => {
   return isRecord(scene.appearance) && hasOnlyKeys(scene.appearance, [
     'backgroundStyle',
     'bodyShape',
+    'bottomTaper',
     'coatPattern',
     'paletteId'
   ]) && hasOwnKeys(scene.appearance, ['backgroundStyle', 'bodyShape', 'paletteId']) &&
@@ -1691,7 +1806,9 @@ const isAvatarDefinitionValue = (value: unknown): value is AvatarDefinition => {
       'sphere',
       'teardrop',
       'trapezoid'
-    ]) && (scene.appearance.coatPattern === undefined || isAvatarCoatPattern(scene.appearance.coatPattern)) &&
+    ]) && (scene.appearance.bottomTaper === undefined ||
+      isFiniteInRange(scene.appearance.bottomTaper, AVATAR_ENTITY_RANGES.bottomTaper)) &&
+    (scene.appearance.coatPattern === undefined || isAvatarCoatPattern(scene.appearance.coatPattern)) &&
     isString(scene.appearance.paletteId) &&
     isRecord(scene.camera) && hasOnlyKeys(scene.camera, [
       'background',
@@ -1741,7 +1858,7 @@ const isAvatarDefinitionValue = (value: unknown): value is AvatarDefinition => {
     new Set(scene.entity.parts.map(part => part.id)).size === scene.entity.parts.length &&
     (scene.entity.parts.length === 0 || scene.entity.parts.filter(part => part.face).length === 1) &&
     decalTargetsAreValid &&
-    isOneOf(scene.entity.preset, ['bear', 'bun', 'cat', 'cloud', 'custom', 'dog', 'rabbit', 'sun']) &&
+    isOneOf(scene.entity.preset, ['bear', 'bun', 'capybara', 'cat', 'cloud', 'custom', 'deer', 'dog', 'fox', 'hamster', 'otter', 'pig', 'rabbit', 'sheep', 'sun']) &&
     isAvatarFace(scene.face) && isOneOf(scene.interactionMode, ['move', 'rotate']) &&
     isRecord(scene.lighting) && hasOnlyKeys(scene.lighting, [
       'azimuth',

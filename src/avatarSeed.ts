@@ -18,11 +18,70 @@ import {
   AVATAR_BUILT_IN_ENTITY_PRESETS,
   CAT_EAR_SCALE_RANGE,
   DOG_EAR_SCALE_RANGE,
-  DOG_HEAD_SCALE_RANGE
+  DOG_HEAD_SCALE_RANGE,
+  BEAR_EAR_SCALE_RANGE,
+  BEAR_HEAD_SCALE_RANGE,
+  RABBIT_EAR_SCALE_RANGE,
+  RABBIT_HEAD_SCALE_RANGE
 } from './avatarEntityPresets'
 import type { AvatarEntityPreset } from './avatarEntityPresets'
 import { AVATAR_FACE_PRESETS, DEFAULT_AVATAR_FACE_PRESET } from './avatarFacePresets'
 import type { AvatarFacePreset } from './avatarFacePresets'
+
+export const AVATAR_ANIMAL_SPECIES_IDS = ['fox', 'hamster', 'capybara', 'otter', 'pig', 'deer', 'sheep'] as const
+export type AvatarAnimalSpeciesId = (typeof AVATAR_ANIMAL_SPECIES_IDS)[number]
+
+export const AVATAR_ANIMAL_SPECIES_SEED_FIELDS = {
+  fox: {
+    earHeight: 'scene.entity.foxEarHeight',
+    earWidth: 'scene.entity.foxEarWidth',
+    headHeight: 'scene.entity.foxHeadHeight',
+    headWidth: 'scene.entity.foxHeadWidth'
+  },
+  hamster: {
+    earHeight: 'scene.entity.hamsterEarHeight',
+    earWidth: 'scene.entity.hamsterEarWidth',
+    headHeight: 'scene.entity.hamsterHeadHeight',
+    headWidth: 'scene.entity.hamsterHeadWidth'
+  },
+  capybara: {
+    earHeight: 'scene.entity.capybaraEarHeight',
+    earWidth: 'scene.entity.capybaraEarWidth',
+    headHeight: 'scene.entity.capybaraHeadHeight',
+    headWidth: 'scene.entity.capybaraHeadWidth'
+  },
+  otter: {
+    earHeight: 'scene.entity.otterEarHeight',
+    earWidth: 'scene.entity.otterEarWidth',
+    headHeight: 'scene.entity.otterHeadHeight',
+    headWidth: 'scene.entity.otterHeadWidth'
+  },
+  pig: {
+    earHeight: 'scene.entity.pigEarHeight',
+    earWidth: 'scene.entity.pigEarWidth',
+    headHeight: 'scene.entity.pigHeadHeight',
+    headWidth: 'scene.entity.pigHeadWidth'
+  },
+  deer: {
+    earHeight: 'scene.entity.deerEarHeight',
+    earWidth: 'scene.entity.deerEarWidth',
+    headHeight: 'scene.entity.deerHeadHeight',
+    headWidth: 'scene.entity.deerHeadWidth'
+  },
+  sheep: {
+    earHeight: 'scene.entity.sheepEarHeight',
+    earWidth: 'scene.entity.sheepEarWidth',
+    headHeight: 'scene.entity.sheepHeadHeight',
+    headWidth: 'scene.entity.sheepHeadWidth'
+  }
+} as const
+
+type AvatarAnimalSpeciesSeedField =
+  (typeof AVATAR_ANIMAL_SPECIES_SEED_FIELDS)[AvatarAnimalSpeciesId][keyof (typeof AVATAR_ANIMAL_SPECIES_SEED_FIELDS)[AvatarAnimalSpeciesId]]
+
+const ANIMAL_SPECIES_SEED_FIELDS: readonly AvatarAnimalSpeciesSeedField[] =
+  Object.values(AVATAR_ANIMAL_SPECIES_SEED_FIELDS).flatMap(fields => Object.values(fields))
+
 export const AVATAR_SEED_FIELDS = [
   'scene.entity.preset',
   AVATAR_SEED_FIELD_PATHS.catEarWidth,
@@ -31,6 +90,19 @@ export const AVATAR_SEED_FIELDS = [
   AVATAR_SEED_FIELD_PATHS.dogEarHeight,
   AVATAR_SEED_FIELD_PATHS.dogHeadWidth,
   AVATAR_SEED_FIELD_PATHS.dogHeadHeight,
+  AVATAR_SEED_FIELD_PATHS.bearEarWidth,
+  AVATAR_SEED_FIELD_PATHS.bearEarHeight,
+  AVATAR_SEED_FIELD_PATHS.bearHeadWidth,
+  AVATAR_SEED_FIELD_PATHS.bearHeadHeight,
+  AVATAR_SEED_FIELD_PATHS.rabbitEarWidth,
+  AVATAR_SEED_FIELD_PATHS.rabbitEarHeight,
+  AVATAR_SEED_FIELD_PATHS.rabbitHeadWidth,
+  AVATAR_SEED_FIELD_PATHS.rabbitHeadHeight,
+  ...ANIMAL_SPECIES_SEED_FIELDS,
+  'scene.entity.foxEarStyle',
+  'scene.entity.foxHeadTaper',
+  'scene.entity.deerAntlerSize',
+  'scene.entity.sheepHornSize',
   'scene.face.preset',
   'scene.appearance.paletteId',
   AVATAR_SEED_FIELD_PATHS.coatPatternAlgorithm,
@@ -72,6 +144,46 @@ export const AVATAR_SEED_FIELD = {
   dogEarWidth: AVATAR_SEED_FIELD_PATHS.dogEarWidth,
   dogHeadHeight: AVATAR_SEED_FIELD_PATHS.dogHeadHeight,
   dogHeadWidth: AVATAR_SEED_FIELD_PATHS.dogHeadWidth,
+  bearEarHeight: AVATAR_SEED_FIELD_PATHS.bearEarHeight,
+  bearEarWidth: AVATAR_SEED_FIELD_PATHS.bearEarWidth,
+  bearHeadHeight: AVATAR_SEED_FIELD_PATHS.bearHeadHeight,
+  bearHeadWidth: AVATAR_SEED_FIELD_PATHS.bearHeadWidth,
+  rabbitEarHeight: AVATAR_SEED_FIELD_PATHS.rabbitEarHeight,
+  rabbitEarWidth: AVATAR_SEED_FIELD_PATHS.rabbitEarWidth,
+  rabbitHeadHeight: AVATAR_SEED_FIELD_PATHS.rabbitHeadHeight,
+  rabbitHeadWidth: AVATAR_SEED_FIELD_PATHS.rabbitHeadWidth,
+  foxEarHeight: AVATAR_ANIMAL_SPECIES_SEED_FIELDS.fox.earHeight,
+  foxEarStyle: 'scene.entity.foxEarStyle',
+  foxEarWidth: AVATAR_ANIMAL_SPECIES_SEED_FIELDS.fox.earWidth,
+  foxHeadHeight: AVATAR_ANIMAL_SPECIES_SEED_FIELDS.fox.headHeight,
+  foxHeadTaper: 'scene.entity.foxHeadTaper',
+  foxHeadWidth: AVATAR_ANIMAL_SPECIES_SEED_FIELDS.fox.headWidth,
+  hamsterEarHeight: AVATAR_ANIMAL_SPECIES_SEED_FIELDS.hamster.earHeight,
+  hamsterEarWidth: AVATAR_ANIMAL_SPECIES_SEED_FIELDS.hamster.earWidth,
+  hamsterHeadHeight: AVATAR_ANIMAL_SPECIES_SEED_FIELDS.hamster.headHeight,
+  hamsterHeadWidth: AVATAR_ANIMAL_SPECIES_SEED_FIELDS.hamster.headWidth,
+  capybaraEarHeight: AVATAR_ANIMAL_SPECIES_SEED_FIELDS.capybara.earHeight,
+  capybaraEarWidth: AVATAR_ANIMAL_SPECIES_SEED_FIELDS.capybara.earWidth,
+  capybaraHeadHeight: AVATAR_ANIMAL_SPECIES_SEED_FIELDS.capybara.headHeight,
+  capybaraHeadWidth: AVATAR_ANIMAL_SPECIES_SEED_FIELDS.capybara.headWidth,
+  otterEarHeight: AVATAR_ANIMAL_SPECIES_SEED_FIELDS.otter.earHeight,
+  otterEarWidth: AVATAR_ANIMAL_SPECIES_SEED_FIELDS.otter.earWidth,
+  otterHeadHeight: AVATAR_ANIMAL_SPECIES_SEED_FIELDS.otter.headHeight,
+  otterHeadWidth: AVATAR_ANIMAL_SPECIES_SEED_FIELDS.otter.headWidth,
+  pigEarHeight: AVATAR_ANIMAL_SPECIES_SEED_FIELDS.pig.earHeight,
+  pigEarWidth: AVATAR_ANIMAL_SPECIES_SEED_FIELDS.pig.earWidth,
+  pigHeadHeight: AVATAR_ANIMAL_SPECIES_SEED_FIELDS.pig.headHeight,
+  pigHeadWidth: AVATAR_ANIMAL_SPECIES_SEED_FIELDS.pig.headWidth,
+  deerAntlerSize: 'scene.entity.deerAntlerSize',
+  deerEarHeight: AVATAR_ANIMAL_SPECIES_SEED_FIELDS.deer.earHeight,
+  deerEarWidth: AVATAR_ANIMAL_SPECIES_SEED_FIELDS.deer.earWidth,
+  deerHeadHeight: AVATAR_ANIMAL_SPECIES_SEED_FIELDS.deer.headHeight,
+  deerHeadWidth: AVATAR_ANIMAL_SPECIES_SEED_FIELDS.deer.headWidth,
+  sheepEarHeight: AVATAR_ANIMAL_SPECIES_SEED_FIELDS.sheep.earHeight,
+  sheepEarWidth: AVATAR_ANIMAL_SPECIES_SEED_FIELDS.sheep.earWidth,
+  sheepHeadHeight: AVATAR_ANIMAL_SPECIES_SEED_FIELDS.sheep.headHeight,
+  sheepHeadWidth: AVATAR_ANIMAL_SPECIES_SEED_FIELDS.sheep.headWidth,
+  sheepHornSize: 'scene.entity.sheepHornSize',
   coatPatternAlgorithm: AVATAR_SEED_FIELD_PATHS.coatPatternAlgorithm,
   coatPatternBreakup: AVATAR_SEED_FIELD_PATHS.coatPatternBreakup,
   coatPatternContrast: AVATAR_SEED_FIELD_PATHS.coatPatternContrast,
@@ -91,6 +203,15 @@ export const AVATAR_SEED_FIELD = {
 } as const satisfies Readonly<Record<string, AvatarSeedField>>
 
 export { AVATAR_CAMERA_BACKGROUND_PRESETS }
+
+export const isAvatarAnimalSpeciesId = (value: unknown): value is AvatarAnimalSpeciesId => (
+  typeof value === 'string' && AVATAR_ANIMAL_SPECIES_IDS.some(species => species === value)
+)
+
+export const getAvatarSeedFieldEntityPreset = (field: string): string | null => {
+  const matched = /^scene\.entity\.(cat|dog|rabbit|bear|fox|hamster|capybara|otter|pig|deer|sheep)(?:Ear|Head|Antler|Horn)/u.exec(field)
+  return matched?.[1] ?? null
+}
 
 export const createRandomAvatarSeed = () => {
   const values = new Uint32Array(3)
@@ -153,6 +274,55 @@ export const resolveSeededAvatarDogHeadScale = (
   const path = field === 'width' ? AVATAR_SEED_FIELD.dogHeadWidth : AVATAR_SEED_FIELD.dogHeadHeight
   const range = domain?.ranges?.[path] ?? DOG_HEAD_SCALE_RANGE
   return resolveAvatarSeededInteger(seed, path, range.min, range.max)
+}
+
+export const resolveSeededAvatarBearEarScale = (
+  seed: string,
+  field: 'height' | 'width',
+  domain?: AvatarSeedDomain
+) => {
+  const path = field === 'width' ? AVATAR_SEED_FIELD.bearEarWidth : AVATAR_SEED_FIELD.bearEarHeight
+  const range = domain?.ranges?.[path] ?? BEAR_EAR_SCALE_RANGE
+  return resolveAvatarSeededInteger(seed, path, range.min, range.max)
+}
+
+export const resolveSeededAvatarBearHeadScale = (
+  seed: string,
+  field: 'height' | 'width',
+  domain?: AvatarSeedDomain
+) => {
+  const path = field === 'width' ? AVATAR_SEED_FIELD.bearHeadWidth : AVATAR_SEED_FIELD.bearHeadHeight
+  const range = domain?.ranges?.[path] ?? BEAR_HEAD_SCALE_RANGE
+  return resolveAvatarSeededInteger(seed, path, range.min, range.max)
+}
+
+export const resolveSeededAvatarRabbitEarScale = (
+  seed: string,
+  field: 'height' | 'width',
+  domain?: AvatarSeedDomain
+) => {
+  const path = field === 'width' ? AVATAR_SEED_FIELD.rabbitEarWidth : AVATAR_SEED_FIELD.rabbitEarHeight
+  const range = domain?.ranges?.[path] ?? RABBIT_EAR_SCALE_RANGE
+  return resolveAvatarSeededInteger(seed, path, range.min, range.max)
+}
+
+export const resolveSeededAvatarRabbitHeadScale = (
+  seed: string,
+  field: 'height' | 'width',
+  domain?: AvatarSeedDomain
+) => {
+  const path = field === 'width' ? AVATAR_SEED_FIELD.rabbitHeadWidth : AVATAR_SEED_FIELD.rabbitHeadHeight
+  const range = domain?.ranges?.[path] ?? RABBIT_HEAD_SCALE_RANGE
+  return resolveAvatarSeededInteger(seed, path, range.min, range.max)
+}
+
+export const resolveSeededAvatarAnimalScale = (
+  seed: string,
+  field: AvatarSeedField,
+  domain?: AvatarSeedDomain
+) => {
+  const range = domain?.ranges?.[field] ?? { max: 150, min: 60 }
+  return resolveAvatarSeededInteger(seed, field, range.min, range.max)
 }
 
 const FACE_PRESETS: readonly AvatarFacePreset[] = [DEFAULT_AVATAR_FACE_PRESET, ...AVATAR_FACE_PRESETS]

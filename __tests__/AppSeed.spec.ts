@@ -16,8 +16,10 @@ import type { Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import App from '../src/App'
+import { getAvatarBearBreedTemplate, resolveAvatarBearBreedTemplate } from '../src/avatarBreedTemplates'
 import { AvatarLocaleProvider } from '../src/avatarLocale'
 import { avatarDefinitionToSearchParams, avatarDefinitionToState, createAvatarDefinition } from '../src/avatarDefinition'
+import { getAvatarAnimalBreedTemplate, resolveAvatarAnimalBreedTemplate } from '../src/avatarSpeciesBreeds'
 import {
   applyDogHeadScale,
   createAvatarEntityParts,
@@ -25,8 +27,11 @@ import {
   serializeAvatarEntityParts
 } from '../src/avatarEntityPresets'
 import {
+  AVATAR_ANIMAL_SPECIES_SEED_FIELDS,
   AVATAR_SEED_FIELD,
   AVATAR_SEED_FIELDS,
+  getAvatarSeedFieldEntityPreset,
+  isAvatarAnimalSpeciesId,
   resolveSeededAvatarEntityPreset,
   resolveSeededAvatarFacePreset,
   serializeAvatarSeedFields
@@ -83,6 +88,30 @@ afterEach(() => {
 })
 
 describe('App Seed authoring', () => {
+  it('adjusts and reloads a standalone ellipse bottom taper through its shared URL', async () => {
+    window.history.replaceState(null, '', '/?shape=ellipse&bottomTaper=42&seed=v1-taper')
+    await renderApp()
+    act(() => host.querySelector<HTMLButtonElement>('#avatar-controls-tab-body')?.click())
+    await flushEffects()
+
+    const taper = host.querySelector<HTMLInputElement>('[aria-label="Body bottom taper"]')
+    expect(taper?.value).toBe('42')
+    act(() => {
+      const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')?.set
+      setter?.call(taper, '79')
+      taper?.dispatchEvent(new Event('input', { bubbles: true }))
+    })
+    await flushEffects()
+    expect(new URLSearchParams(window.location.search).get('bottomTaper')).toBe('79')
+
+    act(() => root.unmount())
+    root = createRoot(host)
+    await renderApp()
+    act(() => host.querySelector<HTMLButtonElement>('#avatar-controls-tab-body')?.click())
+    await flushEffects()
+    expect(host.querySelector<HTMLInputElement>('[aria-label="Body bottom taper"]')?.value).toBe('79')
+  })
+
   it('replaces stale optional eye overrides when selecting a complete face preset', async () => {
     window.history.replaceState(null, '', '/?eyeH=54&eyeLeftH=68&eyeRightH=42&eyeLeftW=34&eyeRightW=14&eyeLeftRot=21&eyeRightRot=-19')
     await renderApp()
@@ -100,7 +129,9 @@ describe('App Seed authoring', () => {
 
   it('serializes the Mixed signal preset as independently vertical and horizontal eyes', async () => {
     await renderApp()
-    act(() => host.querySelector<HTMLButtonElement>('[aria-label="More presets"]')?.click())
+    act(() => host.querySelector<HTMLButtonElement>(
+      '[aria-label="Face presets"] [aria-label="More presets"]'
+    )?.click())
     await flushEffects()
     act(() => Array.from(host.querySelectorAll<HTMLButtonElement>('button'))
       .find(button => button.getAttribute('aria-label') === 'Mixed signal')?.click())
@@ -122,22 +153,13 @@ describe('App Seed authoring', () => {
 
     const params = new URLSearchParams(window.location.search)
     const entity = params.get('entity')
-    const expectedFields = AVATAR_SEED_FIELDS.filter(field => (
-      entity === 'cat'
-        ? field !== AVATAR_SEED_FIELD.dogEarWidth &&
-          field !== AVATAR_SEED_FIELD.dogEarHeight &&
-          field !== AVATAR_SEED_FIELD.dogHeadWidth &&
-          field !== AVATAR_SEED_FIELD.dogHeadHeight
-        : entity === 'dog'
-          ? field !== AVATAR_SEED_FIELD.catEarWidth && field !== AVATAR_SEED_FIELD.catEarHeight
-          : field !== AVATAR_SEED_FIELD.catEarWidth &&
-            field !== AVATAR_SEED_FIELD.catEarHeight &&
-            field !== AVATAR_SEED_FIELD.dogEarWidth &&
-            field !== AVATAR_SEED_FIELD.dogEarHeight &&
-            field !== AVATAR_SEED_FIELD.dogHeadWidth &&
-            field !== AVATAR_SEED_FIELD.dogHeadHeight &&
-            !field.startsWith('scene.appearance.coatPattern.')
-    ))
+    const supportsCoat = entity === 'cat' || entity === 'dog' || entity === 'rabbit' ||
+      entity === 'bear' || isAvatarAnimalSpeciesId(entity)
+    const expectedFields = AVATAR_SEED_FIELDS.filter(field => {
+      const owner = getAvatarSeedFieldEntityPreset(field)
+      if (owner != null && owner !== entity) return false
+      return supportsCoat || !field.startsWith('scene.appearance.coatPattern.')
+    })
     expect(params.get('seedFields')).toBe(serializeAvatarSeedFields(expectedFields))
     expect(entity).not.toBeNull()
     expect(params.get('palette')).not.toBeNull()
@@ -323,6 +345,122 @@ describe('App Seed authoring', () => {
     expect(new URLSearchParams(window.location.search).get('entity')).toBe('cat')
   })
 
+  it('restores the complete Fox scene and keeps its 3D markings in the shared URL', async () => {
+    window.history.replaceState(
+      null,
+      '',
+      '/?entity=rabbit&breed=lionhead-rabbit&rabbitEarWidth=112&rabbitHeadWidth=115&coat=1&seed=v1-fox-scene'
+    )
+    await renderApp()
+
+    act(() => host.querySelector<HTMLButtonElement>('[data-entity-preset="fox"]')?.click())
+    await flushEffects()
+
+    const params = new URLSearchParams(window.location.search)
+    const decals = JSON.parse(params.get('decals') ?? '[]') as unknown[][]
+    expect(params.get('entity')).toBe('fox')
+    expect(params.get('palette')).toBe('red-fox')
+    expect(params.get('cameraBg')).toBe('#173d35')
+    expect(params.get('noseShape')).toBe('inverted-triangle')
+    expect(params.get('coat')).toBe('0')
+    expect(params.get('seedFields')).toBeNull()
+    expect(params.has('breed')).toBe(false)
+    expect(params.has('rabbitEarWidth')).toBe(false)
+    expect(params.has('rabbitHeadWidth')).toBe(false)
+    expect(decals.map(decal => decal[0])).toEqual([
+      'fox-inner-ear-left',
+      'fox-inner-ear-right',
+      'fox-cheek-left',
+      'fox-cheek-right'
+    ])
+    expect(host.querySelector('[data-avatar-surface-decal="fox-cheek-left"]')).not.toBeNull()
+
+    act(() => host.querySelector<HTMLButtonElement>('#avatar-controls-tab-body')?.click())
+    await flushEffects()
+    const foxTaper = host.querySelector<HTMLInputElement>('[aria-label="Part bottom taper"]')
+    expect(foxTaper?.value).toBe('52')
+    act(() => {
+      const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')?.set
+      setter?.call(foxTaper, '83')
+      foxTaper?.dispatchEvent(new Event('input', { bubbles: true }))
+    })
+    await flushEffects()
+    const adjustedParams = new URLSearchParams(window.location.search)
+    expect(deserializeAvatarEntityParts(adjustedParams.get('entityParts'), 'fox')
+      .find(part => part.id === 'fox-head')?.bottomTaper).toBe(83)
+
+    const authoredScene = [
+      'palette',
+      'bg',
+      'cameraBg',
+      'yaw',
+      'pitch',
+      'eyeGap',
+      'eyeLeftRot',
+      'eyeRightRot',
+      'noseShape',
+      'noseY'
+    ].map(key => [key, params.get(key)] as const)
+    const authoredParts = deserializeAvatarEntityParts(adjustedParams.get('entityParts'), 'fox')
+      .map(({ id, shape, baseColor, bottomTaper, highlightColor, shadowColor, foregroundColor }) => ({
+        id,
+        shape,
+        baseColor,
+        bottomTaper,
+        highlightColor,
+        shadowColor,
+        foregroundColor
+      }))
+
+    act(() => root.unmount())
+    root = createRoot(host)
+    await renderApp()
+
+    const reloaded = new URLSearchParams(window.location.search)
+    expect(authoredScene.map(([key]) => [key, reloaded.get(key)] as const)).toEqual(authoredScene)
+    expect(deserializeAvatarEntityParts(reloaded.get('entityParts'), 'fox')
+      .map(({ id, shape, baseColor, bottomTaper, highlightColor, shadowColor, foregroundColor }) => ({
+        id,
+        shape,
+        baseColor,
+        bottomTaper,
+        highlightColor,
+        shadowColor,
+        foregroundColor
+      }))).toEqual(authoredParts)
+    expect((JSON.parse(reloaded.get('decals') ?? '[]') as unknown[][])
+      .map(decal => decal.slice(0, 12))).toEqual(decals.map(decal => decal.slice(0, 12)))
+    expect(host.querySelector('[data-avatar-surface-decal="fox-cheek-left"]')).not.toBeNull()
+  })
+
+  it.each(['red-fox', 'arctic-fox', 'silver-fox', 'fennec-fox'] as const)(
+    'restores the authored side-view composition and real markings from a bare %s link',
+    async breed => {
+      window.history.replaceState(null, '', `/?entity=fox&breed=${breed}&seed=v1-${breed}-bare`)
+      await renderApp()
+
+      const params = new URLSearchParams(window.location.search)
+      expect(params.get('breed')).toBe(breed)
+      expect(params.get('palette')).toBe(breed)
+      expect(params.get('yaw')).toBe('0.2109')
+      expect(params.get('pitch')).toBe('-0.2928')
+      expect(params.get('roll')).toBe('0.424')
+      expect(params.get('positionX')).toBe('-83.4663')
+      expect(params.get('positionY')).toBe('95.6374')
+      expect(params.get('scale')).toBe('1.7697')
+      expect(host.querySelector('[data-avatar-surface-decal="fox-cheek-left"]')).not.toBeNull()
+
+      if (breed === 'red-fox') {
+        expect(params.get('eyeGap')).toBe('54')
+        expect(params.get('eyeH')).toBe('37')
+        expect(params.get('eyeW')).toBe('21')
+        expect(params.get('noseW')).toBe('24')
+        expect(params.get('noseH')).toBe('17')
+        expect(params.get('noseY')).toBe('39')
+      }
+    }
+  )
+
   it('applies a Cat type as a deterministic Seed constraint profile', async () => {
     window.history.replaceState(null, '', '/?entity=cat&seed=v1-siamese-a')
     await renderApp()
@@ -356,6 +494,32 @@ describe('App Seed authoring', () => {
       palette: rerolled.get('palette'),
       shape: rerolled.get('coatLightPatchShape')
     }).toEqual(fixed)
+  })
+
+  it('preserves unrelated Seed bindings when selecting a constrained Cat breed', async () => {
+    const unrelatedFields = [
+      AVATAR_SEED_FIELD.facePreset,
+      AVATAR_SEED_FIELD.backgroundStyle,
+      AVATAR_SEED_FIELD.cameraBackground,
+      AVATAR_SEED_FIELD.viewPose
+    ]
+    window.history.replaceState(
+      null,
+      '',
+      `/?entity=cat&seed=v1-siamese-keep-fields&seedFields=${serializeAvatarSeedFields(unrelatedFields)}`
+    )
+    await renderApp()
+
+    act(() => host.querySelector<HTMLButtonElement>('[data-cat-breed="siamese"]')?.click())
+    await flushEffects()
+
+    const selected = new URLSearchParams(window.location.search)
+    const seededFields = selected.get('seedFields')?.split(',') ?? []
+    expect(selected.get('breed')).toBe('siamese')
+    expect(seededFields).toContain(AVATAR_SEED_FIELD.coatPatternLightPatchLength)
+    expect(seededFields).toContain(AVATAR_SEED_FIELD.coatPatternLightPatchWidth)
+    for (const field of unrelatedFields) expect(seededFields).toContain(field)
+    expect(seededFields).not.toContain(AVATAR_SEED_FIELD.palette)
   })
 
   it('applies a Dog type as a deterministic constrained profile with Dog-only ear fields', async () => {
@@ -395,6 +559,469 @@ describe('App Seed authoring', () => {
       palette: rerolled.get('palette'),
       shape: rerolled.get('coatLightPatchShape')
     }).toEqual(fixed)
+  })
+
+  it('applies a Rabbit type as a deterministic constrained profile with Rabbit-only 3D size fields', async () => {
+    window.history.replaceState(null, '', '/?entity=rabbit&seed=v1-holland-lop-a')
+    await renderApp()
+    act(() => host.querySelector<HTMLButtonElement>('[data-rabbit-breed="holland-lop"]')?.click())
+    await flushEffects()
+
+    const selected = new URLSearchParams(window.location.search)
+    expect(selected.get('entity')).toBe('rabbit')
+    expect(selected.get('breed')).toBe('holland-lop')
+    expect(selected.get('palette')).toBe('holland-lop')
+    expect(selected.get('seedFields')).toContain(AVATAR_SEED_FIELD.rabbitEarWidth)
+    expect(selected.get('seedFields')).toContain(AVATAR_SEED_FIELD.rabbitEarHeight)
+    expect(selected.get('seedFields')).toContain(AVATAR_SEED_FIELD.rabbitHeadWidth)
+    expect(selected.get('seedFields')).not.toContain(AVATAR_SEED_FIELD.catEarWidth)
+    expect(selected.get('seedFields')).not.toContain(AVATAR_SEED_FIELD.dogEarWidth)
+    expect(Number(selected.get('rabbitEarWidth'))).toBeGreaterThanOrEqual(108)
+    expect(Number(selected.get('rabbitEarWidth'))).toBeLessThanOrEqual(128)
+    expect(Number(selected.get('rabbitHeadWidth'))).toBeGreaterThanOrEqual(106)
+    expect(Number(selected.get('rabbitHeadWidth'))).toBeLessThanOrEqual(118)
+
+    const fixed = {
+      palette: selected.get('palette'),
+      style: deserializeAvatarEntityParts(selected.get('entityParts'), 'rabbit').find(part => part.id === 'ear-left')?.shape
+    }
+    act(() => host.querySelector<HTMLButtonElement>('[aria-label="Generate random Seed"]')?.click())
+    await flushEffects()
+    const rerolled = new URLSearchParams(window.location.search)
+    expect(rerolled.get('breed')).toBe('holland-lop')
+    expect(rerolled.get('palette')).toBe(fixed.palette)
+    expect(deserializeAvatarEntityParts(rerolled.get('entityParts'), 'rabbit').find(part => part.id === 'ear-left')?.shape)
+      .toBe(fixed.style)
+  })
+
+  it('round-trips Bear-only virtual dimensions without leaking them into other species', async () => {
+    window.history.replaceState(null, '', '/?entity=bear&breed=giant-panda&bearEarWidth=112&bearEarHeight=108&bearHeadWidth=116&bearHeadHeight=104&seed=v1-bear-url')
+    await renderApp()
+    const bear = new URLSearchParams(window.location.search)
+    expect(bear.get('entity')).toBe('bear')
+    expect(bear.get('breed')).toBe('giant-panda')
+    expect(bear.get('bearHeadWidth')).toBe('116')
+    expect(bear.get('bearEarHeight')).toBe('108')
+    expect(bear.get('seedFields') ?? '').not.toContain(AVATAR_SEED_FIELD.rabbitHeadWidth)
+  })
+
+  it('applies a Bear type as a deterministic constrained profile with Bear-only 3D size fields', async () => {
+    window.history.replaceState(null, '', '/?entity=bear&seed=v1-giant-panda-a')
+    await renderApp()
+    act(() => host.querySelector<HTMLButtonElement>('[data-bear-breed="giant-panda"]')?.click())
+    await flushEffects()
+
+    const selected = new URLSearchParams(window.location.search)
+    expect(selected.get('entity')).toBe('bear')
+    expect(selected.get('breed')).toBe('giant-panda')
+    expect(selected.get('palette')).toBe('giant-panda')
+    expect(selected.get('seedFields')).toContain(AVATAR_SEED_FIELD.bearEarWidth)
+    expect(selected.get('seedFields')).toContain(AVATAR_SEED_FIELD.bearHeadWidth)
+    expect(selected.get('seedFields')).not.toContain(AVATAR_SEED_FIELD.catEarWidth)
+    expect(selected.get('seedFields')).not.toContain(AVATAR_SEED_FIELD.dogEarWidth)
+    expect(selected.get('seedFields')).not.toContain(AVATAR_SEED_FIELD.rabbitEarWidth)
+    expect(Number(selected.get('bearEarWidth'))).toBeGreaterThanOrEqual(108)
+    expect(Number(selected.get('bearEarWidth'))).toBeLessThanOrEqual(128)
+    expect(Number(selected.get('bearHeadWidth'))).toBeGreaterThanOrEqual(108)
+    expect(Number(selected.get('bearHeadWidth'))).toBeLessThanOrEqual(124)
+
+    act(() => host.querySelector<HTMLButtonElement>('[aria-label="Generate random Seed"]')?.click())
+    await flushEffects()
+    const rerolled = new URLSearchParams(window.location.search)
+    expect(rerolled.get('breed')).toBe('giant-panda')
+    expect(rerolled.get('palette')).toBe('giant-panda')
+    expect(Number(rerolled.get('bearEarWidth'))).toBeGreaterThanOrEqual(108)
+    expect(Number(rerolled.get('bearEarWidth'))).toBeLessThanOrEqual(128)
+    expect(Number(rerolled.get('bearHeadWidth'))).toBeGreaterThanOrEqual(108)
+    expect(Number(rerolled.get('bearHeadWidth'))).toBeLessThanOrEqual(124)
+    expect(deserializeAvatarEntityParts(rerolled.get('entityParts'), 'bear').find(part => part.id === 'ear-left')?.baseColor)
+      .toBe('#24272a')
+  })
+
+  it('restores the Koala vertical nose from a bare breed link and keeps it after rerolling', async () => {
+    window.history.replaceState(null, '', '/?entity=bear&breed=koala&seed=v1-koala-nose')
+    await renderApp()
+
+    const selected = new URLSearchParams(window.location.search)
+    expect(selected.get('palette')).toBe('koala')
+    expect(selected.get('nose')).toBe('1')
+    expect(selected.get('noseShape')).toBe('ellipse')
+    expect(selected.get('noseW')).toBe('32')
+    expect(selected.get('noseH')).toBe('42')
+    expect(selected.get('noseY')).toBe('30')
+
+    act(() => host.querySelector<HTMLButtonElement>('[aria-label="Generate random Seed"]')?.click())
+    await flushEffects()
+    const rerolled = new URLSearchParams(window.location.search)
+    expect(rerolled.get('nose')).toBe('1')
+    expect(rerolled.get('noseShape')).toBe('ellipse')
+    expect(rerolled.get('noseW')).toBe('32')
+    expect(rerolled.get('noseH')).toBe('42')
+  })
+
+  it('preserves manually authored Koala nose overrides in a complete shared link', async () => {
+    window.history.replaceState(null, '', '/?entity=bear&breed=koala&nose=1&noseShape=rounded&noseW=24&noseH=36&noseY=27')
+    await renderApp()
+    const selected = new URLSearchParams(window.location.search)
+    expect(selected.get('noseShape')).toBe('rounded')
+    expect(selected.get('noseW')).toBe('24')
+    expect(selected.get('noseH')).toBe('36')
+    expect(selected.get('noseY')).toBe('27')
+  })
+
+  it('keeps the Koala anatomical nose while independently randomizing its eyes', async () => {
+    window.history.replaceState(
+      null,
+      '',
+      '/?entity=bear&breed=koala&seed=v1-koala-face&seedFields=scene.face.preset'
+    )
+    await renderApp()
+
+    for (let iteration = 0; iteration < 3; iteration += 1) {
+      const params = new URLSearchParams(window.location.search)
+      expect(params.get('nose')).toBe('1')
+      expect(params.get('noseShape')).toBe('ellipse')
+      expect(params.get('noseW')).toBe('32')
+      expect(params.get('noseH')).toBe('42')
+      expect(params.get('noseY')).toBe('30')
+
+      act(() => host.querySelector<HTMLButtonElement>('[aria-label="Generate random Seed"]')?.click())
+      await flushEffects()
+    }
+  })
+
+  it('keeps the real Pig snout visible when facial expressions follow Seed', async () => {
+    window.history.replaceState(
+      null,
+      '',
+      '/?entity=pig&breed=pink-pig&seed=v1-pig-face&seedFields=scene.face.preset'
+    )
+    await renderApp()
+
+    for (let iteration = 0; iteration < 3; iteration += 1) {
+      const params = new URLSearchParams(window.location.search)
+      expect(params.get('nose')).toBe('0')
+      expect(params.get('mouth')).toBe('0')
+      expect(host.querySelector('[data-avatar-entity-part="snout"]')).not.toBeNull()
+
+      act(() => host.querySelector<HTMLButtonElement>('[aria-label="Generate random Seed"]')?.click())
+      await flushEffects()
+    }
+  })
+
+  it.each([
+    ['pig', 'spotted-pig'],
+    ['deer', 'sika-deer'],
+    ['deer', 'deer-fawn']
+  ] as const)('restores the natural curved markings from a bare %s breed link', async (species, id) => {
+    window.history.replaceState(null, '', `/?entity=${species}&breed=${id}&seed=v1-${id}-bare`)
+    await renderApp()
+
+    const selected = new URLSearchParams(window.location.search)
+    expect(selected.get('palette')).toBe(id)
+    expect(selected.get('coat')).toBe('1')
+    expect(host.querySelector(`[data-avatar-surface-decal^="coat-${species}-spots-"]`)).not.toBeNull()
+  })
+
+  it.each([
+    ['fox', 'fennec-fox'],
+    ['hamster', 'pudding-hamster'],
+    ['capybara', 'dark-capybara'],
+    ['otter', 'sea-otter'],
+    ['pig', 'spotted-pig'],
+    ['deer', 'reindeer'],
+    ['sheep', 'horned-ram']
+  ] as const)('applies and restores a constrained %s breed with species-specific Seed fields', async (species, id) => {
+    window.history.replaceState(null, '', `/?entity=${species}&seed=v1-${id}-editor`)
+    await renderApp()
+    act(() => host.querySelector<HTMLButtonElement>(`[data-animal-breed="${id}"]`)?.click())
+    await flushEffects()
+
+    const selected = new URLSearchParams(window.location.search)
+    const template = getAvatarAnimalBreedTemplate(species, id)!
+    expect(selected.get('entity')).toBe(species)
+    expect(selected.get('breed')).toBe(id)
+    expect(selected.get('palette')).toBe(id)
+    expect(Number(selected.get(`${species}HeadWidth`))).toBeGreaterThan(0)
+    expect(Number(selected.get(`${species}EarHeight`))).toBeGreaterThan(0)
+
+    const follows = selected.get('seedFields')?.split(',') ?? []
+    for (const field of template.followByDefault) expect(follows).toContain(field)
+    for (const field of follows) {
+      const owner = getAvatarSeedFieldEntityPreset(field)
+      if (owner != null) expect(owner).toBe(species)
+    }
+    if (species === 'pig') {
+      expect(selected.get('nose')).toBe('0')
+      expect(selected.get('coat')).toBe('1')
+    }
+    if (species === 'fox') {
+      expect(host.querySelector('[data-avatar-surface-decal="fox-cheek-left"]')).not.toBeNull()
+      expect(Number(selected.get('foxEarHeight'))).toBeGreaterThanOrEqual(163)
+      expect(selected.get('decals')).not.toBeNull()
+    }
+    if (species === 'deer') expect(selected.get('deerAntlerSize')).not.toBeNull()
+    if (species === 'sheep') expect(selected.get('sheepHornSize')).not.toBeNull()
+
+    act(() => host.querySelector<HTMLButtonElement>('[aria-label="Generate random Seed"]')?.click())
+    await flushEffects()
+    const rerolled = new URLSearchParams(window.location.search)
+    expect(rerolled.get('breed')).toBe(id)
+    expect(rerolled.get('palette')).toBe(id)
+
+    act(() => root.unmount())
+    root = createRoot(host)
+    await renderApp()
+    const restored = new URLSearchParams(window.location.search)
+    expect(restored.get('breed')).toBe(id)
+    expect(restored.get('palette')).toBe(id)
+    expect(restored.get(`${species}HeadWidth`)).toBe(rerolled.get(`${species}HeadWidth`))
+  })
+
+  it('freezes a manually adjusted new-species head width while keeping breed colors and horns fixed', async () => {
+    window.history.replaceState(null, '', '/?entity=deer&seed=v1-deer-manual')
+    await renderApp()
+    act(() => host.querySelector<HTMLButtonElement>('[data-animal-breed="reindeer"]')?.click())
+    await flushEffects()
+
+    const slider = host.querySelector<HTMLInputElement>('[aria-label="Deer head width"]')
+    expect(slider).not.toBeNull()
+    act(() => {
+      const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')?.set
+      setter?.call(slider, '109')
+      slider?.dispatchEvent(new Event('input', { bubbles: true }))
+    })
+    await flushEffects()
+    const manual = new URLSearchParams(window.location.search)
+    expect(manual.get('deerHeadWidth')).toBe('109')
+    expect(manual.get('seedFields') ?? '').not.toContain(AVATAR_ANIMAL_SPECIES_SEED_FIELDS.deer.headWidth)
+
+    act(() => host.querySelector<HTMLButtonElement>('[aria-label="Generate random Seed"]')?.click())
+    await flushEffects()
+    const rerolled = new URLSearchParams(window.location.search)
+    expect(rerolled.get('deerHeadWidth')).toBe('109')
+    expect(rerolled.get('palette')).toBe('reindeer')
+    expect(deserializeAvatarEntityParts(rerolled.get('entityParts'), 'deer')
+      .filter(part => part.id.startsWith('antler-'))).toHaveLength(8)
+  })
+
+  it('clears previous-species dimensions and Seed followers when switching between new animal types', async () => {
+    window.history.replaceState(null, '', '/?entity=hamster&seed=v1-species-switch')
+    await renderApp()
+    act(() => host.querySelector<HTMLButtonElement>('[data-animal-breed="syrian-hamster"]')?.click())
+    await flushEffects()
+    expect(new URLSearchParams(window.location.search).get('seedFields')).toContain(
+      AVATAR_ANIMAL_SPECIES_SEED_FIELDS.hamster.headWidth
+    )
+
+    act(() => host.querySelector<HTMLButtonElement>('[data-entity-preset="pig"]')?.click())
+    await flushEffects()
+    const pig = new URLSearchParams(window.location.search)
+    expect(pig.get('entity')).toBe('pig')
+    expect(pig.get('hamsterHeadWidth')).toBeNull()
+    expect(pig.get('breed')).toBeNull()
+    expect(pig.get('seedFields') ?? '').not.toContain('hamster')
+  })
+
+  it('restores legible Spectacled Bear facial colors from legacy links and preserves them across Seed rerolls', async () => {
+    const template = getAvatarBearBreedTemplate('spectacled-bear')!
+    const legacyParts = resolveAvatarBearBreedTemplate(template, 'v1-spectacled-legacy').entityParts.map(part => (
+      part.face ? { ...part, foregroundColor: getAvatarPalette('spectacled-bear').foreground } : part
+    ))
+    const params = new URLSearchParams({
+      breed: 'spectacled-bear',
+      coat: '1',
+      entity: 'bear',
+      entityParts: serializeAvatarEntityParts(legacyParts),
+      palette: 'spectacled-bear',
+      seed: 'v1-spectacled-legacy',
+      seedFields: `${AVATAR_SEED_FIELD.bearHeadWidth},${AVATAR_SEED_FIELD.palette}`
+    })
+    window.history.replaceState(null, '', `/?${params.toString()}`)
+    await renderApp()
+
+    const restored = new URLSearchParams(window.location.search)
+    expect(deserializeAvatarEntityParts(restored.get('entityParts'), 'bear').find(part => part.face)?.foregroundColor)
+      .toBe('#241711')
+    expect(host.querySelector('.interactive-avatar__canvas path[fill="#241711"]')).not.toBeNull()
+
+    act(() => host.querySelector<HTMLButtonElement>('[aria-label="Generate random Seed"]')?.click())
+    await flushEffects()
+    const rerolled = new URLSearchParams(window.location.search)
+    expect(deserializeAvatarEntityParts(rerolled.get('entityParts'), 'bear').find(part => part.face)?.foregroundColor)
+      .toBe('#241711')
+
+    act(() => root.unmount())
+    root = createRoot(host)
+    await renderApp()
+    const reloaded = new URLSearchParams(window.location.search)
+    expect(deserializeAvatarEntityParts(reloaded.get('entityParts'), 'bear').find(part => part.face)?.foregroundColor)
+      .toBe('#241711')
+  })
+
+  it('preserves manually authored Spectacled Bear facial colors while upgrading the old default', async () => {
+    const template = getAvatarBearBreedTemplate('spectacled-bear')!
+    const customizedParts = resolveAvatarBearBreedTemplate(template, 'v1-spectacled-custom').entityParts.map(part => (
+      part.face ? { ...part, foregroundColor: '#753923' } : part
+    ))
+    const params = new URLSearchParams({
+      breed: 'spectacled-bear',
+      coat: '1',
+      entity: 'bear',
+      entityParts: serializeAvatarEntityParts(customizedParts),
+      palette: 'spectacled-bear',
+      seed: 'v1-spectacled-custom'
+    })
+    window.history.replaceState(null, '', `/?${params.toString()}`)
+    await renderApp()
+
+    const restored = new URLSearchParams(window.location.search)
+    expect(deserializeAvatarEntityParts(restored.get('entityParts'), 'bear').find(part => part.face)?.foregroundColor)
+      .toBe('#753923')
+  })
+
+  it('clears Bear-only Seed bindings and concrete dimensions when switching animal types', async () => {
+    window.history.replaceState(null, '', '/?entity=bear&seed=v1-bear-switch')
+    await renderApp()
+    act(() => host.querySelector<HTMLButtonElement>('[data-bear-breed="giant-panda"]')?.click())
+    await flushEffects()
+    expect(new URLSearchParams(window.location.search).get('bearHeadWidth')).not.toBeNull()
+
+    act(() => host.querySelector<HTMLButtonElement>('[data-entity-preset="dog"]')?.click())
+    await flushEffects()
+    const params = new URLSearchParams(window.location.search)
+    expect(params.get('entity')).toBe('dog')
+    expect(params.get('seedFields') ?? '').not.toContain(AVATAR_SEED_FIELD.bearEarWidth)
+    expect(params.get('seedFields') ?? '').not.toContain(AVATAR_SEED_FIELD.bearHeadWidth)
+    expect(params.has('bearEarWidth')).toBe(false)
+    expect(params.has('bearEarHeight')).toBe(false)
+    expect(params.has('bearHeadWidth')).toBe(false)
+    expect(params.has('bearHeadHeight')).toBe(false)
+  })
+
+  it('freezes an independently edited Bear head width across Seed rerolls and URL reloads', async () => {
+    window.history.replaceState(null, '', '/?entity=bear&seed=v1-giant-panda-head')
+    await renderApp()
+    act(() => host.querySelector<HTMLButtonElement>('[data-bear-breed="giant-panda"]')?.click())
+    await flushEffects()
+    expect(new URLSearchParams(window.location.search).get('seedFields')).toContain(AVATAR_SEED_FIELD.bearHeadWidth)
+
+    act(() => {
+      const width = host.querySelector<HTMLInputElement>('[aria-label="Bear head width"]')
+      const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')?.set
+      setter?.call(width, '126')
+      width?.dispatchEvent(new Event('input', { bubbles: true }))
+      width?.dispatchEvent(new Event('change', { bubbles: true }))
+    })
+    await flushEffects()
+
+    const manual = new URLSearchParams(window.location.search)
+    expect(manual.get('breed')).toBe('giant-panda')
+    expect(manual.get('bearHeadWidth')).toBe('126')
+    expect(manual.get('seedFields')).not.toContain(AVATAR_SEED_FIELD.bearHeadWidth)
+    expect(manual.get('seedFields')).toContain(AVATAR_SEED_FIELD.bearEarWidth)
+
+    act(() => host.querySelector<HTMLButtonElement>('[aria-label="Generate random Seed"]')?.click())
+    await flushEffects()
+    const rerolled = new URLSearchParams(window.location.search)
+    expect(rerolled.get('bearHeadWidth')).toBe('126')
+    const head = deserializeAvatarEntityParts(rerolled.get('entityParts'), 'bear').find(part => part.face)
+
+    act(() => root.unmount())
+    root = createRoot(host)
+    await renderApp()
+    const reloaded = new URLSearchParams(window.location.search)
+    expect(reloaded.get('bearHeadWidth')).toBe('126')
+    expect(deserializeAvatarEntityParts(reloaded.get('entityParts'), 'bear').find(part => part.face)).toEqual(head)
+  })
+
+  it('clears Rabbit-only Seed bindings when switching to another entity type', async () => {
+    const seededFields = serializeAvatarSeedFields([
+      AVATAR_SEED_FIELD.rabbitEarWidth,
+      AVATAR_SEED_FIELD.rabbitEarHeight,
+      AVATAR_SEED_FIELD.rabbitHeadWidth,
+      AVATAR_SEED_FIELD.rabbitHeadHeight,
+      AVATAR_SEED_FIELD.facePreset
+    ])
+    window.history.replaceState(null, '', `/?entity=rabbit&seed=v1-rabbit-switch&seedFields=${seededFields}`)
+    await renderApp()
+    act(() => host.querySelector<HTMLButtonElement>('[data-entity-preset="dog"]')?.click())
+    await flushEffects()
+    const params = new URLSearchParams(window.location.search)
+    expect(params.get('entity')).toBe('dog')
+    expect(params.get('seedFields')).not.toContain(AVATAR_SEED_FIELD.rabbitEarWidth)
+    expect(params.get('seedFields')).not.toContain(AVATAR_SEED_FIELD.rabbitEarHeight)
+    expect(params.get('seedFields')).not.toContain(AVATAR_SEED_FIELD.rabbitHeadWidth)
+    expect(params.get('seedFields')).not.toContain(AVATAR_SEED_FIELD.rabbitHeadHeight)
+    expect(params.has('rabbitEarWidth')).toBe(false)
+    expect(params.has('rabbitHeadWidth')).toBe(false)
+  })
+
+  it('clears Rabbit profile dimensions when switching directly from Rabbit to Cat', async () => {
+    window.history.replaceState(null, '', '/?entity=rabbit&seed=v1-rabbit-cat-switch')
+    await renderApp()
+    act(() => host.querySelector<HTMLButtonElement>('[data-rabbit-breed="lionhead-rabbit"]')?.click())
+    await flushEffects()
+    expect(new URLSearchParams(window.location.search).get('rabbitHeadWidth')).not.toBeNull()
+
+    const rabbit = new URLSearchParams(window.location.search)
+    rabbit.set('breed', 'siamese')
+    rabbit.set('entity', 'cat')
+    act(() => root.unmount())
+    window.history.replaceState(null, '', `/?${rabbit.toString()}`)
+    root = createRoot(host)
+    await renderApp()
+    const params = new URLSearchParams(window.location.search)
+    expect(params.get('entity')).toBe('cat')
+    expect(params.get('breed')).toBe('siamese')
+    expect(params.has('rabbitEarWidth')).toBe(false)
+    expect(params.has('rabbitEarHeight')).toBe(false)
+    expect(params.has('rabbitHeadWidth')).toBe(false)
+    expect(params.has('rabbitHeadHeight')).toBe(false)
+  })
+
+  it('freezes an independently edited Rabbit head width across Seed rerolls and URL reloads', async () => {
+    window.history.replaceState(null, '', '/?entity=rabbit&seed=v1-lionhead-head')
+    await renderApp()
+    act(() => host.querySelector<HTMLButtonElement>('[data-rabbit-breed="lionhead-rabbit"]')?.click())
+    await flushEffects()
+
+    const selected = new URLSearchParams(window.location.search)
+    expect(selected.get('seedFields')).toContain(AVATAR_SEED_FIELD.rabbitHeadWidth)
+    expect(selected.get('seedFields')).toContain(AVATAR_SEED_FIELD.rabbitHeadHeight)
+
+    act(() => {
+      const width = host.querySelector<HTMLInputElement>('[aria-label="Rabbit head width"]')
+      const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')?.set
+      setter?.call(width, '126')
+      width?.dispatchEvent(new Event('input', { bubbles: true }))
+      width?.dispatchEvent(new Event('change', { bubbles: true }))
+    })
+    await flushEffects()
+
+    const manual = new URLSearchParams(window.location.search)
+    expect(manual.get('breed')).toBe('lionhead-rabbit')
+    expect(manual.get('rabbitHeadWidth')).toBe('126')
+    expect(manual.get('seedFields')).not.toContain(AVATAR_SEED_FIELD.rabbitHeadWidth)
+    expect(manual.get('seedFields')).toContain(AVATAR_SEED_FIELD.rabbitHeadHeight)
+
+    act(() => host.querySelector<HTMLButtonElement>('[aria-label="Generate random Seed"]')?.click())
+    await flushEffects()
+    const rerolled = new URLSearchParams(window.location.search)
+    expect(rerolled.get('rabbitHeadWidth')).toBe('126')
+    const head = deserializeAvatarEntityParts(rerolled.get('entityParts'), 'rabbit')
+      .find(part => part.id === 'primary')
+    expect(head?.scaleX).toBeCloseTo(.72 * 1.26)
+
+    act(() => root.unmount())
+    root = createRoot(host)
+    await renderApp()
+    const reloaded = new URLSearchParams(window.location.search)
+    expect(reloaded.get('rabbitHeadWidth')).toBe('126')
+    expect(reloaded.get('rabbitHeadHeight')).toBe(rerolled.get('rabbitHeadHeight'))
+    expect(deserializeAvatarEntityParts(reloaded.get('entityParts'), 'rabbit')
+      .find(part => part.id === 'primary')).toEqual(head)
+    expect(reloaded.get('seedFields')).toBe(rerolled.get('seedFields'))
   })
 
   it('freezes an independently edited Dog head width across Seed rerolls and URL reloads', async () => {
@@ -821,6 +1448,73 @@ describe('App Seed authoring', () => {
     expect(new URLSearchParams(window.location.search).get('seedFields')).toBe('scene.face.preset')
   })
 
+  it('restores a saved Bear profile, its real dimensions, and its Seed-following fields', async () => {
+    persistSavedAvatarPresets([{
+      createdAt: Date.now(),
+      id: 'bear-preset',
+      query: '?entity=bear&breed=giant-panda&palette=giant-panda&bearEarWidth=118&bearEarHeight=110&bearHeadWidth=120&bearHeadHeight=112&seed=v1-panda-preset&seedFields=scene.entity.bearEarWidth,scene.entity.bearHeadWidth',
+      screenshot: 'data:image/png;base64,AA==',
+      version: 1
+    }])
+    await renderApp()
+
+    act(() => host.querySelector<HTMLButtonElement>('[aria-label^="Restore preset saved"]')?.click())
+    await flushEffects()
+    const restored = new URLSearchParams(window.location.search)
+    expect(restored.get('entity')).toBe('bear')
+    expect(restored.get('breed')).toBe('giant-panda')
+    expect(restored.get('palette')).toBe('giant-panda')
+    expect(restored.get('bearEarHeight')).toBe('110')
+    expect(restored.get('bearHeadHeight')).toBe('112')
+    expect(restored.get('seedFields')).toContain(AVATAR_SEED_FIELD.bearEarWidth)
+    expect(restored.get('seedFields')).toContain(AVATAR_SEED_FIELD.bearHeadWidth)
+  })
+
+  it.each([
+    ['fox', 'arctic-fox', 0],
+    ['pig', 'spotted-pig', 0],
+    ['deer', 'reindeer', 8],
+    ['sheep', 'horned-ram', 8]
+  ] as const)('restores a saved %s breed with its real geometry and constrained Seed', async (species, id, hornCount) => {
+    const template = getAvatarAnimalBreedTemplate(species, id)!
+    const resolved = resolveAvatarAnimalBreedTemplate(template, `v1-${id}-saved`)
+    const params = new URLSearchParams({
+      breed: id,
+      entity: species,
+      entityParts: serializeAvatarEntityParts(resolved.entityParts),
+      palette: id,
+      seed: `v1-${id}-saved`,
+      seedFields: template.followByDefault.join(','),
+      [`${species}EarWidth`]: String(resolved.earWidth),
+      [`${species}HeadHeight`]: String(resolved.headHeight),
+      [`${species}HeadWidth`]: String(resolved.headWidth)
+    })
+    persistSavedAvatarPresets([{
+      createdAt: Date.now(),
+      id: `${id}-saved`,
+      query: `?${params.toString()}`,
+      screenshot: 'data:image/png;base64,AA==',
+      version: 1
+    }])
+    await renderApp()
+
+    act(() => host.querySelector<HTMLButtonElement>('[aria-label^="Restore preset saved"]')?.click())
+    await flushEffects()
+    const restored = new URLSearchParams(window.location.search)
+    expect(restored.get('entity')).toBe(species)
+    expect(restored.get('breed')).toBe(id)
+    expect(restored.get('palette')).toBe(id)
+    expect(restored.get(`${species}HeadHeight`)).toBe(String(resolved.headHeight))
+    for (const field of template.followByDefault) {
+      expect(restored.get('seedFields')?.split(',')).toContain(field)
+    }
+    expect(deserializeAvatarEntityParts(restored.get('entityParts'), species)
+      .filter(part => /^(?:antler|horn)-(?:left|right)/u.test(part.id))).toHaveLength(hornCount)
+    if (species === 'fox') {
+      expect(host.querySelector('[data-avatar-surface-decal="fox-cheek-left"]')).not.toBeNull()
+    }
+  })
+
   it('cancels a Seed draft with Escape without committing it', async () => {
     await renderApp()
     const seedInput = host.querySelector<HTMLInputElement>('[aria-label="Current Seed"]')
@@ -1211,6 +1905,106 @@ describe('App Seed authoring', () => {
     expect(onDefinitionChange).not.toHaveBeenCalled()
     expect(host.querySelector<HTMLInputElement>('[aria-label="Dog head width"]')?.value).toBe('124')
     expect(host.querySelector<HTMLInputElement>('[aria-label="Dog head height"]')?.value).toBe('88')
+  })
+
+  it('restores an embedded Bear profile and its actual dimensions without emitting a pseudo-change', async () => {
+    const base = createDefaultAvatarDefinition()
+    const seed = 'v1-embedded-giant-panda'
+    const resolved = resolveAvatarBearBreedTemplate(getAvatarBearBreedTemplate('giant-panda')!, seed)
+    const definition: AvatarDefinition = {
+      ...base,
+      metadata: {
+        generation: {
+          fields: [AVATAR_SEED_FIELD.bearEarWidth, AVATAR_SEED_FIELD.bearHeadWidth],
+          profileId: 'giant-panda',
+          seed,
+          version: 1
+        }
+      },
+      scene: {
+        ...base.scene,
+        appearance: {
+          ...base.scene.appearance,
+          coatPattern: resolved.coatPattern,
+          paletteId: 'giant-panda'
+        },
+        entity: {
+          ...base.scene.entity,
+          parts: resolved.entityParts,
+          preset: 'bear'
+        }
+      }
+    }
+    expect(isAvatarDefinition(definition)).toBe(true)
+    const onDefinitionChange = vi.fn<(next: AvatarDefinition) => void>()
+    await act(async () => {
+      root.render(createElement(
+        AvatarLocaleProvider,
+        { initialLocale: 'en', persist: false },
+        createElement(App, { definition, embedded: true, onDefinitionChange })
+      ))
+    })
+    await flushEffects()
+
+    expect(onDefinitionChange).not.toHaveBeenCalled()
+    expect(host.querySelector('[data-bear-breed="giant-panda"]')?.getAttribute('aria-pressed')).toBe('true')
+    expect(host.querySelector<HTMLInputElement>('[aria-label="Bear ear width"]')?.value)
+      .toBe(String(resolved.bearEarWidth))
+    expect(host.querySelector<HTMLInputElement>('[aria-label="Bear head width"]')?.value)
+      .toBe(String(resolved.bearHeadWidth))
+  })
+
+  it.each([
+    ['fox', 'fennec-fox'],
+    ['pig', 'spotted-pig'],
+    ['deer', 'reindeer'],
+    ['sheep', 'horned-ram']
+  ] as const)('restores an embedded %s breed without changing its real geometry or Seed state', async (species, id) => {
+    const base = createDefaultAvatarDefinition()
+    const seed = `v1-embedded-${id}`
+    const template = getAvatarAnimalBreedTemplate(species, id)!
+    const resolved = resolveAvatarAnimalBreedTemplate(template, seed)
+    const definition: AvatarDefinition = {
+      ...base,
+      metadata: {
+        generation: {
+          fields: [...template.followByDefault],
+          profileId: id,
+          seed,
+          version: 1
+        }
+      },
+      scene: {
+        ...base.scene,
+        appearance: {
+          ...base.scene.appearance,
+          coatPattern: resolved.coatPattern,
+          paletteId: id
+        },
+        decals: resolved.surfaceDecals ?? base.scene.decals,
+        entity: {
+          ...base.scene.entity,
+          parts: resolved.entityParts,
+          preset: species
+        },
+        face: resolved.faceStyle
+      }
+    }
+    expect(isAvatarDefinition(definition)).toBe(true)
+    const onDefinitionChange = vi.fn<(next: AvatarDefinition) => void>()
+    await act(async () => {
+      root.render(createElement(
+        AvatarLocaleProvider,
+        { initialLocale: 'en', persist: false },
+        createElement(App, { definition, embedded: true, onDefinitionChange })
+      ))
+    })
+    await flushEffects()
+
+    expect(onDefinitionChange).not.toHaveBeenCalled()
+    expect(host.querySelector(`[data-animal-breed="${id}"]`)?.getAttribute('aria-pressed')).toBe('true')
+    expect(host.querySelector<HTMLInputElement>(`[aria-label="${species[0]!.toUpperCase()}${species.slice(1)} head width"]`)?.value)
+      .toBe(String(resolved.headWidth))
   })
 
   it('preserves an unknown future Cat profile as an embedded authoring hint', async () => {

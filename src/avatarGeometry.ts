@@ -19,6 +19,7 @@ export const AVATAR_BODY_SHAPES = [
 export type AvatarBodyShape = (typeof AVATAR_BODY_SHAPES)[number]
 
 export interface AvatarBodyGeometryOptions {
+  readonly bottomTaper?: number
   readonly cutAngle?: number
   readonly faceOffsetY?: number
   readonly hollow?: boolean
@@ -268,6 +269,18 @@ const SHAPE_SPECS: Readonly<Record<AvatarBodyShape, ShapeSpec>> = {
 const clamp = (value: number, min: number, max: number) => Math.min(Math.max(value, min), max)
 const signedPow = (value: number, exponent: number) => Math.sign(value) * Math.abs(value) ** exponent
 
+const resolveEllipseLowerTaper = (
+  spec: ShapeSpec,
+  vertical: number,
+  options: AvatarBodyGeometryOptions
+) => {
+  if (spec !== SHAPE_SPECS.ellipse) return 1
+
+  // Keep the profile convex and its lower pole rounded rather than collapsing into a sharp V.
+  const intensity = clamp(options.bottomTaper ?? 0, 0, 100) / 100
+  return 1 - intensity * .62 * Math.max(vertical, 0) ** 2
+}
+
 const subtract = (left: Vec3, right: Vec3): Vec3 => ({
   x: left.x - right.x,
   y: left.y - right.y,
@@ -402,11 +415,13 @@ const getSurfacePoint = (
   const scaledLatitude = latitude * scale
   const latitudeRadius = Math.max(Math.cos(scaledLatitude), 0)
   const latitudeFactor = latitudeRadius ** spec.exponent
+  const vertical = signedPow(Math.sin(scaledLatitude), spec.exponent)
+  const lowerTaper = resolveEllipseLowerTaper(spec, vertical, options)
 
   return {
-    x: spec.radiusX * latitudeFactor * signedPow(Math.sin(scaledLongitude), spec.exponent),
-    y: spec.radiusY * signedPow(Math.sin(scaledLatitude), spec.exponent),
-    z: spec.radiusZ * latitudeFactor * signedPow(Math.cos(scaledLongitude), spec.exponent)
+    x: spec.radiusX * latitudeFactor * lowerTaper * signedPow(Math.sin(scaledLongitude), spec.exponent),
+    y: spec.radiusY * vertical,
+    z: spec.radiusZ * latitudeFactor * lowerTaper * signedPow(Math.cos(scaledLongitude), spec.exponent)
   }
 }
 
@@ -817,7 +832,15 @@ const buildMouthBoundary = (
     .map(point => rotateFacePoint(point, centerX, centerY, rotationDegrees))
 }
 
-const getFacePoint = (spec: ShapeSpec, point: Vec2): Vec3 => {
+const getFacePoint = (
+  spec: ShapeSpec,
+  point: Vec2,
+  options: AvatarBodyGeometryOptions = {}
+): Vec3 => {
+  if (spec === SHAPE_SPECS.ellipse && (options.bottomTaper ?? 0) > 0) {
+    const surfacePoint = getShapeFacePoint(spec, point, options)
+    return { ...surfacePoint, z: surfacePoint.z + .8 }
+  }
   const normalizedRadius = Math.min(
     point.x ** 2 / spec.radiusX ** 2 + point.y ** 2 / spec.radiusY ** 2,
     0.98
@@ -827,8 +850,15 @@ const getFacePoint = (spec: ShapeSpec, point: Vec2): Vec3 => {
   return { x: point.x, y: point.y, z: depth + 0.8 }
 }
 
-const getFaceNormal = (spec: ShapeSpec, point: Vec2): Vec3 => {
-  const surfacePoint = getFacePoint(spec, point)
+const getFaceNormal = (
+  spec: ShapeSpec,
+  point: Vec2,
+  options: AvatarBodyGeometryOptions = {}
+): Vec3 => {
+  if (spec === SHAPE_SPECS.ellipse && (options.bottomTaper ?? 0) > 0) {
+    return getShapeFaceNormal(spec, point, options)
+  }
+  const surfacePoint = getFacePoint(spec, point, options)
   return normalize({
     x: point.x / spec.radiusX ** 2,
     y: point.y / spec.radiusY ** 2,
@@ -909,14 +939,15 @@ const getShapeFacePoint = (
 
   const latitude = Math.asin(clamp(inverseSignedPow(normalizedY, spec.exponent), -.995, .995))
   const latitudeFactor = Math.max(Math.cos(latitude), 0) ** spec.exponent
+  const lowerTaper = resolveEllipseLowerTaper(spec, normalizedY, options)
   const longitude = Math.asin(clamp(inverseSignedPow(
-    point.x / Math.max(spec.radiusX * latitudeFactor, .001),
+    point.x / Math.max(spec.radiusX * latitudeFactor * lowerTaper, .001),
     spec.exponent
   ), -.995, .995))
   return {
-    x: spec.radiusX * latitudeFactor * signedPow(Math.sin(longitude), spec.exponent),
+    x: spec.radiusX * latitudeFactor * lowerTaper * signedPow(Math.sin(longitude), spec.exponent),
     y: spec.radiusY * signedPow(Math.sin(latitude), spec.exponent),
-    z: spec.radiusZ * latitudeFactor * signedPow(Math.cos(longitude), spec.exponent)
+    z: spec.radiusZ * latitudeFactor * lowerTaper * signedPow(Math.cos(longitude), spec.exponent)
   }
 }
 
@@ -1102,10 +1133,10 @@ export const projectDefaultFace = (
     centerY: number,
     boundary: readonly Vec2[]
   ): ProjectedEye | null => {
-    const centerNormal = transformFaceNormal(getFaceNormal(spec, { x: centerX, y: centerY }))
+    const centerNormal = transformFaceNormal(getFaceNormal(spec, { x: centerX, y: centerY }, options))
     if (centerNormal.z <= 0.015) return null
 
-    const projectedBoundary = boundary.map(point => project(transformFacePoint(getFacePoint(spec, point))))
+    const projectedBoundary = boundary.map(point => project(transformFacePoint(getFacePoint(spec, point, options))))
     return {
       depth: clamp(centerNormal.z, 0, 1),
       id,
@@ -1260,7 +1291,7 @@ export const projectAvatarSurfaceDecal = (
     }), options), pose)
   }
   const getLiftedSurfacePoint = (point: Vec2) => {
-    if (decal.side === 'face') return getFacePoint(spec, point)
+    if (decal.side === 'face') return getFacePoint(spec, point, options)
     const surfacePoint = getShapeFacePoint(spec, point, options)
     const surfaceNormal = getShapeFaceNormal(spec, point, options)
     return {
@@ -1340,7 +1371,7 @@ export const projectAvatarSurfaceDecal = (
     }
   }
   const centerNormal = transformNormal(decal.side === 'face'
-    ? getFaceNormal(spec, { x: decal.x, y: decal.y })
+    ? getFaceNormal(spec, { x: decal.x, y: decal.y }, options)
     : getShapeFaceNormal(spec, { x: decal.x, y: decal.y }, options))
   if (centerNormal.z <= 0.015) return null
   const boundary = decal.shape === 'ellipse'

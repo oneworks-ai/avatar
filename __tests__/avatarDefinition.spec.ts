@@ -22,13 +22,40 @@ import {
 } from '../src/avatarDefinition'
 import {
   AVATAR_BUILT_IN_ENTITY_PRESETS,
+  applyDeerAntlerSize,
+  applyDeerAntlerStyle,
+  applyFoxEarScale,
+  applyFoxEarStyle,
+  applyFoxHeadScale,
+  applyFoxHeadTaper,
+  applySheepHornSize,
+  applySheepHornStyle,
   createAvatarEntityParts,
+  createFoxSurfaceDecals,
   deserializeAvatarEntityParts,
   getAvatarEntityPresetFaceStyle,
   getAvatarEntityPresetScene
 } from '../src/avatarEntityPresets'
 import { DEFAULT_AVATAR_FACE_STYLE } from '../src/avatarGeometry'
 describe('Avatar editor public definition bridge', () => {
+  it('round-trips reusable standalone ellipse taper through the public scene and shared URL', () => {
+    const original = createDefaultAvatarDefinition()
+    const tapered = createAvatarDefinition({
+      ...avatarDefinitionToState(original),
+      bodyBottomTaper: 74,
+      bodyShape: 'ellipse'
+    }, original)
+
+    expect(tapered.scene.appearance.bottomTaper).toBe(74)
+    expect(avatarDefinitionToState(tapered).bodyBottomTaper).toBe(74)
+    expect(avatarDefinitionToSearchParams(tapered).get('bottomTaper')).toBe('74')
+    expect(parseAvatarDefinition(tapered)).toEqual(tapered)
+    const { bodyBottomTaper: _omitted, ...previousState } = avatarDefinitionToState(tapered)
+    expect(createAvatarDefinition(previousState, tapered).scene.appearance.bottomTaper).toBe(74)
+    expect(createAvatarDefinition(avatarDefinitionToState(original), original).scene.appearance)
+      .not.toHaveProperty('bottomTaper')
+  })
+
   it('preserves a previous coat pattern when the current state omits the optional field', () => {
     const base = createDefaultAvatarDefinition()
     const previous = {
@@ -102,6 +129,76 @@ describe('Avatar editor public definition bridge', () => {
 
       expect(parseAvatarDefinition(definition), `${preset} should stay public-valid`).toEqual(definition)
     }
+  })
+
+  it('preserves configurable three-dimensional antlers and curled horns through strict definitions and sharing', () => {
+    const base = createDefaultAvatarDefinition()
+
+    for (const { parts, preset } of [
+      {
+        parts: applyDeerAntlerSize(applyDeerAntlerStyle(createAvatarEntityParts('deer'), 'reindeer'), 132),
+        preset: 'deer'
+      },
+      {
+        parts: applySheepHornSize(applySheepHornStyle(createAvatarEntityParts('sheep'), 'curled'), 128),
+        preset: 'sheep'
+      }
+    ] as const) {
+      const definition = createAvatarDefinition({
+        ...avatarDefinitionToState(base),
+        entityParts: parts,
+        entityPreset: preset,
+        faceStyle: getAvatarEntityPresetFaceStyle(preset)!
+      }, base)
+
+      expect(parseAvatarDefinition(definition), `${preset} geometry must remain strict SDK-valid`).toEqual(definition)
+      const restored = deserializeAvatarEntityParts(
+        avatarDefinitionToSearchParams(definition).get('entityParts'),
+        preset
+      )
+      expect(restored.map(part => part.id)).toEqual(parts.map(part => part.id))
+      expect(restored.map(({ id, rotationZ, scaleX, scaleY, scaleZ, x, y, z }) => ({
+        id, rotationZ, scaleX, scaleY, scaleZ, x, y, z
+      }))).toEqual(parts.map(({ id, rotationZ, scaleX, scaleY, scaleZ, x, y, z }) => ({
+        id, rotationZ: rotationZ ?? 0, scaleX, scaleY, scaleZ: scaleZ ?? Math.min(scaleX, scaleY), x, y, z
+      })))
+    }
+  })
+
+  it('round-trips independently styled fox anatomy and attached surface markings through sharing', () => {
+    const base = createDefaultAvatarDefinition()
+    const parts = applyFoxHeadTaper(
+      applyFoxHeadScale(
+        applyFoxEarScale(applyFoxEarStyle(createAvatarEntityParts('fox'), 'rounded'), 72, 70),
+        84,
+        90
+      ),
+      24
+    )
+    const decals = createFoxSurfaceDecals({
+      cheekColor: '#ffffff',
+      cheekScale: 112,
+      innerEarColor: '#f2d3d0',
+      innerEarScale: 78
+    })
+    const definition = createAvatarDefinition({
+      ...avatarDefinitionToState(base),
+      entityParts: parts,
+      entityPreset: 'fox',
+      faceStyle: getAvatarEntityPresetFaceStyle('fox')!,
+      surfaceDecals: decals
+    }, base)
+
+    expect(parseAvatarDefinition(definition)).toEqual(definition)
+    expect(createAvatarDefinition(avatarDefinitionToState(definition), definition)).toEqual(definition)
+
+    const params = avatarDefinitionToSearchParams(definition)
+    const restored = deserializeAvatarEntityParts(params.get('entityParts'), 'fox')
+    expect(restored.find(part => part.id === 'fox-head')?.bottomTaper).toBe(24)
+    expect(restored.find(part => part.id === 'fox-ear-left')?.roundness).toBe(78)
+    expect(params.get('decals')).toContain('fox-cheek-left')
+    expect(params.get('decals')).toContain('#f2d3d0')
+    expect(definition.scene.decals).toEqual(decals)
   })
 
   it('keeps every built-in animation parseable for default and authored entity faces', () => {

@@ -323,6 +323,7 @@ export const Avatar = forwardRef<AvatarHandle, AvatarProps>(function Avatar({
         avatarShadowStyle={scene.effects.avatarShadow}
         backgroundStyle={scene.appearance.backgroundStyle}
         bodyShape={scene.appearance.bodyShape}
+        bottomTaper={scene.appearance.bottomTaper}
         colorGrade={scene.effects.colorGrade}
         entityParts={scene.entity.parts}
         entityPreset={scene.entity.preset}

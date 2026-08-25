@@ -3,13 +3,44 @@ import { describe, expect, it } from 'vitest'
 import { getAvatarPalette } from '@oneworks/avatar'
 
 import {
+  AVATAR_BUILT_IN_ENTITY_PRESETS,
+  applyCapybaraHeadScale,
   applyCatEarScale,
+  applyDeerAntlerSize,
+  applyDeerAntlerStyle,
+  applyDeerHeadScale,
+  applyFoxEarScale,
+  applyFoxEarStyle,
+  applyFoxHeadScale,
+  applyFoxHeadTaper,
+  applyHamsterEarScale,
+  applyHamsterHeadScale,
+  applyOtterHeadScale,
+  applyPigHeadScale,
+  applySheepHeadScale,
+  applySheepHornSize,
+  applySheepHornStyle,
   applyAvatarEntityPalette,
   createAvatarEntityParts,
+  createFoxSurfaceDecals,
+  deserializeAvatarEntityParts,
+  FOX_EAR_SCALE_RANGE,
+  FOX_HEAD_SCALE_RANGE,
+  FOX_HEAD_TAPER_RANGE,
   getCatEarScale,
+  getDeerAntlerSize,
+  getFoxEarScale,
+  getFoxEarStyle,
+  getFoxHeadScale,
+  getFoxHeadTaper,
+  getHamsterEarScale,
+  getHamsterHeadScale,
+  getSheepHornSize,
   getAvatarEntityPresetFaceStyle,
   getAvatarEntityPresetScene,
-  hasMultipleAvatarEntityMaterials
+  hasMultipleAvatarEntityMaterials,
+  resolveAvatarEntityPresetFaceStyle,
+  serializeAvatarEntityParts
 } from '../src/avatarEntityPresets'
 import { DEFAULT_AVATAR_FACE_STYLE } from '../src/avatarGeometry'
 
@@ -26,7 +57,7 @@ describe('built-in entity preset scenes', () => {
   })
 
   it('gives every built-in entity a distinct complete camera composition', () => {
-    const presets = ['cloud', 'sun', 'cat', 'dog', 'bear', 'rabbit', 'bun'] as const
+    const presets = ['cloud', 'sun', 'cat', 'dog', 'bear', 'rabbit', 'fox', 'bun'] as const
     const scenes = presets.map(preset => {
       const scene = getAvatarEntityPresetScene(preset)
       expect(scene).not.toBeNull()
@@ -38,6 +69,19 @@ describe('built-in entity preset scenes', () => {
 
     expect(new Set(scenes.map(scene => scene.cameraBackground)).size).toBe(scenes.length)
     expect(new Set(scenes.map(scene => JSON.stringify(scene.viewState))).size).toBe(scenes.length)
+  })
+
+  it('composes every built-in character off-center from an oblique viewing angle', () => {
+    AVATAR_BUILT_IN_ENTITY_PRESETS.forEach(preset => {
+      const scene = getAvatarEntityPresetScene(preset)
+
+      expect(scene, `${preset} must own a complete authored scene`).not.toBeNull()
+      expect(scene!.viewState.positionX, `${preset} must not be horizontally centered`).not.toBe(0)
+      expect(
+        Math.hypot(scene!.viewState.yaw, scene!.viewState.pitch),
+        `${preset} must not face the camera straight on`
+      ).toBeGreaterThan(0)
+    })
   })
 
   it('keeps the custom entity on the generic preview scene', () => {
@@ -165,6 +209,291 @@ describe('built-in entity preset scenes', () => {
     expect(bun.surfaceDecals).not.toBe(secondBun.surfaceDecals)
     expect(bun.surfaceDecals[0]).not.toBe(secondBun.surfaceDecals[0])
     expect(face.eyeHighlight).not.toBe(getAvatarEntityPresetFaceStyle('bun')!.eyeHighlight)
+  })
+
+  it('builds the fox from true pointed ears and paired face-attached cream markings', () => {
+    const scene = getAvatarEntityPresetScene('fox')!
+    const face = getAvatarEntityPresetFaceStyle('fox')!
+    const parts = createAvatarEntityParts('fox')
+
+    expect(scene).toMatchObject({
+      cameraBackground: '#173d35',
+      cameraMode: true,
+      paletteId: 'red-fox',
+      viewState: {
+        pitch: -.2928,
+        positionX: -83.4663,
+        positionY: 95.6374,
+        roll: .424,
+        scale: 1.7697,
+        yaw: .2109
+      }
+    })
+    expect(parts).toMatchObject([
+      { face: false, id: 'fox-ear-left', occludedByFace: true, shape: 'cone', x: -68 },
+      { face: false, id: 'fox-ear-right', occludedByFace: true, shape: 'cone', x: 68 },
+      { bottomTaper: 52, face: true, id: 'fox-head', shape: 'ellipse' }
+    ])
+    expect(scene.surfaceDecals).toMatchObject([
+      { id: 'fox-inner-ear-left', shape: 'rounded-triangle', targetPartId: 'fox-ear-left' },
+      { id: 'fox-inner-ear-right', shape: 'rounded-triangle', targetPartId: 'fox-ear-right' },
+      { id: 'fox-cheek-left', shape: 'rounded-triangle', side: 'face', targetPartId: 'fox-head' },
+      { id: 'fox-cheek-right', shape: 'rounded-triangle', side: 'face', targetPartId: 'fox-head' }
+    ])
+    expect(face).toMatchObject({ mouthEnabled: false, noseEnabled: true, noseShape: 'inverted-triangle' })
+    expect(applyAvatarEntityPalette(parts, getAvatarPalette('red-fox'))).toEqual(parts)
+  })
+
+  it('scales true three-dimensional fox ears independently for large-eared and short-eared breeds', () => {
+    const original = createAvatarEntityParts('fox')
+    const fennec = applyFoxEarScale(applyFoxEarStyle(original, 'fennec'), 162, 178)
+    const arctic = applyFoxEarScale(applyFoxEarStyle(original, 'rounded'), 72, 70)
+    const originalEar = original.find(part => part.id === 'fox-ear-left')!
+    const fennecEar = fennec.find(part => part.id === 'fox-ear-left')!
+    const arcticEar = arctic.find(part => part.id === 'fox-ear-left')!
+
+    expect(FOX_EAR_SCALE_RANGE).toEqual({ min: 55, max: 195 })
+    expect(FOX_HEAD_SCALE_RANGE).toEqual({ min: 74, max: 134 })
+    expect(getFoxEarScale(fennec)).toEqual({ height: 178, width: 162 })
+    expect(getFoxEarScale(arctic)).toEqual({ height: 70, width: 72 })
+    expect(getFoxEarStyle(fennec)).toBe('fennec')
+    expect(getFoxEarStyle(arctic)).toBe('rounded')
+    expect(getFoxEarStyle(original)).toBe('pointed')
+    expect(fennecEar.scaleX).toBeGreaterThan(originalEar.scaleX * 1.6)
+    expect(fennecEar.scaleY).toBeGreaterThan(originalEar.scaleY * 1.7)
+    expect(arcticEar.roundness).toBeGreaterThan(originalEar.roundness!)
+    expect(arcticEar.scaleY).toBeLessThan(originalEar.scaleY)
+    expect(fennec.find(part => part.face)).toEqual(original.find(part => part.face))
+    expect(arctic.find(part => part.face)).toEqual(original.find(part => part.face))
+  })
+
+  it('reattaches styled fox ears when its smooth tapered three-dimensional head changes size', () => {
+    const original = createAvatarEntityParts('fox')
+    const rounded = applyFoxEarScale(applyFoxEarStyle(original, 'rounded'), 74, 72)
+    const compact = applyFoxHeadTaper(applyFoxHeadScale(rounded, 82, 88), 24)
+    const wider = applyFoxHeadScale(compact, 122, 112)
+    const head = wider.find(part => part.id === 'fox-head')!
+    const left = wider.find(part => part.id === 'fox-ear-left')!
+    const right = wider.find(part => part.id === 'fox-ear-right')!
+
+    expect(getFoxHeadScale(compact)).toEqual({ height: 88, width: 82 })
+    expect(getFoxHeadScale(wider)).toEqual({ height: 112, width: 122 })
+    expect(getFoxEarScale(wider)).toEqual({ height: 72, width: 74 })
+    expect(getFoxEarStyle(wider)).toBe('rounded')
+    expect(left.x).toBeCloseTo(head.x - 62 * 1.22)
+    expect(right.x).toBeCloseTo(head.x + 62 * 1.22)
+    expect(left.y).toBeCloseTo(head.y + (-72 - 17) * 1.12)
+    expect(right.y).toBeCloseTo(left.y)
+    expect(getFoxHeadTaper(compact)).toBe(24)
+    expect(getFoxHeadTaper(wider)).toBe(24)
+    expect(getFoxHeadTaper(applyFoxHeadTaper(original, -50))).toBe(FOX_HEAD_TAPER_RANGE.min)
+    expect(getFoxHeadTaper(applyFoxHeadTaper(original, 500))).toBe(FOX_HEAD_TAPER_RANGE.max)
+    expect(getFoxHeadTaper(original)).toBe(52)
+    expect(getAvatarEntityPresetScene('fox')!.viewState.positionX).toBe(-83.4663)
+  })
+
+  it('preserves authored fox markings by default and safely specializes attached cheeks and inner ears', () => {
+    const authored = getAvatarEntityPresetScene('fox')!.surfaceDecals
+    const original = createFoxSurfaceDecals()
+    const arctic = createFoxSurfaceDecals({
+      cheekColor: '#ffffff',
+      cheekScale: 118,
+      innerEarColor: '#f2d3d0',
+      innerEarScale: 76
+    })
+
+    expect(original).toEqual(authored)
+    expect(original).not.toBe(authored)
+    expect(original[0]).not.toBe(authored[0])
+    expect(arctic.find(decal => decal.id === 'fox-cheek-left')).toMatchObject({
+      color: '#ffffff',
+      height: 156,
+      targetPartId: 'fox-head',
+      width: 151
+    })
+    expect(arctic.find(decal => decal.id === 'fox-inner-ear-right')).toMatchObject({
+      color: '#f2d3d0',
+      height: 82,
+      targetPartId: 'fox-ear-right',
+      width: 58
+    })
+    expect(createFoxSurfaceDecals({ cheekColor: 'invalid', cheekScale: 999 })[2]).toMatchObject({
+      color: '#fff8ec',
+      height: 191,
+      targetPartId: 'fox-head',
+      width: 186
+    })
+    expect(getAvatarEntityPresetScene('fox')!.surfaceDecals).toEqual(authored)
+  })
+
+  it('builds a hamster with real rounded ears and raised three-dimensional cheeks', () => {
+    const scene = getAvatarEntityPresetScene('hamster')!
+    const face = getAvatarEntityPresetFaceStyle('hamster')!
+    const parts = createAvatarEntityParts('hamster')
+
+    expect(scene.paletteId).toBe('syrian-hamster')
+    expect(parts).toMatchObject([
+      { face: false, id: 'ear-left', occludedByFace: true, shape: 'ellipse' },
+      { face: false, id: 'ear-right', occludedByFace: true, shape: 'ellipse' },
+      { face: true, id: 'primary', shape: 'ellipse' },
+      { face: false, id: 'cheek-left', shape: 'ellipse', z: 44 },
+      { face: false, id: 'cheek-right', shape: 'ellipse', z: 44 }
+    ])
+    expect(face).toMatchObject({ noseEnabled: true, noseHeight: 10, noseShape: 'ellipse', noseWidth: 14 })
+
+    const scaledEars = applyHamsterEarScale(parts, 112, 92)
+    const scaledHead = applyHamsterHeadScale(scaledEars, 120, 110)
+
+    expect(getHamsterEarScale(scaledHead)).toEqual({ height: 92, width: 112 })
+    expect(getHamsterHeadScale(scaledHead)).toEqual({ height: 110, width: 120 })
+    expect(scaledHead.find(part => part.id === 'ear-left')?.x).toBeCloseTo(-80.4)
+    expect(scaledHead.find(part => part.id === 'cheek-left')?.x).toBeCloseTo(-72)
+  })
+
+  it('keeps capybara and otter muzzles as raised three-dimensional head attachments', () => {
+    for (const { applyHeadScale, preset, shape } of [
+      { applyHeadScale: applyCapybaraHeadScale, preset: 'capybara', shape: 'trapezoid' },
+      { applyHeadScale: applyOtterHeadScale, preset: 'otter', shape: 'ellipse' }
+    ] as const) {
+      const parts = createAvatarEntityParts(preset)
+      const head = parts.find(part => part.face)!
+      const muzzle = parts.find(part => part.id === 'muzzle')!
+      const scaled = applyHeadScale(parts, 120, 112)
+      const scaledMuzzle = scaled.find(part => part.id === 'muzzle')!
+
+      expect(head.shape).toBe(shape)
+      expect(muzzle).toMatchObject({ face: false, shape: 'capsule' })
+      expect(muzzle.z).toBeGreaterThan(head.z)
+      expect(muzzle.scaleZ).toBeGreaterThan(0)
+      expect(scaled.find(part => part.id === 'ear-left')!.x).toBeLessThan(parts.find(part => part.id === 'ear-left')!.x)
+      expect(scaledMuzzle.y).toBeGreaterThan(muzzle.y)
+    }
+  })
+
+  it('builds a projecting pig snout and two independent depth-sorted nostrils', () => {
+    const parts = createAvatarEntityParts('pig')
+    const snout = parts.find(part => part.id === 'snout')!
+    const nostrils = parts.filter(part => part.id.startsWith('nostril-'))
+
+    expect(snout).toMatchObject({ face: false, shape: 'ellipse', z: 62 })
+    expect(nostrils).toHaveLength(2)
+    expect(nostrils.every(part => part.shape === 'ellipse' && part.z > snout.z && (part.scaleZ ?? 0) > 0)).toBe(true)
+    expect(getAvatarEntityPresetFaceStyle('pig')?.noseEnabled).toBe(false)
+
+    const scaled = applyPigHeadScale(parts, 120, 112)
+    expect(scaled.find(part => part.id === 'nostril-left')?.x).toBeCloseTo(-25.2)
+    expect(scaled.find(part => part.id === 'nostril-right')?.x).toBeCloseTo(25.2)
+    expect(scaled.find(part => part.id === 'snout')!.y).toBeGreaterThan(snout.y)
+  })
+
+  it('authors removable, branched, scalable deer antlers that stay attached to the head', () => {
+    const parts = createAvatarEntityParts('deer')
+    const antlers = parts.filter(part => part.id.startsWith('antler-'))
+    expect(antlers).toHaveLength(6)
+    expect(antlers.every(part => part.shape === 'capsule' && (part.scaleZ ?? 0) > 0)).toBe(true)
+    expect(parts.find(part => part.face)).toMatchObject({ bottomTaper: 24, shape: 'ellipse' })
+
+    const none = applyDeerAntlerStyle(parts, 'none')
+    expect(none.some(part => part.id.startsWith('antler-'))).toBe(false)
+    expect(applyDeerAntlerStyle(none, 'spike').filter(part => part.id.startsWith('antler-'))).toHaveLength(2)
+    expect(applyDeerAntlerStyle(none, 'forked').filter(part => part.id.startsWith('antler-'))).toHaveLength(4)
+    expect(applyDeerAntlerStyle(none, 'branched').filter(part => part.id.startsWith('antler-'))).toHaveLength(6)
+
+    const reindeer = applyDeerAntlerStyle(none, 'reindeer')
+    expect(reindeer.filter(part => part.id.startsWith('antler-'))).toHaveLength(8)
+    expect(reindeer.find(part => part.id === 'antler-left-branch-3')?.scaleZ).toBeGreaterThan(0)
+
+    const resized = applyDeerAntlerSize(reindeer, 125)
+    expect(getDeerAntlerSize(resized)).toBe(125)
+    expect(resized.find(part => part.id === 'antler-left-branch-3')!.x)
+      .toBeLessThan(reindeer.find(part => part.id === 'antler-left-branch-3')!.x)
+
+    const scaledHead = applyDeerHeadScale(resized, 120, 110)
+    expect(scaledHead.find(part => part.id === 'antler-left')!.x)
+      .toBeLessThan(resized.find(part => part.id === 'antler-left')!.x)
+    expect(scaledHead.find(part => part.id === 'antler-left-branch-3')!.x)
+      .toBeLessThan(resized.find(part => part.id === 'antler-left-branch-3')!.x)
+  })
+
+  it('builds sculpted three-dimensional sheep wool and optional curved, curled, or straight horns', () => {
+    const parts = createAvatarEntityParts('sheep')
+    const wool = parts.filter(part => part.id.startsWith('wool-'))
+    expect(wool).toHaveLength(5)
+    expect(wool.every(part => part.shape === 'sphere' && (part.scaleZ ?? 0) > 0)).toBe(true)
+    expect(parts.some(part => part.id.startsWith('horn-'))).toBe(false)
+
+    const curved = applySheepHornStyle(parts, 'curved')
+    const curled = applySheepHornStyle(parts, 'curled')
+    const straight = applySheepHornStyle(parts, 'straight')
+    expect(curved.filter(part => part.id.startsWith('horn-'))).toHaveLength(4)
+    expect(curled.filter(part => part.id.startsWith('horn-'))).toHaveLength(8)
+    expect(straight.filter(part => part.id.startsWith('horn-'))).toHaveLength(2)
+    expect(straight.find(part => part.id === 'horn-left')?.rotationZ).toBe(-12)
+    expect(applySheepHornStyle(curled, 'none').some(part => part.id.startsWith('horn-'))).toBe(false)
+
+    const resized = applySheepHornSize(curled, 130)
+    expect(getSheepHornSize(resized)).toBe(130)
+    const scaledHead = applySheepHeadScale(resized, 118, 110)
+    expect(scaledHead.find(part => part.id === 'horn-left')!.x)
+      .toBeLessThan(resized.find(part => part.id === 'horn-left')!.x)
+    expect(scaledHead.find(part => part.id === 'wool-side-left')!.x)
+      .toBeLessThan(parts.find(part => part.id === 'wool-side-left')!.x)
+  })
+
+  it('lets antler and horn segments inherit semantic root materials from breed palettes', () => {
+    const deer = applyAvatarEntityPalette(
+      applyDeerAntlerStyle(createAvatarEntityParts('deer'), 'reindeer'),
+      getAvatarPalette('reindeer')
+    )
+    const sheep = applyAvatarEntityPalette(
+      applySheepHornStyle(createAvatarEntityParts('sheep'), 'curled'),
+      getAvatarPalette('horned-ram')
+    )
+
+    expect(deer.find(part => part.id === 'antler-left-branch-3')?.baseColor)
+      .toBe(deer.find(part => part.id === 'antler-left')?.baseColor)
+    expect(sheep.find(part => part.id === 'horn-right-segment-3')?.baseColor)
+      .toBe(sheep.find(part => part.id === 'horn-right')?.baseColor)
+    expect(sheep.find(part => part.id === 'horn-right')?.baseColor)
+      .not.toBe(sheep.find(part => part.face)?.baseColor)
+  })
+
+  it('supports safe breed-specific face overrides without mutating the shared entity face', () => {
+    const original = getAvatarEntityPresetFaceStyle('bear')!
+    const koala = resolveAvatarEntityPresetFaceStyle('bear', {
+      noseEnabled: true,
+      noseHeight: 42,
+      noseShape: 'ellipse',
+      noseWidth: 32,
+      noseY: 30
+    })!
+
+    expect(koala).toMatchObject({ noseEnabled: true, noseHeight: 42, noseShape: 'ellipse', noseWidth: 32, noseY: 30 })
+    expect(getAvatarEntityPresetFaceStyle('bear')).toEqual(original)
+    expect(resolveAvatarEntityPresetFaceStyle('bear', {
+      noseHeight: 1000,
+      noseWidth: Number.NaN,
+      noseY: -1000
+    })).toMatchObject({ noseHeight: 48, noseWidth: original.noseWidth, noseY: -10 })
+    expect(resolveAvatarEntityPresetFaceStyle('custom', { noseEnabled: true })).toBeNull()
+  })
+
+  it('round-trips ellipse taper while leaving older part tuples untapered', () => {
+    const parts = createAvatarEntityParts('fox')
+    const serialized = serializeAvatarEntityParts(parts)
+    const tuples = JSON.parse(serialized) as unknown[][]
+
+    expect(tuples.find(tuple => tuple[0] === 'fox-head')?.[24]).toBe(52)
+    expect(deserializeAvatarEntityParts(serialized, 'fox')
+      .find(part => part.id === 'fox-head')?.bottomTaper).toBe(52)
+
+    const oldTuples = JSON.stringify(tuples.map(tuple => tuple.slice(0, 24)))
+    expect(deserializeAvatarEntityParts(oldTuples, 'fox')
+      .find(part => part.id === 'fox-head')?.bottomTaper ?? 0).toBe(0)
+
+    const invalidTuples = tuples.map(tuple => tuple[0] === 'fox-head' ? [...tuple.slice(0, 24), 160] : tuple)
+    expect(deserializeAvatarEntityParts(JSON.stringify(invalidTuples), 'fox')
+      .find(part => part.id === 'fox-head')?.bottomTaper).toBe(100)
   })
 
   it('applies a palette to every part of a multipart entity', () => {

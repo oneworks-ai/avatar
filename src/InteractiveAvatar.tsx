@@ -13,6 +13,7 @@ import {
   createAvatarEntityParts,
   getAvatarEntityPresetFaceStyle,
   getAvatarEntityPresetScene,
+  resolveAvatarEntityPresetFaceStyle,
   resolveAvatarEntityPartScaleZ
 } from './avatarEntityPresets'
 import type { AvatarEntityPart, AvatarEntityPreset } from './avatarEntityPresets'
@@ -87,6 +88,7 @@ export interface InteractiveAvatarProps {
   readonly avatarShadowStyle?: AvatarDropShadowStyle
   readonly backgroundStyle: AvatarBackgroundStyle
   readonly bodyShape: AvatarBodyShape
+  readonly bottomTaper?: number
   readonly entityParts?: readonly AvatarEntityPart[]
   readonly entityPreset?: AvatarEntityPreset
   readonly faceStyleTransitionsEnabled?: boolean
@@ -188,6 +190,7 @@ function EntityPrimitive({
 }
 
 const getEntityPartGeometryOptions = (part: AvatarEntityPart): AvatarBodyGeometryOptions => ({
+  bottomTaper: part.bottomTaper,
   cutAngle: part.cutAngle,
   hollow: part.hollow,
   occlusionAmount: part.occlusionAmount,
@@ -235,6 +238,7 @@ const buildEntityPartGeometries = (
       part.hollow ?? false,
       part.occlusionAmount ?? 0,
       part.occlusionPole ?? null,
+      part.bottomTaper ?? 0,
       part.scaleX,
       part.scaleY,
       resolveAvatarEntityPartScaleZ(part)
@@ -562,12 +566,14 @@ function EntityPresetBody({
 
 export const EntityPresetPreview = memo(function EntityPresetPreview({
   entityParts,
+  faceStyle: providedFaceStyle,
   lightDirection,
   preset,
   previewBackground,
   surfaceDecals: providedSurfaceDecals
 }: {
   readonly entityParts?: readonly AvatarEntityPart[]
+  readonly faceStyle?: Partial<AvatarFaceStyle>
   readonly lightDirection: AvatarLightDirection
   readonly preset: Exclude<AvatarEntityPreset, 'custom'>
   readonly previewBackground?: string
@@ -585,8 +591,8 @@ export const EntityPresetPreview = memo(function EntityPresetPreview({
     [entityParts, preset]
   )
   const faceStyle = useMemo(
-    () => getAvatarEntityPresetFaceStyle(preset) ?? ENTITY_PREVIEW_FACE_STYLE,
-    [preset]
+    () => resolveAvatarEntityPresetFaceStyle(preset, providedFaceStyle) ?? ENTITY_PREVIEW_FACE_STYLE,
+    [preset, providedFaceStyle]
   )
   const surfaceDecals = useMemo<ProjectedSurfaceDecal[]>(() =>
     (providedSurfaceDecals ?? scene?.surfaceDecals ?? []).flatMap(decal => {
@@ -797,6 +803,7 @@ function InteractiveAvatarComponent({
   avatarShadowStyle,
   backgroundStyle,
   bodyShape,
+  bottomTaper = 0,
   colorGrade,
   entityParts = [],
   entityPreset = 'custom',
@@ -865,13 +872,17 @@ function InteractiveAvatarComponent({
   const renderedGridDensity = dragging
     ? Math.min(resolvedGridDensity, 50)
     : resolvedGridDensity
+  const bodyGeometryOptions = useMemo<AvatarBodyGeometryOptions>(
+    () => ({ bottomTaper }),
+    [bottomTaper]
+  )
   const bodyGeometry = useMemo(
-    () => buildAvatarBodyGeometry(bodyShape, pose, lightDirection, renderedGridDensity),
-    [bodyShape, lightDirection, pose, renderedGridDensity]
+    () => buildAvatarBodyGeometry(bodyShape, pose, lightDirection, renderedGridDensity, bodyGeometryOptions),
+    [bodyGeometryOptions, bodyShape, lightDirection, pose, renderedGridDensity]
   )
   const face = useMemo(
-    () => projectDefaultFace(pose, bodyShape, animatedFaceStyle),
-    [animatedFaceStyle, bodyShape, pose]
+    () => projectDefaultFace(pose, bodyShape, animatedFaceStyle, bodyGeometryOptions),
+    [animatedFaceStyle, bodyGeometryOptions, bodyShape, pose]
   )
   const sourceEntityParts = useMemo(
     () => entityParts.length > 0 ? entityParts : createAvatarEntityParts(entityPreset),
@@ -907,7 +918,7 @@ function InteractiveAvatarComponent({
     surfaceDecals.flatMap(decal => {
       if (!usesEntityParts) {
         if (decal.targetPartId != null) return []
-        const projected = projectAvatarSurfaceDecal(pose, bodyShape, decal)
+        const projected = projectAvatarSurfaceDecal(pose, bodyShape, decal, bodyGeometryOptions)
         return projected == null ? [] : [{
           ...decal,
           path: projected.path,
@@ -930,7 +941,7 @@ function InteractiveAvatarComponent({
         targetPartId: targetPart.id,
         ...(projected.transform == null ? {} : { transform: projected.transform })
       }]
-    }), [bodyShape, entityFacePart, entityPreset, pose, sourceEntityParts, surfaceDecals, usesEntityParts])
+    }), [bodyGeometryOptions, bodyShape, entityFacePart, entityPreset, pose, sourceEntityParts, surfaceDecals, usesEntityParts])
   const surfaceMid = applyAvatarColorGrade(
     backgroundStyle === 'gradient' ? palette.gradient[1] : palette.background,
     colorGrade
@@ -1461,6 +1472,7 @@ const areInteractiveAvatarPropsEqual = (
 ) => (
   previous.backgroundStyle === next.backgroundStyle &&
   previous.bodyShape === next.bodyShape &&
+  previous.bottomTaper === next.bottomTaper &&
   previous.entityParts === next.entityParts &&
   previous.entityPreset === next.entityPreset &&
   previous.faceStyleTransitionsEnabled === next.faceStyleTransitionsEnabled &&

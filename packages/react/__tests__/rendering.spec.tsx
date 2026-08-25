@@ -7,7 +7,17 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { DEFAULT_AVATAR_COAT_PATTERN, createDefaultAvatarDefinition } from '@oneworks/avatar'
 
-import { createAvatarEntityParts } from '../../../src/avatarEntityPresets'
+import {
+  applyDeerAntlerStyle,
+  applyFoxEarScale,
+  applyFoxEarStyle,
+  applyFoxHeadScale,
+  applyFoxHeadTaper,
+  applySheepHornStyle,
+  createAvatarEntityParts,
+  createFoxSurfaceDecals,
+  resolveAvatarEntityPresetFaceStyle
+} from '../../../src/avatarEntityPresets'
 import { Avatar } from '../src'
 import type { AvatarHandle } from '../src'
 
@@ -36,6 +46,35 @@ afterEach(() => {
 })
 
 describe('OneWorks Avatar React rendering', () => {
+  it('renders configurable ellipse bottom taper from the shared public definition', () => {
+    const definition = createDefaultAvatarDefinition()
+    const ellipse = {
+      ...definition,
+      scene: {
+        ...definition.scene,
+        appearance: { ...definition.scene.appearance, bodyShape: 'ellipse' as const }
+      }
+    }
+
+    act(() => root.render(createElement(Avatar, { definition: ellipse })))
+    const untapered = host.querySelector('svg clipPath path')?.getAttribute('d')
+
+    act(() => root.render(createElement(Avatar, {
+      definition: {
+        ...ellipse,
+        scene: {
+          ...ellipse.scene,
+          appearance: { ...ellipse.scene.appearance, bottomTaper: 78 }
+        }
+      }
+    })))
+    const tapered = host.querySelector('svg clipPath path')?.getAttribute('d')
+
+    expect(untapered).toContain('M ')
+    expect(tapered).toContain('M ')
+    expect(tapered).not.toBe(untapered)
+  })
+
   it('derives procedural coat decals from the public definition', () => {
     const definition = createDefaultAvatarDefinition()
     const badge = {
@@ -86,6 +125,172 @@ describe('OneWorks Avatar React rendering', () => {
     })))
 
     expect(host.querySelectorAll('[data-avatar-surface-decal*="back-"]').length).toBeGreaterThan(0)
+  })
+
+  it('keeps fox breed ears and colored markings attached to their true three-dimensional surfaces', () => {
+    const definition = createDefaultAvatarDefinition()
+    const renderFox = (
+      parts: ReturnType<typeof createAvatarEntityParts>,
+      decals = createFoxSurfaceDecals()
+    ) => act(() => root.render(createElement(Avatar, {
+      definition: {
+        ...definition,
+        scene: {
+          ...definition.scene,
+          decals,
+          entity: { parts, preset: 'fox' },
+          view: { ...definition.scene.view, pitch: -.16, yaw: .28 }
+        }
+      }
+    })))
+
+    renderFox(createAvatarEntityParts('fox'))
+    const originalCheek = host.querySelector('[data-avatar-surface-decal="fox-cheek-left"]')?.getAttribute('d')
+    const originalEar = host.querySelector('[data-avatar-entity-part="fox-ear-left"] g')?.getAttribute('transform')
+
+    const arctic = applyFoxHeadTaper(
+      applyFoxHeadScale(
+        applyFoxEarScale(applyFoxEarStyle(createAvatarEntityParts('fox'), 'rounded'), 72, 70),
+        84,
+        90
+      ),
+      24
+    )
+    renderFox(arctic, createFoxSurfaceDecals({
+      cheekColor: '#ffffff',
+      cheekScale: 112,
+      innerEarColor: '#f2d3d0',
+      innerEarScale: 78
+    }))
+
+    expect(host.querySelectorAll('[data-avatar-entity-part]')).toHaveLength(arctic.length)
+    const cheek = host.querySelector(
+      '[data-avatar-entity-part="fox-head"] [data-avatar-surface-decal="fox-cheek-left"]'
+    )
+    const innerEar = host.querySelector(
+      '[data-avatar-entity-part="fox-ear-left"] [data-avatar-surface-decal="fox-inner-ear-left"]'
+    )
+    expect(cheek?.getAttribute('fill')).toBe('#ffffff')
+    expect(cheek?.getAttribute('d')).not.toBe(originalCheek)
+    expect(innerEar?.getAttribute('fill')).toBe('#f2d3d0')
+    expect(host.querySelector('[data-avatar-entity-part="fox-ear-left"] g')?.getAttribute('transform'))
+      .not.toBe(originalEar)
+
+    const fennec = applyFoxHeadScale(
+      applyFoxEarScale(applyFoxEarStyle(createAvatarEntityParts('fox'), 'fennec'), 164, 176),
+      96,
+      104
+    )
+    renderFox(fennec)
+
+    for (const side of ['left', 'right']) {
+      expect(host.querySelector(
+        `[data-avatar-entity-part="fox-ear-${side}"] [data-avatar-surface-decal="fox-inner-ear-${side}"]`
+      )).not.toBeNull()
+      expect(host.querySelector(
+        `[data-avatar-entity-part="fox-head"] [data-avatar-surface-decal="fox-cheek-${side}"]`
+      )).not.toBeNull()
+    }
+  })
+
+  it('renders the six new animal anatomies as independently projected three-dimensional parts', () => {
+    const definition = createDefaultAvatarDefinition()
+    const animals = [
+      { identifiers: ['cheek-left', 'cheek-right'], preset: 'hamster' },
+      { identifiers: ['muzzle'], preset: 'capybara' },
+      { identifiers: ['muzzle'], preset: 'otter' },
+      { identifiers: ['snout', 'nostril-left', 'nostril-right'], preset: 'pig' },
+      { identifiers: ['antler-left-branch-3', 'antler-right-branch-3'], preset: 'deer' },
+      { identifiers: ['wool-crown-center', 'horn-left-segment-3'], preset: 'sheep' }
+    ] as const
+
+    for (const animal of animals) {
+      let parts = createAvatarEntityParts(animal.preset)
+      if (animal.preset === 'deer') parts = applyDeerAntlerStyle(parts, 'reindeer')
+      if (animal.preset === 'sheep') parts = applySheepHornStyle(parts, 'curled')
+
+      act(() => root.render(createElement(Avatar, {
+        definition: {
+          ...definition,
+          scene: {
+            ...definition.scene,
+            entity: { parts, preset: animal.preset },
+            view: { ...definition.scene.view, pitch: -.2, yaw: .48 }
+          }
+        }
+      })))
+
+      expect(host.querySelector(`[data-avatar-entity-preset="${animal.preset}"]`)).not.toBeNull()
+      expect(host.querySelectorAll('[data-avatar-entity-part]')).toHaveLength(parts.length)
+      for (const identifier of animal.identifiers) {
+        const part = host.querySelector(`[data-avatar-entity-part="${identifier}"]`)
+        expect(part, `${animal.preset} must render its real ${identifier} geometry`).not.toBeNull()
+        expect(part?.querySelector('g')?.getAttribute('transform')).toContain('translate(')
+      }
+
+      if (animal.preset === 'pig') {
+        const snout = host.querySelector('[data-avatar-entity-part="snout"]')!
+        for (const identifier of ['nostril-left', 'nostril-right']) {
+          const nostril = host.querySelector(`[data-avatar-entity-part="${identifier}"]`)!
+          expect(snout.compareDocumentPosition(nostril) & Node.DOCUMENT_POSITION_FOLLOWING).not.toBe(0)
+        }
+      }
+    }
+  })
+
+  it('renders pig and deer coat spots on their real curved head and ear geometry', () => {
+    const definition = createDefaultAvatarDefinition()
+
+    for (const { paletteId, preset } of [
+      { paletteId: 'spotted-pig', preset: 'pig' },
+      { paletteId: 'sika-deer', preset: 'deer' }
+    ] as const) {
+      act(() => root.render(createElement(Avatar, {
+        definition: {
+          ...definition,
+          scene: {
+            ...definition.scene,
+            appearance: {
+              ...definition.scene.appearance,
+              coatPattern: { ...DEFAULT_AVATAR_COAT_PATTERN, enabled: true },
+              paletteId
+            },
+            entity: { parts: createAvatarEntityParts(preset), preset }
+          }
+        }
+      })))
+
+      expect(host.querySelectorAll(`[data-avatar-surface-decal^="coat-${preset}-spots-"]`).length)
+        .toBeGreaterThan(0)
+      expect(host.querySelector(`[data-avatar-entity-part="ear-left"] [data-avatar-surface-decal^="coat-${preset}-spots-"]`))
+        .not.toBeNull()
+    }
+  })
+
+  it('renders a breed-specific koala nose from the public face definition', () => {
+    const definition = createDefaultAvatarDefinition()
+    const koalaFace = resolveAvatarEntityPresetFaceStyle('bear', {
+      noseEnabled: true,
+      noseHeight: 42,
+      noseShape: 'ellipse',
+      noseWidth: 32,
+      noseY: 30
+    })!
+
+    act(() => root.render(createElement(Avatar, {
+      definition: {
+        ...definition,
+        scene: {
+          ...definition.scene,
+          entity: { parts: createAvatarEntityParts('bear'), preset: 'bear' },
+          face: koalaFace
+        }
+      }
+    })))
+
+    expect(host.querySelector('[data-avatar-entity-preset="bear"]')).not.toBeNull()
+    expect(host.querySelector('[data-visible-marks]')?.getAttribute('data-visible-marks')).toBe('3')
+    expect(koalaFace).toMatchObject({ noseEnabled: true, noseHeight: 42, noseShape: 'ellipse', noseWidth: 32 })
   })
 
   it('renders every part in a custom multipart definition', () => {

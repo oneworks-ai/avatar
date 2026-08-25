@@ -1,6 +1,7 @@
 import {
   DEFAULT_AVATAR_COAT_PATTERN,
   createDefaultAvatarDefinition,
+  getAvatarPalette,
   isAvatarDefinition,
   resolveAvatarCoatPatternDecals
 } from '@oneworks/avatar'
@@ -10,6 +11,59 @@ import { avatarDefinitionToSearchParams, avatarDefinitionToState, createAvatarDe
 import { createAvatarEntityParts } from '../src/avatarEntityPresets'
 
 describe('procedural avatar coat patterns', () => {
+  it('projects distinctive Bear identity markings onto its actual face surface', () => {
+    const expected = {
+      'asian-black-bear': ['coat-bear-moon-moon'],
+      'giant-panda': ['coat-bear-panda-eye-left', 'coat-bear-panda-eye-right', 'coat-bear-panda-muzzle'],
+      'spectacled-bear': ['coat-bear-spectacles-ring-left', 'coat-bear-spectacles-ring-right', 'coat-bear-spectacles-muzzle'],
+      'sun-bear': ['coat-bear-sun-sun'],
+      'red-panda': [
+        'coat-bear-red-panda-brow-left', 'coat-bear-red-panda-brow-right',
+        'coat-bear-red-panda-cheek-left', 'coat-bear-red-panda-cheek-right',
+        'coat-bear-red-panda-muzzle'
+      ],
+      raccoon: ['coat-bear-raccoon-mask', 'coat-bear-raccoon-muzzle'],
+      wombat: ['coat-bear-wombat-muzzle']
+    }
+
+    for (const [paletteId, expectedIds] of Object.entries(expected)) {
+      const decals = resolveAvatarCoatPatternDecals({
+        entityParts: createAvatarEntityParts('bear'),
+        entityPreset: 'bear',
+        paletteId,
+        pattern: { ...DEFAULT_AVATAR_COAT_PATTERN, enabled: true }
+      })
+      expect(decals.map(decal => decal.id)).toEqual(expectedIds)
+      expect(decals.every(decal => decal.targetPartId === 'primary' && decal.opacity === 100)).toBe(true)
+      expect(decals.every(decal => decal.color !== getAvatarPalette(paletteId).foreground)).toBe(true)
+    }
+  })
+
+  it('projects English Spot markings across the real Rabbit head and ears without a Dog decal identity', () => {
+    const pattern = { ...DEFAULT_AVATAR_COAT_PATTERN, density: 60, enabled: true, seed: 'v1-rabbit-spots', thickness: 88 }
+    const first = resolveAvatarCoatPatternDecals({ entityParts: createAvatarEntityParts('rabbit'), entityPreset: 'rabbit', paletteId: 'english-spot', pattern })
+    const replayed = resolveAvatarCoatPatternDecals({ entityParts: createAvatarEntityParts('rabbit'), entityPreset: 'rabbit', paletteId: 'english-spot', pattern })
+    expect(first).toEqual(replayed)
+    expect(first.every(decal => decal.id.startsWith('coat-rabbit-spots-'))).toBe(true)
+    expect(first.every(decal => decal.label === 'Rabbit coat spot')).toBe(true)
+    expect(first.some(decal => decal.targetPartId === 'ear-left')).toBe(true)
+    expect(first.some(decal => decal.targetPartId === 'ear-right')).toBe(true)
+    expect(first.some(decal => decal.targetPartId === 'primary')).toBe(true)
+  })
+
+  it('preserves the existing Dalmatian decal identity when Rabbit spots are enabled', () => {
+    const decals = resolveAvatarCoatPatternDecals({
+      entityParts: createAvatarEntityParts('dog'),
+      entityPreset: 'dog',
+      paletteId: 'dalmatian',
+      pattern: { ...DEFAULT_AVATAR_COAT_PATTERN, density: 60, enabled: true, seed: 'v1-dalmatian-spots' }
+    })
+
+    expect(decals.length).toBeGreaterThan(0)
+    expect(decals.every(decal => decal.id.startsWith('coat-dog-spots-'))).toBe(true)
+    expect(decals.every(decal => decal.label === 'Dalmatian coat spot')).toBe(true)
+  })
+
   it('replays the same Seed and changes topology for another Seed in random mode', () => {
     const parts = createAvatarEntityParts('cat')
     const pattern = { ...DEFAULT_AVATAR_COAT_PATTERN, enabled: true, seed: 'v1-tabby-cat' }

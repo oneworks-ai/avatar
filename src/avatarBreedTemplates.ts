@@ -7,14 +7,33 @@ import {
   applyDogEarScale,
   applyDogEarStyle,
   applyDogHeadScale,
-  createAvatarEntityParts
+  applyBearEarScale,
+  applyBearEarStyle,
+  applyBearHeadScale,
+  applyRabbitEarScale,
+  applyRabbitEarStyle,
+  applyRabbitHeadScale,
+  createAvatarEntityParts,
+  resolveAvatarEntityPresetFaceStyle
 } from './avatarEntityPresets'
-import type { AvatarDogEarStyle, AvatarEntityPart } from './avatarEntityPresets'
+import type {
+  AvatarBearEarStyle,
+  AvatarDogEarStyle,
+  AvatarEntityFaceStyleOverride,
+  AvatarEntityPart,
+  AvatarRabbitEarStyle
+} from './avatarEntityPresets'
+import { DEFAULT_AVATAR_FACE_STYLE } from './avatarGeometry'
+import type { AvatarFaceStyle } from './avatarGeometry'
 import {
   AVATAR_SEED_FIELD,
   resolveSeededAvatarCatEarScale,
   resolveSeededAvatarDogEarScale,
   resolveSeededAvatarDogHeadScale,
+  resolveSeededAvatarBearEarScale,
+  resolveSeededAvatarBearHeadScale,
+  resolveSeededAvatarRabbitEarScale,
+  resolveSeededAvatarRabbitHeadScale,
   resolveSeededAvatarCoatPattern
 } from './avatarSeed'
 import type { AvatarSeedDomain, AvatarSeedField } from './avatarSeed'
@@ -550,4 +569,117 @@ export const resolveAvatarDogBreedTemplate = (
     entityParts,
     paletteId: template.fixed.paletteId
   }
+}
+
+export const AVATAR_RABBIT_BREED_TEMPLATE_IDS = [
+  'holland-lop', 'netherland-dwarf', 'dutch-rabbit', 'himalayan-rabbit', 'lionhead-rabbit', 'english-spot'
+] as const
+export type AvatarRabbitBreedTemplateId = (typeof AVATAR_RABBIT_BREED_TEMPLATE_IDS)[number]
+export interface AvatarRabbitBreedTemplate {
+  readonly earStyle: AvatarRabbitEarStyle
+  readonly fixed: { readonly coatPattern: Partial<AvatarCoatPattern>; readonly rabbitEarHeight: number; readonly rabbitEarWidth: number; readonly rabbitHeadHeight: number; readonly rabbitHeadWidth: number; readonly paletteId: string }
+  readonly followByDefault: readonly AvatarSeedField[]
+  readonly id: AvatarRabbitBreedTemplateId
+  readonly label: string
+  readonly previewBackground?: string
+  readonly seedDomain: AvatarSeedDomain
+}
+export const AVATAR_RABBIT_BREED_CONTROLLED_FIELDS = [
+  AVATAR_SEED_FIELD.palette, AVATAR_SEED_FIELD.rabbitEarWidth, AVATAR_SEED_FIELD.rabbitEarHeight, AVATAR_SEED_FIELD.rabbitHeadWidth, AVATAR_SEED_FIELD.rabbitHeadHeight,
+  AVATAR_SEED_FIELD.coatPatternAlgorithm, AVATAR_SEED_FIELD.coatPatternSeed, AVATAR_SEED_FIELD.coatPatternDensity, AVATAR_SEED_FIELD.coatPatternJitter,
+  AVATAR_SEED_FIELD.coatPatternLightPatchLength, AVATAR_SEED_FIELD.coatPatternLightPatchOffsetY, AVATAR_SEED_FIELD.coatPatternLightPatchWidth, AVATAR_SEED_FIELD.coatPatternLightPatchShape,
+  AVATAR_SEED_FIELD.coatPatternThickness, AVATAR_SEED_FIELD.coatPatternSymmetry, AVATAR_SEED_FIELD.coatPatternContrast, AVATAR_SEED_FIELD.coatPatternBreakup
+] as const satisfies readonly AvatarSeedField[]
+const RABBIT_COAT = { ...DOG_COAT_BASE, density: 0, thickness: 90 }
+const rabbitTemplate = (id: AvatarRabbitBreedTemplateId, label: string, earStyle: AvatarRabbitEarStyle, paletteId: string, ears: readonly [number, number], head: readonly [number, number], followByDefault: readonly AvatarSeedField[], ranges: AvatarSeedDomain['ranges'], coatPattern: Partial<AvatarCoatPattern> = {}, previewBackground?: string): AvatarRabbitBreedTemplate => ({
+  earStyle, fixed: { coatPattern: { ...RABBIT_COAT, ...coatPattern }, paletteId, rabbitEarHeight: ears[1], rabbitEarWidth: ears[0], rabbitHeadHeight: head[1], rabbitHeadWidth: head[0] }, followByDefault, id, label, previewBackground, seedDomain: { paletteIds: [paletteId], ranges }
+})
+export const AVATAR_RABBIT_BREED_TEMPLATES: readonly AvatarRabbitBreedTemplate[] = [
+  rabbitTemplate('holland-lop', 'Holland Lop', 'lop', 'holland-lop', [118, 126], [112, 104], [AVATAR_SEED_FIELD.rabbitEarWidth, AVATAR_SEED_FIELD.rabbitEarHeight, AVATAR_SEED_FIELD.rabbitHeadWidth], { [AVATAR_SEED_FIELD.rabbitEarWidth]: { min: 108, max: 128 }, [AVATAR_SEED_FIELD.rabbitEarHeight]: { min: 116, max: 140 }, [AVATAR_SEED_FIELD.rabbitHeadWidth]: { min: 106, max: 118 } }, { lightPatchWidth: 108 }),
+  rabbitTemplate('netherland-dwarf', 'Netherland Dwarf', 'compact', 'netherland-dwarf', [82, 78], [92, 88], [AVATAR_SEED_FIELD.rabbitEarWidth, AVATAR_SEED_FIELD.rabbitEarHeight, AVATAR_SEED_FIELD.rabbitHeadWidth, AVATAR_SEED_FIELD.rabbitHeadHeight], { [AVATAR_SEED_FIELD.rabbitEarWidth]: { min: 74, max: 90 }, [AVATAR_SEED_FIELD.rabbitEarHeight]: { min: 70, max: 88 }, [AVATAR_SEED_FIELD.rabbitHeadWidth]: { min: 88, max: 98 }, [AVATAR_SEED_FIELD.rabbitHeadHeight]: { min: 84, max: 94 } }, { lightPatchWidth: 88 }),
+  rabbitTemplate('dutch-rabbit', 'Dutch Rabbit', 'dutch', 'dutch-rabbit', [98, 108], [104, 102], [AVATAR_SEED_FIELD.rabbitEarHeight, AVATAR_SEED_FIELD.rabbitHeadWidth, AVATAR_SEED_FIELD.coatPatternLightPatchWidth], { [AVATAR_SEED_FIELD.rabbitEarHeight]: { min: 100, max: 116 }, [AVATAR_SEED_FIELD.rabbitHeadWidth]: { min: 98, max: 110 }, [AVATAR_SEED_FIELD.coatPatternLightPatchWidth]: { min: 92, max: 110 } }, { lightPatchWidth: 100 }),
+  rabbitTemplate('himalayan-rabbit', 'Himalayan Rabbit', 'himalayan', 'himalayan-rabbit', [94, 112], [100, 100], [AVATAR_SEED_FIELD.rabbitEarHeight, AVATAR_SEED_FIELD.coatPatternLightPatchLength], { [AVATAR_SEED_FIELD.rabbitEarHeight]: { min: 104, max: 122 }, [AVATAR_SEED_FIELD.coatPatternLightPatchLength]: { min: 96, max: 112 } }, { lightPatchLength: 104, lightPatchWidth: 96 }),
+  rabbitTemplate('lionhead-rabbit', 'Lionhead Rabbit', 'lionhead', 'lionhead-rabbit', [110, 116], [122, 116], [AVATAR_SEED_FIELD.rabbitEarWidth, AVATAR_SEED_FIELD.rabbitHeadWidth, AVATAR_SEED_FIELD.rabbitHeadHeight], { [AVATAR_SEED_FIELD.rabbitEarWidth]: { min: 102, max: 120 }, [AVATAR_SEED_FIELD.rabbitHeadWidth]: { min: 114, max: 130 }, [AVATAR_SEED_FIELD.rabbitHeadHeight]: { min: 108, max: 124 } }, { lightPatchWidth: 112 }),
+  rabbitTemplate('english-spot', 'English Spot', 'spotted', 'english-spot', [100, 110], [104, 104], [AVATAR_SEED_FIELD.rabbitEarWidth, AVATAR_SEED_FIELD.rabbitEarHeight, AVATAR_SEED_FIELD.coatPatternSeed, AVATAR_SEED_FIELD.coatPatternDensity], { [AVATAR_SEED_FIELD.rabbitEarWidth]: { min: 94, max: 108 }, [AVATAR_SEED_FIELD.rabbitEarHeight]: { min: 102, max: 120 }, [AVATAR_SEED_FIELD.coatPatternDensity]: { min: 40, max: 68 } }, { density: 54, thickness: 88 }, '#73879a')
+]
+export const getAvatarRabbitBreedTemplate = (id: string | null | undefined) => AVATAR_RABBIT_BREED_TEMPLATES.find(template => template.id === id) ?? null
+export const isAvatarRabbitBreedTemplateId = (value: unknown): value is AvatarRabbitBreedTemplateId => typeof value === 'string' && AVATAR_RABBIT_BREED_TEMPLATE_IDS.some(id => id === value)
+export interface ResolvedAvatarRabbitBreedTemplate { readonly coatPattern: AvatarCoatPattern; readonly rabbitEarHeight: number; readonly rabbitEarWidth: number; readonly rabbitHeadHeight: number; readonly rabbitHeadWidth: number; readonly entityParts: readonly AvatarEntityPart[]; readonly paletteId: string }
+export const resolveAvatarRabbitBreedTemplate = (template: AvatarRabbitBreedTemplate, seed: string, currentCoatPattern: AvatarCoatPattern = DEFAULT_AVATAR_COAT_PATTERN): ResolvedAvatarRabbitBreedTemplate => {
+  const coatPattern = resolveSeededAvatarCoatPattern(seed, { ...DEFAULT_AVATAR_COAT_PATTERN, ...currentCoatPattern, ...template.fixed.coatPattern }, template.followByDefault, template.seedDomain)
+  const ear = (field: 'height' | 'width') => template.followByDefault.includes(field === 'width' ? AVATAR_SEED_FIELD.rabbitEarWidth : AVATAR_SEED_FIELD.rabbitEarHeight) ? resolveSeededAvatarRabbitEarScale(seed, field, template.seedDomain) : field === 'width' ? template.fixed.rabbitEarWidth : template.fixed.rabbitEarHeight
+  const head = (field: 'height' | 'width') => template.followByDefault.includes(field === 'width' ? AVATAR_SEED_FIELD.rabbitHeadWidth : AVATAR_SEED_FIELD.rabbitHeadHeight) ? resolveSeededAvatarRabbitHeadScale(seed, field, template.seedDomain) : field === 'width' ? template.fixed.rabbitHeadWidth : template.fixed.rabbitHeadHeight
+  const rabbitEarWidth = ear('width'), rabbitEarHeight = ear('height'), rabbitHeadWidth = head('width'), rabbitHeadHeight = head('height')
+  const entityParts = applyAvatarEntityPalette(applyRabbitHeadScale(applyRabbitEarStyle(applyRabbitEarScale(createAvatarEntityParts('rabbit'), rabbitEarWidth, rabbitEarHeight), template.earStyle), rabbitHeadWidth, rabbitHeadHeight), getAvatarPalette(template.fixed.paletteId))
+  return { coatPattern, rabbitEarHeight, rabbitEarWidth, rabbitHeadHeight, rabbitHeadWidth, entityParts, paletteId: template.fixed.paletteId }
+}
+
+export const AVATAR_BEAR_BREED_TEMPLATE_IDS = ['brown-bear', 'polar-bear', 'asian-black-bear', 'giant-panda', 'spectacled-bear', 'sun-bear', 'red-panda', 'koala', 'raccoon', 'wombat', 'teddy-bear'] as const
+export type AvatarBearBreedTemplateId = (typeof AVATAR_BEAR_BREED_TEMPLATE_IDS)[number]
+export interface AvatarBearBreedTemplate {
+  readonly earStyle: AvatarBearEarStyle
+  readonly fixed: { readonly bearEarHeight: number; readonly bearEarWidth: number; readonly bearHeadHeight: number; readonly bearHeadWidth: number; readonly coatPattern: Partial<AvatarCoatPattern>; readonly faceStyle?: AvatarEntityFaceStyleOverride; readonly foregroundColor?: string; readonly paletteId: string }
+  readonly followByDefault: readonly AvatarSeedField[]
+  readonly id: AvatarBearBreedTemplateId
+  readonly label: string
+  readonly previewBackground?: string
+  readonly seedDomain: AvatarSeedDomain
+}
+export const AVATAR_BEAR_BREED_CONTROLLED_FIELDS = [
+  AVATAR_SEED_FIELD.palette, AVATAR_SEED_FIELD.bearEarWidth, AVATAR_SEED_FIELD.bearEarHeight, AVATAR_SEED_FIELD.bearHeadWidth, AVATAR_SEED_FIELD.bearHeadHeight,
+  AVATAR_SEED_FIELD.coatPatternAlgorithm, AVATAR_SEED_FIELD.coatPatternSeed, AVATAR_SEED_FIELD.coatPatternDensity, AVATAR_SEED_FIELD.coatPatternJitter,
+  AVATAR_SEED_FIELD.coatPatternLightPatchLength, AVATAR_SEED_FIELD.coatPatternLightPatchOffsetY, AVATAR_SEED_FIELD.coatPatternLightPatchWidth, AVATAR_SEED_FIELD.coatPatternLightPatchShape,
+  AVATAR_SEED_FIELD.coatPatternThickness, AVATAR_SEED_FIELD.coatPatternSymmetry, AVATAR_SEED_FIELD.coatPatternContrast, AVATAR_SEED_FIELD.coatPatternBreakup
+] as const satisfies readonly AvatarSeedField[]
+const BEAR_COAT = { ...DOG_COAT_BASE, density: 0, jitter: 0, thickness: 92, symmetry: 100, breakup: 0, contrast: 88, lightPatchOffsetY: 0, lightPatchShape: 'face-mask' as const }
+const bearTemplate = (id: AvatarBearBreedTemplateId, label: string, earStyle: AvatarBearEarStyle, paletteId: string, ears: readonly [number, number], head: readonly [number, number], followByDefault: readonly AvatarSeedField[], ranges: AvatarSeedDomain['ranges'], coatPattern: Partial<AvatarCoatPattern> = {}, previewBackground?: string, foregroundColor?: string, faceStyle?: AvatarEntityFaceStyleOverride): AvatarBearBreedTemplate => ({
+  earStyle, fixed: { bearEarHeight: ears[1], bearEarWidth: ears[0], bearHeadHeight: head[1], bearHeadWidth: head[0], coatPattern: { ...BEAR_COAT, ...coatPattern }, ...(faceStyle == null ? {} : { faceStyle }), ...(foregroundColor == null ? {} : { foregroundColor }), paletteId }, followByDefault, id, label, previewBackground, seedDomain: { paletteIds: [paletteId], ranges }
+})
+const bearRange = (earWidth: readonly [number, number], earHeight: readonly [number, number], headWidth: readonly [number, number], headHeight: readonly [number, number]) => ({
+  [AVATAR_SEED_FIELD.bearEarWidth]: { min: earWidth[0], max: earWidth[1] }, [AVATAR_SEED_FIELD.bearEarHeight]: { min: earHeight[0], max: earHeight[1] }, [AVATAR_SEED_FIELD.bearHeadWidth]: { min: headWidth[0], max: headWidth[1] }, [AVATAR_SEED_FIELD.bearHeadHeight]: { min: headHeight[0], max: headHeight[1] }
+})
+export const AVATAR_BEAR_BREED_TEMPLATES: readonly AvatarBearBreedTemplate[] = [
+  bearTemplate('brown-bear', 'Brown Bear', 'teddy', 'brown-bear', [105, 98], [112, 108], [AVATAR_SEED_FIELD.bearEarWidth, AVATAR_SEED_FIELD.bearHeadWidth], bearRange([96, 112], [92, 104], [106, 120], [102, 114])),
+  bearTemplate('polar-bear', 'Polar Bear', 'compact', 'polar-bear', [82, 78], [116, 104], [AVATAR_SEED_FIELD.bearHeadWidth, AVATAR_SEED_FIELD.bearHeadHeight], bearRange([76, 90], [72, 86], [110, 126], [98, 112]), {}, '#687c86'),
+  bearTemplate('asian-black-bear', 'Asian Black Bear', 'pointed', 'asian-black-bear', [92, 92], [106, 108], [AVATAR_SEED_FIELD.bearEarHeight, AVATAR_SEED_FIELD.bearHeadWidth], bearRange([84, 100], [86, 100], [100, 114], [102, 114]), {}, '#e8decc'),
+  bearTemplate('giant-panda', 'Giant Panda', 'panda', 'giant-panda', [118, 110], [116, 112], [AVATAR_SEED_FIELD.bearEarWidth, AVATAR_SEED_FIELD.bearHeadWidth], bearRange([108, 128], [102, 118], [108, 124], [104, 118])),
+  bearTemplate('spectacled-bear', 'Spectacled Bear', 'teddy', 'spectacled-bear', [92, 92], [108, 110], [AVATAR_SEED_FIELD.bearHeadWidth], bearRange([84, 100], [84, 100], [102, 116], [104, 116]), {}, '#e8decc', '#241711'),
+  bearTemplate('sun-bear', 'Sun Bear', 'compact', 'sun-bear', [76, 80], [98, 112], [AVATAR_SEED_FIELD.bearEarHeight, AVATAR_SEED_FIELD.bearHeadHeight], bearRange([70, 84], [74, 88], [92, 106], [106, 120]), {}, '#e8decc'),
+  bearTemplate('red-panda', 'Red Panda', 'pointed', 'red-panda', [108, 106], [106, 110], [AVATAR_SEED_FIELD.bearEarWidth, AVATAR_SEED_FIELD.bearHeadWidth], bearRange([98, 120], [98, 116], [98, 116], [104, 116])),
+  bearTemplate('koala', 'Koala', 'koala', 'koala', [132, 124], [108, 110], [AVATAR_SEED_FIELD.bearEarWidth, AVATAR_SEED_FIELD.bearEarHeight], bearRange([120, 145], [114, 136], [102, 114], [104, 116]), {}, undefined, undefined, {
+    mouthEnabled: false,
+    noseEnabled: true,
+    noseHeight: 42,
+    noseShape: 'ellipse',
+    noseWidth: 32,
+    noseY: 30
+  }),
+  bearTemplate('raccoon', 'Raccoon', 'pointed', 'raccoon', [92, 88], [110, 104], [AVATAR_SEED_FIELD.bearHeadWidth, AVATAR_SEED_FIELD.bearHeadHeight], bearRange([84, 100], [82, 96], [104, 118], [98, 112])),
+  bearTemplate('wombat', 'Wombat', 'wombat', 'wombat', [78, 70], [124, 96], [AVATAR_SEED_FIELD.bearHeadWidth, AVATAR_SEED_FIELD.bearHeadHeight], bearRange([70, 88], [64, 78], [116, 130], [90, 104])),
+  bearTemplate('teddy-bear', 'Teddy Bear', 'teddy', 'teddy-bear', [108, 104], [108, 108], [AVATAR_SEED_FIELD.bearEarWidth, AVATAR_SEED_FIELD.bearHeadWidth, AVATAR_SEED_FIELD.bearHeadHeight], bearRange([98, 118], [96, 112], [102, 118], [102, 118]))
+]
+export const getAvatarBearBreedTemplate = (id: string | null | undefined) => AVATAR_BEAR_BREED_TEMPLATES.find(template => template.id === id) ?? null
+export const isAvatarBearBreedTemplateId = (value: unknown): value is AvatarBearBreedTemplateId => typeof value === 'string' && AVATAR_BEAR_BREED_TEMPLATE_IDS.some(id => id === value)
+export const applyAvatarBearBreedForeground = (
+  entityParts: readonly AvatarEntityPart[],
+  template: AvatarBearBreedTemplate | null | undefined
+): readonly AvatarEntityPart[] => {
+  const foregroundColor = template?.fixed.foregroundColor
+  if (foregroundColor == null || template == null) return entityParts
+
+  const paletteForeground = getAvatarPalette(template.fixed.paletteId).foreground.toLowerCase()
+  return entityParts.map(part => (
+    part.face && part.foregroundColor.toLowerCase() === paletteForeground
+      ? { ...part, foregroundColor }
+      : part
+  ))
+}
+export interface ResolvedAvatarBearBreedTemplate { readonly bearEarHeight: number; readonly bearEarWidth: number; readonly bearHeadHeight: number; readonly bearHeadWidth: number; readonly coatPattern: AvatarCoatPattern; readonly entityParts: readonly AvatarEntityPart[]; readonly faceStyle: AvatarFaceStyle; readonly paletteId: string }
+export const resolveAvatarBearBreedTemplate = (template: AvatarBearBreedTemplate, seed: string, currentCoatPattern: AvatarCoatPattern = DEFAULT_AVATAR_COAT_PATTERN): ResolvedAvatarBearBreedTemplate => {
+  const coatPattern = resolveSeededAvatarCoatPattern(seed, { ...DEFAULT_AVATAR_COAT_PATTERN, ...currentCoatPattern, ...template.fixed.coatPattern }, template.followByDefault, template.seedDomain)
+  const ear = (field: 'height' | 'width') => template.followByDefault.includes(field === 'width' ? AVATAR_SEED_FIELD.bearEarWidth : AVATAR_SEED_FIELD.bearEarHeight) ? resolveSeededAvatarBearEarScale(seed, field, template.seedDomain) : field === 'width' ? template.fixed.bearEarWidth : template.fixed.bearEarHeight
+  const head = (field: 'height' | 'width') => template.followByDefault.includes(field === 'width' ? AVATAR_SEED_FIELD.bearHeadWidth : AVATAR_SEED_FIELD.bearHeadHeight) ? resolveSeededAvatarBearHeadScale(seed, field, template.seedDomain) : field === 'width' ? template.fixed.bearHeadWidth : template.fixed.bearHeadHeight
+  const bearEarWidth = ear('width'), bearEarHeight = ear('height'), bearHeadWidth = head('width'), bearHeadHeight = head('height')
+  const entityParts = applyAvatarBearBreedForeground(applyAvatarEntityPalette(applyBearHeadScale(applyBearEarStyle(applyBearEarScale(createAvatarEntityParts('bear'), bearEarWidth, bearEarHeight), template.earStyle), bearHeadWidth, bearHeadHeight), getAvatarPalette(template.fixed.paletteId)), template)
+  return { bearEarHeight, bearEarWidth, bearHeadHeight, bearHeadWidth, coatPattern, entityParts, faceStyle: resolveAvatarEntityPresetFaceStyle('bear', template.fixed.faceStyle) ?? DEFAULT_AVATAR_FACE_STYLE, paletteId: template.fixed.paletteId }
 }

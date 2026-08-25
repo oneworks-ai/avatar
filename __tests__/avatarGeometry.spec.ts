@@ -23,6 +23,16 @@ const projectedPathExtent = (path: string) => {
   }
 }
 
+const projectedPathBandWidth = (path: string, minY: number, maxY: number) => {
+  const values = Array.from(path.matchAll(/-?\d+(?:\.\d+)?/g), match => Number(match[0]))
+  const xs = values.flatMap((value, index) => {
+    if (index % 2 !== 0) return []
+    const y = values[index + 1]
+    return y != null && y >= minY && y <= maxY ? [value] : []
+  })
+  return Math.max(...xs) - Math.min(...xs)
+}
+
 describe('avatar surface lighting', () => {
   it('uses stronger near shadows and attenuates all contrast with distance', () => {
     expect(resolveAvatarSurfaceShadeOpacity(-1, 0)).toBeCloseTo(.96)
@@ -64,6 +74,24 @@ describe('avatar surface lighting', () => {
     expect(geometry.outlinePath).toContain('M ')
     expect(geometry.occlusionPath).toContain('M ')
     expect(geometry.outlinePath).not.toBe(ellipse.outlinePath)
+  })
+
+  it('tapers only the lower half of an ellipse without changing its zero-taper silhouette', () => {
+    const pose = { pitch: 0, yaw: 0 }
+    const original = buildAvatarBodyGeometry('ellipse', pose, LIGHT)
+    const explicitZero = buildAvatarBodyGeometry('ellipse', pose, LIGHT, 100, { bottomTaper: 0 })
+    const tapered = buildAvatarBodyGeometry('ellipse', pose, LIGHT, 100, { bottomTaper: 75 })
+    const unchangedSphere = buildAvatarBodyGeometry('sphere', pose, LIGHT, 100, { bottomTaper: 75 })
+
+    expect(explicitZero.outlinePath).toBe(original.outlinePath)
+    expect(tapered.outlinePath).not.toBe(original.outlinePath)
+    expect(projectedPathBandWidth(tapered.outlinePath, 110, 145))
+      .toBeCloseTo(projectedPathBandWidth(original.outlinePath, 110, 145), 1)
+    expect(projectedPathBandWidth(tapered.outlinePath, 255, 290))
+      .toBeLessThan(projectedPathBandWidth(original.outlinePath, 255, 290) * .92)
+    expect(projectedPathBandWidth(tapered.outlinePath, 255, 270))
+      .toBeGreaterThan(projectedPathBandWidth(tapered.outlinePath, 195, 210) * .64)
+    expect(unchangedSphere.outlinePath).toBe(buildAvatarBodyGeometry('sphere', pose, LIGHT).outlinePath)
   })
 
   it('scales multipart geometry in local X, Y, and Z axes before rotation', () => {
@@ -219,5 +247,29 @@ describe('avatar face-anchored surface decals', () => {
     })
 
     expect(anchored?.path).toBe(face.mouth?.path)
+  })
+
+  it('keeps facial features and face decals attached to a tapered ellipse in 3D', () => {
+    const pose = { pitch: -.24, yaw: .52 }
+    const options = { bottomTaper: 72 }
+    const style = {
+      ...DEFAULT_AVATAR_FACE_STYLE,
+      mouthHeight: 20,
+      mouthShape: 'ellipse' as const,
+      mouthWidth: 20,
+      mouthY: 52
+    }
+    const decal = {
+      color: '#ffffff', height: 20, id: 'tapered-anchor', label: 'Tapered anchor', opacity: 100,
+      rotation: 0, shape: 'ellipse' as const, side: 'face' as const, targetPartId: null,
+      width: 20, x: 0, y: 52
+    }
+    const taperedFace = projectDefaultFace(pose, 'ellipse', style, options)
+    const taperedDecal = projectAvatarSurfaceDecal(pose, 'ellipse', decal, options)
+    const originalDecal = projectAvatarSurfaceDecal(pose, 'ellipse', decal)
+
+    expect(taperedDecal?.path).toBe(taperedFace.mouth?.path)
+    expect(taperedDecal?.path).not.toBe(originalDecal?.path)
+    expect(taperedDecal?.path).not.toContain('NaN')
   })
 })

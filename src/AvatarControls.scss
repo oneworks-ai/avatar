@@ -398,12 +398,16 @@
   }
 
   &__cat-breed-list,
-  &__dog-breed-list {
+  &__dog-breed-list,
+  &__rabbit-breed-list,
+  &__bear-breed-list {
     grid-template-columns: repeat(auto-fill, minmax(48px, 52px));
   }
 
   &__cat-breed-preset,
-  &__dog-breed-preset {
+  &__dog-breed-preset,
+  &__rabbit-breed-preset,
+  &__bear-breed-preset {
     border-radius: 8px;
   }
 
@@ -594,14 +598,22 @@
   &__coat-row,
   &__cat-ear-size,
   &__dog-ear-size,
-  &__dog-head-size {
+  &__dog-head-size,
+  &__rabbit-ear-size,
+  &__rabbit-head-size,
+  &__bear-ear-size,
+  &__bear-head-size {
     display: grid;
     gap: 8px;
   }
 
   &__cat-ear-size,
   &__dog-ear-size,
-  &__dog-head-size {
+  &__dog-head-size,
+  &__rabbit-ear-size,
+  &__rabbit-head-size,
+  &__bear-ear-size,
+  &__bear-head-size {
     border-top: 1px solid var(--border-color);
     padding-top: 18px;
   }

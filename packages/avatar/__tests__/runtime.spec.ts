@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 
 import {
   AVATAR_BACKGROUND_STYLES,
+  AVATAR_BEAR_COMPATIBLE_PALETTE_IDS,
   AVATAR_CAMERA_BACKGROUND_PRESETS,
   DEFAULT_AVATAR_COAT_PATTERN,
   AVATAR_FACE_RANGES,
@@ -47,6 +48,42 @@ const supportLibrary: AvatarAnimationLibrary = {
 }
 
 describe('OneWorks Avatar public runtime contract', () => {
+  it('supports bounded optional ellipse taper on both standalone bodies and entity parts', () => {
+    const definition = createDefaultAvatarDefinition()
+    const tapered = {
+      ...definition,
+      scene: {
+        ...definition.scene,
+        appearance: { ...definition.scene.appearance, bodyShape: 'ellipse' as const, bottomTaper: 72 },
+        entity: {
+          parts: [{
+            baseColor: '#dd7646', bottomTaper: 68, face: true, foregroundColor: '#26352b',
+            highlightColor: '#f19b67', id: 'fox-head', label: 'Head', scaleX: .84,
+            scaleY: .7, shadowColor: '#974626', shape: 'ellipse' as const, x: 0, y: 17, z: 0
+          }],
+          preset: 'fox' as const
+        }
+      }
+    }
+
+    expect(isAvatarDefinition(definition)).toBe(true)
+    expect(isAvatarDefinition(tapered)).toBe(true)
+    expect(isAvatarDefinition({
+      ...tapered,
+      scene: { ...tapered.scene, appearance: { ...tapered.scene.appearance, bottomTaper: -1 } }
+    })).toBe(false)
+    expect(isAvatarDefinition({
+      ...tapered,
+      scene: {
+        ...tapered.scene,
+        entity: {
+          ...tapered.scene.entity,
+          parts: [{ ...tapered.scene.entity.parts[0]!, bottomTaper: 101 }]
+        }
+      }
+    })).toBe(false)
+  })
+
   it('validates and deterministically resolves first-class coat patterns', () => {
     const definition = createDefaultAvatarDefinition()
     const parts = [{
@@ -67,6 +104,118 @@ describe('OneWorks Avatar public runtime contract', () => {
     const first = resolveAvatarCoatPatternDecals({ entityParts: parts, entityPreset: 'cat', paletteId: 'tabby', pattern })
     expect(resolveAvatarCoatPatternDecals({ entityParts: parts, entityPreset: 'cat', paletteId: 'tabby', pattern })).toEqual(first)
     expect(first.length).toBeGreaterThan(0)
+  })
+
+  it('exposes natural Bear palettes, independent dimension paths, and projected panda eye patches', () => {
+    expect(AVATAR_BEAR_COMPATIBLE_PALETTE_IDS).toHaveLength(11)
+    expect(AVATAR_BEAR_COMPATIBLE_PALETTE_IDS.every(id => AVATAR_PALETTES.some(palette => palette.id === id)))
+      .toBe(true)
+    expect(AVATAR_SEED_FIELD_PATHS.bearEarWidth).toBe('scene.entity.bearEarWidth')
+    expect(AVATAR_SEED_FIELD_PATHS.bearEarHeight).toBe('scene.entity.bearEarHeight')
+    expect(AVATAR_SEED_FIELD_PATHS.bearHeadWidth).toBe('scene.entity.bearHeadWidth')
+    expect(AVATAR_SEED_FIELD_PATHS.bearHeadHeight).toBe('scene.entity.bearHeadHeight')
+
+    const parts = [{
+      baseColor: '#f5f3ec', face: true, foregroundColor: '#b56c45', highlightColor: '#ffffff',
+      id: 'primary', label: 'Head', scaleX: .8, scaleY: .8, shadowColor: '#9fa6a2',
+      shape: 'ellipse' as const, x: 0, y: 0, z: 0
+    }]
+    const decals = resolveAvatarCoatPatternDecals({
+      entityParts: parts,
+      entityPreset: 'bear',
+      paletteId: 'giant-panda',
+      pattern: { ...DEFAULT_AVATAR_COAT_PATTERN, enabled: true }
+    })
+    expect(decals.map(decal => decal.id)).toEqual([
+      'coat-bear-panda-eye-left', 'coat-bear-panda-eye-right', 'coat-bear-panda-muzzle'
+    ])
+    expect(decals.every(decal => decal.targetPartId === 'primary')).toBe(true)
+  })
+
+  it('round-trips all six animal entity contracts and exposes their independent geometry Seed fields', () => {
+    const definition = createDefaultAvatarDefinition()
+    const presets = ['hamster', 'capybara', 'otter', 'pig', 'deer', 'sheep'] as const
+
+    for (const preset of presets) {
+      const next = {
+        ...definition,
+        scene: { ...definition.scene, entity: { ...definition.scene.entity, preset } }
+      }
+      expect(isAvatarDefinition(next), `${preset} must be accepted by the public runtime`).toBe(true)
+      expect(parseAvatarDefinition(serializeAvatarDefinition(next))).toEqual(next)
+
+      for (const dimension of ['EarWidth', 'EarHeight', 'HeadWidth', 'HeadHeight'] as const) {
+        const key = `${preset}${dimension}` as keyof typeof AVATAR_SEED_FIELD_PATHS
+        expect(AVATAR_SEED_FIELD_PATHS[key]).toBe(`scene.entity.${preset}${dimension}`)
+      }
+    }
+
+    expect(AVATAR_SEED_FIELD_PATHS.deerAntlerSize).toBe('scene.entity.deerAntlerSize')
+    expect(AVATAR_SEED_FIELD_PATHS.deerAntlerStyle).toBe('scene.entity.deerAntlerStyle')
+    expect(AVATAR_SEED_FIELD_PATHS.sheepHornSize).toBe('scene.entity.sheepHornSize')
+    expect(AVATAR_SEED_FIELD_PATHS.sheepHornStyle).toBe('scene.entity.sheepHornStyle')
+  })
+
+  it('exposes independent public fox breed geometry and anatomical style Seed fields', () => {
+    expect(AVATAR_SEED_FIELD_PATHS.foxEarWidth).toBe('scene.entity.foxEarWidth')
+    expect(AVATAR_SEED_FIELD_PATHS.foxEarHeight).toBe('scene.entity.foxEarHeight')
+    expect(AVATAR_SEED_FIELD_PATHS.foxEarStyle).toBe('scene.entity.foxEarStyle')
+    expect(AVATAR_SEED_FIELD_PATHS.foxHeadWidth).toBe('scene.entity.foxHeadWidth')
+    expect(AVATAR_SEED_FIELD_PATHS.foxHeadHeight).toBe('scene.entity.foxHeadHeight')
+    expect(AVATAR_SEED_FIELD_PATHS.foxHeadTaper).toBe('scene.entity.foxHeadTaper')
+
+    const definition = createDefaultAvatarDefinition()
+    const fox = {
+      ...definition,
+      metadata: {
+        ...definition.metadata,
+        generation: {
+          fields: [AVATAR_SEED_FIELD_PATHS.foxEarWidth, AVATAR_SEED_FIELD_PATHS.foxHeadTaper],
+          seed: 'v1-arctic-fox',
+          version: 1 as const
+        }
+      },
+      scene: { ...definition.scene, entity: { ...definition.scene.entity, preset: 'fox' as const } }
+    }
+
+    expect(isAvatarDefinition(fox)).toBe(true)
+    expect(parseAvatarDefinition(serializeAvatarDefinition(fox))).toEqual(fox)
+  })
+
+  it('projects deterministic pig and deer spots onto their real three-dimensional head and ears', () => {
+    const parts = [
+      { baseColor: '#b77a4c', face: true, foregroundColor: '#39251b', highlightColor: '#dda77a', id: 'primary', label: 'Head', scaleX: .72, scaleY: .76, shadowColor: '#744931', shape: 'ellipse' as const, x: 0, y: 0, z: 0 },
+      { baseColor: '#a06747', face: false, foregroundColor: '#39251b', highlightColor: '#dda77a', id: 'ear-left', label: 'Left ear', scaleX: .2, scaleY: .3, shadowColor: '#744931', shape: 'ellipse' as const, x: -62, y: -68, z: -12 },
+      { baseColor: '#a06747', face: false, foregroundColor: '#39251b', highlightColor: '#dda77a', id: 'ear-right', label: 'Right ear', scaleX: .2, scaleY: .3, shadowColor: '#744931', shape: 'ellipse' as const, x: 62, y: -68, z: -12 }
+    ]
+    const pattern = { ...DEFAULT_AVATAR_COAT_PATTERN, enabled: true, seed: 'v1-animal-spots' }
+
+    for (const { entityPreset, paletteId } of [
+      { entityPreset: 'deer', paletteId: 'sika-deer' },
+      { entityPreset: 'pig', paletteId: 'spotted-pig' }
+    ] as const) {
+      const options = { entityParts: parts, entityPreset, paletteId, pattern }
+      const decals = resolveAvatarCoatPatternDecals(options)
+      expect(decals.length).toBeGreaterThan(0)
+      expect(resolveAvatarCoatPatternDecals(options)).toEqual(decals)
+      expect(decals.some(decal => decal.targetPartId === 'ear-left')).toBe(true)
+      expect(decals.some(decal => decal.targetPartId === 'ear-right')).toBe(true)
+      expect(decals.some(decal => decal.side === 'left' || decal.side === 'right')).toBe(true)
+      expect(decals.every(decal => decal.id.startsWith(`coat-${entityPreset}-spots-`))).toBe(true)
+    }
+
+    expect(resolveAvatarCoatPatternDecals({
+      entityParts: parts,
+      entityPreset: 'pig',
+      paletteId: 'pink-pig',
+      pattern
+    })).toEqual([])
+    expect(resolveAvatarCoatPatternDecals({
+      entityParts: parts,
+      entityPreset: 'deer',
+      paletteId: 'reindeer',
+      pattern
+    })).toEqual([])
   })
 
   it('accepts old coat definitions while validating optional light coat patch fields', () => {
