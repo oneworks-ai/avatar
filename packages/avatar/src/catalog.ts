@@ -14,6 +14,133 @@ export interface AvatarPalette {
   readonly entityMaterials?: Readonly<Record<string, { readonly baseColor: string; readonly foregroundColor: string; readonly highlightColor: string; readonly shadowColor: string }>>
 }
 
+/** A breed-owned, percentage-based fur brightness interval. */
+export interface AvatarPaletteToneJitterRange {
+  readonly max: number
+  readonly min: number
+}
+
+const AVATAR_PALETTE_TONE_JITTER_LIMIT = 40
+
+const adjustAvatarPaletteHexTone = (color: string, amount: number): string => {
+  if (!/^#[\da-f]{6}$/iu.test(color)) return color
+  const scale = 1 + Math.max(-AVATAR_PALETTE_TONE_JITTER_LIMIT, Math.min(AVATAR_PALETTE_TONE_JITTER_LIMIT, amount)) / 100
+  const channel = (offset: number) => Math.min(255, Math.max(0,
+    Math.round(Number.parseInt(color.slice(offset, offset + 2), 16) * scale)
+  )).toString(16).padStart(2, '0')
+  return `#${channel(1)}${channel(3)}${channel(5)}`
+}
+
+/** Adjusts one authored fur or marking color without changing its hue. */
+export const applyAvatarPaletteColorTone = (color: string, amount: number): string => (
+  adjustAvatarPaletteHexTone(color, amount)
+)
+
+const avatarPaletteToneLuminance = (color: string): number => {
+  if (!/^#[\da-f]{6}$/iu.test(color)) return 0
+  return (
+    Number.parseInt(color.slice(1, 3), 16) * .2126 +
+    Number.parseInt(color.slice(3, 5), 16) * .7152 +
+    Number.parseInt(color.slice(5, 7), 16) * .0722
+  ) / 255
+}
+
+/**
+ * Derives a complete natural-fur palette without changing its public identity.
+ * Eyes, noses, nostrils, and defining dark masks remain deliberately untouched.
+ */
+export const applyAvatarPaletteToneJitter = (
+  palette: AvatarPalette,
+  amount: number
+): AvatarPalette => {
+  const boundedAmount = Number.isFinite(amount)
+    ? Math.max(-AVATAR_PALETTE_TONE_JITTER_LIMIT, Math.min(AVATAR_PALETTE_TONE_JITTER_LIMIT, Math.round(amount)))
+    : 0
+  if (boundedAmount === 0) return palette
+
+  const hasProtectedDarkIdentity = palette.coat?.marking === 'mask' ||
+    palette.coat?.marking === 'panda' || palette.coat?.marking === 'spectacles' ||
+    palette.coat?.marking === 'raccoon'
+  const baseLuminance = avatarPaletteToneLuminance(palette.background)
+  const protectDarkIdentity = (color: string) => hasProtectedDarkIdentity &&
+    baseLuminance - avatarPaletteToneLuminance(color) > .32
+  const adjustPatch = (color: string) => protectDarkIdentity(color)
+    ? color
+    : adjustAvatarPaletteHexTone(color, boundedAmount * .55)
+
+  const entityMaterials = palette.entityMaterials == null ? undefined : Object.fromEntries(
+    Object.entries(palette.entityMaterials).map(([partId, material]) => {
+      const isNostril = partId.startsWith('nostril-')
+      const isHorn = partId.startsWith('horn-') || partId.startsWith('antler-')
+      const isPatch = partId.startsWith('cheek-') || partId === 'muzzle' || partId === 'snout'
+      const protectedMaterial = isNostril || protectDarkIdentity(material.baseColor)
+      const materialAmount = protectedMaterial ? 0 : boundedAmount * (isHorn ? .38 : isPatch ? .58 : 1)
+      return [partId, {
+        baseColor: adjustAvatarPaletteHexTone(material.baseColor, materialAmount),
+        foregroundColor: material.foregroundColor,
+        highlightColor: adjustAvatarPaletteHexTone(material.highlightColor, materialAmount * .65),
+        shadowColor: adjustAvatarPaletteHexTone(material.shadowColor, materialAmount * .7)
+      }]
+    })
+  )
+
+  return {
+    ...palette,
+    background: adjustAvatarPaletteHexTone(palette.background, boundedAmount),
+    ...(palette.coat == null ? {} : {
+      coat: {
+        ...palette.coat,
+        mark: palette.coat.mark,
+        patch: adjustPatch(palette.coat.patch)
+      }
+    }),
+    ...(entityMaterials == null ? {} : { entityMaterials }),
+    gradient: [
+      adjustAvatarPaletteHexTone(palette.gradient[0], boundedAmount),
+      adjustAvatarPaletteHexTone(palette.gradient[1], boundedAmount * .65)
+    ],
+    shadow: adjustAvatarPaletteHexTone(palette.shadow, boundedAmount * .7)
+  }
+}
+
+/** Restores a saved/shared fur tone from concrete material colors alone. */
+export const resolveAvatarPaletteFromEntityParts = (
+  palette: AvatarPalette,
+  entityParts: readonly {
+    readonly baseColor: string
+    readonly face: boolean
+    readonly highlightColor?: string
+    readonly id?: string
+    readonly shadowColor?: string
+  }[]
+): AvatarPalette => {
+  const facePart = entityParts.find(part => part.face)
+  if (facePart == null) return palette
+  const originalColor = facePart.id == null
+    ? palette.background
+    : palette.entityMaterials?.[facePart.id]?.baseColor ?? palette.background
+  let bestAmount: number | null = null
+  let bestScore = -1
+  for (let amount = -AVATAR_PALETTE_TONE_JITTER_LIMIT; amount <= AVATAR_PALETTE_TONE_JITTER_LIMIT; amount += 1) {
+    if (adjustAvatarPaletteHexTone(originalColor, amount).toLowerCase() !== facePart.baseColor.toLowerCase()) continue
+
+    const candidate = applyAvatarPaletteToneJitter(palette, amount)
+    let score = 0
+    for (const part of entityParts) {
+      const material = part.id == null ? undefined : candidate.entityMaterials?.[part.id]
+      const expectedBase = material?.baseColor ?? candidate.background
+      if (part.baseColor.toLowerCase() === expectedBase.toLowerCase()) score += part.face ? 8 : 2
+      if (material != null && part.highlightColor?.toLowerCase() === material.highlightColor.toLowerCase()) score += 2
+      if (material != null && part.shadowColor?.toLowerCase() === material.shadowColor.toLowerCase()) score += 3
+    }
+    if (score > bestScore || (score === bestScore && Math.abs(amount) < Math.abs(bestAmount ?? amount))) {
+      bestAmount = amount
+      bestScore = score
+    }
+  }
+  return bestAmount == null ? palette : applyAvatarPaletteToneJitter(palette, bestAmount)
+}
+
 interface NaturalAnimalPaletteOptions {
   readonly ear?: string
   readonly foreground: string
@@ -507,9 +634,9 @@ export const AVATAR_PALETTES: readonly AvatarPalette[] = [
     }
   },
   { id: 'brown-bear', name: 'Brown Bear', background: '#8b5737', gradient: ['#8b5737', '#bd8153'], foreground: '#211711', shadow: '#4c2c1e', coat: { mark: '#70432b', marking: 'muzzle', patch: '#d6a576' }, entityMaterials: { 'ear-left': { baseColor: '#67402b', foregroundColor: '#211711', highlightColor: '#9f6845', shadowColor: '#382015' }, 'ear-right': { baseColor: '#67402b', foregroundColor: '#211711', highlightColor: '#9f6845', shadowColor: '#382015' }, primary: { baseColor: '#8b5737', foregroundColor: '#211711', highlightColor: '#bd8153', shadowColor: '#4c2c1e' } } },
-  { id: 'polar-bear', name: 'Polar Bear', background: '#f4f1e8', gradient: ['#f4f1e8', '#d9e4e7'], foreground: '#26343a', shadow: '#aebec2', coat: { mark: '#b6d0d4', marking: 'muzzle', patch: '#fffdf6' }, entityMaterials: { 'ear-left': { baseColor: '#e3e8e5', foregroundColor: '#26343a', highlightColor: '#ffffff', shadowColor: '#afc1c3' }, 'ear-right': { baseColor: '#e3e8e5', foregroundColor: '#26343a', highlightColor: '#ffffff', shadowColor: '#afc1c3' }, primary: { baseColor: '#f4f1e8', foregroundColor: '#26343a', highlightColor: '#fffdf6', shadowColor: '#aebec2' } } },
+  { id: 'polar-bear', name: 'Polar Bear', background: '#e7e5dc', gradient: ['#e7e5dc', '#d9e4e7'], foreground: '#26343a', shadow: '#aebec2', coat: { mark: '#b6d0d4', marking: 'muzzle', patch: '#fffdf6' }, entityMaterials: { 'ear-left': { baseColor: '#dbe0dd', foregroundColor: '#26343a', highlightColor: '#ffffff', shadowColor: '#afc1c3' }, 'ear-right': { baseColor: '#dbe0dd', foregroundColor: '#26343a', highlightColor: '#ffffff', shadowColor: '#afc1c3' }, primary: { baseColor: '#e7e5dc', foregroundColor: '#26343a', highlightColor: '#fffdf6', shadowColor: '#aebec2' } } },
   { id: 'asian-black-bear', name: 'Asian Black Bear', background: '#242527', gradient: ['#242527', '#4b4d50'], foreground: '#d9b57a', shadow: '#0d0e0f', coat: { mark: '#111214', marking: 'moon', patch: '#e7d7ad' }, entityMaterials: { 'ear-left': { baseColor: '#161719', foregroundColor: '#d9b57a', highlightColor: '#414348', shadowColor: '#070708' }, 'ear-right': { baseColor: '#161719', foregroundColor: '#d9b57a', highlightColor: '#414348', shadowColor: '#070708' }, primary: { baseColor: '#242527', foregroundColor: '#d9b57a', highlightColor: '#4b4d50', shadowColor: '#0d0e0f' } } },
-  { id: 'giant-panda', name: 'Giant Panda', background: '#f5f3ec', gradient: ['#f5f3ec', '#d9ddd9'], foreground: '#b56c45', shadow: '#9fa6a2', coat: { mark: '#303338', marking: 'panda', patch: '#f8f6ef' }, entityMaterials: { 'ear-left': { baseColor: '#24272a', foregroundColor: '#b56c45', highlightColor: '#43484b', shadowColor: '#101113' }, 'ear-right': { baseColor: '#24272a', foregroundColor: '#b56c45', highlightColor: '#43484b', shadowColor: '#101113' }, primary: { baseColor: '#f5f3ec', foregroundColor: '#b56c45', highlightColor: '#ffffff', shadowColor: '#9fa6a2' } } },
+  { id: 'giant-panda', name: 'Giant Panda', background: '#dedbd1', gradient: ['#dedbd1', '#f1efe8'], foreground: '#b56c45', shadow: '#9fa6a2', coat: { mark: '#303338', marking: 'panda', patch: '#f8f6ef' }, entityMaterials: { 'ear-left': { baseColor: '#24272a', foregroundColor: '#b56c45', highlightColor: '#43484b', shadowColor: '#101113' }, 'ear-right': { baseColor: '#24272a', foregroundColor: '#b56c45', highlightColor: '#43484b', shadowColor: '#101113' }, primary: { baseColor: '#dedbd1', foregroundColor: '#b56c45', highlightColor: '#fffdf7', shadowColor: '#9fa6a2' } } },
   { id: 'spectacled-bear', name: 'Spectacled Bear', background: '#3a2e25', gradient: ['#3a2e25', '#675142'], foreground: '#d4a871', shadow: '#1e1712', coat: { mark: '#d7c19a', marking: 'spectacles', patch: '#b88958' }, entityMaterials: { 'ear-left': { baseColor: '#2b221c', foregroundColor: '#d4a871', highlightColor: '#514139', shadowColor: '#15100d' }, 'ear-right': { baseColor: '#2b221c', foregroundColor: '#d4a871', highlightColor: '#514139', shadowColor: '#15100d' }, primary: { baseColor: '#3a2e25', foregroundColor: '#d4a871', highlightColor: '#675142', shadowColor: '#1e1712' } } },
   { id: 'sun-bear', name: 'Sun Bear', background: '#2c2722', gradient: ['#2c2722', '#544a3d'], foreground: '#d9a56b', shadow: '#14110e', coat: { mark: '#151310', marking: 'sun', patch: '#e8bd77' }, entityMaterials: { 'ear-left': { baseColor: '#1d1a17', foregroundColor: '#d9a56b', highlightColor: '#3e3730', shadowColor: '#0d0b0a' }, 'ear-right': { baseColor: '#1d1a17', foregroundColor: '#d9a56b', highlightColor: '#3e3730', shadowColor: '#0d0b0a' }, primary: { baseColor: '#2c2722', foregroundColor: '#d9a56b', highlightColor: '#544a3d', shadowColor: '#14110e' } } },
   { id: 'red-panda', name: 'Red Panda', background: '#b65b32', gradient: ['#b65b32', '#de9257'], foreground: '#2d211c', shadow: '#6b301e', coat: { mark: '#f1d7ae', marking: 'red-panda', patch: '#f5e6c9' }, entityMaterials: { 'ear-left': { baseColor: '#7f3825', foregroundColor: '#2d211c', highlightColor: '#b75e38', shadowColor: '#431c15' }, 'ear-right': { baseColor: '#7f3825', foregroundColor: '#2d211c', highlightColor: '#b75e38', shadowColor: '#431c15' }, primary: { baseColor: '#b65b32', foregroundColor: '#2d211c', highlightColor: '#de9257', shadowColor: '#6b301e' } } },
@@ -519,7 +646,7 @@ export const AVATAR_PALETTES: readonly AvatarPalette[] = [
   { id: 'teddy-bear', name: 'Teddy Bear', background: '#b98050', gradient: ['#b98050', '#dfad78'], foreground: '#4b2d1d', shadow: '#77452c', coat: { mark: '#895232', marking: 'muzzle', patch: '#edc38d' }, entityMaterials: { 'ear-left': { baseColor: '#9a5d3b', foregroundColor: '#4b2d1d', highlightColor: '#c98254', shadowColor: '#5f3522' }, 'ear-right': { baseColor: '#9a5d3b', foregroundColor: '#4b2d1d', highlightColor: '#c98254', shadowColor: '#5f3522' }, primary: { baseColor: '#b98050', foregroundColor: '#4b2d1d', highlightColor: '#dfad78', shadowColor: '#77452c' } } },
   naturalAnimalPalette({ id: 'syrian-hamster', name: 'Syrian Hamster', tone: '#c99152', highlight: '#edc38d', shadow: '#795032', foreground: '#38241c', ear: '#b97855', mark: '#a16c3f', marking: 'muzzle', patch: '#f7e4c5' }),
   naturalAnimalPalette({ id: 'pudding-hamster', name: 'Pudding Hamster', tone: '#e5bd76', highlight: '#f8dea7', shadow: '#ad8350', foreground: '#4e3826', ear: '#d6a47c', mark: '#c59658', marking: 'muzzle', patch: '#fff0d1' }),
-  naturalAnimalPalette({ id: 'silver-fox-hamster', name: 'Silver Fox Hamster', tone: '#ece9e1', highlight: '#fffdf6', shadow: '#b4afa4', foreground: '#302b2a', ear: '#b9a7a3', mark: '#a9a39c', marking: 'blaze', patch: '#fffdf8' }),
+  naturalAnimalPalette({ id: 'silver-fox-hamster', name: 'Silver Fox Hamster', tone: '#e3e0d8', highlight: '#fffdf6', shadow: '#b4afa4', foreground: '#302b2a', ear: '#b9a7a3', mark: '#a9a39c', marking: 'blaze', patch: '#fffdf8' }),
   naturalAnimalPalette({ id: 'sapphire-hamster', name: 'Sapphire Hamster', tone: '#8b8997', highlight: '#bebbc4', shadow: '#595764', foreground: '#292732', ear: '#777280', mark: '#626170', marking: 'muzzle', patch: '#ded9db' }),
   naturalAnimalPalette({ id: 'capybara', name: 'Capybara', tone: '#a77b58', highlight: '#c8a17c', shadow: '#694a37', foreground: '#34261e', ear: '#8b654d', mark: '#805b42', marking: 'muzzle', patch: '#d4b291' }),
   naturalAnimalPalette({ id: 'sandy-capybara', name: 'Sandy Capybara', tone: '#c2a079', highlight: '#e0c39e', shadow: '#866744', foreground: '#473326', ear: '#ad8a69', mark: '#967551', marking: 'muzzle', patch: '#ecd8ba' }),
@@ -530,11 +657,11 @@ export const AVATAR_PALETTES: readonly AvatarPalette[] = [
   naturalAnimalPalette({ id: 'asian-small-clawed-otter', name: 'Asian Small-clawed Otter', tone: '#917055', highlight: '#b99b7d', shadow: '#604835', foreground: '#34261d', ear: '#7e6049', mark: '#b59879', marking: 'muzzle', patch: '#f0e0c4' }),
   naturalAnimalPalette({ id: 'pink-pig', name: 'Pink Pig', tone: '#efb0ac', highlight: '#ffd4d0', shadow: '#bd7777', foreground: '#713f43', ear: '#df9391', mark: '#d88d8b', marking: 'muzzle', patch: '#f8c5bf' }),
   naturalAnimalPalette({ id: 'black-pig', name: 'Black Pig', tone: '#353035', highlight: '#64555a', shadow: '#1e1a1e', foreground: '#dca87f', ear: '#292529', mark: '#58464a', marking: 'muzzle', patch: '#725760' }),
-  naturalAnimalPalette({ id: 'spotted-pig', name: 'Spotted Pig', tone: '#ead3c7', highlight: '#fff0e5', shadow: '#a99589', foreground: '#55372f', ear: '#d7b3a7', mark: '#595251', marking: 'spots', patch: '#f4d8cd' }),
+  naturalAnimalPalette({ id: 'spotted-pig', name: 'Spotted Pig', tone: '#ead3c7', highlight: '#fff0e5', shadow: '#a99589', foreground: '#55372f', ear: '#d7b3a7', mark: '#595251', marking: 'spots', patch: '#d9a399' }),
   naturalAnimalPalette({ id: 'wild-boar', name: 'Wild Boar', tone: '#665347', highlight: '#927969', shadow: '#403329', foreground: '#e8cbaa', ear: '#564338', mark: '#43352e', marking: 'blaze', patch: '#b49273' }),
   naturalAnimalPalette({ id: 'sika-deer', name: 'Sika Deer', tone: '#b77a4c', highlight: '#dda77a', shadow: '#744931', foreground: '#39251b', ear: '#a06747', horn: '#806447', mark: '#f2ddbb', marking: 'spots', patch: '#f5e7cf' }),
   naturalAnimalPalette({ id: 'reindeer', name: 'Reindeer', tone: '#8a7565', highlight: '#b49c84', shadow: '#59493f', foreground: '#33271f', ear: '#756153', horn: '#b59876', mark: '#cbbba6', marking: 'muzzle', patch: '#e2d5c1' }),
-  naturalAnimalPalette({ id: 'white-deer', name: 'White Deer', tone: '#ece9df', highlight: '#fffdf4', shadow: '#c0b8aa', foreground: '#453a34', ear: '#e2d8ca', horn: '#b8a386', mark: '#d7cec0', marking: 'muzzle', patch: '#fff9ec' }),
+  naturalAnimalPalette({ id: 'white-deer', name: 'White Deer', tone: '#e5e1d6', highlight: '#fffdf4', shadow: '#c0b8aa', foreground: '#453a34', ear: '#d9cfc1', horn: '#b8a386', mark: '#d7cec0', marking: 'muzzle', patch: '#fff9ec' }),
   naturalAnimalPalette({ id: 'deer-fawn', name: 'Fawn', tone: '#c28a5a', highlight: '#e4b587', shadow: '#845839', foreground: '#3d281c', ear: '#b07451', mark: '#f6e5c8', marking: 'spots', patch: '#f7ead2' }),
   naturalAnimalPalette({ id: 'white-sheep', name: 'White Sheep', tone: '#f0ece0', highlight: '#fffdf6', shadow: '#c6bca9', foreground: '#3a302c', ear: '#d8cbb9', mark: '#e0d7c5', marking: 'muzzle', patch: '#f7eee0' }),
   naturalAnimalPalette({ id: 'black-faced-sheep', name: 'Black-faced Sheep', tone: '#e9e4d8', highlight: '#fffdf4', shadow: '#beb5a5', foreground: '#ecdfc2', ear: '#383438', mark: '#39353a', marking: 'mask', patch: '#454047' }),
@@ -557,14 +684,14 @@ export const AVATAR_PALETTES: readonly AvatarPalette[] = [
   {
     id: 'arctic-fox',
     name: 'Arctic Fox',
-    background: '#edf0eb',
-    gradient: ['#edf0eb', '#fffdf8'],
+    background: '#e2e6e0',
+    gradient: ['#e2e6e0', '#fffdf8'],
     foreground: '#38454c',
     shadow: '#adb9bd',
     entityMaterials: {
       'fox-ear-left': { baseColor: '#dce1df', foregroundColor: '#38454c', highlightColor: '#f8f7f2', shadowColor: '#a9b5b8' },
       'fox-ear-right': { baseColor: '#dce1df', foregroundColor: '#38454c', highlightColor: '#f8f7f2', shadowColor: '#a9b5b8' },
-      'fox-head': { baseColor: '#edf0eb', foregroundColor: '#38454c', highlightColor: '#fffdf8', shadowColor: '#adb9bd' }
+      'fox-head': { baseColor: '#e2e6e0', foregroundColor: '#38454c', highlightColor: '#fffdf8', shadowColor: '#adb9bd' }
     }
   },
   {

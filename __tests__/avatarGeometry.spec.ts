@@ -9,6 +9,7 @@ import {
   resolveAvatarSurfaceShadeOpacity
 } from '../src/avatarGeometry'
 import { AVATAR_FACE_PRESETS } from '../src/avatarFacePresets'
+import { applySheepHeadScale, createAvatarEntityParts, createSheepSurfaceDecals } from '../src/avatarEntityPresets'
 
 const POSE = { pitch: -.35, yaw: .4 }
 const LIGHT = { azimuth: -92, elevation: 64 }
@@ -222,6 +223,37 @@ describe('avatar surface lighting', () => {
 })
 
 describe('avatar face-anchored surface decals', () => {
+  it('keeps sheep heads and wool rounded from side views while face masks follow the same thick surface', () => {
+    const parts = createAvatarEntityParts('sheep')
+    const head = parts.find(part => part.face)!
+    const options = {
+      bottomTaper: head.bottomTaper,
+      scaleX: head.scaleX,
+      scaleY: head.scaleY,
+      scaleZ: head.scaleZ
+    }
+    const front = buildAvatarBodyGeometry('ellipse', { pitch: 0, yaw: 0 }, LIGHT, 100, options)
+    const side = buildAvatarBodyGeometry('ellipse', { pitch: 0, yaw: 1.38 }, LIGHT, 100, options)
+    const top = buildAvatarBodyGeometry('ellipse', { pitch: -.95, yaw: .32 }, LIGHT, 100, options)
+
+    expect(projectedPathExtent(side.outlinePath).width)
+      .toBeGreaterThan(projectedPathExtent(front.outlinePath).width * .88)
+    expect(projectedPathExtent(top.outlinePath).height)
+      .toBeGreaterThan(projectedPathExtent(front.outlinePath).height * .74)
+
+    for (const pose of [{ pitch: 0, yaw: 0 }, { pitch: -.24, yaw: .78 }, { pitch: -.5, yaw: 1.1 }]) {
+      const projected = projectAvatarSurfaceDecal(pose, 'ellipse', createSheepSurfaceDecals()[0]!, options)
+      expect(projected?.path, `sheep surface marking must follow ${JSON.stringify(pose)}`).toContain(' Z')
+      expect(projected?.path).not.toContain('NaN')
+    }
+
+    const expanded = applySheepHeadScale(parts, 125, 110)
+    const expandedHead = expanded.find(part => part.face)!
+    expect(expandedHead.scaleZ).toBeGreaterThan(head.scaleZ!)
+    expect(expanded.find(part => part.id === 'wool-crown-center')!.scaleZ)
+      .toBeGreaterThan(parts.find(part => part.id === 'wool-crown-center')!.scaleZ!)
+  })
+
   it('uses the same projection as facial features at extreme poses', () => {
     const pose = { pitch: -.96, yaw: 1.32 }
     const face = projectDefaultFace(pose, 'sphere', {

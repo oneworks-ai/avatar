@@ -28,6 +28,11 @@ import type { AvatarEntityPreset } from './avatarEntityPresets'
 import { AVATAR_FACE_PRESETS, DEFAULT_AVATAR_FACE_PRESET } from './avatarFacePresets'
 import type { AvatarFacePreset } from './avatarFacePresets'
 
+export interface AvatarPaletteToneJitterRange {
+  readonly max: number
+  readonly min: number
+}
+
 export const AVATAR_ANIMAL_SPECIES_IDS = ['fox', 'hamster', 'capybara', 'otter', 'pig', 'deer', 'sheep'] as const
 export type AvatarAnimalSpeciesId = (typeof AVATAR_ANIMAL_SPECIES_IDS)[number]
 
@@ -129,6 +134,7 @@ export interface AvatarSeedDomain {
   readonly lightPatchShapes?: readonly AvatarCoatPatternLightPatchShape[]
   readonly paletteIds?: readonly string[]
   readonly ranges?: Partial<Record<AvatarSeedField, { readonly max: number; readonly min: number }>>
+  readonly toneJitter?: AvatarPaletteToneJitterRange
 }
 
 export const AVATAR_COAT_PATTERN_SEED_FIELDS = AVATAR_SEED_FIELDS.filter(
@@ -326,6 +332,7 @@ export const resolveSeededAvatarAnimalScale = (
 }
 
 const FACE_PRESETS: readonly AvatarFacePreset[] = [DEFAULT_AVATAR_FACE_PRESET, ...AVATAR_FACE_PRESETS]
+  .filter(preset => preset.style.eyeShape === 'rounded')
 
 export const resolveSeededAvatarFacePreset = (seed: string): AvatarFacePreset => {
   const id = resolveAvatarSeededOption(
@@ -344,6 +351,22 @@ export const resolveSeededAvatarPaletteId = (
   AVATAR_SEED_FIELD.palette,
   candidates
 )
+
+/** Samples only this breed's natural brightness envelope, without changing its palette ID. */
+export const resolveSeededAvatarPaletteTone = (
+  seed: string,
+  paletteId: string,
+  domain?: AvatarSeedDomain
+): number => {
+  const range = domain?.toneJitter
+  if (range == null) return 0
+  return resolveAvatarSeededInteger(
+    seed,
+    `${AVATAR_SEED_FIELD.palette}:${paletteId}:tone`,
+    range.min,
+    range.max
+  )
+}
 
 export const resolveSeededAvatarTabbyPaletteId = (seed: string) => resolveSeededAvatarPaletteId(
   seed,

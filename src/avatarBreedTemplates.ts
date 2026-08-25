@@ -25,6 +25,7 @@ import type {
 } from './avatarEntityPresets'
 import { DEFAULT_AVATAR_FACE_STYLE } from './avatarGeometry'
 import type { AvatarFaceStyle } from './avatarGeometry'
+import { getAvatarBreedToneJitterRange, resolveAvatarBreedPalette } from './avatarBreedTone'
 import {
   AVATAR_SEED_FIELD,
   resolveSeededAvatarCatEarScale,
@@ -36,7 +37,21 @@ import {
   resolveSeededAvatarRabbitHeadScale,
   resolveSeededAvatarCoatPattern
 } from './avatarSeed'
-import type { AvatarSeedDomain, AvatarSeedField } from './avatarSeed'
+import type { AvatarPaletteToneJitterRange, AvatarSeedDomain, AvatarSeedField } from './avatarSeed'
+
+const withAvatarBreedTone = <T extends {
+  readonly fixed: { readonly paletteId: string }
+  readonly followByDefault: readonly AvatarSeedField[]
+  readonly seedDomain: AvatarSeedDomain
+}>(template: T): T & { readonly toneJitter: AvatarPaletteToneJitterRange } => {
+  const toneJitter = getAvatarBreedToneJitterRange(template.fixed.paletteId)
+  return {
+    ...template,
+    followByDefault: [AVATAR_SEED_FIELD.palette, ...template.followByDefault],
+    seedDomain: { ...template.seedDomain, toneJitter },
+    toneJitter
+  }
+}
 
 export const AVATAR_CAT_BREED_TEMPLATE_IDS = [
   'siamese',
@@ -61,6 +76,7 @@ export interface AvatarCatBreedTemplate {
   readonly label: string
   readonly previewBackground?: string
   readonly seedDomain: AvatarSeedDomain
+  readonly toneJitter: AvatarPaletteToneJitterRange
 }
 
 export const AVATAR_CAT_BREED_CONTROLLED_FIELDS = [
@@ -81,7 +97,7 @@ export const AVATAR_CAT_BREED_CONTROLLED_FIELDS = [
   AVATAR_SEED_FIELD.coatPatternBreakup
 ] as const satisfies readonly AvatarSeedField[]
 
-export const AVATAR_CAT_BREED_TEMPLATES: readonly AvatarCatBreedTemplate[] = [
+export const AVATAR_CAT_BREED_TEMPLATES: readonly AvatarCatBreedTemplate[] = ([
   {
     fixed: {
       catEarHeight: 114,
@@ -311,7 +327,7 @@ export const AVATAR_CAT_BREED_TEMPLATES: readonly AvatarCatBreedTemplate[] = [
       }
     }
   }
-] as const
+] as const).map(withAvatarBreedTone)
 
 export const getAvatarCatBreedTemplate = (id: string | null | undefined) => (
   AVATAR_CAT_BREED_TEMPLATES.find(template => template.id === id) ?? null
@@ -351,7 +367,7 @@ export const resolveAvatarCatBreedTemplate = (
   const catEarHeight = template.followByDefault.includes(AVATAR_SEED_FIELD.catEarHeight)
     ? resolveSeededAvatarCatEarScale(seed, 'height', template.seedDomain)
     : template.fixed.catEarHeight
-  const palette = getAvatarPalette(template.fixed.paletteId)
+  const palette = resolveAvatarBreedPalette(template.fixed.paletteId, seed, template.seedDomain)
   const entityParts = applyAvatarEntityPalette(
     applyCatEarScale(
       createAvatarEntityParts('cat'),
@@ -395,6 +411,7 @@ export interface AvatarDogBreedTemplate {
   readonly label: string
   readonly previewBackground?: string
   readonly seedDomain: AvatarSeedDomain
+  readonly toneJitter: AvatarPaletteToneJitterRange
 }
 
 export const AVATAR_DOG_BREED_CONTROLLED_FIELDS = [
@@ -432,7 +449,7 @@ const DOG_COAT_BASE = {
   thickness: 100
 }
 
-export const AVATAR_DOG_BREED_TEMPLATES: readonly AvatarDogBreedTemplate[] = [
+export const AVATAR_DOG_BREED_TEMPLATES: readonly AvatarDogBreedTemplate[] = ([
   {
     earStyle: 'upright',
     fixed: { coatPattern: { ...DOG_COAT_BASE, lightPatchLength: 96, lightPatchWidth: 104 }, dogEarHeight: 118, dogEarWidth: 104, dogHeadHeight: 96, dogHeadWidth: 102, paletteId: 'shiba-inu' },
@@ -512,7 +529,7 @@ export const AVATAR_DOG_BREED_TEMPLATES: readonly AvatarDogBreedTemplate[] = [
       [AVATAR_SEED_FIELD.coatPatternDensity]: { min: 46, max: 78 }
     } }
   }
-] as const
+] as const).map(withAvatarBreedTone)
 
 export const getAvatarDogBreedTemplate = (id: string | null | undefined) => (
   AVATAR_DOG_BREED_TEMPLATES.find(template => template.id === id) ?? null
@@ -551,7 +568,7 @@ export const resolveAvatarDogBreedTemplate = (
   const dogHeadHeight = template.followByDefault.includes(AVATAR_SEED_FIELD.dogHeadHeight)
     ? resolveSeededAvatarDogHeadScale(seed, 'height', template.seedDomain)
     : template.fixed.dogHeadHeight
-  const palette = getAvatarPalette(template.fixed.paletteId)
+  const palette = resolveAvatarBreedPalette(template.fixed.paletteId, seed, template.seedDomain)
   const entityParts = applyAvatarEntityPalette(applyDogHeadScale(
     applyDogEarStyle(
       applyDogEarScale(createAvatarEntityParts('dog'), dogEarWidth, dogEarHeight),
@@ -583,6 +600,7 @@ export interface AvatarRabbitBreedTemplate {
   readonly label: string
   readonly previewBackground?: string
   readonly seedDomain: AvatarSeedDomain
+  readonly toneJitter: AvatarPaletteToneJitterRange
 }
 export const AVATAR_RABBIT_BREED_CONTROLLED_FIELDS = [
   AVATAR_SEED_FIELD.palette, AVATAR_SEED_FIELD.rabbitEarWidth, AVATAR_SEED_FIELD.rabbitEarHeight, AVATAR_SEED_FIELD.rabbitHeadWidth, AVATAR_SEED_FIELD.rabbitHeadHeight,
@@ -591,7 +609,7 @@ export const AVATAR_RABBIT_BREED_CONTROLLED_FIELDS = [
   AVATAR_SEED_FIELD.coatPatternThickness, AVATAR_SEED_FIELD.coatPatternSymmetry, AVATAR_SEED_FIELD.coatPatternContrast, AVATAR_SEED_FIELD.coatPatternBreakup
 ] as const satisfies readonly AvatarSeedField[]
 const RABBIT_COAT = { ...DOG_COAT_BASE, density: 0, thickness: 90 }
-const rabbitTemplate = (id: AvatarRabbitBreedTemplateId, label: string, earStyle: AvatarRabbitEarStyle, paletteId: string, ears: readonly [number, number], head: readonly [number, number], followByDefault: readonly AvatarSeedField[], ranges: AvatarSeedDomain['ranges'], coatPattern: Partial<AvatarCoatPattern> = {}, previewBackground?: string): AvatarRabbitBreedTemplate => ({
+const rabbitTemplate = (id: AvatarRabbitBreedTemplateId, label: string, earStyle: AvatarRabbitEarStyle, paletteId: string, ears: readonly [number, number], head: readonly [number, number], followByDefault: readonly AvatarSeedField[], ranges: AvatarSeedDomain['ranges'], coatPattern: Partial<AvatarCoatPattern> = {}, previewBackground?: string): AvatarRabbitBreedTemplate => withAvatarBreedTone({
   earStyle, fixed: { coatPattern: { ...RABBIT_COAT, ...coatPattern }, paletteId, rabbitEarHeight: ears[1], rabbitEarWidth: ears[0], rabbitHeadHeight: head[1], rabbitHeadWidth: head[0] }, followByDefault, id, label, previewBackground, seedDomain: { paletteIds: [paletteId], ranges }
 })
 export const AVATAR_RABBIT_BREED_TEMPLATES: readonly AvatarRabbitBreedTemplate[] = [
@@ -610,7 +628,7 @@ export const resolveAvatarRabbitBreedTemplate = (template: AvatarRabbitBreedTemp
   const ear = (field: 'height' | 'width') => template.followByDefault.includes(field === 'width' ? AVATAR_SEED_FIELD.rabbitEarWidth : AVATAR_SEED_FIELD.rabbitEarHeight) ? resolveSeededAvatarRabbitEarScale(seed, field, template.seedDomain) : field === 'width' ? template.fixed.rabbitEarWidth : template.fixed.rabbitEarHeight
   const head = (field: 'height' | 'width') => template.followByDefault.includes(field === 'width' ? AVATAR_SEED_FIELD.rabbitHeadWidth : AVATAR_SEED_FIELD.rabbitHeadHeight) ? resolveSeededAvatarRabbitHeadScale(seed, field, template.seedDomain) : field === 'width' ? template.fixed.rabbitHeadWidth : template.fixed.rabbitHeadHeight
   const rabbitEarWidth = ear('width'), rabbitEarHeight = ear('height'), rabbitHeadWidth = head('width'), rabbitHeadHeight = head('height')
-  const entityParts = applyAvatarEntityPalette(applyRabbitHeadScale(applyRabbitEarStyle(applyRabbitEarScale(createAvatarEntityParts('rabbit'), rabbitEarWidth, rabbitEarHeight), template.earStyle), rabbitHeadWidth, rabbitHeadHeight), getAvatarPalette(template.fixed.paletteId))
+  const entityParts = applyAvatarEntityPalette(applyRabbitHeadScale(applyRabbitEarStyle(applyRabbitEarScale(createAvatarEntityParts('rabbit'), rabbitEarWidth, rabbitEarHeight), template.earStyle), rabbitHeadWidth, rabbitHeadHeight), resolveAvatarBreedPalette(template.fixed.paletteId, seed, template.seedDomain))
   return { coatPattern, rabbitEarHeight, rabbitEarWidth, rabbitHeadHeight, rabbitHeadWidth, entityParts, paletteId: template.fixed.paletteId }
 }
 
@@ -624,6 +642,7 @@ export interface AvatarBearBreedTemplate {
   readonly label: string
   readonly previewBackground?: string
   readonly seedDomain: AvatarSeedDomain
+  readonly toneJitter: AvatarPaletteToneJitterRange
 }
 export const AVATAR_BEAR_BREED_CONTROLLED_FIELDS = [
   AVATAR_SEED_FIELD.palette, AVATAR_SEED_FIELD.bearEarWidth, AVATAR_SEED_FIELD.bearEarHeight, AVATAR_SEED_FIELD.bearHeadWidth, AVATAR_SEED_FIELD.bearHeadHeight,
@@ -632,7 +651,7 @@ export const AVATAR_BEAR_BREED_CONTROLLED_FIELDS = [
   AVATAR_SEED_FIELD.coatPatternThickness, AVATAR_SEED_FIELD.coatPatternSymmetry, AVATAR_SEED_FIELD.coatPatternContrast, AVATAR_SEED_FIELD.coatPatternBreakup
 ] as const satisfies readonly AvatarSeedField[]
 const BEAR_COAT = { ...DOG_COAT_BASE, density: 0, jitter: 0, thickness: 92, symmetry: 100, breakup: 0, contrast: 88, lightPatchOffsetY: 0, lightPatchShape: 'face-mask' as const }
-const bearTemplate = (id: AvatarBearBreedTemplateId, label: string, earStyle: AvatarBearEarStyle, paletteId: string, ears: readonly [number, number], head: readonly [number, number], followByDefault: readonly AvatarSeedField[], ranges: AvatarSeedDomain['ranges'], coatPattern: Partial<AvatarCoatPattern> = {}, previewBackground?: string, foregroundColor?: string, faceStyle?: AvatarEntityFaceStyleOverride): AvatarBearBreedTemplate => ({
+const bearTemplate = (id: AvatarBearBreedTemplateId, label: string, earStyle: AvatarBearEarStyle, paletteId: string, ears: readonly [number, number], head: readonly [number, number], followByDefault: readonly AvatarSeedField[], ranges: AvatarSeedDomain['ranges'], coatPattern: Partial<AvatarCoatPattern> = {}, previewBackground?: string, foregroundColor?: string, faceStyle?: AvatarEntityFaceStyleOverride): AvatarBearBreedTemplate => withAvatarBreedTone({
   earStyle, fixed: { bearEarHeight: ears[1], bearEarWidth: ears[0], bearHeadHeight: head[1], bearHeadWidth: head[0], coatPattern: { ...BEAR_COAT, ...coatPattern }, ...(faceStyle == null ? {} : { faceStyle }), ...(foregroundColor == null ? {} : { foregroundColor }), paletteId }, followByDefault, id, label, previewBackground, seedDomain: { paletteIds: [paletteId], ranges }
 })
 const bearRange = (earWidth: readonly [number, number], earHeight: readonly [number, number], headWidth: readonly [number, number], headHeight: readonly [number, number]) => ({
@@ -680,6 +699,6 @@ export const resolveAvatarBearBreedTemplate = (template: AvatarBearBreedTemplate
   const ear = (field: 'height' | 'width') => template.followByDefault.includes(field === 'width' ? AVATAR_SEED_FIELD.bearEarWidth : AVATAR_SEED_FIELD.bearEarHeight) ? resolveSeededAvatarBearEarScale(seed, field, template.seedDomain) : field === 'width' ? template.fixed.bearEarWidth : template.fixed.bearEarHeight
   const head = (field: 'height' | 'width') => template.followByDefault.includes(field === 'width' ? AVATAR_SEED_FIELD.bearHeadWidth : AVATAR_SEED_FIELD.bearHeadHeight) ? resolveSeededAvatarBearHeadScale(seed, field, template.seedDomain) : field === 'width' ? template.fixed.bearHeadWidth : template.fixed.bearHeadHeight
   const bearEarWidth = ear('width'), bearEarHeight = ear('height'), bearHeadWidth = head('width'), bearHeadHeight = head('height')
-  const entityParts = applyAvatarBearBreedForeground(applyAvatarEntityPalette(applyBearHeadScale(applyBearEarStyle(applyBearEarScale(createAvatarEntityParts('bear'), bearEarWidth, bearEarHeight), template.earStyle), bearHeadWidth, bearHeadHeight), getAvatarPalette(template.fixed.paletteId)), template)
+  const entityParts = applyAvatarBearBreedForeground(applyAvatarEntityPalette(applyBearHeadScale(applyBearEarStyle(applyBearEarScale(createAvatarEntityParts('bear'), bearEarWidth, bearEarHeight), template.earStyle), bearHeadWidth, bearHeadHeight), resolveAvatarBreedPalette(template.fixed.paletteId, seed, template.seedDomain)), template)
   return { bearEarHeight, bearEarWidth, bearHeadHeight, bearHeadWidth, coatPattern, entityParts, faceStyle: resolveAvatarEntityPresetFaceStyle('bear', template.fixed.faceStyle) ?? DEFAULT_AVATAR_FACE_STYLE, paletteId: template.fixed.paletteId }
 }

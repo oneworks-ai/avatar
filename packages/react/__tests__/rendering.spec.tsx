@@ -5,17 +5,28 @@ import { createRoot } from 'react-dom/client'
 import type { Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-import { DEFAULT_AVATAR_COAT_PATTERN, createDefaultAvatarDefinition } from '@oneworks/avatar'
+import {
+  DEFAULT_AVATAR_COAT_PATTERN,
+  applyAvatarPaletteToneJitter,
+  createDefaultAvatarDefinition,
+  getAvatarPalette,
+  resolveAvatarCoatPatternDecals
+} from '@oneworks/avatar'
 
 import {
   applyDeerAntlerStyle,
+  applyAvatarEntityPalette,
   applyFoxEarScale,
   applyFoxEarStyle,
   applyFoxHeadScale,
   applyFoxHeadTaper,
   applySheepHornStyle,
   createAvatarEntityParts,
+  createDeerSurfaceDecals,
   createFoxSurfaceDecals,
+  createOtterSurfaceDecals,
+  createSheepSurfaceDecals,
+  getAvatarEntityPresetFaceStyle,
   resolveAvatarEntityPresetFaceStyle
 } from '../../../src/avatarEntityPresets'
 import { Avatar } from '../src'
@@ -99,6 +110,127 @@ describe('OneWorks Avatar React rendering', () => {
     })))
     expect(host.querySelectorAll('[data-avatar-surface-decal^="coat-mackerel-"]').length).toBeGreaterThan(0)
     expect(host.querySelector('[data-avatar-surface-decal="user-badge"]')).not.toBeNull()
+  })
+
+  it('restores a saved natural fur tone and its projected markings without changing the palette identity', () => {
+    const definition = createDefaultAvatarDefinition()
+    const basePalette = getAvatarPalette('giant-panda')
+    for (const amount of [-17, -6, 4, 18]) {
+      const runtimePalette = applyAvatarPaletteToneJitter(basePalette, amount)
+      const parts = applyAvatarEntityPalette(createAvatarEntityParts('bear'), runtimePalette)
+      const saved = {
+        ...definition,
+        scene: {
+          ...definition.scene,
+          appearance: {
+            ...definition.scene.appearance,
+            coatPattern: { ...DEFAULT_AVATAR_COAT_PATTERN, enabled: true },
+            paletteId: basePalette.id
+          },
+          entity: { parts, preset: 'bear' as const }
+        }
+      }
+
+      act(() => root.render(createElement(Avatar, { definition: saved })))
+
+      expect(runtimePalette.id).toBe(basePalette.id)
+      expect(parts.find(part => part.face)?.baseColor).toBe(runtimePalette.background)
+      expect(parts.find(part => part.face)?.baseColor).not.toBe(basePalette.background)
+      expect(host.querySelector('[data-avatar-surface-decal="coat-bear-panda-muzzle"]')?.getAttribute('fill'))
+        .toBe(runtimePalette.coat!.patch)
+      expect(host.querySelector('[data-avatar-surface-decal="coat-bear-panda-muzzle"]')?.getAttribute('fill'))
+        .not.toBe(basePalette.coat!.patch)
+      expect(host.querySelector('[data-avatar-surface-decal="coat-bear-panda-eye-left"]')?.getAttribute('fill'))
+        .toBe(basePalette.coat!.mark)
+      expect(host.querySelector('[data-avatar-entity-part="primary"] g path[fill]')?.getAttribute('fill'))
+        .toBe(runtimePalette.entityMaterials!.primary!.baseColor)
+      expect(host.querySelector('[data-avatar-entity-part="primary"] g path[fill]')?.getAttribute('fill'))
+        .not.toBe(runtimePalette.coat!.patch)
+      expect(saved.scene.appearance.paletteId).toBe('giant-panda')
+    }
+  })
+
+  it('preserves saved fur tones and their curved face markings while an animation changes the pose', async () => {
+    vi.stubGlobal('requestAnimationFrame', vi.fn(() => 1))
+    vi.stubGlobal('cancelAnimationFrame', vi.fn())
+
+    const definition = createDefaultAvatarDefinition()
+    const basePalette = getAvatarPalette('giant-panda')
+    const runtimePalette = applyAvatarPaletteToneJitter(basePalette, -16)
+    const parts = applyAvatarEntityPalette(createAvatarEntityParts('bear'), runtimePalette)
+    const saved = {
+      ...definition,
+      scene: {
+        ...definition.scene,
+        appearance: {
+          ...definition.scene.appearance,
+          coatPattern: { ...DEFAULT_AVATAR_COAT_PATTERN, enabled: true },
+          paletteId: basePalette.id
+        },
+        entity: { parts, preset: 'bear' as const }
+      }
+    }
+    const ref = createRef<AvatarHandle>()
+
+    act(() => root.render(createElement(Avatar, { definition: saved, ref })))
+    await act(async () => ref.current?.play({
+      anchor: 'relative',
+      durationMs: 1000,
+      keyframes: [
+        { atMs: 0, patch: { view: { yaw: 0 } } },
+        { atMs: 900, patch: { view: { yaw: .55 } } }
+      ],
+      playback: 'loop'
+    }))
+    act(() => ref.current?.seek(450))
+
+    expect(host.querySelector('[data-avatar-entity-part="primary"] g path[fill]')?.getAttribute('fill'))
+      .toBe(runtimePalette.entityMaterials!.primary!.baseColor)
+    expect(host.querySelector('[data-avatar-surface-decal="coat-bear-panda-muzzle"]')?.getAttribute('fill'))
+      .toBe(runtimePalette.coat!.patch)
+    expect(host.querySelector('[data-avatar-surface-decal="coat-bear-panda-eye-left"]')?.getAttribute('fill'))
+      .toBe(basePalette.coat!.mark)
+    expect(ref.current?.getDefinition().scene.appearance.paletteId).toBe(basePalette.id)
+    expect(ref.current?.getDefinition().scene.entity.parts).toEqual(parts)
+  })
+
+  it('keeps manually authored face colors and the camera background unchanged across fur tone changes', () => {
+    const definition = createDefaultAvatarDefinition()
+    const basePalette = getAvatarPalette('giant-panda')
+    const pattern = { ...DEFAULT_AVATAR_COAT_PATTERN, enabled: true }
+    const manualMuzzle = {
+      ...resolveAvatarCoatPatternDecals({
+        entityParts: createAvatarEntityParts('bear'),
+        entityPreset: 'bear',
+        paletteId: basePalette.id,
+        pattern
+      }).find(decal => decal.id === 'coat-bear-panda-muzzle')!,
+      color: '#12ab34'
+    }
+
+    for (const amount of [-6, 4]) {
+      const palette = applyAvatarPaletteToneJitter(basePalette, amount)
+      const parts = applyAvatarEntityPalette(createAvatarEntityParts('bear'), palette)
+      act(() => root.render(createElement(Avatar, {
+        definition: {
+          ...definition,
+          scene: {
+            ...definition.scene,
+            appearance: { ...definition.scene.appearance, coatPattern: pattern, paletteId: basePalette.id },
+            camera: { ...definition.scene.camera, background: '#124578' },
+            decals: [manualMuzzle],
+            entity: { parts, preset: 'bear' }
+          }
+        }
+      })))
+
+      expect(host.querySelector('[data-avatar-surface-decal="coat-bear-panda-muzzle"]')?.getAttribute('fill'))
+        .toBe('#12ab34')
+      expect(host.querySelector('[data-avatar-entity-part="primary"] g path[fill]')?.getAttribute('fill'))
+        .toBe(palette.entityMaterials!.primary!.baseColor)
+      expect(host.querySelector<HTMLElement>('.oneworks-avatar')?.style
+        .getPropertyValue('--oneworks-avatar-background')).toBe('#124578')
+    }
   })
 
   it('projects procedural coat marks on the back of the head', () => {
@@ -198,7 +330,7 @@ describe('OneWorks Avatar React rendering', () => {
     const animals = [
       { identifiers: ['cheek-left', 'cheek-right'], preset: 'hamster' },
       { identifiers: ['muzzle'], preset: 'capybara' },
-      { identifiers: ['muzzle'], preset: 'otter' },
+      { identifiers: ['ear-left', 'ear-right', 'primary'], preset: 'otter' },
       { identifiers: ['snout', 'nostril-left', 'nostril-right'], preset: 'pig' },
       { identifiers: ['antler-left-branch-3', 'antler-right-branch-3'], preset: 'deer' },
       { identifiers: ['wool-crown-center', 'horn-left-segment-3'], preset: 'sheep' }
@@ -234,6 +366,58 @@ describe('OneWorks Avatar React rendering', () => {
           const nostril = host.querySelector(`[data-avatar-entity-part="${identifier}"]`)!
           expect(snout.compareDocumentPosition(nostril) & Node.DOCUMENT_POSITION_FOLLOWING).not.toBe(0)
         }
+      }
+    }
+  })
+
+  it('projects animal face color onto the head surface without adding floating muzzle geometry', () => {
+    const definition = createDefaultAvatarDefinition()
+
+    for (const { color, createDecals, paletteId, preset } of [
+      { color: '#e5d0ad', createDecals: createOtterSurfaceDecals, paletteId: 'river-otter', preset: 'otter' },
+      { color: '#f5e7cf', createDecals: createDeerSurfaceDecals, paletteId: 'sika-deer', preset: 'deer' },
+      { color: '#39353a', createDecals: createSheepSurfaceDecals, paletteId: 'black-faced-sheep', preset: 'sheep' }
+    ] as const) {
+      const parts = applyAvatarEntityPalette(createAvatarEntityParts(preset), getAvatarPalette(paletteId))
+      const face = getAvatarEntityPresetFaceStyle(preset)!
+      const render = (yaw: number, pitch: number) => act(() => root.render(createElement(Avatar, {
+        definition: {
+          ...definition,
+          scene: {
+            ...definition.scene,
+            appearance: { ...definition.scene.appearance, paletteId },
+            decals: createDecals({ color }),
+            entity: { parts, preset },
+            face,
+            view: { ...definition.scene.view, pitch, yaw }
+          }
+        }
+      })))
+
+      render(.15, -.1)
+      const initial = host.querySelector(
+        `[data-avatar-entity-part="primary"] [data-avatar-surface-decal="${preset}-face-mask"]`
+      )
+
+      expect(initial, `${preset} mask must be projected inside its real head part`).not.toBeNull()
+      expect(initial?.getAttribute('fill')).toBe(color)
+      expect(initial?.parentElement?.getAttribute('clip-path')).toContain(`-entity-${preset}-`)
+      expect(host.querySelector('[data-avatar-entity-part="muzzle"]')).toBeNull()
+      expect(face.eyeShape).toBe('rounded')
+      expect(host.querySelector('[data-visible-marks]')?.getAttribute('data-visible-marks')).toBe('3')
+
+      const originalPath = initial?.getAttribute('d')
+      render(.86, -.28)
+      const turned = host.querySelector(
+        `[data-avatar-entity-part="primary"] [data-avatar-surface-decal="${preset}-face-mask"]`
+      )
+
+      expect(turned, `${preset} surface mask must follow the head during side views`).not.toBeNull()
+      expect(turned?.getAttribute('d')).not.toBe(originalPath)
+      expect(turned?.getAttribute('d')).not.toContain('NaN')
+
+      if (preset === 'sheep') {
+        expect(parts.find(part => part.face)?.foregroundColor).not.toBe(color)
       }
     }
   })

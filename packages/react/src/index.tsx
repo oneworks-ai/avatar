@@ -11,7 +11,8 @@ import {
   parseAvatarAnimationClip,
   resolveAvatarAnimationClip,
   resolveAvatarCoatPatternDecals,
-  resolveAvatarAnimationFrame
+  resolveAvatarAnimationFrame,
+  resolveAvatarPaletteFromEntityParts
 } from '@oneworks/avatar'
 import type {
   AvatarAnimationClip,
@@ -278,11 +279,18 @@ export const Avatar = forwardRef<AvatarHandle, AvatarProps>(function Avatar({
   }, [animation, autoplay, stopFrame])
 
   const scene = renderDefinition.scene
-  const palette = getAvatarPalette(scene.appearance.paletteId)
+  const palette = useMemo(
+    () => resolveAvatarPaletteFromEntityParts(
+      getAvatarPalette(scene.appearance.paletteId),
+      scene.entity.parts
+    ),
+    [scene.appearance.paletteId, scene.entity.parts]
+  )
   const generatedCoatDecals = scene.appearance.coatPattern?.enabled
     ? resolveAvatarCoatPatternDecals({
       entityParts: scene.entity.parts,
       entityPreset: scene.entity.preset,
+      palette,
       paletteId: scene.appearance.paletteId,
       pattern: scene.appearance.coatPattern
     })

@@ -36,6 +36,12 @@ describe('avatar editor seed fields', () => {
     expect(resolveSeededAvatarCameraBackground(seed)).toBe(resolveSeededAvatarCameraBackground(seed))
   })
 
+  it('only generates rounded geometric eyes when facial expressions follow Seed', () => {
+    for (let index = 0; index < 120; index += 1) {
+      expect(resolveSeededAvatarFacePreset(`v1-rounded-eyes-${index}`).style.eyeShape).toBe('rounded')
+    }
+  })
+
   it('uses a deterministic natural palette candidate set for tabby coats', () => {
     for (const seed of ['v1-tabby-a', 'v1-tabby-b', 'v1-tabby-c', 'v1-tabby-d']) {
       const paletteId = resolveSeededAvatarTabbyPaletteId(seed)

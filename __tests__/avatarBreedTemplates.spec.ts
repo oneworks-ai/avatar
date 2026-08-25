@@ -40,7 +40,83 @@ import {
   getRabbitEarScale,
   getRabbitHeadScale
 } from '../src/avatarEntityPresets'
-import { AVATAR_SEED_FIELD } from '../src/avatarSeed'
+import { AVATAR_SEED_FIELD, resolveSeededAvatarPaletteTone } from '../src/avatarSeed'
+import { resolveAvatarBreedPalette } from '../src/avatarBreedTone'
+
+const perceivedLightness = (color: string): number => (
+  (
+    Number.parseInt(color.slice(1, 3), 16) * .2126 +
+    Number.parseInt(color.slice(3, 5), 16) * .7152 +
+    Number.parseInt(color.slice(5, 7), 16) * .0722
+  ) / 255
+)
+
+describe('legacy animal breed natural-color readability', () => {
+  it('keeps every cat, dog, rabbit, and bear face marking distinct throughout its own brightness interval', () => {
+    const breeds = [
+      ...AVATAR_CAT_BREED_TEMPLATES.map(template => ({
+        entityPreset: 'cat' as const,
+        resolve: (seed: string) => resolveAvatarCatBreedTemplate(template, seed),
+        template
+      })),
+      ...AVATAR_DOG_BREED_TEMPLATES.map(template => ({
+        entityPreset: 'dog' as const,
+        resolve: (seed: string) => resolveAvatarDogBreedTemplate(template, seed),
+        template
+      })),
+      ...AVATAR_RABBIT_BREED_TEMPLATES.map(template => ({
+        entityPreset: 'rabbit' as const,
+        resolve: (seed: string) => resolveAvatarRabbitBreedTemplate(template, seed),
+        template
+      })),
+      ...AVATAR_BEAR_BREED_TEMPLATES.map(template => ({
+        entityPreset: 'bear' as const,
+        resolve: (seed: string) => resolveAvatarBearBreedTemplate(template, seed),
+        template
+      }))
+    ]
+    const failures: string[] = []
+
+    for (const { entityPreset, resolve, template } of breeds) {
+      for (const requestedTone of [template.toneJitter.min, template.toneJitter.max]) {
+        const seed = Array.from({ length: 600 }, (_, index) => `v1-${template.id}-contrast-${index}`)
+          .find(candidate => (
+            resolveSeededAvatarPaletteTone(candidate, template.fixed.paletteId, template.seedDomain) === requestedTone
+          ))
+        expect(seed, `${template.id} should reach authored tone ${requestedTone}`).toBeDefined()
+
+        const resolved = resolve(seed!)
+        const face = resolved.entityParts.find(part => part.face)!
+        const palette = resolveAvatarBreedPalette(template.fixed.paletteId, seed!, template.seedDomain)
+        const markings = resolveAvatarCoatPatternDecals({
+          entityParts: resolved.entityParts,
+          entityPreset,
+          paletteId: resolved.paletteId,
+          pattern: resolved.coatPattern,
+          ...{ palette }
+        })
+
+        for (const marking of markings) {
+          const parent = resolved.entityParts.find(part => part.id === marking.targetPartId)
+          if (parent == null) continue
+          const contrast = Math.abs(perceivedLightness(marking.color) - perceivedLightness(parent.baseColor))
+          if (contrast <= .045) {
+            failures.push(`${template.id} ${marking.id} at tone ${requestedTone}: ${contrast.toFixed(3)}`)
+          }
+        }
+
+        const eyeBackdrop = template.id === 'spectacled-bear'
+          ? markings.find(marking => marking.id.includes('spectacles-ring'))?.color ?? face.baseColor
+          : face.baseColor
+        const eyeContrast = Math.abs(perceivedLightness(face.foregroundColor) - perceivedLightness(eyeBackdrop))
+        if (eyeContrast <= .14) failures.push(`${template.id} eyes at tone ${requestedTone}: ${eyeContrast.toFixed(3)}`)
+      }
+    }
+
+    expect(breeds).toHaveLength(29)
+    expect(failures).toEqual([])
+  })
+})
 
 describe('cat type Seed constraint profiles', () => {
   it('defines the built-in cat types as constrained Cat looks', () => {
@@ -58,7 +134,13 @@ describe('cat type Seed constraint profiles', () => {
       const head = resolved.entityParts.find(part => part.id === 'cat-head')
       expect(resolved.paletteId).toBe(template.fixed.paletteId)
       expect(resolved.entityParts).toHaveLength(3)
-      expect(head?.baseColor).toBe(getAvatarPalette(template.fixed.paletteId).background)
+      expect(head?.baseColor).toBe(resolveAvatarBreedPalette(
+        template.fixed.paletteId,
+        'v1-breed-contract',
+        template.seedDomain
+      ).background)
+      expect(template.followByDefault).toContain(AVATAR_SEED_FIELD.palette)
+      expect(template.seedDomain.toneJitter).toEqual(template.toneJitter)
       expect(head?.scaleX).toBe(.73)
       expect(head?.scaleY).toBe(.68)
     }
@@ -128,9 +210,15 @@ describe('cat type Seed constraint profiles', () => {
     const british = resolveAvatarCatBreedTemplate(getAvatarCatBreedTemplate('british-shorthair')!, 'v1-british')
     const russian = resolveAvatarCatBreedTemplate(getAvatarCatBreedTemplate('russian-blue')!, 'v1-russian')
 
-    expect(british.entityParts.find(part => part.id === 'cat-head')?.baseColor).toBe('#b89a6b')
+    expect(british.entityParts.find(part => part.id === 'cat-head')?.baseColor).toBe(
+      resolveAvatarBreedPalette('british-shorthair', 'v1-british',
+        getAvatarCatBreedTemplate('british-shorthair')!.seedDomain).background
+    )
     expect(british.coatPattern.enabled).toBe(true)
-    expect(russian.entityParts.find(part => part.id === 'cat-head')?.baseColor).toBe('#718493')
+    expect(russian.entityParts.find(part => part.id === 'cat-head')?.baseColor).toBe(
+      resolveAvatarBreedPalette('russian-blue', 'v1-russian',
+        getAvatarCatBreedTemplate('russian-blue')!.seedDomain).background
+    )
     expect(russian.coatPattern.enabled).toBe(false)
     expect(russian.catEarWidth).toBeGreaterThanOrEqual(98)
     expect(russian.catEarWidth).toBeLessThanOrEqual(112)
@@ -151,9 +239,10 @@ describe('cat type Seed constraint profiles', () => {
       lightPatchOffsetY: 0,
       lightPatchShape: 'face-mask'
     })
-    expect(first.entityParts.find(part => part.id === 'cat-head')?.baseColor).toBe('#171b22')
+    const seededPalette = resolveAvatarBreedPalette('cow-cat', 'v1-cow-a', template.seedDomain)
+    expect(first.entityParts.find(part => part.id === 'cat-head')?.baseColor).toBe(seededPalette.background)
     expect(first.entityParts.find(part => part.id === 'cat-head')?.foregroundColor).toBe('#c58b35')
-    expect(first.entityParts.find(part => part.id === 'cat-ear-left')?.baseColor).toBe('#171b22')
+    expect(first.entityParts.find(part => part.id === 'cat-ear-left')?.baseColor).toBe(seededPalette.background)
     expect(palette.coat?.patch).toBe('#fffdf7')
     expect(palette.foreground).toBe('#c58b35')
     expect(first.coatPattern.lightPatchLength).toBeGreaterThanOrEqual(112)
@@ -197,10 +286,17 @@ describe('bear type Seed constraint profiles', () => {
       const resolved = resolveAvatarBearBreedTemplate(template, `v1-${template.id}-profile`)
       expect(resolveAvatarBearBreedTemplate(template, `v1-${template.id}-profile`)).toEqual(resolved)
       expect(resolved.paletteId).toBe(template.fixed.paletteId)
+      expect(resolved.faceStyle.eyeShape).toBe('rounded')
       expect(template.seedDomain.paletteIds).toEqual([template.fixed.paletteId])
       expect(resolved.entityParts).toHaveLength(3)
       expect(resolved.entityParts.find(part => part.face)?.baseColor)
-        .toBe(getAvatarPalette(template.fixed.paletteId).background)
+        .toBe(resolveAvatarBreedPalette(
+          template.fixed.paletteId,
+          `v1-${template.id}-profile`,
+          template.seedDomain
+        ).background)
+      expect(template.followByDefault).toContain(AVATAR_SEED_FIELD.palette)
+      expect(template.seedDomain.toneJitter).toEqual(template.toneJitter)
 
       for (const field of template.followByDefault) {
         const range = template.seedDomain.ranges?.[field]
@@ -307,7 +403,12 @@ describe('rabbit type Seed constraint profiles', () => {
       const second = resolveAvatarRabbitBreedTemplate(template, `v1-${template.id}-a`)
       expect(first).toEqual(second)
       expect(first.paletteId).toBe(template.fixed.paletteId)
-      expect(first.entityParts.find(part => part.face)?.baseColor).toBe(getAvatarPalette(template.fixed.paletteId).background)
+      expect(first.entityParts.find(part => part.face)?.baseColor).toBe(resolveAvatarBreedPalette(
+        template.fixed.paletteId,
+        `v1-${template.id}-a`,
+        template.seedDomain
+      ).background)
+      expect(template.followByDefault).toContain(AVATAR_SEED_FIELD.palette)
       expect(first.entityParts).toHaveLength(3)
     }
     expect(AVATAR_RABBIT_BREED_TEMPLATES.find(template => template.id === 'english-spot')?.previewBackground).toBe('#73879a')

@@ -31,10 +31,14 @@ import {
   applySheepHornSize,
   applySheepHornStyle,
   createAvatarEntityParts,
+  createDeerSurfaceDecals,
   createFoxSurfaceDecals,
+  createOtterSurfaceDecals,
+  createSheepSurfaceDecals,
   deserializeAvatarEntityParts,
   getAvatarEntityPresetFaceStyle,
-  getAvatarEntityPresetScene
+  getAvatarEntityPresetScene,
+  serializeAvatarEntityParts
 } from '../src/avatarEntityPresets'
 import { DEFAULT_AVATAR_FACE_STYLE } from '../src/avatarGeometry'
 describe('Avatar editor public definition bridge', () => {
@@ -162,6 +166,37 @@ describe('Avatar editor public definition bridge', () => {
       }))).toEqual(parts.map(({ id, rotationZ, scaleX, scaleY, scaleZ, x, y, z }) => ({
         id, rotationZ: rotationZ ?? 0, scaleX, scaleY, scaleZ: scaleZ ?? Math.min(scaleX, scaleY), x, y, z
       })))
+    }
+  })
+
+  it('round-trips curved animal face markings while migrating legacy floating muzzles', () => {
+    const base = createDefaultAvatarDefinition()
+    const oldMuzzle = createAvatarEntityParts('capybara').find(part => part.id === 'muzzle')!
+
+    for (const { createDecals, preset } of [
+      { createDecals: createOtterSurfaceDecals, preset: 'otter' },
+      { createDecals: createDeerSurfaceDecals, preset: 'deer' },
+      { createDecals: createSheepSurfaceDecals, preset: 'sheep' }
+    ] as const) {
+      const decals = createDecals({ color: '#efe3ce', shape: 'face-mask' })
+      const definition = createAvatarDefinition({
+        ...avatarDefinitionToState(base),
+        entityParts: createAvatarEntityParts(preset),
+        entityPreset: preset,
+        faceStyle: getAvatarEntityPresetFaceStyle(preset)!,
+        surfaceDecals: decals
+      }, base)
+
+      expect(parseAvatarDefinition(definition)).toEqual(definition)
+      expect(definition.scene.decals).toEqual(decals)
+      const params = avatarDefinitionToSearchParams(definition)
+      expect(params.get('decals')).toContain(`${preset}-face-mask`)
+      expect(params.get('decals')).toContain('primary')
+      expect(deserializeAvatarEntityParts(params.get('entityParts'), preset)
+        .some(part => part.id === 'muzzle')).toBe(false)
+      expect(deserializeAvatarEntityParts(serializeAvatarEntityParts([
+        ...createAvatarEntityParts(preset), oldMuzzle
+      ]), preset).some(part => part.id === 'muzzle')).toBe(false)
     }
   })
 

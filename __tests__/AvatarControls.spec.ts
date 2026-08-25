@@ -710,6 +710,14 @@ describe('AvatarControls natural animal breeds', () => {
           '[data-avatar-surface-decal="fox-cheek-left"]'
         ) != null)).toBe(true)
       }
+      if (species === 'sheep' || species === 'deer' || species === 'otter') {
+        expect([...buttons].every(button => button.querySelector(
+          `[data-avatar-entity-part="primary"] [data-avatar-surface-decal="${species}-face-mask"]`
+        ) != null)).toBe(true)
+        expect([...buttons].every(button => button.querySelector(
+          '[data-avatar-entity-part="muzzle"]'
+        ) == null)).toBe(true)
+      }
       const label = species === 'capybara' ? 'Capybara' : `${species[0]!.toUpperCase()}${species.slice(1)}`
       expect(host.querySelector<HTMLInputElement>(`[aria-label="${label} head width"]`)?.value).toBe('113')
       expect(host.querySelector<HTMLInputElement>(`[aria-label="${label} ear width"]`)?.value).toBe('104')

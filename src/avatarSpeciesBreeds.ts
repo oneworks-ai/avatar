@@ -1,4 +1,4 @@
-import { DEFAULT_AVATAR_COAT_PATTERN, getAvatarPalette } from '@oneworks/avatar'
+import { DEFAULT_AVATAR_COAT_PATTERN } from '@oneworks/avatar'
 import type { AvatarCoatPattern } from '@oneworks/avatar'
 
 import * as avatarEntityPresets from './avatarEntityPresets'
@@ -17,17 +17,35 @@ import type {
 import { DEFAULT_AVATAR_FACE_STYLE } from './avatarGeometry'
 import type { AvatarFaceStyle } from './avatarGeometry'
 import {
+  applyAvatarBreedMarkingTone,
+  getAvatarBreedToneJitterRange,
+  resolveAvatarBreedPalette
+} from './avatarBreedTone'
+import {
   AVATAR_ANIMAL_SPECIES_IDS,
   AVATAR_ANIMAL_SPECIES_SEED_FIELDS,
   AVATAR_SEED_FIELD,
   resolveSeededAvatarAnimalScale,
-  resolveSeededAvatarCoatPattern
+  resolveSeededAvatarCoatPattern,
+  resolveSeededAvatarPaletteTone
 } from './avatarSeed'
-import type { AvatarAnimalSpeciesId, AvatarSeedDomain, AvatarSeedField } from './avatarSeed'
+import type {
+  AvatarAnimalSpeciesId,
+  AvatarPaletteToneJitterRange,
+  AvatarSeedDomain,
+  AvatarSeedField
+} from './avatarSeed'
 import type { AvatarSurfaceDecal } from './avatarSurfaceDecals'
 
 type AvatarAnimalDimension = 'earHeight' | 'earWidth' | 'headHeight' | 'headWidth'
 type AvatarAnimalHornStyle = 'branched' | 'curled' | 'curved' | 'forked' | 'none' | 'reindeer' | 'spike' | 'straight'
+type AvatarAnimalBreedSurfaceFaceMarkingStyle = {
+  readonly color: string
+  readonly height: number
+  readonly shape: 'ellipse' | 'face-mask' | 'rounded' | 'rounded-triangle'
+  readonly width: number
+  readonly y: number
+}
 
 export interface AvatarAnimalDimensions {
   readonly earHeight: number
@@ -48,7 +66,9 @@ interface AvatarAnimalBreedOptions {
   readonly hornSize?: number
   readonly hornStyle?: AvatarAnimalHornStyle
   readonly previewBackground?: string
+  readonly surfaceFaceMarkings?: AvatarAnimalBreedSurfaceFaceMarkingStyle
   readonly surfaceMarkings?: AvatarFoxSurfaceMarkingStyle
+  readonly toneJitter?: AvatarPaletteToneJitterRange
 }
 
 export interface AvatarAnimalBreedTemplate {
@@ -64,6 +84,7 @@ export interface AvatarAnimalBreedTemplate {
     readonly hornSize?: number
     readonly hornStyle?: AvatarAnimalHornStyle
     readonly paletteId: string
+    readonly surfaceFaceMarkings?: AvatarAnimalBreedSurfaceFaceMarkingStyle
     readonly surfaceMarkings?: AvatarFoxSurfaceMarkingStyle
   }
   readonly followByDefault: readonly AvatarSeedField[]
@@ -72,6 +93,7 @@ export interface AvatarAnimalBreedTemplate {
   readonly previewBackground?: string
   readonly seedDomain: AvatarSeedDomain
   readonly species: AvatarAnimalSpeciesId
+  readonly toneJitter: AvatarPaletteToneJitterRange
 }
 
 export interface ResolvedAvatarAnimalBreedTemplate extends AvatarAnimalDimensions {
@@ -224,12 +246,13 @@ const createAnimalBreed = (
       }
     })
   }
-  const followByDefault = options.follow.flatMap<AvatarSeedField>(field => {
+  const toneJitter = options.toneJitter ?? getAvatarBreedToneJitterRange(id)
+  const followByDefault = [AVATAR_SEED_FIELD.palette, ...options.follow.flatMap<AvatarSeedField>(field => {
     if (field === 'density') return [AVATAR_SEED_FIELD.coatPatternDensity]
     if (field === 'spots') return [AVATAR_SEED_FIELD.coatPatternSeed]
     if (field === 'hornSize') return [hornField]
     return [fields[field]]
-  })
+  })]
 
   return {
     fixed: {
@@ -252,6 +275,7 @@ const createAnimalBreed = (
       ...(options.earStyle == null ? {} : { earStyle: options.earStyle }),
       earWidth: options.ears[0],
       faceStyle: {
+        eyeShape: 'rounded',
         height: 44,
         mouthEnabled: false,
         width: 24,
@@ -263,6 +287,7 @@ const createAnimalBreed = (
       ...(options.hornSize == null ? {} : { hornSize: options.hornSize }),
       ...(options.hornStyle == null ? {} : { hornStyle: options.hornStyle }),
       paletteId: id,
+      ...(options.surfaceFaceMarkings == null ? {} : { surfaceFaceMarkings: options.surfaceFaceMarkings }),
       ...(options.surfaceMarkings == null ? {} : { surfaceMarkings: options.surfaceMarkings })
     },
     followByDefault,
@@ -273,9 +298,11 @@ const createAnimalBreed = (
       coatAlgorithms: [options.coatPattern?.algorithm ?? 'mackerel'],
       lightPatchShapes: [options.coatPattern?.lightPatchShape ?? 'face-mask'],
       paletteIds: [id],
-      ranges
+      ranges,
+      toneJitter
     },
-    species
+    species,
+    toneJitter
   }
 }
 
@@ -307,7 +334,7 @@ const foxBreeds = [
     surfaceMarkings: {
       cheekColor: '#fffdf7',
       cheekScale: 109,
-      innerEarColor: '#e9c8c1',
+      innerEarColor: '#ddbab2',
       innerEarScale: 82
     }
   }),
@@ -337,7 +364,7 @@ const foxBreeds = [
     surfaceMarkings: {
       cheekColor: '#fff3d9',
       cheekScale: 106,
-      innerEarColor: '#deb6a6',
+      innerEarColor: '#b78170',
       innerEarScale: 113
     }
   })
@@ -375,13 +402,16 @@ const capybaraBreeds = [
 
 const otterBreeds = [
   createAnimalBreed('otter', 'sea-otter', 'Sea Otter', {
-    ears: [75, 74], faceStyle: { gap: 48, height: 45, noseWidth: 21 }, follow: ['headWidth', 'headHeight'], head: [123, 106]
+    ears: [75, 74], faceStyle: { gap: 48, height: 45, noseWidth: 21 }, follow: ['headWidth', 'headHeight'], head: [123, 106],
+    surfaceFaceMarkings: { color: '#ddd0be', height: 136, shape: 'face-mask', width: 154, y: 27 }
   }),
   createAnimalBreed('otter', 'river-otter', 'River Otter', {
-    ears: [87, 86], faceStyle: { gap: 45, height: 42, noseWidth: 18 }, follow: ['earWidth', 'headWidth'], head: [112, 95]
+    ears: [87, 86], faceStyle: { gap: 45, height: 42, noseWidth: 18 }, follow: ['earWidth', 'headWidth'], head: [112, 95],
+    surfaceFaceMarkings: { color: '#e5d0ad', height: 110, shape: 'ellipse', width: 138, y: 36 }
   }),
   createAnimalBreed('otter', 'asian-small-clawed-otter', 'Asian Small-clawed Otter', {
-    ears: [95, 91], faceStyle: { gap: 42, height: 49, noseWidth: 16 }, follow: ['earHeight', 'headHeight'], head: [101, 103]
+    ears: [95, 91], faceStyle: { gap: 42, height: 49, noseWidth: 16 }, follow: ['earHeight', 'headHeight'], head: [101, 103],
+    surfaceFaceMarkings: { color: '#f0e0c4', height: 104, shape: 'rounded', width: 128, y: 34 }
   })
 ] as const
 
@@ -402,34 +432,43 @@ const pigBreeds = [
 
 const deerBreeds = [
   createAnimalBreed('deer', 'sika-deer', 'Sika Deer', {
-    coatPattern: { algorithm: 'spotted', density: 38, enabled: true, jitter: 10 }, ears: [102, 111], faceStyle: { gap: 49, height: 49, noseWidth: 17 }, follow: ['headWidth', 'hornSize', 'density'], head: [106, 110], hornSize: 105, hornStyle: 'forked'
+    coatPattern: { algorithm: 'spotted', density: 38, enabled: true, jitter: 10 }, ears: [102, 111], faceStyle: { gap: 49, height: 49, noseWidth: 17 }, follow: ['headWidth', 'hornSize', 'density'], head: [106, 110], hornSize: 105, hornStyle: 'forked',
+    surfaceFaceMarkings: { color: '#f5e7cf', height: 126, shape: 'face-mask', width: 106, y: 37 }
   }),
   createAnimalBreed('deer', 'reindeer', 'Reindeer', {
-    ears: [94, 105], faceStyle: { gap: 50, height: 44, noseWidth: 22 }, follow: ['headHeight', 'hornSize'], head: [118, 111], hornSize: 132, hornStyle: 'reindeer'
+    ears: [94, 105], faceStyle: { gap: 50, height: 44, noseWidth: 22 }, follow: ['headHeight', 'hornSize'], head: [118, 111], hornSize: 132, hornStyle: 'reindeer',
+    surfaceFaceMarkings: { color: '#e2d5c1', height: 132, shape: 'ellipse', width: 124, y: 38 }
   }),
   createAnimalBreed('deer', 'white-deer', 'White Deer', {
-    ears: [111, 116], faceStyle: { gap: 47, height: 51, noseWidth: 15 }, follow: ['earHeight', 'headWidth', 'hornSize'], head: [103, 108], hornSize: 96, hornStyle: 'spike', previewBackground: '#728875'
+    ears: [111, 116], faceStyle: { gap: 47, height: 51, noseWidth: 15 }, follow: ['earHeight', 'headWidth', 'hornSize'], head: [103, 108], hornSize: 96, hornStyle: 'spike', previewBackground: '#728875',
+    surfaceFaceMarkings: { color: '#fff9ec', height: 128, shape: 'rounded', width: 110, y: 37 }
   }),
   createAnimalBreed('deer', 'deer-fawn', 'Deer Fawn', {
-    coatPattern: { algorithm: 'spotted', density: 29, enabled: true, jitter: 8 }, ears: [120, 118], faceStyle: { gap: 43, height: 54, noseWidth: 13 }, follow: ['earWidth', 'headHeight', 'density'], head: [96, 102], hornStyle: 'none'
+    coatPattern: { algorithm: 'spotted', density: 29, enabled: true, jitter: 8 }, ears: [120, 118], faceStyle: { gap: 43, height: 54, noseWidth: 13 }, follow: ['earWidth', 'headHeight', 'density'], head: [96, 102], hornStyle: 'none',
+    surfaceFaceMarkings: { color: '#f7ead2', height: 114, shape: 'face-mask', width: 98, y: 35 }
   })
 ] as const
 
 const sheepBreeds = [
   createAnimalBreed('sheep', 'white-sheep', 'White Sheep', {
-    ears: [105, 95], faceStyle: { gap: 47, height: 45, noseWidth: 17 }, follow: ['earWidth', 'headWidth'], head: [117, 112], hornStyle: 'none', previewBackground: '#718580'
+    ears: [105, 95], faceStyle: { gap: 47, height: 45, noseWidth: 17 }, follow: ['earWidth', 'headWidth'], head: [117, 112], hornStyle: 'none', previewBackground: '#718580',
+    surfaceFaceMarkings: { color: '#d2c2aa', height: 132, shape: 'ellipse', width: 122, y: 34 }
   }),
   createAnimalBreed('sheep', 'black-faced-sheep', 'Black-faced Sheep', {
-    ears: [114, 101], faceStyle: { gap: 46, height: 48, noseWidth: 17 }, follow: ['earHeight', 'headHeight'], head: [113, 106], hornStyle: 'none', previewBackground: '#cfbea0'
+    ears: [114, 101], faceStyle: { gap: 46, height: 48, noseWidth: 17 }, follow: ['earHeight', 'headHeight'], head: [113, 106], hornStyle: 'none', previewBackground: '#cfbea0',
+    surfaceFaceMarkings: { color: '#39353a', height: 178, shape: 'face-mask', width: 150, y: 12 }
   }),
   createAnimalBreed('sheep', 'horned-ram', 'Horned Ram', {
-    ears: [88, 91], faceStyle: { gap: 51, height: 42, noseWidth: 20 }, follow: ['headWidth', 'hornSize'], head: [124, 116], hornSize: 124, hornStyle: 'curled'
+    ears: [88, 91], faceStyle: { gap: 51, height: 42, noseWidth: 20 }, follow: ['headWidth', 'hornSize'], head: [124, 116], hornSize: 124, hornStyle: 'curled',
+    surfaceFaceMarkings: { color: '#b6a38a', height: 154, shape: 'face-mask', width: 138, y: 24 }
   }),
   createAnimalBreed('sheep', 'lamb', 'Lamb', {
-    ears: [121, 111], faceStyle: { gap: 41, height: 54, noseWidth: 13 }, follow: ['earWidth', 'headHeight'], head: [98, 104], hornStyle: 'none', previewBackground: '#889686'
+    ears: [121, 111], faceStyle: { gap: 41, height: 54, noseWidth: 13 }, follow: ['earWidth', 'headHeight'], head: [98, 104], hornStyle: 'none', previewBackground: '#889686',
+    surfaceFaceMarkings: { color: '#e7d0ca', height: 120, shape: 'rounded', width: 110, y: 31 }
   }),
   createAnimalBreed('sheep', 'mountain-goat', 'Mountain Goat', {
-    ears: [94, 102], faceStyle: { gap: 44, height: 46, noseWidth: 16 }, follow: ['earHeight', 'headWidth', 'hornSize'], head: [99, 113], hornSize: 117, hornStyle: 'straight', previewBackground: '#8a8172'
+    ears: [94, 102], faceStyle: { gap: 44, height: 46, noseWidth: 16 }, follow: ['earHeight', 'headWidth', 'hornSize'], head: [99, 113], hornSize: 117, hornStyle: 'straight', previewBackground: '#8a8172',
+    surfaceFaceMarkings: { color: '#c4b5a5', height: 152, shape: 'rounded-triangle', width: 112, y: 19 }
   })
 ] as const
 
@@ -524,6 +563,8 @@ export const resolveAvatarAnimalBreedTemplate = (
     }
   }
 
+  const palette = resolveAvatarBreedPalette(template.fixed.paletteId, seed, template.seedDomain)
+  const toneAmount = resolveSeededAvatarPaletteTone(seed, template.fixed.paletteId, template.seedDomain)
   const entityParts = applyAvatarEntityPalette(
     applyAvatarAnimalDimensions(
       baseParts,
@@ -531,15 +572,33 @@ export const resolveAvatarAnimalBreedTemplate = (
       dimensions,
       template.fixed.hornStyle
     ),
-    getAvatarPalette(template.fixed.paletteId)
+    palette
   )
 
-  const createSurfaceDecals = ENTITY_MODEL_EXPORTS.createFoxSurfaceDecals
-  const surfaceDecals = template.species === 'fox' && typeof createSurfaceDecals === 'function'
-    ? (createSurfaceDecals as (style?: AvatarFoxSurfaceMarkingStyle) => readonly AvatarSurfaceDecal[])(
+  const createFoxDecals = ENTITY_MODEL_EXPORTS.createFoxSurfaceDecals
+  const createFaceDecals = ENTITY_MODEL_EXPORTS[`create${speciesExportName(template.species)}SurfaceDecals`]
+  const surfaceDecals = template.species === 'fox' && typeof createFoxDecals === 'function'
+    ? (createFoxDecals as (style?: AvatarFoxSurfaceMarkingStyle) => readonly AvatarSurfaceDecal[])(
       template.fixed.surfaceMarkings
-    )
-    : undefined
+    ).map(decal => ({
+      ...decal,
+      color: applyAvatarBreedMarkingTone(
+        decal.color,
+        toneAmount * (decal.id.includes('inner-ear') ? .45 : .35)
+      )
+    }))
+    : template.fixed.surfaceFaceMarkings != null && typeof createFaceDecals === 'function'
+      ? (createFaceDecals as (
+        style?: AvatarAnimalBreedSurfaceFaceMarkingStyle
+      ) => readonly AvatarSurfaceDecal[])({
+        ...template.fixed.surfaceFaceMarkings,
+        color: template.id === 'black-faced-sheep'
+          ? template.fixed.surfaceFaceMarkings.color
+          : template.species === 'deer' || template.species === 'otter'
+            ? palette.coat?.patch ?? template.fixed.surfaceFaceMarkings.color
+            : applyAvatarBreedMarkingTone(template.fixed.surfaceFaceMarkings.color, toneAmount * .45)
+      })
+      : undefined
 
   return {
     ...dimensions,

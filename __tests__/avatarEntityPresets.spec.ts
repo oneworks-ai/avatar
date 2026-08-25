@@ -22,7 +22,10 @@ import {
   applySheepHornStyle,
   applyAvatarEntityPalette,
   createAvatarEntityParts,
+  createDeerSurfaceDecals,
   createFoxSurfaceDecals,
+  createOtterSurfaceDecals,
+  createSheepSurfaceDecals,
   deserializeAvatarEntityParts,
   FOX_EAR_SCALE_RANGE,
   FOX_HEAD_SCALE_RANGE,
@@ -39,6 +42,9 @@ import {
   getAvatarEntityPresetFaceStyle,
   getAvatarEntityPresetScene,
   hasMultipleAvatarEntityMaterials,
+  normalizeDeerEntityParts,
+  normalizeOtterEntityParts,
+  normalizeSheepEntityParts,
   resolveAvatarEntityPresetFaceStyle,
   serializeAvatarEntityParts
 } from '../src/avatarEntityPresets'
@@ -82,6 +88,18 @@ describe('built-in entity preset scenes', () => {
         `${preset} must not face the camera straight on`
       ).toBeGreaterThan(0)
     })
+  })
+
+  it('defaults every animal to animation-friendly rounded eyes while preserving explicit ellipse overrides', () => {
+    for (const preset of [
+      'cat', 'dog', 'bear', 'rabbit', 'fox', 'hamster', 'capybara', 'otter', 'pig', 'deer', 'sheep'
+    ] as const) {
+      expect(getAvatarEntityPresetFaceStyle(preset)?.eyeShape, `${preset} should use rounded eyes`).toBe('rounded')
+      expect(resolveAvatarEntityPresetFaceStyle(preset, { eyeShape: 'ellipse' })?.eyeShape).toBe('ellipse')
+    }
+
+    expect(resolveAvatarEntityPresetFaceStyle('bear', { noseShape: 'ellipse', noseHeight: 42 })?.noseShape)
+      .toBe('ellipse')
   })
 
   it('keeps the custom entity on the generic preview scene', () => {
@@ -350,24 +368,118 @@ describe('built-in entity preset scenes', () => {
     expect(scaledHead.find(part => part.id === 'cheek-left')?.x).toBeCloseTo(-72)
   })
 
-  it('keeps capybara and otter muzzles as raised three-dimensional head attachments', () => {
-    for (const { applyHeadScale, preset, shape } of [
-      { applyHeadScale: applyCapybaraHeadScale, preset: 'capybara', shape: 'trapezoid' },
-      { applyHeadScale: applyOtterHeadScale, preset: 'otter', shape: 'ellipse' }
+  it('keeps the capybara’s genuinely broad projecting muzzle as three-dimensional anatomy', () => {
+    const parts = createAvatarEntityParts('capybara')
+    const head = parts.find(part => part.face)!
+    const muzzle = parts.find(part => part.id === 'muzzle')!
+    const scaled = applyCapybaraHeadScale(parts, 120, 112)
+    const scaledMuzzle = scaled.find(part => part.id === 'muzzle')!
+
+    expect(head.shape).toBe('trapezoid')
+    expect(muzzle).toMatchObject({ face: false, scaleZ: .26, shape: 'capsule' })
+    expect(muzzle.z).toBeGreaterThan(head.z)
+    expect(scaled.find(part => part.id === 'ear-left')!.x).toBeLessThan(parts.find(part => part.id === 'ear-left')!.x)
+    expect(scaledMuzzle.y).toBeGreaterThan(muzzle.y)
+    expect(deserializeAvatarEntityParts(serializeAvatarEntityParts(parts), 'capybara'))
+      .toContainEqual(expect.objectContaining({ id: 'muzzle', scaleZ: .26 }))
+  })
+
+  it('paints otter, deer, and sheep face color directly onto their real curved head surfaces', () => {
+    for (const { createDecals, preset } of [
+      { createDecals: createOtterSurfaceDecals, preset: 'otter' },
+      { createDecals: createDeerSurfaceDecals, preset: 'deer' },
+      { createDecals: createSheepSurfaceDecals, preset: 'sheep' }
     ] as const) {
       const parts = createAvatarEntityParts(preset)
-      const head = parts.find(part => part.face)!
-      const muzzle = parts.find(part => part.id === 'muzzle')!
-      const scaled = applyHeadScale(parts, 120, 112)
-      const scaledMuzzle = scaled.find(part => part.id === 'muzzle')!
+      const scene = getAvatarEntityPresetScene(preset)!
+      const original = createDecals()
+      const styled = createDecals({
+        color: '#f5e7cf', height: 1000, opacity: -2, shape: 'rounded-triangle', width: 300, x: -400, y: 400
+      })
 
-      expect(head.shape).toBe(shape)
-      expect(muzzle).toMatchObject({ face: false, shape: 'capsule' })
-      expect(muzzle.z).toBeGreaterThan(head.z)
-      expect(muzzle.scaleZ).toBeGreaterThan(0)
-      expect(scaled.find(part => part.id === 'ear-left')!.x).toBeLessThan(parts.find(part => part.id === 'ear-left')!.x)
-      expect(scaledMuzzle.y).toBeGreaterThan(muzzle.y)
+      expect(parts.some(part => part.id === 'muzzle'), `${preset} cannot use a floating color-only muzzle`).toBe(false)
+      expect(original).toEqual(scene.surfaceDecals)
+      expect(original[0]).not.toBe(scene.surfaceDecals[0])
+      expect(original[0]).toMatchObject({
+        id: `${preset}-face-mask`, shape: 'face-mask', side: 'face', targetPartId: 'primary'
+      })
+      expect(styled[0]).toMatchObject({
+        color: '#f5e7cf', height: 340, opacity: 0, shape: 'rounded-triangle', targetPartId: 'primary',
+        width: 240, x: -180, y: 180
+      })
+      expect(createDecals({ color: 'not-a-color' })[0]?.color).toBe(original[0]?.color)
     }
+
+    const scaledOtter = applyOtterHeadScale(createAvatarEntityParts('otter'), 120, 112)
+    expect(scaledOtter.find(part => part.id === 'ear-left')!.x).toBeLessThan(-69)
+    expect(scaledOtter.some(part => part.id === 'muzzle')).toBe(false)
+  })
+
+  it('migrates old floating face-color geometry without stripping the capybara or pig anatomy', () => {
+    const oldMuzzle = createAvatarEntityParts('capybara').find(part => part.id === 'muzzle')!
+
+    for (const { normalize, preset } of [
+      { normalize: normalizeOtterEntityParts, preset: 'otter' },
+      { normalize: normalizeDeerEntityParts, preset: 'deer' },
+      { normalize: normalizeSheepEntityParts, preset: 'sheep' }
+    ] as const) {
+      const legacyParts = [...createAvatarEntityParts(preset), oldMuzzle]
+      expect(normalize(legacyParts).some(part => part.id === 'muzzle')).toBe(false)
+      expect(deserializeAvatarEntityParts(serializeAvatarEntityParts(legacyParts), preset)
+        .some(part => part.id === 'muzzle')).toBe(false)
+    }
+
+    expect(createAvatarEntityParts('capybara').some(part => part.id === 'muzzle')).toBe(true)
+    expect(createAvatarEntityParts('pig').filter(part => (
+      part.id === 'snout' || part.id.startsWith('nostril-')
+    ))).toHaveLength(3)
+    expect(createAvatarEntityParts('hamster').filter(part => part.id.startsWith('cheek-'))).toHaveLength(2)
+  })
+
+  it('restores real sheep thickness from old muzzle links without overwriting modern custom depth', () => {
+    const oldMuzzle = createAvatarEntityParts('capybara').find(part => part.id === 'muzzle')!
+    const authored = applySheepHornSize(
+      applySheepHornStyle(createAvatarEntityParts('sheep'), 'curled'),
+      125
+    )
+    const widthScale = 1.18
+    const heightScale = .9
+    const depthScale = Math.sqrt(widthScale * heightScale)
+    const oldParts = applySheepHeadScale(authored, widthScale * 100, heightScale * 100).map(part => ({
+      ...part,
+      ...(part.face
+        ? { scaleZ: .65 * depthScale }
+        : part.id.startsWith('wool-')
+          ? { scaleZ: .25 * depthScale, z: -19 }
+          : part.id.startsWith('ear-')
+            ? { scaleZ: .17 * depthScale, z: -8 }
+            : part.id.startsWith('horn-')
+              ? { scaleZ: .15 * 1.25 * depthScale, z: 8 }
+              : {})
+    }))
+    const migrated = deserializeAvatarEntityParts(
+      serializeAvatarEntityParts([...oldParts, oldMuzzle]),
+      'sheep'
+    )
+
+    expect(migrated.some(part => part.id === 'muzzle')).toBe(false)
+    expect(migrated.find(part => part.face)).toMatchObject({
+      scaleX: .68 * widthScale,
+      scaleY: .73 * heightScale
+    })
+    expect(migrated.find(part => part.face)?.scaleZ).toBeCloseTo(.82 * depthScale)
+    expect(migrated.find(part => part.id === 'wool-crown-center')?.scaleZ).toBeCloseTo(.37 * depthScale)
+    expect(migrated.find(part => part.id === 'ear-left')?.scaleZ).toBeCloseTo(.24 * depthScale)
+    expect(migrated.find(part => part.id === 'horn-left')?.scaleZ).toBeCloseTo(.22 * 1.25 * depthScale)
+    expect(migrated.find(part => part.id === 'horn-left')?.z).toBeCloseTo(12 * depthScale)
+    expect(migrated.filter(part => part.id.startsWith('horn-'))).toHaveLength(8)
+
+    const modernCustomDepth = createAvatarEntityParts('sheep').map(part => (
+      part.face ? { ...part, scaleZ: .59 } : part
+    ))
+    expect(normalizeSheepEntityParts(modernCustomDepth).find(part => part.face)?.scaleZ).toBe(.59)
+    expect(deserializeAvatarEntityParts(serializeAvatarEntityParts(modernCustomDepth), 'sheep')
+      .find(part => part.face)?.scaleZ).toBe(.59)
   })
 
   it('builds a projecting pig snout and two independent depth-sorted nostrils', () => {
@@ -417,9 +529,16 @@ describe('built-in entity preset scenes', () => {
 
   it('builds sculpted three-dimensional sheep wool and optional curved, curled, or straight horns', () => {
     const parts = createAvatarEntityParts('sheep')
+    const head = parts.find(part => part.face)!
     const wool = parts.filter(part => part.id.startsWith('wool-'))
+    const ears = parts.filter(part => part.id.startsWith('ear-'))
+
+    expect(head.scaleZ).toBe(.82)
+    expect(head.scaleZ!).toBeGreaterThan(head.scaleX)
     expect(wool).toHaveLength(5)
-    expect(wool.every(part => part.shape === 'sphere' && (part.scaleZ ?? 0) > 0)).toBe(true)
+    expect(wool.every(part => part.shape === 'sphere' && (part.scaleZ ?? 0) >= Math.min(part.scaleX, part.scaleY)))
+      .toBe(true)
+    expect(ears.every(part => (part.scaleZ ?? 0) >= part.scaleX)).toBe(true)
     expect(parts.some(part => part.id.startsWith('horn-'))).toBe(false)
 
     const curved = applySheepHornStyle(parts, 'curved')
@@ -434,10 +553,23 @@ describe('built-in entity preset scenes', () => {
     const resized = applySheepHornSize(curled, 130)
     expect(getSheepHornSize(resized)).toBe(130)
     const scaledHead = applySheepHeadScale(resized, 118, 110)
+    const depthFactor = Math.sqrt(1.18 * 1.1)
+
+    expect(scaledHead.find(part => part.face)?.scaleZ).toBeCloseTo(.82 * depthFactor)
+    expect(scaledHead.find(part => part.id === 'wool-crown-center')?.scaleZ).toBeCloseTo(.37 * depthFactor)
+    expect(scaledHead.find(part => part.id === 'ear-left')?.scaleZ).toBeCloseTo(.24 * depthFactor)
+    expect(scaledHead.find(part => part.id === 'horn-left')?.scaleZ).toBeCloseTo(.22 * 1.3 * depthFactor)
+    expect(scaledHead.find(part => part.id === 'wool-crown-center')?.z).toBeCloseTo(-15 * depthFactor)
+    expect(scaledHead.find(part => part.id === 'horn-left')?.z).toBeCloseTo(12 * depthFactor)
     expect(scaledHead.find(part => part.id === 'horn-left')!.x)
       .toBeLessThan(resized.find(part => part.id === 'horn-left')!.x)
     expect(scaledHead.find(part => part.id === 'wool-side-left')!.x)
       .toBeLessThan(parts.find(part => part.id === 'wool-side-left')!.x)
+
+    const resizedAgain = applySheepHeadScale(scaledHead, 86, 92)
+    const nextDepthFactor = Math.sqrt(.86 * .92)
+    expect(resizedAgain.find(part => part.face)?.scaleZ).toBeCloseTo(.82 * nextDepthFactor)
+    expect(resizedAgain.find(part => part.id === 'horn-left')?.scaleZ).toBeCloseTo(.22 * 1.3 * nextDepthFactor)
   })
 
   it('lets antler and horn segments inherit semantic root materials from breed palettes', () => {

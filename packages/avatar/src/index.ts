@@ -1,4 +1,4 @@
-import { AVATAR_PALETTES } from './catalog.js'
+import { AVATAR_PALETTES, type AvatarPalette } from './catalog.js'
 
 export * from './catalog.js'
 
@@ -290,6 +290,21 @@ export type AvatarEntityPreset = 'bear' | 'bun' | 'capybara' | 'cat' | 'cloud' |
 export type AvatarDeerAntlerStyle = 'branched' | 'forked' | 'none' | 'reindeer' | 'spike'
 export type AvatarFoxEarStyle = 'fennec' | 'pointed' | 'rounded'
 export type AvatarSheepHornStyle = 'curled' | 'curved' | 'none' | 'straight'
+export type AvatarAnimalSurfaceMarkingShape = 'ellipse' | 'face-mask' | 'rounded' | 'rounded-triangle'
+
+export interface AvatarAnimalSurfaceMarkingStyle {
+  readonly color?: string
+  readonly height?: number
+  readonly opacity?: number
+  readonly shape?: AvatarAnimalSurfaceMarkingShape
+  readonly width?: number
+  readonly x?: number
+  readonly y?: number
+}
+export type AvatarDeerSurfaceMarkingStyle = AvatarAnimalSurfaceMarkingStyle
+export type AvatarOtterSurfaceMarkingStyle = AvatarAnimalSurfaceMarkingStyle
+export type AvatarSheepSurfaceMarkingShape = AvatarAnimalSurfaceMarkingShape
+export type AvatarSheepSurfaceMarkingStyle = AvatarAnimalSurfaceMarkingStyle
 export type AvatarEyeShape = 'ellipse' | 'rounded'
 export type AvatarSurfaceDecalSide = 'back' | 'face' | 'front' | 'left' | 'right'
 export type AvatarSurfaceDecalShape =
@@ -1040,11 +1055,13 @@ const resolveAvatarCoatPatternAlgorithm = (pattern: AvatarCoatPattern) => (
 export const resolveAvatarCoatPatternDecals = ({
   entityParts,
   entityPreset,
+  palette: paletteOverride,
   paletteId,
   pattern
 }: {
   readonly entityParts: readonly AvatarEntityPart[]
   readonly entityPreset: AvatarEntityPreset
+  readonly palette?: AvatarPalette
   readonly paletteId: string
   readonly pattern: AvatarCoatPattern
 }): readonly AvatarSurfaceDecal[] => {
@@ -1056,7 +1073,7 @@ export const resolveAvatarCoatPatternDecals = ({
   if (facePartId == null) return []
   const leftEarId = entityParts.find(part => /ear-left|left-ear/u.test(part.id))?.id
   const rightEarId = entityParts.find(part => /ear-right|right-ear/u.test(part.id))?.id
-  const palette = AVATAR_PALETTES.find(candidate => candidate.id === paletteId) ?? AVATAR_PALETTES[0]!
+  const palette = paletteOverride ?? AVATAR_PALETTES.find(candidate => candidate.id === paletteId) ?? AVATAR_PALETTES[0]!
   if (entityPreset === 'bear') return resolveAvatarBearCoatPatternDecals({ facePartId, palette, pattern })
   if ((entityPreset === 'deer' || entityPreset === 'pig') && palette.coat?.marking !== 'spots') return []
   if (

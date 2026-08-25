@@ -1,9 +1,30 @@
-import { AVATAR_ENTITY_RANGES, AVATAR_EYE_HIGHLIGHT_RANGES, AVATAR_FACE_RANGES } from '@oneworks/avatar'
+import {
+  AVATAR_ENTITY_RANGES,
+  AVATAR_EYE_HIGHLIGHT_RANGES,
+  AVATAR_FACE_RANGES,
+  AVATAR_SURFACE_DECAL_RANGES
+} from '@oneworks/avatar'
 import type { AvatarPalette } from '@oneworks/avatar'
 
 import { AVATAR_BODY_SHAPES, DEFAULT_AVATAR_FACE_STYLE, resolveAvatarFaceStyle } from './avatarGeometry'
 import type { AvatarBodyShape, AvatarFaceStyle } from './avatarGeometry'
 import type { AvatarSurfaceDecal } from './avatarSurfaceDecals'
+
+export type AvatarAnimalSurfaceMarkingShape = Extract<
+  AvatarSurfaceDecal['shape'],
+  'ellipse' | 'face-mask' | 'rounded' | 'rounded-triangle'
+>
+
+export type AvatarAnimalSurfaceMarkingStyle = Partial<
+  Pick<AvatarSurfaceDecal, 'color' | 'height' | 'opacity' | 'width' | 'x' | 'y'>
+> & {
+  readonly shape?: AvatarAnimalSurfaceMarkingShape
+}
+
+export type AvatarDeerSurfaceMarkingStyle = AvatarAnimalSurfaceMarkingStyle
+export type AvatarOtterSurfaceMarkingStyle = AvatarAnimalSurfaceMarkingStyle
+export type AvatarSheepSurfaceMarkingShape = AvatarAnimalSurfaceMarkingShape
+export type AvatarSheepSurfaceMarkingStyle = AvatarAnimalSurfaceMarkingStyle
 
 export const AVATAR_ENTITY_PRESETS = ['custom', 'cloud', 'sun', 'cat', 'dog', 'bear', 'rabbit', 'fox', 'hamster', 'capybara', 'otter', 'pig', 'deer', 'sheep', 'bun'] as const
 
@@ -192,7 +213,7 @@ const HAMSTER_ACCENT_MATERIAL = {
 
 const HAMSTER_FACE_STYLE: AvatarFaceStyle = {
   ...DEFAULT_AVATAR_FACE_STYLE,
-  eyeShape: 'ellipse',
+  eyeShape: 'rounded',
   gap: 48,
   height: 32,
   leftEyeRotation: -5,
@@ -222,7 +243,7 @@ const CAPYBARA_MUZZLE_MATERIAL = {
 
 const CAPYBARA_FACE_STYLE: AvatarFaceStyle = {
   ...DEFAULT_AVATAR_FACE_STYLE,
-  eyeShape: 'ellipse',
+  eyeShape: 'rounded',
   gap: 55,
   height: 28,
   leftEyeRotation: -3,
@@ -252,7 +273,7 @@ const OTTER_MUZZLE_MATERIAL = {
 
 const OTTER_FACE_STYLE: AvatarFaceStyle = {
   ...DEFAULT_AVATAR_FACE_STYLE,
-  eyeShape: 'ellipse',
+  eyeShape: 'rounded',
   gap: 45,
   height: 33,
   leftEyeRotation: -6,
@@ -289,7 +310,7 @@ const PIG_NOSTRIL_MATERIAL = {
 
 const PIG_FACE_STYLE: AvatarFaceStyle = {
   ...DEFAULT_AVATAR_FACE_STYLE,
-  eyeShape: 'ellipse',
+  eyeShape: 'rounded',
   gap: 49,
   height: 33,
   leftEyeRotation: -5,
@@ -322,7 +343,7 @@ const DEER_MUZZLE_MATERIAL = {
 
 const DEER_FACE_STYLE: AvatarFaceStyle = {
   ...DEFAULT_AVATAR_FACE_STYLE,
-  eyeShape: 'ellipse',
+  eyeShape: 'rounded',
   gap: 46,
   height: 39,
   leftEyeRotation: -8,
@@ -359,7 +380,7 @@ const SHEEP_HORN_MATERIAL = {
 
 const SHEEP_FACE_STYLE: AvatarFaceStyle = {
   ...DEFAULT_AVATAR_FACE_STYLE,
-  eyeShape: 'ellipse',
+  eyeShape: 'rounded',
   gap: 44,
   height: 37,
   leftEyeRotation: -5,
@@ -695,6 +716,21 @@ const CAPYBARA_PRESET_SCENE = {
   viewState: { pitch: -.12, positionX: -67, positionY: 105, roll: .16, scale: 1.83, yaw: .23 }
 } as const satisfies AvatarEntityPresetScene
 
+const OTTER_FACE_MASK_DECAL: AvatarSurfaceDecal = {
+  color: OTTER_MUZZLE_MATERIAL.baseColor,
+  height: 130,
+  id: 'otter-face-mask',
+  label: 'Natural otter face marking',
+  opacity: 100,
+  rotation: 0,
+  shape: 'face-mask',
+  side: 'face',
+  targetPartId: 'primary',
+  width: 160,
+  x: 0,
+  y: 37
+}
+
 const OTTER_PRESET_SCENE = {
   ...DEFAULT_PRESET_LIGHTING,
   avatarOutlineStyle: { color: '#302118', opacity: 86, width: 4 },
@@ -711,7 +747,7 @@ const OTTER_PRESET_SCENE = {
   showLight: false,
   showOutline: true,
   showShadow: false,
-  surfaceDecals: [],
+  surfaceDecals: [OTTER_FACE_MASK_DECAL],
   viewState: { pitch: -.19, positionX: 72, positionY: 92, roll: -.14, scale: 1.9, yaw: -.27 }
 } as const satisfies AvatarEntityPresetScene
 
@@ -735,6 +771,21 @@ const PIG_PRESET_SCENE = {
   viewState: { pitch: -.15, positionX: -69, positionY: 103, roll: .21, scale: 1.86, yaw: .22 }
 } as const satisfies AvatarEntityPresetScene
 
+const DEER_FACE_MASK_DECAL: AvatarSurfaceDecal = {
+  color: DEER_MUZZLE_MATERIAL.baseColor,
+  height: 142,
+  id: 'deer-face-mask',
+  label: 'Natural deer face marking',
+  opacity: 100,
+  rotation: 0,
+  shape: 'face-mask',
+  side: 'face',
+  targetPartId: 'primary',
+  width: 130,
+  x: 0,
+  y: 38
+}
+
 const DEER_PRESET_SCENE = {
   ...DEFAULT_PRESET_LIGHTING,
   avatarOutlineStyle: { color: '#39251b', opacity: 86, width: 4 },
@@ -751,9 +802,24 @@ const DEER_PRESET_SCENE = {
   showLight: false,
   showOutline: true,
   showShadow: false,
-  surfaceDecals: [],
+  surfaceDecals: [DEER_FACE_MASK_DECAL],
   viewState: { pitch: -.16, positionX: 61, positionY: 111, roll: -.18, scale: 1.72, yaw: -.25 }
 } as const satisfies AvatarEntityPresetScene
+
+const SHEEP_FACE_MASK_DECAL: AvatarSurfaceDecal = {
+  color: SHEEP_FACE_MATERIAL.baseColor,
+  height: 168,
+  id: 'sheep-face-mask',
+  label: 'Natural sheep face marking',
+  opacity: 100,
+  rotation: 0,
+  shape: 'face-mask',
+  side: 'face',
+  targetPartId: 'primary',
+  width: 146,
+  x: 0,
+  y: 20
+}
 
 const SHEEP_PRESET_SCENE = {
   ...DEFAULT_PRESET_LIGHTING,
@@ -771,7 +837,7 @@ const SHEEP_PRESET_SCENE = {
   showLight: false,
   showOutline: true,
   showShadow: false,
-  surfaceDecals: [],
+  surfaceDecals: [SHEEP_FACE_MASK_DECAL],
   viewState: { pitch: -.13, positionX: -72, positionY: 101, roll: .17, scale: 1.8, yaw: .21 }
 } as const satisfies AvatarEntityPresetScene
 
@@ -931,8 +997,7 @@ const CAPYBARA_PARTS: readonly AvatarEntityPart[] = [
 const OTTER_PARTS: readonly AvatarEntityPart[] = [
   { ...OTTER_MATERIAL, face: false, id: 'ear-left', label: 'Left small ear', occludedByFace: true, rotationX: -5, rotationY: -8, rotationZ: -7, roundness: 100, scaleX: .16, scaleY: .18, scaleZ: .13, shape: 'ellipse', x: -69, y: -62, z: -17 },
   { ...OTTER_MATERIAL, face: false, id: 'ear-right', label: 'Right small ear', occludedByFace: true, rotationX: -5, rotationY: 8, rotationZ: 7, roundness: 100, scaleX: .15, scaleY: .17, scaleZ: .13, shape: 'ellipse', x: 69, y: -62, z: -17 },
-  { ...OTTER_MATERIAL, bottomTaper: 4, face: true, id: 'primary', label: 'Low rounded head', roundness: 100, scaleX: .79, scaleY: .65, scaleZ: .69, shape: 'ellipse', x: 0, y: 18, z: 0 },
-  { ...OTTER_MUZZLE_MATERIAL, face: false, id: 'muzzle', label: 'Continuous pale muzzle', rotationX: -8, roundness: 100, scaleX: .42, scaleY: .29, scaleZ: .22, shape: 'capsule', x: 0, y: 43, z: 54 }
+  { ...OTTER_MATERIAL, bottomTaper: 4, face: true, id: 'primary', label: 'Low rounded head', roundness: 100, scaleX: .79, scaleY: .65, scaleZ: .69, shape: 'ellipse', x: 0, y: 18, z: 0 }
 ]
 
 const PIG_PARTS: readonly AvatarEntityPart[] = [
@@ -953,8 +1018,7 @@ const DEER_PARTS: readonly AvatarEntityPart[] = [
   { ...DEER_ANTLER_MATERIAL, face: false, id: 'antler-right-branch-2', label: 'Right upper antler branch', rotationX: -8, rotationY: 13, rotationZ: 48, roundness: 88, scaleX: .09, scaleY: .22, scaleZ: .085, shape: 'capsule', x: 63, y: -156, z: -6 },
   { ...DEER_MATERIAL, face: false, id: 'ear-left', label: 'Left tall deer ear', occludedByFace: true, occlusionAmount: 9, occlusionPole: 'bottom', rotationX: -5, rotationY: -13, rotationZ: -36, roundness: 94, scaleX: .23, scaleY: .41, scaleZ: .18, shape: 'teardrop', x: -72, y: -63, z: -10 },
   { ...DEER_MATERIAL, face: false, id: 'ear-right', label: 'Right tall deer ear', occludedByFace: true, occlusionAmount: 9, occlusionPole: 'bottom', rotationX: -5, rotationY: 13, rotationZ: 36, roundness: 94, scaleX: .23, scaleY: .41, scaleZ: .18, shape: 'teardrop', x: 72, y: -63, z: -10 },
-  { ...DEER_MATERIAL, bottomTaper: 24, face: true, id: 'primary', label: 'Long tapered deer head', roundness: 92, scaleX: .66, scaleY: .82, scaleZ: .64, shape: 'ellipse', x: 0, y: 17, z: 0 },
-  { ...DEER_MUZZLE_MATERIAL, face: false, id: 'muzzle', label: 'Pale rounded deer muzzle', rotationX: -7, roundness: 100, scaleX: .34, scaleY: .29, scaleZ: .2, shape: 'ellipse', x: 0, y: 48, z: 51 }
+  { ...DEER_MATERIAL, bottomTaper: 24, face: true, id: 'primary', label: 'Long tapered deer head', roundness: 92, scaleX: .66, scaleY: .82, scaleZ: .64, shape: 'ellipse', x: 0, y: 17, z: 0 }
 ]
 
 const DEER_REINDEER_BRANCH_PARTS: readonly AvatarEntityPart[] = [
@@ -965,26 +1029,25 @@ const DEER_REINDEER_BRANCH_PARTS: readonly AvatarEntityPart[] = [
 const DEER_ANATOMY_PARTS = [...DEER_PARTS, ...DEER_REINDEER_BRANCH_PARTS]
 
 const SHEEP_PARTS: readonly AvatarEntityPart[] = [
-  { ...SHEEP_MATERIAL, face: false, id: 'wool-crown-left', label: 'Left wool crown', roundness: 100, scaleX: .29, scaleY: .3, scaleZ: .26, shape: 'sphere', x: -58, y: -77, z: -19 },
-  { ...SHEEP_MATERIAL, face: false, id: 'wool-crown-center', label: 'Central wool crown', roundness: 100, scaleX: .33, scaleY: .32, scaleZ: .28, shape: 'sphere', x: 0, y: -91, z: -22 },
-  { ...SHEEP_MATERIAL, face: false, id: 'wool-crown-right', label: 'Right wool crown', roundness: 100, scaleX: .29, scaleY: .3, scaleZ: .26, shape: 'sphere', x: 58, y: -77, z: -19 },
-  { ...SHEEP_MATERIAL, face: false, id: 'wool-side-left', label: 'Left wool curl', roundness: 100, scaleX: .28, scaleY: .31, scaleZ: .25, shape: 'sphere', x: -83, y: -25, z: -17 },
-  { ...SHEEP_MATERIAL, face: false, id: 'wool-side-right', label: 'Right wool curl', roundness: 100, scaleX: .28, scaleY: .31, scaleZ: .25, shape: 'sphere', x: 83, y: -25, z: -17 },
-  { ...SHEEP_FACE_MATERIAL, face: false, id: 'ear-left', label: 'Left soft sheep ear', occludedByFace: true, occlusionAmount: 8, occlusionPole: 'bottom', rotationX: -6, rotationY: -12, rotationZ: -53, roundness: 90, scaleX: .22, scaleY: .34, scaleZ: .17, shape: 'teardrop', x: -85, y: -42, z: -8 },
-  { ...SHEEP_FACE_MATERIAL, face: false, id: 'ear-right', label: 'Right soft sheep ear', occludedByFace: true, occlusionAmount: 8, occlusionPole: 'bottom', rotationX: -6, rotationY: 12, rotationZ: 53, roundness: 90, scaleX: .22, scaleY: .34, scaleZ: .17, shape: 'teardrop', x: 85, y: -42, z: -8 },
-  { ...SHEEP_MATERIAL, bottomTaper: 12, face: true, id: 'primary', label: 'Soft sheep face', roundness: 100, scaleX: .68, scaleY: .73, scaleZ: .65, shape: 'ellipse', x: 0, y: 17, z: 0 },
-  { ...SHEEP_FACE_MATERIAL, face: false, id: 'muzzle', label: 'Pale sheep muzzle', rotationX: -6, roundness: 100, scaleX: .34, scaleY: .26, scaleZ: .2, shape: 'ellipse', x: 0, y: 42, z: 49 }
+  { ...SHEEP_MATERIAL, face: false, id: 'wool-crown-left', label: 'Left wool crown', roundness: 100, scaleX: .29, scaleY: .3, scaleZ: .34, shape: 'sphere', x: -58, y: -77, z: -12 },
+  { ...SHEEP_MATERIAL, face: false, id: 'wool-crown-center', label: 'Central wool crown', roundness: 100, scaleX: .33, scaleY: .32, scaleZ: .37, shape: 'sphere', x: 0, y: -91, z: -15 },
+  { ...SHEEP_MATERIAL, face: false, id: 'wool-crown-right', label: 'Right wool crown', roundness: 100, scaleX: .29, scaleY: .3, scaleZ: .34, shape: 'sphere', x: 58, y: -77, z: -12 },
+  { ...SHEEP_MATERIAL, face: false, id: 'wool-side-left', label: 'Left wool curl', roundness: 100, scaleX: .28, scaleY: .31, scaleZ: .34, shape: 'sphere', x: -83, y: -25, z: -10 },
+  { ...SHEEP_MATERIAL, face: false, id: 'wool-side-right', label: 'Right wool curl', roundness: 100, scaleX: .28, scaleY: .31, scaleZ: .34, shape: 'sphere', x: 83, y: -25, z: -10 },
+  { ...SHEEP_FACE_MATERIAL, face: false, id: 'ear-left', label: 'Left soft sheep ear', occludedByFace: true, occlusionAmount: 8, occlusionPole: 'bottom', rotationX: -6, rotationY: -12, rotationZ: -53, roundness: 90, scaleX: .22, scaleY: .34, scaleZ: .24, shape: 'teardrop', x: -85, y: -42, z: -5 },
+  { ...SHEEP_FACE_MATERIAL, face: false, id: 'ear-right', label: 'Right soft sheep ear', occludedByFace: true, occlusionAmount: 8, occlusionPole: 'bottom', rotationX: -6, rotationY: 12, rotationZ: 53, roundness: 90, scaleX: .22, scaleY: .34, scaleZ: .24, shape: 'teardrop', x: 85, y: -42, z: -5 },
+  { ...SHEEP_MATERIAL, bottomTaper: 12, face: true, id: 'primary', label: 'Soft sheep face', roundness: 100, scaleX: .68, scaleY: .73, scaleZ: .82, shape: 'ellipse', x: 0, y: 17, z: 0 }
 ]
 
 const SHEEP_HORN_PARTS: readonly AvatarEntityPart[] = [
-  { ...SHEEP_HORN_MATERIAL, face: false, id: 'horn-left', label: 'Left horn root', rotationX: -7, rotationY: -14, rotationZ: -47, roundness: 94, scaleX: .18, scaleY: .35, scaleZ: .15, shape: 'capsule', x: -77, y: -51, z: 8 },
-  { ...SHEEP_HORN_MATERIAL, face: false, id: 'horn-left-segment-1', label: 'Left horn outer curve', rotationX: -6, rotationY: -18, rotationZ: -93, roundness: 96, scaleX: .16, scaleY: .28, scaleZ: .14, shape: 'capsule', x: -103, y: -31, z: 15 },
-  { ...SHEEP_HORN_MATERIAL, face: false, id: 'horn-left-segment-2', label: 'Left horn lower curl', rotationX: -5, rotationY: -13, rotationZ: -149, roundness: 98, scaleX: .14, scaleY: .24, scaleZ: .12, shape: 'capsule', x: -98, y: -1, z: 20 },
-  { ...SHEEP_HORN_MATERIAL, face: false, id: 'horn-left-segment-3', label: 'Left horn inner curl', rotationX: -4, rotationY: -8, rotationZ: -205, roundness: 100, scaleX: .12, scaleY: .19, scaleZ: .1, shape: 'capsule', x: -76, y: 10, z: 24 },
-  { ...SHEEP_HORN_MATERIAL, face: false, id: 'horn-right', label: 'Right horn root', rotationX: -7, rotationY: 14, rotationZ: 47, roundness: 94, scaleX: .18, scaleY: .35, scaleZ: .15, shape: 'capsule', x: 77, y: -51, z: 8 },
-  { ...SHEEP_HORN_MATERIAL, face: false, id: 'horn-right-segment-1', label: 'Right horn outer curve', rotationX: -6, rotationY: 18, rotationZ: 93, roundness: 96, scaleX: .16, scaleY: .28, scaleZ: .14, shape: 'capsule', x: 103, y: -31, z: 15 },
-  { ...SHEEP_HORN_MATERIAL, face: false, id: 'horn-right-segment-2', label: 'Right horn lower curl', rotationX: -5, rotationY: 13, rotationZ: 149, roundness: 98, scaleX: .14, scaleY: .24, scaleZ: .12, shape: 'capsule', x: 98, y: -1, z: 20 },
-  { ...SHEEP_HORN_MATERIAL, face: false, id: 'horn-right-segment-3', label: 'Right horn inner curl', rotationX: -4, rotationY: 8, rotationZ: 205, roundness: 100, scaleX: .12, scaleY: .19, scaleZ: .1, shape: 'capsule', x: 76, y: 10, z: 24 }
+  { ...SHEEP_HORN_MATERIAL, face: false, id: 'horn-left', label: 'Left horn root', rotationX: -7, rotationY: -14, rotationZ: -47, roundness: 94, scaleX: .18, scaleY: .35, scaleZ: .22, shape: 'capsule', x: -77, y: -51, z: 12 },
+  { ...SHEEP_HORN_MATERIAL, face: false, id: 'horn-left-segment-1', label: 'Left horn outer curve', rotationX: -6, rotationY: -18, rotationZ: -93, roundness: 96, scaleX: .16, scaleY: .28, scaleZ: .2, shape: 'capsule', x: -103, y: -31, z: 19 },
+  { ...SHEEP_HORN_MATERIAL, face: false, id: 'horn-left-segment-2', label: 'Left horn lower curl', rotationX: -5, rotationY: -13, rotationZ: -149, roundness: 98, scaleX: .14, scaleY: .24, scaleZ: .17, shape: 'capsule', x: -98, y: -1, z: 24 },
+  { ...SHEEP_HORN_MATERIAL, face: false, id: 'horn-left-segment-3', label: 'Left horn inner curl', rotationX: -4, rotationY: -8, rotationZ: -205, roundness: 100, scaleX: .12, scaleY: .19, scaleZ: .14, shape: 'capsule', x: -76, y: 10, z: 28 },
+  { ...SHEEP_HORN_MATERIAL, face: false, id: 'horn-right', label: 'Right horn root', rotationX: -7, rotationY: 14, rotationZ: 47, roundness: 94, scaleX: .18, scaleY: .35, scaleZ: .22, shape: 'capsule', x: 77, y: -51, z: 12 },
+  { ...SHEEP_HORN_MATERIAL, face: false, id: 'horn-right-segment-1', label: 'Right horn outer curve', rotationX: -6, rotationY: 18, rotationZ: 93, roundness: 96, scaleX: .16, scaleY: .28, scaleZ: .2, shape: 'capsule', x: 103, y: -31, z: 19 },
+  { ...SHEEP_HORN_MATERIAL, face: false, id: 'horn-right-segment-2', label: 'Right horn lower curl', rotationX: -5, rotationY: 13, rotationZ: 149, roundness: 98, scaleX: .14, scaleY: .24, scaleZ: .17, shape: 'capsule', x: 98, y: -1, z: 24 },
+  { ...SHEEP_HORN_MATERIAL, face: false, id: 'horn-right-segment-3', label: 'Right horn inner curl', rotationX: -4, rotationY: 8, rotationZ: 205, roundness: 100, scaleX: .12, scaleY: .19, scaleZ: .14, shape: 'capsule', x: 76, y: 10, z: 28 }
 ]
 
 const SHEEP_ANATOMY_PARTS = [...SHEEP_HORN_PARTS, ...SHEEP_PARTS]
@@ -1323,7 +1386,8 @@ interface AvatarAnimalAppendageControls<Style extends string> {
 
 const createAvatarAnimalPartScaleControls = (
   authoredParts: readonly AvatarEntityPart[],
-  earIds: readonly string[] = ['ear-left', 'ear-right']
+  earIds: readonly string[] = ['ear-left', 'ear-right'],
+  options: { readonly synchronizeDepth?: boolean } = {}
 ): AvatarAnimalPartScaleControls => {
   const authoredHead = authoredParts.find(part => part.face)!
   const authoredPartsById = new Map(authoredParts.map(part => [part.id, part]))
@@ -1348,13 +1412,17 @@ const createAvatarAnimalPartScaleControls = (
       const previousHeightScale = head.scaleY / authoredHead.scaleY
       const nextWidthScale = width == null ? previousWidthScale : width / 100
       const nextHeightScale = height == null ? previousHeightScale : height / 100
+      const authoredHeadDepth = authoredHead.scaleZ ?? Math.min(authoredHead.scaleX, authoredHead.scaleY)
+      const previousDepthScale = (head.scaleZ ?? authoredHeadDepth) / authoredHeadDepth
+      const nextDepthScale = Math.sqrt(nextWidthScale * nextHeightScale)
 
       return parts.map(part => {
         if (part.id === head.id && part.face) {
           return {
             ...part,
             ...(width == null ? {} : { scaleX: authoredHead.scaleX * nextWidthScale }),
-            ...(height == null ? {} : { scaleY: authoredHead.scaleY * nextHeightScale })
+            ...(height == null ? {} : { scaleY: authoredHead.scaleY * nextHeightScale }),
+            ...(options.synchronizeDepth ? { scaleZ: authoredHeadDepth * nextDepthScale } : {})
           }
         }
 
@@ -1375,7 +1443,13 @@ const createAvatarAnimalPartScaleControls = (
         return {
           ...part,
           x: head.x + normalizedOffsetX * nextWidthScale,
-          y: head.y + normalizedOffsetY * nextHeightScale
+          y: head.y + normalizedOffsetY * nextHeightScale,
+          ...(options.synchronizeDepth
+            ? {
+                ...(part.scaleZ == null ? {} : { scaleZ: part.scaleZ / previousDepthScale * nextDepthScale }),
+                z: head.z + (part.z - head.z) / previousDepthScale * nextDepthScale
+              }
+            : {})
         }
       })
     },
@@ -1637,11 +1711,112 @@ export const applyDeerAntlerStyle = deerAntlerControls.applyStyle
 export const applyDeerAntlerSize = deerAntlerControls.applySize
 export const getDeerAntlerSize = deerAntlerControls.getSize
 
+const ANIMAL_SURFACE_MARKING_SHAPES = [
+  'ellipse',
+  'face-mask',
+  'rounded',
+  'rounded-triangle'
+] as const
+
+const createAnimalSurfaceDecals = (
+  authored: AvatarSurfaceDecal,
+  style: AvatarAnimalSurfaceMarkingStyle
+): AvatarSurfaceDecal[] => {
+  const bounded = (
+    value: number | undefined,
+    fallback: number,
+    range: { readonly max: number; readonly min: number }
+  ) => typeof value === 'number' && Number.isFinite(value)
+    ? Math.min(Math.max(value, range.min), range.max)
+    : fallback
+
+  return [{
+    ...authored,
+    ...(typeof style.color === 'string' && /^#[\da-f]{6}$/i.test(style.color)
+      ? { color: style.color }
+      : {}),
+    height: bounded(style.height, authored.height, AVATAR_SURFACE_DECAL_RANGES.height),
+    opacity: bounded(style.opacity, authored.opacity, AVATAR_SURFACE_DECAL_RANGES.opacity),
+    shape: style.shape != null && ANIMAL_SURFACE_MARKING_SHAPES.includes(style.shape)
+      ? style.shape
+      : authored.shape,
+    width: bounded(style.width, authored.width, AVATAR_SURFACE_DECAL_RANGES.width),
+    x: bounded(style.x, authored.x, AVATAR_SURFACE_DECAL_RANGES.x),
+    y: bounded(style.y, authored.y, AVATAR_SURFACE_DECAL_RANGES.y)
+  }]
+}
+
+export const createOtterSurfaceDecals = (
+  style: AvatarOtterSurfaceMarkingStyle = {}
+): AvatarSurfaceDecal[] => createAnimalSurfaceDecals(OTTER_FACE_MASK_DECAL, style)
+
+export const createDeerSurfaceDecals = (
+  style: AvatarDeerSurfaceMarkingStyle = {}
+): AvatarSurfaceDecal[] => createAnimalSurfaceDecals(DEER_FACE_MASK_DECAL, style)
+
 export const SHEEP_EAR_SCALE_RANGE = { min: 60, max: 150 } as const
 export const SHEEP_HEAD_SCALE_RANGE = { min: 76, max: 134 } as const
 export const SHEEP_HORN_SIZE_RANGE = { min: 60, max: 145 } as const
 export type AvatarSheepHornStyle = 'none' | 'curved' | 'curled' | 'straight'
-const sheepPartScaleControls = createAvatarAnimalPartScaleControls(SHEEP_ANATOMY_PARTS)
+
+export const createSheepSurfaceDecals = (
+  style: AvatarSheepSurfaceMarkingStyle = {}
+): AvatarSurfaceDecal[] => createAnimalSurfaceDecals(SHEEP_FACE_MASK_DECAL, style)
+
+const normalizeSurfaceMarkedAnimalEntityParts = (
+  parts: readonly AvatarEntityPart[]
+): AvatarEntityPart[] => parts.filter(part => part.id !== 'muzzle' || part.face)
+
+export const normalizeOtterEntityParts = (
+  parts: readonly AvatarEntityPart[]
+): AvatarEntityPart[] => normalizeSurfaceMarkedAnimalEntityParts(parts)
+
+export const normalizeDeerEntityParts = (
+  parts: readonly AvatarEntityPart[]
+): AvatarEntityPart[] => normalizeSurfaceMarkedAnimalEntityParts(parts)
+
+export const normalizeSheepEntityParts = (
+  parts: readonly AvatarEntityPart[]
+): AvatarEntityPart[] => {
+  const hasLegacyFloatingMuzzle = parts.some(part => part.id === 'muzzle' && !part.face)
+  const normalized = normalizeSurfaceMarkedAnimalEntityParts(parts)
+  if (!hasLegacyFloatingMuzzle) return normalized
+
+  const authoredHead = SHEEP_PARTS.find(part => part.face)!
+  const head = normalized.find(part => part.id === authoredHead.id && part.face)
+  if (head == null) return normalized
+
+  const depthScale = Math.sqrt(
+    head.scaleX / authoredHead.scaleX * head.scaleY / authoredHead.scaleY
+  )
+  const authoredById = new Map(SHEEP_ANATOMY_PARTS.map(part => [part.id, part]))
+  const clampDepth = (depth: number) => Math.min(
+    Math.max(depth, AVATAR_ENTITY_RANGES.scaleZ.min),
+    AVATAR_ENTITY_RANGES.scaleZ.max
+  )
+
+  return normalized.map(part => {
+    const authored = authoredById.get(part.id)
+    if (authored?.scaleZ == null) return part
+    if (part.face) return { ...part, scaleZ: clampDepth(authored.scaleZ * depthScale) }
+
+    const partSizeScale = Math.sqrt(
+      part.scaleX / authored.scaleX * part.scaleY / authored.scaleY
+    )
+
+    return {
+      ...part,
+      scaleZ: clampDepth(authored.scaleZ * partSizeScale * depthScale),
+      z: head.z + (authored.z - authoredHead.z) * depthScale
+    }
+  })
+}
+
+const sheepPartScaleControls = createAvatarAnimalPartScaleControls(
+  SHEEP_ANATOMY_PARTS,
+  ['ear-left', 'ear-right'],
+  { synchronizeDepth: true }
+)
 const sheepHornControls = createAvatarAnimalAppendageControls<AvatarSheepHornStyle>(
   SHEEP_ANATOMY_PARTS,
   'horn',
@@ -1974,7 +2149,14 @@ export const deserializeAvatarEntityParts = (
             })
       }
     })
-    return parts.length === 0 && parsed.length > 0 ? defaults : parts
+    const normalizedParts = preset === 'otter'
+      ? normalizeOtterEntityParts(parts)
+      : preset === 'deer'
+        ? normalizeDeerEntityParts(parts)
+        : preset === 'sheep'
+          ? normalizeSheepEntityParts(parts)
+          : parts
+    return normalizedParts.length === 0 && parsed.length > 0 ? defaults : normalizedParts
   } catch {
     return defaults
   }

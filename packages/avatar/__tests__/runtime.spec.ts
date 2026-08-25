@@ -9,6 +9,7 @@ import {
   AVATAR_PALETTES,
   AVATAR_SEED_FIELD_PATHS,
   anchorAvatarAnimationClip,
+  applyAvatarPaletteToneJitter,
   applyAvatarScenePatch,
   createDefaultAvatarDefinition,
   createSeededAvatarDefinition,
@@ -20,6 +21,7 @@ import {
   resolveAvatarAnimationClip,
   resolveAvatarAnimationFrame,
   resolveAvatarCoatPatternDecals,
+  resolveAvatarPaletteFromEntityParts,
   resolveAvatarSeededInteger,
   resolveAvatarSeededOption,
   resolveSeededAvatarView,
@@ -130,6 +132,86 @@ describe('OneWorks Avatar public runtime contract', () => {
       'coat-bear-panda-eye-left', 'coat-bear-panda-eye-right', 'coat-bear-panda-muzzle'
     ])
     expect(decals.every(decal => decal.targetPartId === 'primary')).toBe(true)
+  })
+
+  it('uses an optional runtime palette for curved coat markings while preserving canonical palette IDs', () => {
+    const parts = [{
+      baseColor: '#f5f3ec', face: true, foregroundColor: '#b56c45', highlightColor: '#ffffff',
+      id: 'primary', label: 'Head', scaleX: .8, scaleY: .8, shadowColor: '#9fa6a2',
+      shape: 'ellipse' as const, x: 0, y: 0, z: 0
+    }]
+    const basePalette = AVATAR_PALETTES.find(palette => palette.id === 'giant-panda')!
+    const runtimePalette = {
+      ...basePalette,
+      coat: { ...basePalette.coat!, mark: '#263238', patch: '#f1e7d9' }
+    }
+    const options = {
+      entityParts: parts,
+      entityPreset: 'bear' as const,
+      paletteId: basePalette.id,
+      pattern: { ...DEFAULT_AVATAR_COAT_PATTERN, enabled: true }
+    }
+
+    const canonical = resolveAvatarCoatPatternDecals(options)
+    const jittered = resolveAvatarCoatPatternDecals({ ...options, palette: runtimePalette })
+
+    expect(jittered.map(decal => decal.id)).toEqual(canonical.map(decal => decal.id))
+    expect(jittered.filter(decal => decal.id.includes('eye-')).map(decal => decal.color))
+      .toEqual(['#263238', '#263238'])
+    expect(jittered.find(decal => decal.id.endsWith('-muzzle'))?.color).toBe('#f1e7d9')
+    expect(canonical.filter(decal => decal.id.includes('eye-')).map(decal => decal.color))
+      .toEqual([basePalette.coat!.mark, basePalette.coat!.mark])
+    expect(canonical.find(decal => decal.id.endsWith('-muzzle'))?.color).toBe(basePalette.coat!.patch)
+    expect(runtimePalette.id).toBe(basePalette.id)
+    expect(resolveAvatarCoatPatternDecals(options)).toEqual(canonical)
+  })
+
+  it('recovers a precise saved fur tone even when light-colored heads saturate to pure white', () => {
+    for (const { amount, paletteId } of [
+      { amount: 18, paletteId: 'arctic-fox' },
+      { amount: 22, paletteId: 'giant-panda' },
+      { amount: 19, paletteId: 'white-sheep' }
+    ]) {
+      const canonical = AVATAR_PALETTES.find(palette => palette.id === paletteId)!
+      const jittered = applyAvatarPaletteToneJitter(canonical, amount)
+      const parts = Object.entries(jittered.entityMaterials!).map(([id, material]) => ({
+        ...material,
+        face: id === 'primary' || id === 'fox-head',
+        id
+      }))
+
+      expect(parts.find(part => part.face)?.baseColor, `${paletteId} must exercise channel saturation`)
+        .toBe('#ffffff')
+      expect(resolveAvatarPaletteFromEntityParts(canonical, parts), `${paletteId} must preserve its exact saved tone`)
+        .toEqual(jittered)
+      expect(jittered.id).toBe(canonical.id)
+      expect(jittered.foreground).toBe(canonical.foreground)
+    }
+  })
+
+  it('keeps panda face markings clearly separated from the head throughout its natural tone range', () => {
+    const basePalette = AVATAR_PALETTES.find(palette => palette.id === 'giant-panda')!
+    const luminance = (color: string) => (
+      Number.parseInt(color.slice(1, 3), 16) * .2126 +
+      Number.parseInt(color.slice(3, 5), 16) * .7152 +
+      Number.parseInt(color.slice(5, 7), 16) * .0722
+    ) / 255
+
+    for (const amount of [-6, 0, 4]) {
+      const palette = applyAvatarPaletteToneJitter(basePalette, amount)
+      const head = palette.entityMaterials!.primary!.baseColor
+      const muzzle = palette.coat!.patch
+      const eyePatch = palette.coat!.mark
+
+      expect(luminance(muzzle) - luminance(head), `panda muzzle must remain visible at tone ${amount}`)
+        .toBeGreaterThan(.065)
+      expect(luminance(head) - luminance(eyePatch), `panda eye patches must remain distinctive at tone ${amount}`)
+        .toBeGreaterThan(.5)
+      expect(eyePatch).toBe(basePalette.coat!.mark)
+      expect(palette.entityMaterials!['ear-left']!.baseColor)
+        .toBe(basePalette.entityMaterials!['ear-left']!.baseColor)
+      expect(palette.foreground).toBe(basePalette.foreground)
+    }
   })
 
   it('round-trips all six animal entity contracts and exposes their independent geometry Seed fields', () => {

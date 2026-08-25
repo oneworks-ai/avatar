@@ -103,6 +103,10 @@ import {
 } from './avatarBreedTemplates'
 import type { AvatarBearBreedTemplateId, AvatarCatBreedTemplateId, AvatarDogBreedTemplateId, AvatarRabbitBreedTemplateId } from './avatarBreedTemplates'
 import {
+  resolveAvatarBreedPalette,
+  resolveAvatarBreedPaletteFromEntityParts
+} from './avatarBreedTone'
+import {
   avatarDefinitionToSearchParams,
   avatarDefinitionToState,
   createAvatarDefinition,
@@ -1050,7 +1054,26 @@ const parseQueryConfig = (
     surfaceDecals: (
       params.has('decals')
         ? deserializeAvatarSurfaceDecals(params.get('decals'), entityParts.map(part => part.id))
-        : defaultAnimalBreed?.surfaceDecals ?? []
+        : defaultAnimalBreed?.surfaceDecals?.map(decal => {
+          if (
+            !params.has('entityParts') ||
+            seededFields.includes(AVATAR_SEED_FIELD.palette) ||
+            animalBreedTemplate?.fixed.surfaceFaceMarkings == null ||
+            decal.id !== `${entityPreset}-face-mask`
+          ) {
+            return decal
+          }
+
+          const concretePalette = resolveAvatarBreedPaletteFromEntityParts(
+            getAvatarPalette(selectedPaletteId),
+            entityParts
+          )
+          const color = entityPreset === 'deer' || entityPreset === 'otter'
+            ? concretePalette.coat?.patch ?? animalBreedTemplate.fixed.surfaceFaceMarkings.color
+            : animalBreedTemplate.fixed.surfaceFaceMarkings.color
+
+          return { ...decal, color }
+        }) ?? []
     ).filter(decal => !decal.id.startsWith('seed-tabby-')),
     sharedAnimation,
     viewState: {
@@ -1302,7 +1325,10 @@ const resolveSeededQueryConfig = (config: AvatarQueryConfig): AvatarQueryConfig 
                   getAvatarAnimalBreedTemplates(next.entityPreset).map(template => template.fixed.paletteId)
                 )
       : resolveSeededAvatarPaletteId(config.seed)
-    const paletteParts = applyAvatarEntityPalette(next.entityParts, getAvatarPalette(paletteId))
+    const palette = breedTemplate != null && breedTemplate.fixed.paletteId === paletteId
+      ? resolveAvatarBreedPalette(paletteId, config.seed, breedTemplate.seedDomain)
+      : getAvatarPalette(paletteId)
+    const paletteParts = applyAvatarEntityPalette(next.entityParts, palette)
     next = {
       ...next,
       entityParts: next.entityPreset === 'bear'
@@ -1632,6 +1658,7 @@ function App({
   const [selectedPaletteId, setSelectedPaletteId] = useState(initialConfig.selectedPaletteId)
   const [seed, setSeed] = useState(initialConfig.seed)
   const [seededFields, setSeededFields] = useState<readonly string[]>(initialConfig.seededFields)
+  const appliedPaletteSeedRef = useRef(initialConfig.seed)
   const paletteManuallyFixedRef = useRef(
     !initialConfig.seededFields.includes(AVATAR_SEED_FIELD.palette) && (
       definition != null || typeof window !== 'undefined' && new URLSearchParams(window.location.search).has('palette')
@@ -1712,7 +1739,10 @@ function App({
   avatarViewStateRef.current = avatarViewState
   seededViewTransitionViewRef.current = seededViewTransitionState
 
-  const selectedPalette = getAvatarPalette(selectedPaletteId)
+  const selectedPalette = useMemo(() => resolveAvatarBreedPaletteFromEntityParts(
+    getAvatarPalette(selectedPaletteId),
+    entityParts
+  ), [entityParts, selectedPaletteId])
   const concreteCatEarScale = useMemo(() => getCatEarScale(entityParts), [entityParts])
   const resolvedCatEarWidth = catEarWidth ?? concreteCatEarScale.width
   const resolvedCatEarHeight = catEarHeight ?? concreteCatEarScale.height
@@ -1747,10 +1777,11 @@ function App({
     ? resolveAvatarCoatPatternDecals({
       entityParts,
       entityPreset,
+      ...{ palette: selectedPalette },
       paletteId: selectedPaletteId,
       pattern: coatPattern
     })
-    : [], [coatPattern, entityParts, entityPreset, selectedPaletteId])
+    : [], [coatPattern, entityParts, entityPreset, selectedPalette, selectedPaletteId])
   const resolvedSurfaceDecals = useMemo(() => {
     const explicitDecalIds = new Set(surfaceDecals.map(decal => decal.id))
     return [
@@ -2337,6 +2368,7 @@ function App({
       setSelectedPaletteId(config.selectedPaletteId)
       paletteManuallyFixedRef.current = !config.seededFields.includes(AVATAR_SEED_FIELD.palette) &&
         previousParams.has('palette')
+      appliedPaletteSeedRef.current = config.seed
       setSeed(config.seed)
       setSeededFields(config.seededFields)
       setGenerationEnabled(true)
@@ -2627,6 +2659,7 @@ function App({
       setPixelEffect(DEFAULT_AVATAR_PIXEL_EFFECT)
       setSelectedPaletteId(nextScene.paletteId)
       paletteManuallyFixedRef.current = false
+      appliedPaletteSeedRef.current = seed
       setShowAvatarShadow(nextScene.showAvatarShadow)
       setShowFrameShadow(nextScene.showFrameShadow)
       setShowLight(nextScene.showLight)
@@ -2680,7 +2713,8 @@ function App({
     setBearHeadWidth(null)
     setCoatPattern(resolved.coatPattern)
     setSelectedPaletteId(resolved.paletteId)
-    paletteManuallyFixedRef.current = true
+    paletteManuallyFixedRef.current = false
+    appliedPaletteSeedRef.current = seed
     setSeededFields(current => [
       ...getApplicableAvatarSeedFields('cat', false).filter(field => (
         template.followByDefault.includes(field) ||
@@ -2741,7 +2775,8 @@ function App({
     setBearHeadWidth(null)
     setCoatPattern(resolved.coatPattern)
     setSelectedPaletteId(resolved.paletteId)
-    paletteManuallyFixedRef.current = true
+    paletteManuallyFixedRef.current = false
+    appliedPaletteSeedRef.current = seed
     setSeededFields(current => [
       ...getApplicableAvatarSeedFields('dog', false).filter(field => (
         template.followByDefault.includes(field) ||
@@ -2802,7 +2837,8 @@ function App({
     setBearHeadWidth(null)
     setCoatPattern(resolved.coatPattern)
     setSelectedPaletteId(resolved.paletteId)
-    paletteManuallyFixedRef.current = true
+    paletteManuallyFixedRef.current = false
+    appliedPaletteSeedRef.current = seed
     setSeededFields(current => [
       ...getApplicableAvatarSeedFields('rabbit', false).filter(field => (
         template.followByDefault.includes(field) || (
@@ -2865,7 +2901,8 @@ function App({
     }
     setCoatPattern(resolved.coatPattern)
     setSelectedPaletteId(resolved.paletteId)
-    paletteManuallyFixedRef.current = true
+    paletteManuallyFixedRef.current = false
+    appliedPaletteSeedRef.current = seed
     setSeededFields(current => [
       ...getApplicableAvatarSeedFields('bear', false).filter(field => (
         template.followByDefault.includes(field) || (
@@ -2935,7 +2972,8 @@ function App({
     setAnimationPreviewFaceStyle(resolved.faceStyle)
     setCoatPattern(resolved.coatPattern)
     setSelectedPaletteId(resolved.paletteId)
-    paletteManuallyFixedRef.current = true
+    paletteManuallyFixedRef.current = false
+    appliedPaletteSeedRef.current = seed
     const controlledFields = getAvatarAnimalBreedControlledFields(species)
     setSeededFields(current => [
       ...getApplicableAvatarSeedFields(species, false).filter(field => (
@@ -2998,7 +3036,9 @@ function App({
           : entityPreset === 'bear'
             ? AVATAR_BEAR_COMPATIBLE_PALETTE_IDS[0]!
             : DEFAULT_TABBY_PALETTE_ID)
-    const palette = getAvatarPalette(paletteId)
+    const palette = paletteSeeded && breedTemplate != null && breedTemplate.fixed.paletteId === paletteId
+      ? resolveAvatarBreedPalette(paletteId, nextSeed, breedTemplate.seedDomain)
+      : getAvatarPalette(paletteId)
     setSelectedPaletteId(paletteId)
     setEntityParts(currentParts => {
       const paletteParts = applyAvatarEntityPalette(currentParts, palette)
@@ -3007,6 +3047,7 @@ function App({
         : paletteParts
     })
     paletteManuallyFixedRef.current = false
+    appliedPaletteSeedRef.current = nextSeed
   }
 
   const applySeededFields = (nextSeed: string, fields: readonly string[]) => {
@@ -3324,15 +3365,35 @@ function App({
         continue
       }
       if (field === AVATAR_SEED_FIELD.palette) {
-        const palette = getAvatarPalette(resolvedPaletteId)
+        const previousPaletteSeed = appliedPaletteSeedRef.current
+        const palette = breedTemplate != null && breedTemplate.fixed.paletteId === resolvedPaletteId
+          ? resolveAvatarBreedPalette(resolvedPaletteId, nextSeed, breedTemplate.seedDomain)
+          : getAvatarPalette(resolvedPaletteId)
         setSelectedPaletteId(resolvedPaletteId)
         paletteManuallyFixedRef.current = false
+        appliedPaletteSeedRef.current = nextSeed
         setEntityParts(currentParts => {
           const paletteParts = applyAvatarEntityPalette(currentParts, palette)
           return resolvedEntityPreset === 'bear'
             ? applyAvatarBearBreedForeground(paletteParts, getAvatarBearBreedTemplate(bearBreedTemplateId))
             : paletteParts
         })
+        if (animalSpecies != null) {
+          const animalTemplate = getAvatarAnimalBreedTemplate(animalSpecies, animalBreedTemplateId)
+          if (animalTemplate != null) {
+            const previousDecals = resolveAvatarAnimalBreedTemplate(animalTemplate, previousPaletteSeed).surfaceDecals ?? []
+            const nextDecals = resolveAvatarAnimalBreedTemplate(animalTemplate, nextSeed).surfaceDecals ?? []
+            const previousById = new Map(previousDecals.map(decal => [decal.id, decal]))
+            const nextById = new Map(nextDecals.map(decal => [decal.id, decal]))
+            setSurfaceDecals(current => current.map(decal => {
+              const previous = previousById.get(decal.id)
+              const updated = nextById.get(decal.id)
+              return updated != null && previous?.color.toLowerCase() === decal.color.toLowerCase()
+                ? { ...decal, color: updated.color }
+                : decal
+            }))
+          }
+        }
         continue
       }
       if (field.startsWith('scene.appearance.coatPattern.')) continue
@@ -3380,10 +3441,11 @@ function App({
       ? resolveSeededAvatarEntityPreset(nextSeed)
       : entityPreset
     const activeFields = seededFields.length === 0
-      ? breedTemplate?.followByDefault ?? getApplicableAvatarSeedFields(
-        randomEntityPreset,
-        entityPreset === 'custom'
-      )
+      ? breedTemplate == null
+        ? getApplicableAvatarSeedFields(randomEntityPreset, entityPreset === 'custom')
+        : paletteManuallyFixedRef.current
+          ? breedTemplate.followByDefault.filter(field => field !== AVATAR_SEED_FIELD.palette)
+          : breedTemplate.followByDefault
       : seededFields
     const randomFields = breedTemplate != null && !activeFields.includes(AVATAR_SEED_FIELD.viewPose)
       ? [...activeFields, AVATAR_SEED_FIELD.viewPose]
@@ -3403,9 +3465,11 @@ function App({
     setGenerationEnabled(true)
     if (!enabled) {
       if (field === AVATAR_SEED_FIELD.viewPose) cancelSeededViewTransition()
+      if (field === AVATAR_SEED_FIELD.palette) paletteManuallyFixedRef.current = true
       markSeedFieldsManual(field)
       return
     }
+    if (field === AVATAR_SEED_FIELD.palette) paletteManuallyFixedRef.current = false
     const nextSeed = normalizeEditorAvatarSeed(seed)
     setSeed(nextSeed)
     if (field === AVATAR_SEED_FIELD.entityPreset) {
@@ -3627,6 +3691,7 @@ function App({
     setSelectedPaletteId(config.selectedPaletteId)
     paletteManuallyFixedRef.current = !config.seededFields.includes(AVATAR_SEED_FIELD.palette) &&
       presetParams.has('palette')
+    appliedPaletteSeedRef.current = config.seed
     setSeed(config.seed)
     setSeededFields(config.seededFields)
     setGenerationEnabled(true)
@@ -5084,7 +5149,10 @@ function App({
                     elevation: animationThumbnailCapture.lightElevation
                   }}
                   onViewStateChange={ignoreAvatarViewStateChange}
-                  palette={getAvatarPalette(animationThumbnailCapture.paletteId)}
+                  palette={resolveAvatarBreedPaletteFromEntityParts(
+                    getAvatarPalette(animationThumbnailCapture.paletteId),
+                    animationThumbnailCapture.entityParts
+                  )}
                   renderSurfaceCells={false}
                   shadowStyle={animationThumbnailCapture.faceShadowStyle}
                   showLight={animationThumbnailCapture.showLight}
