@@ -339,7 +339,9 @@ const parseBodyShape = (value: string | null): AvatarBodyShape => {
   return AVATAR_BODY_SHAPES.includes(value as AvatarBodyShape) ? (value as AvatarBodyShape) : 'sphere'
 }
 const parseEyeShape = (value: string | null): AvatarEyeShape => {
-  return value === 'ellipse' || value === 'rounded' ? value : DEFAULT_AVATAR_FACE_STYLE.eyeShape
+  return value === 'ellipse' || value === 'rounded' || value === 'chevron'
+    ? value
+    : DEFAULT_AVATAR_FACE_STYLE.eyeShape
 }
 const parseNoseShape = (value: string | null): AvatarNoseShape => {
   return value === 'ellipse' || value === 'inverted-triangle' || value === 'rounded'
@@ -581,6 +583,7 @@ const parseQueryConfig = (
       leftEyeWidth: params.has('eyeLeftW')
         ? parseRangeValue(params.get('eyeLeftW'), DEFAULT_AVATAR_FACE_STYLE.width, AVATAR_FACE_RANGES.leftEyeWidth.min, AVATAR_FACE_RANGES.leftEyeWidth.max)
         : undefined,
+      leftEyeShape: params.has('eyeLeftShape') ? parseEyeShape(params.get('eyeLeftShape')) : undefined,
       leftEyeRotation: parseRangeValue(
         params.get('eyeLeftRot'),
         DEFAULT_AVATAR_FACE_STYLE.leftEyeRotation,
@@ -1452,6 +1455,8 @@ function App({
     }
     if (resolvedFaceStyle.leftEyeWidth != null) params.set('eyeLeftW', String(resolvedFaceStyle.leftEyeWidth))
     if (resolvedFaceStyle.rightEyeWidth != null) params.set('eyeRightW', String(resolvedFaceStyle.rightEyeWidth))
+    if (resolvedFaceStyle.leftEyeShape != null) params.set('eyeLeftShape', resolvedFaceStyle.leftEyeShape)
+    if (resolvedFaceStyle.rightEyeShape != null) params.set('eyeRightShape', resolvedFaceStyle.rightEyeShape)
     params.set('eyeGap', String(resolvedFaceStyle.gap))
     params.set('eyeRot', String(resolvedFaceStyle.rotation))
     params.set('eyeLeftRot', String(resolvedFaceStyle.leftEyeRotation))

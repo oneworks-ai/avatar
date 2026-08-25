@@ -220,7 +220,7 @@ export type AvatarCameraFrame = 'circle' | 'rounded' | 'square'
 export type AvatarCoatPatternAlgorithm = 'broken-mackerel' | 'classic' | 'mackerel' | 'random' | 'spotted'
 export type AvatarCoatPatternLightPatchShape = 'ellipse' | 'face-mask' | 'rounded'
 export type AvatarEntityPreset = 'bear' | 'bun' | 'cat' | 'cloud' | 'custom' | 'dog' | 'rabbit' | 'sun'
-export type AvatarEyeShape = 'ellipse' | 'rounded'
+export type AvatarEyeShape = 'chevron' | 'ellipse' | 'rounded'
 export type AvatarSurfaceDecalSide = 'back' | 'face' | 'front' | 'left' | 'right'
 export type AvatarSurfaceDecalShape =
   | 'claude-spark'
@@ -265,6 +265,7 @@ export interface AvatarFace {
   readonly height: number
   readonly leftEyeHeight?: number
   readonly leftEyeWidth?: number
+  readonly leftEyeShape?: AvatarEyeShape
   readonly leftEyeRotation: number
   readonly mouthCurve: number
   readonly mouthEnabled: boolean
@@ -282,6 +283,7 @@ export interface AvatarFace {
   readonly rotation: number
   readonly rightEyeHeight?: number
   readonly rightEyeWidth?: number
+  readonly rightEyeShape?: AvatarEyeShape
   readonly rightEyeRotation: number
   readonly width: number
 }
@@ -1198,6 +1200,7 @@ const isAvatarFace = (value: unknown): value is AvatarFace => (
     'height',
     'leftEyeHeight',
     'leftEyeWidth',
+    'leftEyeShape',
     'leftEyeRotation',
     'mouthCurve',
     'mouthEnabled',
@@ -1215,6 +1218,7 @@ const isAvatarFace = (value: unknown): value is AvatarFace => (
     'rotation',
     'rightEyeHeight',
     'rightEyeWidth',
+    'rightEyeShape',
     'rightEyeRotation',
     'width'
   ]) && hasOwnKeys(value, [
@@ -1242,7 +1246,9 @@ const isAvatarFace = (value: unknown): value is AvatarFace => (
     'width'
   ]) && isAvatarEyeHighlight(value.eyeHighlight) &&
   isFiniteInRange(value.eyeRoundness, AVATAR_FACE_RANGES.eyeRoundness) &&
-  isOneOf(value.eyeShape, ['ellipse', 'rounded']) && isFiniteInRange(value.gap, AVATAR_FACE_RANGES.gap) &&
+  isOneOf(value.eyeShape, ['chevron', 'ellipse', 'rounded']) && isFiniteInRange(value.gap, AVATAR_FACE_RANGES.gap) &&
+  (value.leftEyeShape === undefined || isOneOf(value.leftEyeShape, ['chevron', 'ellipse', 'rounded'])) &&
+  (value.rightEyeShape === undefined || isOneOf(value.rightEyeShape, ['chevron', 'ellipse', 'rounded'])) &&
   isFiniteInRange(value.height, AVATAR_FACE_RANGES.height) &&
   (value.leftEyeHeight === undefined || isFiniteInRange(value.leftEyeHeight, AVATAR_FACE_RANGES.leftEyeHeight)) &&
   (value.leftEyeWidth === undefined || isFiniteInRange(value.leftEyeWidth, AVATAR_FACE_RANGES.leftEyeWidth)) &&
@@ -1376,6 +1382,8 @@ const isPartialAvatarFace = (value: unknown) => {
     ...booleanKeys,
     'eyeHighlight',
     'eyeShape',
+    'leftEyeShape',
+    'rightEyeShape',
     'mouthShape',
     'noseShape'
   ]
@@ -1386,7 +1394,9 @@ const isPartialAvatarFace = (value: unknown) => {
       return range != null && isFiniteInRange(field, range)
     }
     if (booleanKeys.includes(key)) return isBoolean(field)
-    if (key === 'eyeShape') return isOneOf(field, ['ellipse', 'rounded'])
+    if (key === 'eyeShape' || key === 'leftEyeShape' || key === 'rightEyeShape') {
+      return isOneOf(field, ['chevron', 'ellipse', 'rounded'])
+    }
     if (key === 'eyeHighlight') return isAvatarEyeHighlight(field)
     if (key === 'mouthShape') {
       return isOneOf(field, ['curve', 'ellipse', 'rounded', 'rounded-triangle'])
