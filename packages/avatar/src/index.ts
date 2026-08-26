@@ -34,7 +34,17 @@ export const AVATAR_CAMERA_BACKGROUND_PRESETS = deepFreeze([
   '#8ec5a4'
 ] as const)
 export const AVATAR_SEED_FIELD_PATHS = deepFreeze({
+  alpacaEarHeight: 'scene.entity.alpacaEarHeight',
+  alpacaEarWidth: 'scene.entity.alpacaEarWidth',
+  alpacaHeadHeight: 'scene.entity.alpacaHeadHeight',
+  alpacaHeadWidth: 'scene.entity.alpacaHeadWidth',
   backgroundStyle: 'scene.appearance.backgroundStyle',
+  beaverEarHeight: 'scene.entity.beaverEarHeight',
+  beaverEarWidth: 'scene.entity.beaverEarWidth',
+  beaverHeadHeight: 'scene.entity.beaverHeadHeight',
+  beaverHeadWidth: 'scene.entity.beaverHeadWidth',
+  beaverToothSize: 'scene.entity.beaverToothSize',
+  beaverToothStyle: 'scene.entity.beaverToothStyle',
   cameraBackground: 'scene.camera.background',
   cameraFrame: 'scene.camera.frame',
   capybaraEarHeight: 'scene.entity.capybaraEarHeight',
@@ -43,10 +53,31 @@ export const AVATAR_SEED_FIELD_PATHS = deepFreeze({
   capybaraHeadWidth: 'scene.entity.capybaraHeadWidth',
   catEarHeight: 'scene.entity.catEarHeight',
   catEarWidth: 'scene.entity.catEarWidth',
+  chinchillaEarHeight: 'scene.entity.chinchillaEarHeight',
+  chinchillaEarWidth: 'scene.entity.chinchillaEarWidth',
+  chinchillaHeadHeight: 'scene.entity.chinchillaHeadHeight',
+  chinchillaHeadWidth: 'scene.entity.chinchillaHeadWidth',
+  chickBeakSize: 'scene.entity.chickBeakSize',
+  chickBeakStyle: 'scene.entity.chickBeakStyle',
+  chickCrestSize: 'scene.entity.chickCrestSize',
+  chickCrestStyle: 'scene.entity.chickCrestStyle',
+  chickHeadHeight: 'scene.entity.chickHeadHeight',
+  chickHeadWidth: 'scene.entity.chickHeadWidth',
+  cowEarHeight: 'scene.entity.cowEarHeight',
+  cowEarWidth: 'scene.entity.cowEarWidth',
+  cowForelockStyle: 'scene.entity.cowForelockStyle',
+  cowHeadHeight: 'scene.entity.cowHeadHeight',
+  cowHeadWidth: 'scene.entity.cowHeadWidth',
+  cowHornSize: 'scene.entity.cowHornSize',
+  cowHornStyle: 'scene.entity.cowHornStyle',
   dogEarHeight: 'scene.entity.dogEarHeight',
   dogEarWidth: 'scene.entity.dogEarWidth',
   dogHeadHeight: 'scene.entity.dogHeadHeight',
   dogHeadWidth: 'scene.entity.dogHeadWidth',
+  duckBillSize: 'scene.entity.duckBillSize',
+  duckBillStyle: 'scene.entity.duckBillStyle',
+  duckHeadHeight: 'scene.entity.duckHeadHeight',
+  duckHeadWidth: 'scene.entity.duckHeadWidth',
   deerAntlerSize: 'scene.entity.deerAntlerSize',
   deerAntlerStyle: 'scene.entity.deerAntlerStyle',
   deerEarHeight: 'scene.entity.deerEarHeight',
@@ -59,18 +90,60 @@ export const AVATAR_SEED_FIELD_PATHS = deepFreeze({
   foxHeadHeight: 'scene.entity.foxHeadHeight',
   foxHeadTaper: 'scene.entity.foxHeadTaper',
   foxHeadWidth: 'scene.entity.foxHeadWidth',
+  ferretEarHeight: 'scene.entity.ferretEarHeight',
+  ferretEarWidth: 'scene.entity.ferretEarWidth',
+  ferretHeadHeight: 'scene.entity.ferretHeadHeight',
+  ferretHeadWidth: 'scene.entity.ferretHeadWidth',
+  guineaPigEarHeight: 'scene.entity.guineaPigEarHeight',
+  guineaPigEarWidth: 'scene.entity.guineaPigEarWidth',
+  guineaPigHeadHeight: 'scene.entity.guineaPigHeadHeight',
+  guineaPigHeadWidth: 'scene.entity.guineaPigHeadWidth',
+  gooseBillSize: 'scene.entity.gooseBillSize',
+  gooseBillStyle: 'scene.entity.gooseBillStyle',
+  gooseHeadHeight: 'scene.entity.gooseHeadHeight',
+  gooseHeadWidth: 'scene.entity.gooseHeadWidth',
   hamsterEarHeight: 'scene.entity.hamsterEarHeight',
   hamsterEarWidth: 'scene.entity.hamsterEarWidth',
   hamsterHeadHeight: 'scene.entity.hamsterHeadHeight',
   hamsterHeadWidth: 'scene.entity.hamsterHeadWidth',
+  hedgehogEarHeight: 'scene.entity.hedgehogEarHeight',
+  hedgehogEarWidth: 'scene.entity.hedgehogEarWidth',
+  hedgehogHeadHeight: 'scene.entity.hedgehogHeadHeight',
+  hedgehogHeadWidth: 'scene.entity.hedgehogHeadWidth',
+  hedgehogSpineSize: 'scene.entity.hedgehogSpineSize',
+  hedgehogSpineStyle: 'scene.entity.hedgehogSpineStyle',
+  lionEarHeight: 'scene.entity.lionEarHeight',
+  lionEarWidth: 'scene.entity.lionEarWidth',
+  lionHeadHeight: 'scene.entity.lionHeadHeight',
+  lionHeadWidth: 'scene.entity.lionHeadWidth',
+  lionManeSize: 'scene.entity.lionManeSize',
+  lionManeStyle: 'scene.entity.lionManeStyle',
+  monkeyEarHeight: 'scene.entity.monkeyEarHeight',
+  monkeyEarWidth: 'scene.entity.monkeyEarWidth',
+  monkeyHeadHeight: 'scene.entity.monkeyHeadHeight',
+  monkeyHeadWidth: 'scene.entity.monkeyHeadWidth',
   otterEarHeight: 'scene.entity.otterEarHeight',
   otterEarWidth: 'scene.entity.otterEarWidth',
   otterHeadHeight: 'scene.entity.otterHeadHeight',
   otterHeadWidth: 'scene.entity.otterHeadWidth',
+  owlBeakSize: 'scene.entity.owlBeakSize',
+  owlBeakStyle: 'scene.entity.owlBeakStyle',
+  owlHeadHeight: 'scene.entity.owlHeadHeight',
+  owlHeadWidth: 'scene.entity.owlHeadWidth',
+  owlTuftSize: 'scene.entity.owlTuftSize',
+  owlTuftStyle: 'scene.entity.owlTuftStyle',
+  parrotBeakSize: 'scene.entity.parrotBeakSize',
+  parrotBeakStyle: 'scene.entity.parrotBeakStyle',
+  parrotHeadHeight: 'scene.entity.parrotHeadHeight',
+  parrotHeadWidth: 'scene.entity.parrotHeadWidth',
   pigEarHeight: 'scene.entity.pigEarHeight',
   pigEarWidth: 'scene.entity.pigEarWidth',
   pigHeadHeight: 'scene.entity.pigHeadHeight',
   pigHeadWidth: 'scene.entity.pigHeadWidth',
+  penguinBeakSize: 'scene.entity.penguinBeakSize',
+  penguinBeakStyle: 'scene.entity.penguinBeakStyle',
+  penguinHeadHeight: 'scene.entity.penguinHeadHeight',
+  penguinHeadWidth: 'scene.entity.penguinHeadWidth',
   bearEarHeight: 'scene.entity.bearEarHeight',
   bearEarWidth: 'scene.entity.bearEarWidth',
   bearHeadHeight: 'scene.entity.bearHeadHeight',
@@ -79,12 +152,25 @@ export const AVATAR_SEED_FIELD_PATHS = deepFreeze({
   rabbitEarWidth: 'scene.entity.rabbitEarWidth',
   rabbitHeadHeight: 'scene.entity.rabbitHeadHeight',
   rabbitHeadWidth: 'scene.entity.rabbitHeadWidth',
+  sealEarHeight: 'scene.entity.sealEarHeight',
+  sealEarWidth: 'scene.entity.sealEarWidth',
+  sealHeadHeight: 'scene.entity.sealHeadHeight',
+  sealHeadWidth: 'scene.entity.sealHeadWidth',
   sheepEarHeight: 'scene.entity.sheepEarHeight',
   sheepEarWidth: 'scene.entity.sheepEarWidth',
   sheepHeadHeight: 'scene.entity.sheepHeadHeight',
   sheepHeadWidth: 'scene.entity.sheepHeadWidth',
   sheepHornSize: 'scene.entity.sheepHornSize',
   sheepHornStyle: 'scene.entity.sheepHornStyle',
+  squirrelEarHeight: 'scene.entity.squirrelEarHeight',
+  squirrelEarWidth: 'scene.entity.squirrelEarWidth',
+  squirrelHeadHeight: 'scene.entity.squirrelHeadHeight',
+  squirrelHeadWidth: 'scene.entity.squirrelHeadWidth',
+  squirrelTailSize: 'scene.entity.squirrelTailSize',
+  tigerEarHeight: 'scene.entity.tigerEarHeight',
+  tigerEarWidth: 'scene.entity.tigerEarWidth',
+  tigerHeadHeight: 'scene.entity.tigerHeadHeight',
+  tigerHeadWidth: 'scene.entity.tigerHeadWidth',
   coatPatternAlgorithm: 'scene.appearance.coatPattern.algorithm',
   coatPatternBreakup: 'scene.appearance.coatPattern.breakup',
   coatPatternContrast: 'scene.appearance.coatPattern.contrast',
@@ -286,9 +372,27 @@ export type AvatarBodyShape =
 export type AvatarCameraFrame = 'circle' | 'rounded' | 'square'
 export type AvatarCoatPatternAlgorithm = 'broken-mackerel' | 'classic' | 'mackerel' | 'random' | 'spotted'
 export type AvatarCoatPatternLightPatchShape = 'ellipse' | 'face-mask' | 'rounded'
-export type AvatarEntityPreset = 'bear' | 'bun' | 'capybara' | 'cat' | 'cloud' | 'custom' | 'deer' | 'dog' | 'fox' | 'hamster' | 'otter' | 'pig' | 'rabbit' | 'sheep' | 'sun'
+export const AVATAR_ENTITY_PRESET_VALUES = deepFreeze([
+  'alpaca', 'bear', 'beaver', 'bun', 'capybara', 'cat', 'cloud', 'cow', 'custom',
+  'chick', 'chinchilla', 'deer', 'dog', 'duck', 'ferret', 'fox', 'goose', 'hamster', 'hedgehog', 'lion', 'monkey', 'otter', 'pig', 'rabbit',
+  'guinea-pig', 'owl', 'parrot', 'penguin', 'seal', 'sheep', 'squirrel', 'sun', 'tiger'
+] as const)
+export type AvatarEntityPreset = (typeof AVATAR_ENTITY_PRESET_VALUES)[number]
+export type AvatarBeaverToothStyle = 'none' | 'paired'
+export type AvatarChickBeakStyle = 'pointed' | 'short'
+export type AvatarChickCrestStyle = 'comb' | 'fluffy' | 'none'
+export type AvatarCowForelockStyle = 'highland' | 'none' | 'soft'
+export type AvatarCowHornStyle = 'highland' | 'none' | 'short'
 export type AvatarDeerAntlerStyle = 'branched' | 'forked' | 'none' | 'reindeer' | 'spike'
+export type AvatarDuckBillStyle = 'broad' | 'flat'
 export type AvatarFoxEarStyle = 'fennec' | 'pointed' | 'rounded'
+export type AvatarGooseBillStyle = 'broad' | 'short'
+export type AvatarHedgehogSpineStyle = 'full' | 'none' | 'short'
+export type AvatarLionManeStyle = 'full' | 'juvenile' | 'none'
+export type AvatarPenguinBeakStyle = 'short' | 'tapered'
+export type AvatarOwlBeakStyle = 'hooked' | 'short'
+export type AvatarOwlTuftStyle = 'none' | 'paired'
+export type AvatarParrotBeakStyle = 'hooked' | 'macaw'
 export type AvatarSheepHornStyle = 'curled' | 'curved' | 'none' | 'straight'
 export type AvatarAnimalSurfaceMarkingShape = 'ellipse' | 'face-mask' | 'rounded' | 'rounded-triangle'
 
@@ -301,10 +405,63 @@ export interface AvatarAnimalSurfaceMarkingStyle {
   readonly x?: number
   readonly y?: number
 }
+export type AvatarAlpacaSurfaceMarkingStyle = AvatarAnimalSurfaceMarkingStyle
+export type AvatarBeaverSurfaceMarkingStyle = AvatarAnimalSurfaceMarkingStyle
+export type AvatarGuineaPigSurfaceMarkingStyle = AvatarAnimalSurfaceMarkingStyle & {
+  readonly innerEarColor?: string
+}
+export type AvatarGooseSurfaceMarkingStyle = AvatarAnimalSurfaceMarkingStyle & {
+  readonly billColor?: string
+  readonly nostrilColor?: string
+}
+export type AvatarCapybaraSurfaceMarkingStyle = AvatarAnimalSurfaceMarkingStyle
+export type AvatarChickSurfaceMarkingStyle = AvatarAnimalSurfaceMarkingStyle & {
+  readonly beakColor?: string
+  readonly combColor?: string
+  readonly nostrilColor?: string
+}
+export type AvatarChinchillaSurfaceMarkingStyle = AvatarAnimalSurfaceMarkingStyle & {
+  readonly innerEarColor?: string
+}
+export type AvatarCowSurfaceMarkingStyle = AvatarAnimalSurfaceMarkingStyle
+export type AvatarHamsterSurfaceMarkingStyle = AvatarAnimalSurfaceMarkingStyle & {
+  readonly innerEarColor?: string
+}
+export type AvatarHedgehogSurfaceMarkingStyle = AvatarAnimalSurfaceMarkingStyle
+export type AvatarLionSurfaceMarkingStyle = AvatarAnimalSurfaceMarkingStyle
+export type AvatarMonkeySurfaceMarkingStyle = AvatarAnimalSurfaceMarkingStyle & {
+  readonly innerEarColor?: string
+  readonly nostrilColor?: string
+}
+export type AvatarPenguinSurfaceMarkingStyle = AvatarAnimalSurfaceMarkingStyle & {
+  readonly beakColor?: string
+  readonly nostrilColor?: string
+}
+export type AvatarOwlSurfaceMarkingStyle = AvatarAnimalSurfaceMarkingStyle & {
+  readonly beakColor?: string
+  readonly eyeRingColor?: string
+  readonly nostrilColor?: string
+  readonly tuftColor?: string
+}
+export type AvatarParrotSurfaceMarkingStyle = AvatarAnimalSurfaceMarkingStyle & {
+  readonly beakColor?: string
+  readonly nostrilColor?: string
+}
 export type AvatarDeerSurfaceMarkingStyle = AvatarAnimalSurfaceMarkingStyle
+export type AvatarDuckSurfaceMarkingStyle = AvatarAnimalSurfaceMarkingStyle & {
+  readonly billColor?: string
+  readonly nostrilColor?: string
+}
+export type AvatarFerretSurfaceMarkingStyle = AvatarAnimalSurfaceMarkingStyle & {
+  readonly innerEarColor?: string
+  readonly maskColor?: string
+}
 export type AvatarOtterSurfaceMarkingStyle = AvatarAnimalSurfaceMarkingStyle
+export type AvatarSealSurfaceMarkingStyle = AvatarAnimalSurfaceMarkingStyle
 export type AvatarSheepSurfaceMarkingShape = AvatarAnimalSurfaceMarkingShape
 export type AvatarSheepSurfaceMarkingStyle = AvatarAnimalSurfaceMarkingStyle
+export type AvatarSquirrelSurfaceMarkingStyle = AvatarAnimalSurfaceMarkingStyle
+export type AvatarTigerSurfaceMarkingStyle = AvatarAnimalSurfaceMarkingStyle
 export type AvatarEyeShape = 'ellipse' | 'rounded'
 export type AvatarSurfaceDecalSide = 'back' | 'face' | 'front' | 'left' | 'right'
 export type AvatarSurfaceDecalShape =
@@ -904,7 +1061,7 @@ const resolveAvatarDogCoatPatternDecals = ({
   readonly palette: (typeof AVATAR_PALETTES)[number]
   readonly pattern: AvatarCoatPattern
   readonly rightEarId: string | undefined
-  readonly species?: 'bear' | 'deer' | 'dog' | 'pig' | 'rabbit'
+  readonly species?: 'bear' | 'cow' | 'deer' | 'dog' | 'pig' | 'rabbit'
 }): readonly AvatarSurfaceDecal[] => {
   const marking = palette.coat?.marking
   if (marking == null) return []
@@ -1067,7 +1224,8 @@ export const resolveAvatarCoatPatternDecals = ({
 }): readonly AvatarSurfaceDecal[] => {
   if (!pattern.enabled || (
     entityPreset !== 'cat' && entityPreset !== 'dog' && entityPreset !== 'rabbit' &&
-    entityPreset !== 'bear' && entityPreset !== 'deer' && entityPreset !== 'pig'
+    entityPreset !== 'bear' && entityPreset !== 'cow' && entityPreset !== 'deer' && entityPreset !== 'pig' &&
+    entityPreset !== 'squirrel' && entityPreset !== 'tiger'
   )) return []
   const facePartId = entityParts.find(part => part.face)?.id
   if (facePartId == null) return []
@@ -1075,10 +1233,45 @@ export const resolveAvatarCoatPatternDecals = ({
   const rightEarId = entityParts.find(part => /ear-right|right-ear/u.test(part.id))?.id
   const palette = paletteOverride ?? AVATAR_PALETTES.find(candidate => candidate.id === paletteId) ?? AVATAR_PALETTES[0]!
   if (entityPreset === 'bear') return resolveAvatarBearCoatPatternDecals({ facePartId, palette, pattern })
-  if ((entityPreset === 'deer' || entityPreset === 'pig') && palette.coat?.marking !== 'spots') return []
+  if (entityPreset === 'tiger' && palette.coat?.marking !== 'stripes') return []
+  if (entityPreset === 'squirrel') {
+    if (palette.coat?.marking !== 'stripes') return []
+    const thickness = pattern.thickness / 100
+    const opacity = Math.round(72 + pattern.contrast * .23)
+    const chipmunkStripe = (
+      id: string,
+      x: number,
+      width: number,
+      rotation: number,
+      bend: number,
+      color: string
+    ): AvatarSurfaceDecal => ({
+      bend,
+      color,
+      height: 112,
+      id: `coat-chipmunk-${id}`,
+      label: 'Natural curved chipmunk stripe',
+      opacity,
+      rotation,
+      shape: 'tapered-band',
+      side: 'face',
+      targetPartId: facePartId,
+      width: Math.max(6, Math.round(width * thickness)),
+      x,
+      y: -14
+    })
+    return [
+      chipmunkStripe('center', 0, 14, 0, 0, palette.coat.mark),
+      chipmunkStripe('left', -42, 12, -11, -17, palette.coat.mark),
+      chipmunkStripe('right', 42, 12, 11, 17, palette.coat.mark),
+      chipmunkStripe('left-light', -23, 9, -5, -9, palette.coat.patch),
+      chipmunkStripe('right-light', 23, 9, 5, 9, palette.coat.patch)
+    ]
+  }
+  if ((entityPreset === 'cow' || entityPreset === 'deer' || entityPreset === 'pig') && palette.coat?.marking !== 'spots') return []
   if (
     entityPreset === 'dog' || entityPreset === 'rabbit' ||
-    entityPreset === 'deer' || entityPreset === 'pig'
+    entityPreset === 'cow' || entityPreset === 'deer' || entityPreset === 'pig'
   ) return resolveAvatarDogCoatPatternDecals({
     facePartId,
     leftEarId,
@@ -1108,7 +1301,7 @@ export const resolveAvatarCoatPatternDecals = ({
     resolveAvatarSeededInteger(pattern.seed, `coat.${algorithm}.${path}.${axis}`, -100, 100) / 100 * amount * jitterAmount
   )
   const selectedGroups = [
-    ...AVATAR_TABBY_TONE_GROUPS,
+    ...(entityPreset === 'tiger' ? [] : AVATAR_TABBY_TONE_GROUPS),
     ...AVATAR_TABBY_DARK_GROUPS.slice(0, densityCount)
   ]
   return selectedGroups.flatMap(group => group.map(spec => {
@@ -1159,8 +1352,10 @@ export const resolveAvatarCoatPatternDecals = ({
           : Math.round(spec.height * heightScale) + Math.abs(pairedJitter('height', 8 * jitterScale)),
         AVATAR_SURFACE_DECAL_RANGES.height
       ),
-      id: `coat-${algorithm}-${spec.id}`,
-      label: isTone ? 'Tabby coat patch' : spotted || broken ? 'Tabby spot' : 'Tabby stripe',
+      id: `coat-${entityPreset === 'tiger' ? 'tiger-' : ''}${algorithm}-${spec.id}`,
+      label: entityPreset === 'tiger'
+        ? 'Natural curved tiger stripe'
+        : isTone ? 'Tabby coat patch' : spotted || broken ? 'Tabby spot' : 'Tabby stripe',
       opacity,
       rotation: clampDecalValue(
         spec.rotation + pairedJitter('rotation', 14 * jitterScale),
@@ -1875,7 +2070,7 @@ const isAvatarDefinitionValue = (value: unknown): value is AvatarDefinition => {
     new Set(scene.entity.parts.map(part => part.id)).size === scene.entity.parts.length &&
     (scene.entity.parts.length === 0 || scene.entity.parts.filter(part => part.face).length === 1) &&
     decalTargetsAreValid &&
-    isOneOf(scene.entity.preset, ['bear', 'bun', 'capybara', 'cat', 'cloud', 'custom', 'deer', 'dog', 'fox', 'hamster', 'otter', 'pig', 'rabbit', 'sheep', 'sun']) &&
+    isOneOf(scene.entity.preset, AVATAR_ENTITY_PRESET_VALUES) &&
     isAvatarFace(scene.face) && isOneOf(scene.interactionMode, ['move', 'rotate']) &&
     isRecord(scene.lighting) && hasOnlyKeys(scene.lighting, [
       'azimuth',

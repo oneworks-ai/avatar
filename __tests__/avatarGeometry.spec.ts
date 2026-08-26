@@ -9,7 +9,16 @@ import {
   resolveAvatarSurfaceShadeOpacity
 } from '../src/avatarGeometry'
 import { AVATAR_FACE_PRESETS } from '../src/avatarFacePresets'
-import { applySheepHeadScale, createAvatarEntityParts, createSheepSurfaceDecals } from '../src/avatarEntityPresets'
+import {
+  applySheepHeadScale,
+  createAvatarEntityParts,
+  createCapybaraSurfaceDecals,
+  createCowSurfaceDecals,
+  createMonkeySurfaceDecals,
+  createOwlSurfaceDecals,
+  createParrotSurfaceDecals,
+  createSheepSurfaceDecals
+} from '../src/avatarEntityPresets'
 
 const POSE = { pitch: -.35, yaw: .4 }
 const LIGHT = { azimuth: -92, elevation: 64 }
@@ -33,6 +42,39 @@ const projectedPathBandWidth = (path: string, minY: number, maxY: number) => {
   })
   return Math.max(...xs) - Math.min(...xs)
 }
+
+const projectedPathArea = (path: string | undefined) => {
+  if (path == null) return 0
+  return path.split(/(?=M )/).reduce((total, subpath) => {
+    const values = Array.from(subpath.matchAll(/-?\d+(?:\.\d+)?/g), match => Number(match[0]))
+    const points = Array.from({ length: Math.floor(values.length / 2) }, (_, index) => ({
+      x: values[index * 2]!,
+      y: values[index * 2 + 1]!
+    }))
+    if (points.length < 3) return total
+    const signedArea = points.reduce((area, point, index) => {
+      const next = points[(index + 1) % points.length]!
+      return area + point.x * next.y - next.x * point.y
+    }, 0) / 2
+    return total + Math.abs(signedArea)
+  }, 0)
+}
+
+const getPartGeometryOptions = (part: ReturnType<typeof createAvatarEntityParts>[number]) => ({
+  bottomTaper: part.bottomTaper,
+  cutAngle: part.cutAngle,
+  hollow: part.hollow,
+  occlusionAmount: part.occlusionAmount,
+  occlusionPole: part.occlusionPole,
+  rotationX: part.rotationX,
+  rotationY: part.rotationY,
+  rotationZ: part.rotationZ,
+  roundness: part.roundness,
+  scaleX: part.scaleX,
+  scaleY: part.scaleY,
+  scaleZ: part.scaleZ,
+  topScale: part.topScale
+})
 
 describe('avatar surface lighting', () => {
   it('uses stronger near shadows and attenuates all contrast with distance', () => {
@@ -223,6 +265,100 @@ describe('avatar surface lighting', () => {
 })
 
 describe('avatar face-anchored surface decals', () => {
+  it('clips face-side markings continuously as their target crosses the visible horizon', () => {
+    const fixtures = [
+      { createDecals: createOwlSurfaceDecals, id: 'owl-facial-disc', preset: 'owl' as const },
+      { createDecals: createParrotSurfaceDecals, id: 'parrot-face-patch', preset: 'parrot' as const },
+      { createDecals: createMonkeySurfaceDecals, id: 'monkey-face-mask', preset: 'monkey' as const },
+      { createDecals: createCowSurfaceDecals, id: 'cow-face-mask', preset: 'cow' as const }
+    ]
+
+    for (const fixture of fixtures) {
+      const parts = createAvatarEntityParts(fixture.preset)
+      const decal = fixture.createDecals().find(candidate => candidate.id === fixture.id)!
+      const target = parts.find(part => part.id === decal.targetPartId) ?? parts.find(part => part.face)!
+      const areas = [88, 89, 90, 91, 92].map(yaw => projectedPathArea(projectAvatarSurfaceDecal(
+        { pitch: 0, yaw: yaw * Math.PI / 180 },
+        target.shape,
+        decal,
+        getPartGeometryOptions(target)
+      )?.path))
+      const frontArea = projectedPathArea(projectAvatarSurfaceDecal(
+        { pitch: 0, yaw: 0 },
+        target.shape,
+        decal,
+        getPartGeometryOptions(target)
+      )?.path)
+      const largestStep = Math.max(...areas.slice(1).map((area, index) => Math.abs(area - areas[index]!)))
+
+      expect(areas[2], `${fixture.id} must retain the still-visible half at an exact 90 degree yaw`)
+        .toBeGreaterThan(0)
+      expect(largestStep, `${fixture.id} must shrink at the horizon instead of disappearing as one sheet`)
+        .toBeLessThan(frontArea * .08)
+    }
+  })
+
+  it('clips individual face features continuously instead of toggling the whole face group', () => {
+    const areas = [88, 89, 90, 91, 92].map(yaw => {
+      const face = projectDefaultFace(
+        { pitch: 0, yaw: yaw * Math.PI / 180 },
+        'sphere',
+        DEFAULT_AVATAR_FACE_STYLE
+      )
+      return face.eyes.reduce((total, eye) => total + projectedPathArea(eye.path), 0) +
+        projectedPathArea(face.nose?.path) + projectedPathArea(face.mouth?.path)
+    })
+    const front = projectDefaultFace({ pitch: 0, yaw: 0 }, 'sphere', DEFAULT_AVATAR_FACE_STYLE)
+    const frontArea = front.eyes.reduce((total, eye) => total + projectedPathArea(eye.path), 0) +
+      projectedPathArea(front.nose?.path) + projectedPathArea(front.mouth?.path)
+    const largestStep = Math.max(...areas.slice(1).map((area, index) => Math.abs(area - areas[index]!)))
+
+    expect(largestStep).toBeLessThan(frontArea * .08)
+    expect(projectDefaultFace(
+      { pitch: 0, yaw: Math.PI / 2 },
+      'sphere',
+      DEFAULT_AVATAR_FACE_STYLE
+    ).visible).toBe(true)
+    expect(projectDefaultFace({ pitch: 0, yaw: Math.PI }, 'sphere', DEFAULT_AVATAR_FACE_STYLE).eyes)
+      .toHaveLength(0)
+  })
+
+  it('makes the capybara muzzle a real side-profile volume with its marking on that same curved surface', () => {
+    const parts = createAvatarEntityParts('capybara')
+    const head = parts.find(part => part.face)!
+    const muzzle = parts.find(part => part.id === 'muzzle')!
+    const pose = { pitch: -.12, yaw: 1.18 }
+    const headGeometry = buildAvatarBodyGeometry(head.shape, pose, LIGHT, 100, {
+      roundness: head.roundness,
+      scaleX: head.scaleX,
+      scaleY: head.scaleY,
+      scaleZ: head.scaleZ,
+      topScale: head.topScale
+    })
+    const muzzleOptions = {
+      rotationX: muzzle.rotationX,
+      roundness: muzzle.roundness,
+      scaleX: muzzle.scaleX,
+      scaleY: muzzle.scaleY,
+      scaleZ: muzzle.scaleZ
+    }
+    const muzzleGeometry = buildAvatarBodyGeometry(muzzle.shape, pose, LIGHT, 100, muzzleOptions)
+    const headRight = projectedPathExtent(headGeometry.outlinePath).width / 2
+    const muzzleRight = muzzle.x * Math.cos(pose.yaw)
+      + muzzle.z * Math.sin(pose.yaw)
+      + projectedPathExtent(muzzleGeometry.outlinePath).width / 2
+
+    expect(muzzle.baseColor).toBe(head.baseColor)
+    expect(muzzleRight, 'the fur-covered muzzle must genuinely alter the visible side silhouette')
+      .toBeGreaterThan(headRight + 12)
+
+    const marking = createCapybaraSurfaceDecals()[0]!
+    expect(marking.targetPartId).toBe('muzzle')
+    expect(marking.color).not.toBe(muzzle.baseColor)
+    expect(projectAvatarSurfaceDecal(pose, muzzle.shape, marking, muzzleOptions)?.path)
+      .not.toContain('NaN')
+  })
+
   it('keeps sheep heads and wool rounded from side views while face masks follow the same thick surface', () => {
     const parts = createAvatarEntityParts('sheep')
     const head = parts.find(part => part.face)!

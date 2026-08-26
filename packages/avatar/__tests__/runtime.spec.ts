@@ -238,6 +238,198 @@ describe('OneWorks Avatar public runtime contract', () => {
     expect(AVATAR_SEED_FIELD_PATHS.sheepHornStyle).toBe('scene.entity.sheepHornStyle')
   })
 
+  it('round-trips the six next-generation animal contracts and exposes their anatomical Seed fields', () => {
+    const definition = createDefaultAvatarDefinition()
+    const presets = ['alpaca', 'cow', 'squirrel', 'tiger', 'lion', 'hedgehog'] as const
+
+    for (const preset of presets) {
+      const next = {
+        ...definition,
+        scene: { ...definition.scene, entity: { ...definition.scene.entity, preset } }
+      }
+      expect(isAvatarDefinition(next), `${preset} must be valid in the framework-neutral SDK`).toBe(true)
+      expect(parseAvatarDefinition(serializeAvatarDefinition(next))).toEqual(next)
+
+      for (const dimension of ['EarWidth', 'EarHeight', 'HeadWidth', 'HeadHeight'] as const) {
+        const key = `${preset}${dimension}` as keyof typeof AVATAR_SEED_FIELD_PATHS
+        expect(AVATAR_SEED_FIELD_PATHS[key]).toBe(`scene.entity.${preset}${dimension}`)
+      }
+    }
+
+    for (const field of [
+      'cowForelockStyle', 'cowHornSize', 'cowHornStyle', 'squirrelTailSize',
+      'lionManeSize', 'lionManeStyle', 'hedgehogSpineSize', 'hedgehogSpineStyle'
+    ] as const) {
+      expect(AVATAR_SEED_FIELD_PATHS[field]).toBe(`scene.entity.${field}`)
+    }
+  })
+
+  it('round-trips each landed third-batch head-only animal contract', () => {
+    const definition = createDefaultAvatarDefinition()
+    const presets = [
+      { fieldPrefix: 'seal', preset: 'seal' },
+      { fieldPrefix: 'beaver', preset: 'beaver' },
+      { fieldPrefix: 'guineaPig', preset: 'guinea-pig' },
+      { fieldPrefix: 'chinchilla', preset: 'chinchilla' },
+      { fieldPrefix: 'ferret', preset: 'ferret' },
+      { fieldPrefix: 'monkey', preset: 'monkey' }
+    ] as const
+
+    for (const { fieldPrefix, preset } of presets) {
+      const next = {
+        ...definition,
+        scene: { ...definition.scene, entity: { ...definition.scene.entity, preset } }
+      }
+      expect(isAvatarDefinition(next), `${preset} must be accepted by the public runtime`).toBe(true)
+      expect(parseAvatarDefinition(serializeAvatarDefinition(next))).toEqual(next)
+
+      for (const dimension of ['EarWidth', 'EarHeight', 'HeadWidth', 'HeadHeight'] as const) {
+        const key = `${fieldPrefix}${dimension}` as keyof typeof AVATAR_SEED_FIELD_PATHS
+        expect(AVATAR_SEED_FIELD_PATHS[key]).toBe(`scene.entity.${fieldPrefix}${dimension}`)
+      }
+    }
+
+    expect(AVATAR_SEED_FIELD_PATHS.beaverToothSize).toBe('scene.entity.beaverToothSize')
+    expect(AVATAR_SEED_FIELD_PATHS.beaverToothStyle).toBe('scene.entity.beaverToothStyle')
+  })
+
+  it('round-trips the bird-native chick contract without fake ear Seed fields', () => {
+    const definition = createDefaultAvatarDefinition()
+    const chick = {
+      ...definition,
+      metadata: {
+        ...definition.metadata,
+        generation: {
+          fields: [
+            AVATAR_SEED_FIELD_PATHS.chickHeadWidth,
+            AVATAR_SEED_FIELD_PATHS.chickHeadHeight,
+            AVATAR_SEED_FIELD_PATHS.chickBeakSize,
+            AVATAR_SEED_FIELD_PATHS.chickBeakStyle,
+            AVATAR_SEED_FIELD_PATHS.chickCrestSize,
+            AVATAR_SEED_FIELD_PATHS.chickCrestStyle
+          ],
+          seed: 'v1-yellow-chick',
+          version: 1 as const
+        }
+      },
+      scene: { ...definition.scene, entity: { ...definition.scene.entity, preset: 'chick' as const } }
+    }
+
+    expect(isAvatarDefinition(chick)).toBe(true)
+    expect(parseAvatarDefinition(serializeAvatarDefinition(chick))).toEqual(chick)
+    expect(Object.keys(AVATAR_SEED_FIELD_PATHS).some(field => field.startsWith('chickEar'))).toBe(false)
+  })
+
+  it('round-trips the bird-native duck contract without fake ear Seed fields', () => {
+    const definition = createDefaultAvatarDefinition()
+    const duck = {
+      ...definition,
+      metadata: {
+        ...definition.metadata,
+        generation: {
+          fields: [
+            AVATAR_SEED_FIELD_PATHS.duckHeadWidth,
+            AVATAR_SEED_FIELD_PATHS.duckHeadHeight,
+            AVATAR_SEED_FIELD_PATHS.duckBillSize,
+            AVATAR_SEED_FIELD_PATHS.duckBillStyle
+          ],
+          seed: 'v1-yellow-duckling',
+          version: 1 as const
+        }
+      },
+      scene: { ...definition.scene, entity: { ...definition.scene.entity, preset: 'duck' as const } }
+    }
+
+    expect(isAvatarDefinition(duck)).toBe(true)
+    expect(parseAvatarDefinition(serializeAvatarDefinition(duck))).toEqual(duck)
+    expect(Object.keys(AVATAR_SEED_FIELD_PATHS).some(field => field.startsWith('duckEar'))).toBe(false)
+  })
+
+  it('round-trips the bird-native penguin contract without fake ear Seed fields', () => {
+    const definition = createDefaultAvatarDefinition()
+    const penguin = {
+      ...definition,
+      metadata: {
+        ...definition.metadata,
+        generation: {
+          fields: [
+            AVATAR_SEED_FIELD_PATHS.penguinHeadWidth,
+            AVATAR_SEED_FIELD_PATHS.penguinHeadHeight,
+            AVATAR_SEED_FIELD_PATHS.penguinBeakSize,
+            AVATAR_SEED_FIELD_PATHS.penguinBeakStyle
+          ],
+          seed: 'v1-emperor-penguin',
+          version: 1 as const
+        }
+      },
+      scene: { ...definition.scene, entity: { ...definition.scene.entity, preset: 'penguin' as const } }
+    }
+
+    expect(isAvatarDefinition(penguin)).toBe(true)
+    expect(parseAvatarDefinition(serializeAvatarDefinition(penguin))).toEqual(penguin)
+    expect(Object.keys(AVATAR_SEED_FIELD_PATHS).some(field => field.startsWith('penguinEar'))).toBe(false)
+  })
+
+  it('round-trips the bird-native owl contract and its true tuft attachment without fake ears', () => {
+    const definition = createDefaultAvatarDefinition()
+    const fields = [
+      AVATAR_SEED_FIELD_PATHS.owlHeadWidth,
+      AVATAR_SEED_FIELD_PATHS.owlHeadHeight,
+      AVATAR_SEED_FIELD_PATHS.owlBeakSize,
+      AVATAR_SEED_FIELD_PATHS.owlBeakStyle,
+      AVATAR_SEED_FIELD_PATHS.owlTuftSize,
+      AVATAR_SEED_FIELD_PATHS.owlTuftStyle
+    ]
+    const owl = {
+      ...definition,
+      metadata: { ...definition.metadata, generation: { fields, seed: 'v1-barn-owl', version: 1 as const } },
+      scene: { ...definition.scene, entity: { ...definition.scene.entity, preset: 'owl' as const } }
+    }
+
+    expect(isAvatarDefinition(owl)).toBe(true)
+    expect(parseAvatarDefinition(serializeAvatarDefinition(owl))).toEqual(owl)
+    expect(Object.keys(AVATAR_SEED_FIELD_PATHS).some(field => field.startsWith('owlEar'))).toBe(false)
+  })
+
+  it('round-trips the bird-native parrot contract without fake ear or crest Seed fields', () => {
+    const definition = createDefaultAvatarDefinition()
+    const fields = [
+      AVATAR_SEED_FIELD_PATHS.parrotHeadWidth,
+      AVATAR_SEED_FIELD_PATHS.parrotHeadHeight,
+      AVATAR_SEED_FIELD_PATHS.parrotBeakSize,
+      AVATAR_SEED_FIELD_PATHS.parrotBeakStyle
+    ]
+    const parrot = {
+      ...definition,
+      metadata: { ...definition.metadata, generation: { fields, seed: 'v1-scarlet-macaw', version: 1 as const } },
+      scene: { ...definition.scene, entity: { ...definition.scene.entity, preset: 'parrot' as const } }
+    }
+
+    expect(isAvatarDefinition(parrot)).toBe(true)
+    expect(parseAvatarDefinition(serializeAvatarDefinition(parrot))).toEqual(parrot)
+    expect(Object.keys(AVATAR_SEED_FIELD_PATHS).some(field => field.startsWith('parrotEar'))).toBe(false)
+    expect(Object.keys(AVATAR_SEED_FIELD_PATHS).some(field => field.startsWith('parrotCrest'))).toBe(false)
+  })
+
+  it('round-trips the bird-native goose contract without fake ear Seed fields', () => {
+    const definition = createDefaultAvatarDefinition()
+    const fields = [
+      AVATAR_SEED_FIELD_PATHS.gooseHeadWidth,
+      AVATAR_SEED_FIELD_PATHS.gooseHeadHeight,
+      AVATAR_SEED_FIELD_PATHS.gooseBillSize,
+      AVATAR_SEED_FIELD_PATHS.gooseBillStyle
+    ]
+    const goose = {
+      ...definition,
+      metadata: { ...definition.metadata, generation: { fields, seed: 'v1-white-gosling', version: 1 as const } },
+      scene: { ...definition.scene, entity: { ...definition.scene.entity, preset: 'goose' as const } }
+    }
+
+    expect(isAvatarDefinition(goose)).toBe(true)
+    expect(parseAvatarDefinition(serializeAvatarDefinition(goose))).toEqual(goose)
+    expect(Object.keys(AVATAR_SEED_FIELD_PATHS).some(field => field.startsWith('gooseEar'))).toBe(false)
+  })
+
   it('exposes independent public fox breed geometry and anatomical style Seed fields', () => {
     expect(AVATAR_SEED_FIELD_PATHS.foxEarWidth).toBe('scene.entity.foxEarWidth')
     expect(AVATAR_SEED_FIELD_PATHS.foxEarHeight).toBe('scene.entity.foxEarHeight')
@@ -298,6 +490,46 @@ describe('OneWorks Avatar public runtime contract', () => {
       paletteId: 'reindeer',
       pattern
     })).toEqual([])
+  })
+
+  it('projects dairy-cow spots, chipmunk bands, and tiger stripes onto real animal surfaces', () => {
+    const parts = [
+      { baseColor: '#c87948', face: true, foregroundColor: '#39251d', highlightColor: '#eaa779', id: 'primary', label: 'Head', scaleX: .75, scaleY: .74, scaleZ: .76, shadowColor: '#875033', shape: 'ellipse' as const, x: 0, y: 12, z: 0 },
+      { baseColor: '#c87948', face: false, foregroundColor: '#39251d', highlightColor: '#eaa779', id: 'ear-left', label: 'Left ear', scaleX: .22, scaleY: .28, scaleZ: .2, shadowColor: '#875033', shape: 'ellipse' as const, x: -65, y: -70, z: -12 },
+      { baseColor: '#c87948', face: false, foregroundColor: '#39251d', highlightColor: '#eaa779', id: 'ear-right', label: 'Right ear', scaleX: .22, scaleY: .28, scaleZ: .2, shadowColor: '#875033', shape: 'ellipse' as const, x: 65, y: -70, z: -12 }
+    ]
+    const pattern = {
+      ...DEFAULT_AVATAR_COAT_PATTERN,
+      algorithm: 'mackerel' as const,
+      density: 100,
+      enabled: true,
+      seed: 'v1-next-generation-anatomy'
+    }
+
+    const cow = resolveAvatarCoatPatternDecals({
+      entityParts: parts, entityPreset: 'cow', paletteId: 'dairy-cow', pattern
+    })
+    expect(cow.length).toBeGreaterThan(8)
+    expect(cow.some(decal => decal.targetPartId === 'ear-left')).toBe(true)
+    expect(cow.every(decal => decal.id.startsWith('coat-cow-spots-'))).toBe(true)
+
+    const chipmunk = resolveAvatarCoatPatternDecals({
+      entityParts: parts, entityPreset: 'squirrel', paletteId: 'chipmunk', pattern
+    })
+    expect(chipmunk).toHaveLength(5)
+    expect(chipmunk.every(decal => decal.shape === 'tapered-band' && decal.targetPartId === 'primary')).toBe(true)
+    expect(new Set(chipmunk.map(decal => decal.color)).size).toBe(2)
+    expect(chipmunk.some(decal => decal.bend !== 0)).toBe(true)
+
+    const tiger = resolveAvatarCoatPatternDecals({
+      entityParts: parts, entityPreset: 'tiger', paletteId: 'bengal-tiger', pattern
+    })
+    expect(tiger.length).toBeGreaterThan(12)
+    expect(tiger.every(decal => decal.id.startsWith('coat-tiger-mackerel-'))).toBe(true)
+    expect(tiger.some(decal => decal.targetPartId === 'ear-left')).toBe(true)
+    expect(tiger.some(decal => decal.side === 'left' || decal.side === 'right')).toBe(true)
+    expect(tiger.some(decal => decal.shape === 'tapered-band' && decal.bend !== 0)).toBe(true)
+    expect(tiger.some(decal => decal.shape === 'face-mask')).toBe(false)
   })
 
   it('accepts old coat definitions while validating optional light coat patch fields', () => {

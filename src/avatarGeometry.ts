@@ -20,6 +20,7 @@ export type AvatarBodyShape = (typeof AVATAR_BODY_SHAPES)[number]
 
 export interface AvatarBodyGeometryOptions {
   readonly bottomTaper?: number
+  readonly compositorDensity?: number
   readonly cutAngle?: number
   readonly faceOffsetY?: number
   readonly hollow?: boolean
@@ -174,11 +175,33 @@ export interface BodyCell {
   readonly shade: number
 }
 
+export interface BodySurfaceVertex {
+  readonly depth: number
+  readonly x: number
+  readonly y: number
+}
+
+export interface BodySurfaceTriangle {
+  readonly bounds: {
+    readonly maxX: number
+    readonly maxY: number
+    readonly minX: number
+    readonly minY: number
+  }
+  readonly id: string
+  readonly maxDepth: number
+  readonly meanDepth: number
+  readonly minDepth: number
+  readonly vertices: readonly [BodySurfaceVertex, BodySurfaceVertex, BodySurfaceVertex]
+}
+
 export interface BodyGeometry {
   readonly cells: readonly BodyCell[]
   readonly cavityPath?: string
   readonly occlusionPath?: string
+  readonly outlinePoints: readonly BodySurfaceVertex[]
   readonly outlinePath: string
+  readonly surfaceTriangles: readonly BodySurfaceTriangle[]
 }
 
 export interface ProjectedFace {
@@ -240,6 +263,8 @@ const CENTER_X = VIEW_SIZE / 2
 const CENTER_Y = 202
 const BASE_LATITUDE_STEPS = 14
 const BASE_LONGITUDE_STEPS = 28
+const COMPOSITOR_LATITUDE_STEPS = 6
+const COMPOSITOR_LONGITUDE_STEPS = 12
 const OUTLINE_LATITUDE_STEPS = 28
 const OUTLINE_LONGITUDE_STEPS = 72
 const NORMAL_DELTA = 0.006
@@ -979,6 +1004,7 @@ export const buildAvatarBodyGeometry = (
   const vertices: Vec2[] = []
   const occlusionVertices: Vec2[] = []
   const cells: BodyCell[] = []
+  const surfaceTriangles: BodySurfaceTriangle[] = []
   const azimuth = lightDirection.azimuth * Math.PI / 180
   const elevation = lightDirection.elevation * Math.PI / 180
   const lightVector = normalize({
@@ -994,6 +1020,9 @@ export const buildAvatarBodyGeometry = (
   const scaleX = options.scaleX ?? 1
   const scaleY = options.scaleY ?? 1
   const scaleZ = options.scaleZ ?? 1
+  const compositorDensity = clamp(options.compositorDensity ?? 1, .5, 2)
+  const compositorLatitudeSteps = Math.max(3, Math.round(COMPOSITOR_LATITUDE_STEPS * compositorDensity))
+  const compositorLongitudeSteps = Math.max(6, Math.round(COMPOSITOR_LONGITUDE_STEPS * compositorDensity))
   const transformPoint = (point: Vec3) => rotate(rotateLocal({
     x: point.x * scaleX,
     y: point.y * scaleY,
@@ -1004,6 +1033,80 @@ export const buildAvatarBodyGeometry = (
     y: normal.y / scaleY,
     z: normal.z / scaleZ
   }), options), pose)
+
+  const buildCompositorVertex = (longitude: number, latitude: number) => {
+    const point = transformPoint(getSurfacePoint(spec, longitude, latitude, false, options))
+    const normal = transformNormal(getSurfaceNormal(spec, longitude, latitude, false, options))
+    const projectedPoint = project(point)
+    return { depth: point.z, facing: normal.z, x: projectedPoint.x, y: projectedPoint.y }
+  }
+  const clipCompositorTriangle = (
+    vertices: readonly { readonly depth: number; readonly facing: number; readonly x: number; readonly y: number }[]
+  ) => {
+    const clipped: { depth: number; facing: number; x: number; y: number }[] = []
+    const minimumFacing = .015
+    for (let index = 0; index < vertices.length; index += 1) {
+      const previous = vertices[(index + vertices.length - 1) % vertices.length]!
+      const current = vertices[index]!
+      const previousVisible = previous.facing > minimumFacing
+      const currentVisible = current.facing > minimumFacing
+      if (previousVisible !== currentVisible) {
+        const ratio = (minimumFacing - previous.facing) / (current.facing - previous.facing)
+        clipped.push({
+          depth: previous.depth + (current.depth - previous.depth) * ratio,
+          facing: minimumFacing,
+          x: previous.x + (current.x - previous.x) * ratio,
+          y: previous.y + (current.y - previous.y) * ratio
+        })
+      }
+      if (currentVisible) clipped.push(current)
+    }
+    return clipped
+  }
+  const appendCompositorTriangle = (
+    id: string,
+    source: readonly { readonly depth: number; readonly facing: number; readonly x: number; readonly y: number }[]
+  ) => {
+    const clipped = clipCompositorTriangle(source)
+    for (let index = 1; index < clipped.length - 1; index += 1) {
+      const rawVertices = [clipped[0]!, clipped[index]!, clipped[index + 1]!] as const
+      const triangleVertices = rawVertices.map(({ depth, x, y }) => ({ depth, x, y })) as unknown as
+        readonly [BodySurfaceVertex, BodySurfaceVertex, BodySurfaceVertex]
+      const depths = triangleVertices.map(vertex => vertex.depth)
+      const xs = triangleVertices.map(vertex => vertex.x)
+      const ys = triangleVertices.map(vertex => vertex.y)
+      surfaceTriangles.push({
+        bounds: {
+          maxX: Math.max(...xs),
+          maxY: Math.max(...ys),
+          minX: Math.min(...xs),
+          minY: Math.min(...ys)
+        },
+        id: `${id}-${index - 1}`,
+        maxDepth: Math.max(...depths),
+        meanDepth: depths.reduce((total, depth) => total + depth, 0) / depths.length,
+        minDepth: Math.min(...depths),
+        vertices: triangleVertices
+      })
+    }
+  }
+
+  for (let latitudeIndex = 0; latitudeIndex < compositorLatitudeSteps; latitudeIndex += 1) {
+    const latitudeStart = -Math.PI / 2 + latitudeIndex / compositorLatitudeSteps * Math.PI
+    const latitudeEnd = -Math.PI / 2 + (latitudeIndex + 1) / compositorLatitudeSteps * Math.PI
+    for (let longitudeIndex = 0; longitudeIndex < compositorLongitudeSteps; longitudeIndex += 1) {
+      const longitudeStart = -Math.PI + longitudeIndex / compositorLongitudeSteps * Math.PI * 2
+      const longitudeEnd = -Math.PI + (longitudeIndex + 1) / compositorLongitudeSteps * Math.PI * 2
+      const corners = [
+        buildCompositorVertex(longitudeStart, latitudeStart),
+        buildCompositorVertex(longitudeEnd, latitudeStart),
+        buildCompositorVertex(longitudeEnd, latitudeEnd),
+        buildCompositorVertex(longitudeStart, latitudeEnd)
+      ] as const
+      appendCompositorTriangle(`${latitudeIndex}-${longitudeIndex}-a`, [corners[0], corners[1], corners[2]])
+      appendCompositorTriangle(`${latitudeIndex}-${longitudeIndex}-b`, [corners[0], corners[2], corners[3]])
+    }
+  }
 
   for (let latitudeIndex = 0; latitudeIndex <= outlineLatitudeSteps; latitudeIndex += 1) {
     const latitude = -Math.PI / 2 + latitudeIndex / outlineLatitudeSteps * Math.PI
@@ -1094,7 +1197,9 @@ export const buildAvatarBodyGeometry = (
     cells: cells.sort((left, right) => left.depth - right.depth),
     cavityPath,
     occlusionPath: occlusionHull.length === 0 ? undefined : roundedPolygonPath(occlusionHull, 0),
-    outlinePath
+    outlinePoints: hull.map(point => ({ depth: 0, ...point })),
+    outlinePath,
+    surfaceTriangles
   }
 }
 
@@ -1126,7 +1231,6 @@ export const projectDefaultFace = (
     y: normal.y / scaleY,
     z: normal.z / scaleZ
   }), options), pose)
-  const faceNormal = transformFaceNormal({ x: 0, y: 0, z: 1 })
   const projectPart = (
     id: string,
     centerX: number,
@@ -1134,9 +1238,11 @@ export const projectDefaultFace = (
     boundary: readonly Vec2[]
   ): ProjectedEye | null => {
     const centerNormal = transformFaceNormal(getFaceNormal(spec, { x: centerX, y: centerY }, options))
-    if (centerNormal.z <= 0.015) return null
-
-    const projectedBoundary = boundary.map(point => project(transformFacePoint(getFacePoint(spec, point, options))))
+    const visibleBoundary = clipPolygonToVisibleHemisphere(
+      boundary.map(point => transformFacePoint(getFacePoint(spec, point, options)))
+    )
+    if (visibleBoundary.length < 3) return null
+    const projectedBoundary = visibleBoundary.map(project)
     return {
       depth: clamp(centerNormal.z, 0, 1),
       id,
@@ -1253,7 +1359,7 @@ export const projectDefaultFace = (
         )
     ),
     nose: projectPart('nose', 0, resolvedFaceStyle.noseY, noseBoundary),
-    visible: faceNormal.z > 0.015
+    visible: eyes.length > 0
   }
 }
 
@@ -1328,8 +1434,6 @@ export const projectAvatarSurfaceDecal = (
         false,
         options
       ))
-      if (centerNormal.z <= .015) continue
-
       const samples = Array.from({ length: samplesPerRay }, (_, sampleIndex) => {
         const progress = startProgress +
           sampleIndex / (samplesPerRay - 1) * (endProgress - startProgress)
@@ -1338,7 +1442,7 @@ export const projectAvatarSurfaceDecal = (
           longitude: curvedLongitude(progress)
         }
       })
-      const boundary = [
+      const boundary = clipPolygonToVisibleHemisphere([
         ...samples.map(sample => getSurfacePoint(
           spec,
           sample.longitude - angularHalfWidth,
@@ -1353,9 +1457,11 @@ export const projectAvatarSurfaceDecal = (
           false,
           options
         ))
-      ].map(point => project(transformPoint(point)))
+      ].map(transformPoint))
+      if (boundary.length < 3) continue
+      const projectedBoundary = boundary.map(project)
 
-      paths.push(`M ${boundary.map(point => `${point.x.toFixed(3)} ${point.y.toFixed(3)}`).join(' L ')} Z`)
+      paths.push(`M ${projectedBoundary.map(point => `${point.x.toFixed(3)} ${point.y.toFixed(3)}`).join(' L ')} Z`)
       visibleDepths.push(centerNormal.z)
     }
 
@@ -1373,7 +1479,6 @@ export const projectAvatarSurfaceDecal = (
   const centerNormal = transformNormal(decal.side === 'face'
     ? getFaceNormal(spec, { x: decal.x, y: decal.y }, options)
     : getShapeFaceNormal(spec, { x: decal.x, y: decal.y }, options))
-  if (centerNormal.z <= 0.015) return null
   const boundary = decal.shape === 'ellipse'
     ? buildEllipseBoundary(decal.x, decal.y, decal.width, decal.height, decal.rotation)
     : decal.shape === 'face-mask'
@@ -1397,9 +1502,7 @@ export const projectAvatarSurfaceDecal = (
         )
       : buildRoundedRectangleBoundary(decal.x, decal.y, decal.width, decal.height, decal.rotation, 100)
   const transformedBoundary = boundary.map(point => transformPoint(getLiftedSurfacePoint(point)))
-  const visibleBoundary = decal.side === 'face'
-    ? transformedBoundary
-    : clipPolygonToVisibleHemisphere(transformedBoundary)
+  const visibleBoundary = clipPolygonToVisibleHemisphere(transformedBoundary)
   if (visibleBoundary.length < 3) return null
   const projectedBoundary = visibleBoundary.map(project)
   const assetTransform = decal.shape === 'claude-spark'

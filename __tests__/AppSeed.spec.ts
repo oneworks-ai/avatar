@@ -24,12 +24,14 @@ import {
   applyDogHeadScale,
   createAvatarEntityParts,
   deserializeAvatarEntityParts,
+  getAvatarEntityPresetScene,
   serializeAvatarEntityParts
 } from '../src/avatarEntityPresets'
 import {
   AVATAR_ANIMAL_SPECIES_SEED_FIELDS,
   AVATAR_SEED_FIELD,
   AVATAR_SEED_FIELDS,
+  getAvatarAnimalSpeciesKey,
   getAvatarSeedFieldEntityPreset,
   isAvatarAnimalSpeciesId,
   resolveSeededAvatarEntityPreset,
@@ -38,6 +40,7 @@ import {
   serializeAvatarSeedFields
 } from '../src/avatarSeed'
 import { persistSavedAvatarPresets } from '../src/savedAvatarPresets'
+import { serializeAvatarSurfaceDecals } from '../src/avatarSurfaceDecals'
 
 let host: HTMLDivElement
 let root: Root
@@ -463,6 +466,164 @@ describe('App Seed authoring', () => {
     }
   )
 
+  it.each(['african-lion', 'lioness', 'white-lion', 'lion-cub'] as const)(
+    'restores the approved cropped overhead composition from a bare %s link',
+    async breed => {
+      window.history.replaceState(null, '', `/?entity=lion&breed=${breed}&seed=v1-${breed}-approved-view`)
+      await renderApp()
+
+      const params = new URLSearchParams(window.location.search)
+      expect(params.get('breed')).toBe(breed)
+      expect(params.get('palette')).toBe(breed)
+      expect(params.get('yaw')).toBe('0.5247')
+      expect(params.get('pitch')).toBe('0.4877')
+      expect(params.get('roll')).toBe('0.2')
+      expect(params.get('positionX')).toBe('-95.8539')
+      expect(params.get('positionY')).toBe('-43.7987')
+      expect(params.get('scale')).toBe('1.64')
+    }
+  )
+
+  it.each([
+    ['seal', 'harbor-seal'],
+    ['beaver', 'north-american-beaver'],
+    ['guinea-pig', 'american-guinea-pig'],
+    ['chinchilla', 'gray-chinchilla'],
+    ['ferret', 'sable-ferret'],
+    ['monkey', 'macaque']
+  ] as const)(
+    'restores the authored %s view and camera from a bare breed link and keeps it when reselecting the breed',
+    async (species, breed) => {
+      const scene = getAvatarEntityPresetScene(species)!
+      window.history.replaceState(null, '', `/?entity=${species}&breed=${breed}&seed=v1-${species}-authored-view`)
+      await renderApp()
+
+      let params = new URLSearchParams(window.location.search)
+      expect(params.get('breed')).toBe(breed)
+      expect(Number(params.get('yaw'))).toBeCloseTo(scene.viewState.yaw, 4)
+      expect(Number(params.get('pitch'))).toBeCloseTo(scene.viewState.pitch, 4)
+      expect(Number(params.get('roll'))).toBeCloseTo(scene.viewState.roll, 4)
+      expect(Number(params.get('positionX'))).toBeCloseTo(scene.viewState.positionX, 4)
+      expect(Number(params.get('positionY'))).toBeCloseTo(scene.viewState.positionY, 4)
+      expect(Number(params.get('scale'))).toBeCloseTo(scene.viewState.scale, 4)
+      expect(params.get('camera')).toBe(scene.cameraMode ? '1' : '0')
+      expect(params.get('cameraBg')).toBe(scene.cameraBackground)
+      expect(params.get('cameraFrame')).toBe(scene.cameraFrame)
+
+      act(() => host.querySelector<HTMLButtonElement>(`[data-animal-breed="${breed}"]`)?.click())
+      await flushEffects()
+      params = new URLSearchParams(window.location.search)
+      expect(params.get('breed')).toBe(breed)
+      expect(Number(params.get('yaw'))).toBeCloseTo(scene.viewState.yaw, 4)
+      expect(Number(params.get('pitch'))).toBeCloseTo(scene.viewState.pitch, 4)
+    }
+  )
+
+  it.each([
+    ['seal', 'harbor-seal'],
+    ['beaver', 'north-american-beaver'],
+    ['guinea-pig', 'american-guinea-pig'],
+    ['chinchilla', 'gray-chinchilla'],
+    ['ferret', 'sable-ferret'],
+    ['monkey', 'macaque']
+  ] as const)(
+    'preserves an explicit %s view and camera instead of applying the authored breed composition',
+    async (species, breed) => {
+      window.history.replaceState(
+        null,
+        '',
+        `/?entity=${species}&breed=${breed}&yaw=0.31&pitch=-0.19&roll=0.11&positionX=17&positionY=43&scale=1.49&camera=0&cameraBg=%23124578&cameraFrame=circle`
+      )
+      await renderApp()
+      const params = new URLSearchParams(window.location.search)
+      expect(params.get('breed')).toBe(breed)
+      expect(params.get('yaw')).toBe('0.31')
+      expect(params.get('pitch')).toBe('-0.19')
+      expect(params.get('roll')).toBe('0.11')
+      expect(params.get('positionX')).toBe('17')
+      expect(params.get('positionY')).toBe('43')
+      expect(params.get('scale')).toBe('1.49')
+      expect(params.get('camera')).toBe('0')
+      expect(params.get('cameraBg')).toBe('#124578')
+      expect(params.get('cameraFrame')).toBe('circle')
+    }
+  )
+
+  it.each(['african-lion', 'lioness', 'white-lion', 'lion-cub'] as const)(
+    'keeps the selected %s breed and approved composition when its preview is clicked again',
+    async breed => {
+      window.history.replaceState(null, '', `/?entity=lion&breed=${breed}&seed=v1-${breed}-selected`)
+      await renderApp()
+
+      act(() => host.querySelector<HTMLButtonElement>(`[data-animal-breed="${breed}"]`)?.click())
+      await flushEffects()
+
+      const params = new URLSearchParams(window.location.search)
+      expect(params.get('breed')).toBe(breed)
+      expect(params.get('palette')).toBe(breed)
+      expect(params.get('yaw')).toBe('0.5247')
+      expect(params.get('pitch')).toBe('0.4877')
+      expect(params.get('roll')).toBe('0.2')
+      expect(params.get('positionX')).toBe('-95.8539')
+      expect(params.get('positionY')).toBe('-43.7987')
+      expect(params.get('scale')).toBe('1.64')
+    }
+  )
+
+  it.each(['african-lion', 'white-lion', 'lion-cub'] as const)(
+    'keeps the %s mane proportional to its actual head throughout runtime Seed rerolls',
+    async breed => {
+      const template = getAvatarAnimalBreedTemplate('lion', breed)!
+      const params = new URLSearchParams({
+        breed,
+        entity: 'lion',
+        seed: `v1-${breed}-runtime-reroll`,
+        seedFields: template.followByDefault.join(',')
+      })
+      window.history.replaceState(null, '', `/?${params.toString()}`)
+      await renderApp()
+
+      for (let iteration = 0; iteration < 6; iteration += 1) {
+        act(() => host.querySelector<HTMLButtonElement>('[aria-label="Generate random Seed"]')?.click())
+        await flushEffects()
+
+        const randomized = new URLSearchParams(window.location.search)
+        const headWidth = Number(randomized.get('lionHeadWidth') ?? template.fixed.headWidth)
+        const headHeight = Number(randomized.get('lionHeadHeight') ?? template.fixed.headHeight)
+        const maneSize = Number(randomized.get('lionManeSize'))
+        const expectedMane = Math.round(template.fixed.hornSize! * Math.sqrt(
+          headWidth / template.fixed.headWidth * headHeight / template.fixed.headHeight
+        ))
+
+        expect(randomized.get('breed')).toBe(breed)
+        expect(Math.abs(maneSize - expectedMane)).toBeLessThanOrEqual(2)
+        expect(randomized.get('yaw')).toBe('0.5247')
+        expect(randomized.get('pitch')).toBe('0.4877')
+      }
+    }
+  )
+
+  it('keeps an explicitly authored lion pose while switching between lion breeds', async () => {
+    window.history.replaceState(
+      null,
+      '',
+      '/?entity=lion&breed=african-lion&yaw=0.32&pitch=-0.18&roll=0.12&positionX=18&positionY=44&scale=1.48'
+    )
+    await renderApp()
+
+    act(() => host.querySelector<HTMLButtonElement>('[data-animal-breed="white-lion"]')?.click())
+    await flushEffects()
+
+    const params = new URLSearchParams(window.location.search)
+    expect(params.get('breed')).toBe('white-lion')
+    expect(params.get('yaw')).toBe('0.32')
+    expect(params.get('pitch')).toBe('-0.18')
+    expect(params.get('roll')).toBe('0.12')
+    expect(params.get('positionX')).toBe('18')
+    expect(params.get('positionY')).toBe('44')
+    expect(params.get('scale')).toBe('1.48')
+  })
+
   it('applies a Cat type as a deterministic Seed constraint profile', async () => {
     window.history.replaceState(null, '', '/?entity=cat&seed=v1-siamese-a')
     await renderApp()
@@ -699,11 +860,14 @@ describe('App Seed authoring', () => {
     }
   })
 
-  it('keeps the real Pig snout visible when facial expressions follow Seed', async () => {
+  it.each([
+    ['pig', 'pink-pig'],
+    ['cow', 'dairy-cow']
+  ] as const)('keeps the real %s snout visible when facial expressions follow Seed', async (species, breed) => {
     window.history.replaceState(
       null,
       '',
-      '/?entity=pig&breed=pink-pig&seed=v1-pig-face&seedFields=scene.face.preset'
+      `/?entity=${species}&breed=${breed}&seed=v1-${species}-face&seedFields=scene.face.preset`
     )
     await renderApp()
 
@@ -713,6 +877,8 @@ describe('App Seed authoring', () => {
       expect(params.get('nose')).toBe('0')
       expect(params.get('mouth')).toBe('0')
       expect(host.querySelector('[data-avatar-entity-part="snout"]')).not.toBeNull()
+      expect(host.querySelector('[data-avatar-entity-part="nostril-left"]')).not.toBeNull()
+      expect(host.querySelector('[data-avatar-entity-part="nostril-right"]')).not.toBeNull()
 
       act(() => host.querySelector<HTMLButtonElement>('[aria-label="Generate random Seed"]')?.click())
       await flushEffects()
@@ -754,6 +920,161 @@ describe('App Seed authoring', () => {
     expect(selected.get('palette')).toBe(id)
     expect(selected.get('coat')).toBe('1')
     expect(host.querySelector(`[data-avatar-surface-decal^="coat-${species}-spots-"]`)).not.toBeNull()
+  })
+
+  it.each([
+    ['cow', 'dairy-cow', 'coat-cow-spots-'],
+    ['squirrel', 'chipmunk', 'coat-chipmunk-'],
+    ['tiger', 'bengal-tiger', 'coat-tiger-'],
+    ['tiger', 'white-tiger', 'coat-tiger-'],
+    ['tiger', 'golden-tiger', 'coat-tiger-'],
+    ['tiger', 'tiger-cub', 'coat-tiger-']
+  ] as const)('restores the authentic curved %s markings from a bare %s share link', async (species, id, decalId) => {
+    window.history.replaceState(null, '', `/?entity=${species}&breed=${id}&seed=v1-${id}-bare-markings`)
+    await renderApp()
+
+    const selected = new URLSearchParams(window.location.search)
+    expect(selected.get('palette')).toBe(id)
+    expect(selected.get('coat')).toBe('1')
+    expect(host.querySelector(
+      `.interactive-avatar__canvas [data-avatar-entity-part] [data-avatar-surface-decal^="${decalId}"]`
+    )).not.toBeNull()
+  })
+
+  it.each([
+    ['hamster', 'syrian-hamster'],
+    ['hamster', 'pudding-hamster'],
+    ['hamster', 'silver-fox-hamster'],
+    ['hamster', 'sapphire-hamster'],
+    ['squirrel', 'red-squirrel'],
+    ['squirrel', 'gray-squirrel'],
+    ['squirrel', 'chipmunk'],
+    ['squirrel', 'black-squirrel'],
+    ['capybara', 'capybara'],
+    ['capybara', 'sandy-capybara'],
+    ['capybara', 'dark-capybara'],
+    ['capybara', 'capybara-pup']
+  ] as const)('keeps %s %s fur color on its actual anatomical surface across sharing and Seed rerolls', async (
+    species,
+    breed
+  ) => {
+    window.history.replaceState(null, '', `/?entity=${species}&breed=${breed}&seed=v1-${breed}-anatomical-fur`)
+    await renderApp()
+
+    const assertAnatomicalMarkings = () => {
+      const params = new URLSearchParams(window.location.search)
+      const parts = deserializeAvatarEntityParts(params.get('entityParts'), species)
+      const head = parts.find(part => part.face)!
+      const anatomicalIds = species === 'capybara' ? ['muzzle'] : ['cheek-left', 'cheek-right']
+
+      for (const partId of anatomicalIds) {
+        const part = parts.find(candidate => candidate.id === partId)!
+        expect(part.baseColor).toBe(head.baseColor)
+        expect(part.highlightColor).toBe(head.highlightColor)
+        expect(part.shadowColor).toBe(head.shadowColor)
+        const decalId = species === 'capybara' ? 'capybara-muzzle-fur' : `${species}-${partId}`
+        expect(host.querySelector(
+          `.interactive-avatar__canvas [data-avatar-entity-part="${partId}"] ` +
+          `[data-avatar-surface-decal="${decalId}"]`
+        )).not.toBeNull()
+        expect(params.get('decals')).toContain(decalId)
+      }
+    }
+
+    assertAnatomicalMarkings()
+    act(() => host.querySelector<HTMLButtonElement>('[aria-label="Generate random Seed"]')?.click())
+    await flushEffects()
+    assertAnatomicalMarkings()
+
+    act(() => root.unmount())
+    root = createRoot(host)
+    await renderApp()
+    assertAnatomicalMarkings()
+  })
+
+  it.each([
+    ['hamster', 'syrian-hamster'],
+    ['squirrel', 'red-squirrel'],
+    ['capybara', 'capybara']
+  ] as const)('migrates legacy %s colored anatomy into body-colored volume and projected fur', async (
+    species,
+    breed
+  ) => {
+    const template = getAvatarAnimalBreedTemplate(species, breed)!
+    const resolved = resolveAvatarAnimalBreedTemplate(template, `v1-${breed}-legacy-anatomy`)
+    const head = resolved.entityParts.find(part => part.face)!
+    const anatomicalIds = species === 'capybara' ? ['muzzle'] : ['cheek-left', 'cheek-right']
+    const legacyParts = resolved.entityParts.map(part => anatomicalIds.includes(part.id)
+      ? {
+          ...part,
+          baseColor: template.fixed.surfaceFaceMarkings!.color,
+          ...(species === 'capybara' ? { scaleZ: .25, z: 57 } : {})
+        }
+      : part)
+    const params = new URLSearchParams({
+      breed,
+      entity: species,
+      entityParts: serializeAvatarEntityParts(legacyParts),
+      seed: `v1-${breed}-legacy-anatomy`
+    })
+    window.history.replaceState(null, '', `/?${params.toString()}`)
+    await renderApp()
+
+    const shared = new URLSearchParams(window.location.search)
+    const migratedParts = deserializeAvatarEntityParts(shared.get('entityParts'), species)
+    for (const partId of anatomicalIds) {
+      const part = migratedParts.find(candidate => candidate.id === partId)!
+      expect(part.baseColor).toBe(head.baseColor)
+      expect(part.highlightColor).toBe(head.highlightColor)
+      expect(part.shadowColor).toBe(head.shadowColor)
+      const decalId = species === 'capybara' ? 'capybara-muzzle-fur' : `${species}-${partId}`
+      expect(host.querySelector(
+        `.interactive-avatar__canvas [data-avatar-entity-part="${partId}"] ` +
+        `[data-avatar-surface-decal="${decalId}"]`
+      )).not.toBeNull()
+    }
+    if (species === 'capybara') {
+      expect(migratedParts.find(part => part.id === 'muzzle')?.scaleZ).toBeGreaterThan(.35)
+    }
+  })
+
+  it.each([
+    ['hamster', 'pudding-hamster'],
+    ['squirrel', 'chipmunk'],
+    ['capybara', 'dark-capybara']
+  ] as const)('restores missing legacy %s fur decals without replacing manually saved markings', async (
+    species,
+    breed
+  ) => {
+    const resolved = resolveAvatarAnimalBreedTemplate(
+      getAvatarAnimalBreedTemplate(species, breed)!,
+      `v1-${breed}-legacy-decals`
+    )
+    const preserved = {
+      ...resolved.surfaceDecals![0]!,
+      color: '#12ab34',
+      id: 'manually-saved-marking',
+      targetPartId: 'primary'
+    }
+    const params = new URLSearchParams({
+      breed,
+      decals: serializeAvatarSurfaceDecals([preserved]),
+      entity: species,
+      entityParts: serializeAvatarEntityParts(resolved.entityParts),
+      seed: `v1-${breed}-legacy-decals`
+    })
+    window.history.replaceState(null, '', `/?${params.toString()}`)
+    await renderApp()
+
+    expect(host.querySelector('[data-avatar-surface-decal="manually-saved-marking"]')?.getAttribute('fill'))
+      .toBe('#12ab34')
+    const required = species === 'capybara'
+      ? ['capybara-muzzle-fur']
+      : [`${species}-cheek-left`, `${species}-cheek-right`]
+    for (const decal of required) {
+      expect(host.querySelector(`[data-avatar-surface-decal="${decal}"]`)).not.toBeNull()
+      expect(new URLSearchParams(window.location.search).get('decals')).toContain(decal)
+    }
   })
 
   it.each([
@@ -860,7 +1181,19 @@ describe('App Seed authoring', () => {
     ['otter', 'sea-otter'],
     ['pig', 'spotted-pig'],
     ['deer', 'reindeer'],
-    ['sheep', 'horned-ram']
+    ['sheep', 'horned-ram'],
+    ['alpaca', 'caramel-alpaca'],
+    ['cow', 'highland-cow'],
+    ['squirrel', 'chipmunk'],
+    ['tiger', 'white-tiger'],
+    ['lion', 'white-lion'],
+    ['hedgehog', 'albino-hedgehog'],
+    ['seal', 'harp-seal'],
+    ['beaver', 'eurasian-beaver'],
+    ['guinea-pig', 'teddy-guinea-pig'],
+    ['chinchilla', 'black-velvet-chinchilla'],
+    ['ferret', 'panda-ferret'],
+    ['monkey', 'golden-monkey']
   ] as const)('applies and restores a constrained %s breed with species-specific Seed fields', async (species, id) => {
     window.history.replaceState(null, '', `/?entity=${species}&seed=v1-${id}-editor`)
     await renderApp()
@@ -873,8 +1206,9 @@ describe('App Seed authoring', () => {
     expect(selected.get('breed')).toBe(id)
     expect(selected.get('palette')).toBe(id)
     expect(selected.get('eyeShape')).toBe('rounded')
-    expect(Number(selected.get(`${species}HeadWidth`))).toBeGreaterThan(0)
-    expect(Number(selected.get(`${species}EarHeight`))).toBeGreaterThan(0)
+    const speciesKey = getAvatarAnimalSpeciesKey(species)
+    expect(Number(selected.get(`${speciesKey}HeadWidth`))).toBeGreaterThan(0)
+    expect(Number(selected.get(`${speciesKey}EarHeight`))).toBeGreaterThan(0)
 
     const follows = selected.get('seedFields')?.split(',') ?? []
     for (const field of template.followByDefault) expect(follows).toContain(field)
@@ -893,6 +1227,11 @@ describe('App Seed authoring', () => {
     }
     if (species === 'deer') expect(selected.get('deerAntlerSize')).not.toBeNull()
     if (species === 'sheep') expect(selected.get('sheepHornSize')).not.toBeNull()
+    if (species === 'cow') expect(selected.get('cowHornSize')).not.toBeNull()
+    if (species === 'squirrel') expect(selected.get('squirrelTailSize')).not.toBeNull()
+    if (species === 'lion') expect(selected.get('lionManeSize')).not.toBeNull()
+    if (species === 'hedgehog') expect(selected.get('hedgehogSpineSize')).not.toBeNull()
+    if (species === 'beaver') expect(selected.get('beaverToothSize')).not.toBeNull()
 
     act(() => host.querySelector<HTMLButtonElement>('[aria-label="Generate random Seed"]')?.click())
     await flushEffects()
@@ -906,7 +1245,7 @@ describe('App Seed authoring', () => {
     const restored = new URLSearchParams(window.location.search)
     expect(restored.get('breed')).toBe(id)
     expect(restored.get('palette')).toBe(id)
-    expect(restored.get(`${species}HeadWidth`)).toBe(rerolled.get(`${species}HeadWidth`))
+    expect(restored.get(`${speciesKey}HeadWidth`)).toBe(rerolled.get(`${speciesKey}HeadWidth`))
   })
 
   it('freezes a manually adjusted new-species head width while keeping breed colors and horns fixed', async () => {
@@ -935,6 +1274,54 @@ describe('App Seed authoring', () => {
     expect(deserializeAvatarEntityParts(rerolled.get('entityParts'), 'deer')
       .filter(part => part.id.startsWith('antler-'))).toHaveLength(8)
   })
+
+  it.each([
+    ['cow', 'highland-cow', 'Cow horn size', 'cowHornSize', 'horn-', '112'],
+    ['squirrel', 'red-squirrel', 'Squirrel tail size', 'squirrelTailSize', 'tail-', '106'],
+    ['lion', 'african-lion', 'Lion mane size', 'lionManeSize', 'mane-', '109'],
+    ['hedgehog', 'european-hedgehog', 'Hedgehog spine size', 'hedgehogSpineSize', 'spine-', '104'],
+    ['beaver', 'north-american-beaver', 'Incisor size', 'beaverToothSize', 'tooth-', '101']
+  ] as const)(
+    'preserves a manually adjusted %s anatomical feature through Seed changes and share restoration',
+    async (species, breed, label, queryKey, partPrefix, value) => {
+      window.history.replaceState(null, '', `/?entity=${species}&breed=${breed}&seed=v1-${breed}-manual-feature`)
+      await renderApp()
+
+      const slider = host.querySelector<HTMLInputElement>(`input[aria-label="${label}"]`)
+      expect(slider).not.toBeNull()
+      act(() => {
+        const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')?.set
+        setter?.call(slider, value)
+        slider?.dispatchEvent(new Event('input', { bubbles: true }))
+      })
+      await flushEffects()
+
+      const manual = new URLSearchParams(window.location.search)
+      expect(manual.get(queryKey)).toBe(value)
+      expect(manual.get('seedFields') ?? '').not.toContain(`scene.entity.${queryKey}`)
+      const originalParts = deserializeAvatarEntityParts(manual.get('entityParts'), species)
+      const originalFeature = originalParts.filter(part => part.id.startsWith(partPrefix))
+      expect(originalFeature.length).toBeGreaterThan(0)
+
+      act(() => root.unmount())
+      root = createRoot(host)
+      await renderApp()
+      expect(new URLSearchParams(window.location.search).get(queryKey)).toBe(value)
+
+      act(() => host.querySelector<HTMLButtonElement>('[aria-label="Generate random Seed"]')?.click())
+      await flushEffects()
+      const randomized = new URLSearchParams(window.location.search)
+      expect(randomized.get(queryKey), `${queryKey}: ${randomized.get('seedFields')}`).toBe(value)
+      expect(randomized.get('palette')).toBe(breed)
+      expect(deserializeAvatarEntityParts(randomized.get('entityParts'), species)
+        .filter(part => part.id.startsWith(partPrefix))).toHaveLength(originalFeature.length)
+
+      act(() => root.unmount())
+      root = createRoot(host)
+      await renderApp()
+      expect(new URLSearchParams(window.location.search).get(queryKey)).toBe(value)
+    }
+  )
 
   it('clears previous-species dimensions and Seed followers when switching between new animal types', async () => {
     window.history.replaceState(null, '', '/?entity=hamster&seed=v1-species-switch')
@@ -1608,7 +1995,13 @@ describe('App Seed authoring', () => {
     ['otter', 'river-otter', 0],
     ['pig', 'spotted-pig', 0],
     ['deer', 'reindeer', 8],
-    ['sheep', 'horned-ram', 8]
+    ['sheep', 'horned-ram', 8],
+    ['alpaca', 'gray-alpaca', 0],
+    ['cow', 'highland-cow', 4],
+    ['squirrel', 'chipmunk', 0],
+    ['tiger', 'golden-tiger', 0],
+    ['lion', 'white-lion', 0],
+    ['hedgehog', 'cinnamon-hedgehog', 0]
   ] as const)('restores a saved %s breed with its real geometry and constrained Seed', async (species, id, hornCount) => {
     const template = getAvatarAnimalBreedTemplate(species, id)!
     const resolved = resolveAvatarAnimalBreedTemplate(template, `v1-${id}-saved`)
@@ -1647,7 +2040,7 @@ describe('App Seed authoring', () => {
     if (species === 'fox') {
       expect(host.querySelector('[data-avatar-surface-decal="fox-cheek-left"]')).not.toBeNull()
     }
-    if (species === 'otter' || species === 'deer' || species === 'sheep') {
+    if (species === 'otter' || species === 'deer' || species === 'sheep' || species === 'alpaca') {
       expect(host.querySelector(
         `.interactive-avatar__canvas [data-avatar-entity-part="primary"] [data-avatar-surface-decal="${species}-face-mask"]`
       )).not.toBeNull()
@@ -2099,7 +2492,19 @@ describe('App Seed authoring', () => {
     ['otter', 'river-otter'],
     ['pig', 'spotted-pig'],
     ['deer', 'reindeer'],
-    ['sheep', 'horned-ram']
+    ['sheep', 'horned-ram'],
+    ['alpaca', 'alpaca-cria'],
+    ['cow', 'highland-cow'],
+    ['squirrel', 'chipmunk'],
+    ['tiger', 'tiger-cub'],
+    ['lion', 'african-lion'],
+    ['hedgehog', 'cream-hedgehog'],
+    ['seal', 'harbor-seal'],
+    ['beaver', 'north-american-beaver'],
+    ['guinea-pig', 'american-guinea-pig'],
+    ['chinchilla', 'gray-chinchilla'],
+    ['ferret', 'sable-ferret'],
+    ['monkey', 'macaque']
   ] as const)('restores an embedded %s breed without changing its real geometry or Seed state', async (species, id) => {
     const base = createDefaultAvatarDefinition()
     const seed = `v1-embedded-${id}`
@@ -2144,13 +2549,34 @@ describe('App Seed authoring', () => {
 
     expect(onDefinitionChange).not.toHaveBeenCalled()
     expect(host.querySelector(`[data-animal-breed="${id}"]`)?.getAttribute('aria-pressed')).toBe('true')
-    expect(host.querySelector<HTMLInputElement>(`[aria-label="${species[0]!.toUpperCase()}${species.slice(1)} head width"]`)?.value)
+    const speciesLabel = species === 'guinea-pig'
+      ? 'Guinea Pig'
+      : `${species[0]!.toUpperCase()}${species.slice(1)}`
+    expect(host.querySelector<HTMLInputElement>(`[aria-label="${speciesLabel} head width"]`)?.value)
       .toBe(String(resolved.headWidth))
-    if (species === 'otter' || species === 'deer' || species === 'sheep') {
+    if (species === 'otter' || species === 'deer' || species === 'sheep' || species === 'alpaca') {
       expect(host.querySelector(
         `.interactive-avatar__canvas [data-avatar-entity-part="primary"] [data-avatar-surface-decal="${species}-face-mask"]`
       )).not.toBeNull()
       expect(host.querySelector('.interactive-avatar__canvas [data-avatar-entity-part="muzzle"]')).toBeNull()
+    }
+    if (species === 'seal' || species === 'beaver' || species === 'guinea-pig' || species === 'chinchilla') {
+      expect(host.querySelector(
+        `.interactive-avatar__canvas [data-avatar-entity-part="cheek-left"] ` +
+        `[data-avatar-surface-decal="${species}-cheek-left"]`
+      )).not.toBeNull()
+    }
+    if (species === 'ferret') {
+      expect(host.querySelector(
+        '.interactive-avatar__canvas [data-avatar-entity-part="primary"] ' +
+        '[data-avatar-surface-decal="ferret-eye-mask-left"]'
+      )).not.toBeNull()
+    }
+    if (species === 'monkey') {
+      expect(host.querySelector(
+        '.interactive-avatar__canvas [data-avatar-entity-part="muzzle"] ' +
+        '[data-avatar-surface-decal="monkey-muzzle-skin"]'
+      )).not.toBeNull()
     }
   })
 

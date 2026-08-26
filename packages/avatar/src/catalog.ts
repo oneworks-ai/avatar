@@ -8,7 +8,7 @@ export interface AvatarPalette {
   readonly coat?: {
     readonly mark: string
     /** Declarative coat geometry interpreted by the shared 3D decal resolver. */
-    readonly marking?: 'blaze' | 'mask' | 'muzzle' | 'spots' | 'panda' | 'spectacles' | 'moon' | 'sun' | 'red-panda' | 'raccoon' | 'wombat'
+    readonly marking?: 'blaze' | 'mask' | 'muzzle' | 'spots' | 'stripes' | 'panda' | 'spectacles' | 'moon' | 'sun' | 'red-panda' | 'raccoon' | 'wombat'
     readonly patch: string
   }
   readonly entityMaterials?: Readonly<Record<string, { readonly baseColor: string; readonly foregroundColor: string; readonly highlightColor: string; readonly shadowColor: string }>>
@@ -72,7 +72,7 @@ export const applyAvatarPaletteToneJitter = (
     Object.entries(palette.entityMaterials).map(([partId, material]) => {
       const isNostril = partId.startsWith('nostril-')
       const isHorn = partId.startsWith('horn-') || partId.startsWith('antler-')
-      const isPatch = partId.startsWith('cheek-') || partId === 'muzzle' || partId === 'snout'
+      const isPatch = partId === 'snout'
       const protectedMaterial = isNostril || protectDarkIdentity(material.baseColor)
       const materialAmount = protectedMaterial ? 0 : boundedAmount * (isHorn ? .38 : isPatch ? .58 : 1)
       return [partId, {
@@ -143,15 +143,21 @@ export const resolveAvatarPaletteFromEntityParts = (
 
 interface NaturalAnimalPaletteOptions {
   readonly ear?: string
+  readonly forelock?: string
   readonly foreground: string
   readonly highlight: string
   readonly horn?: string
   readonly id: string
+  readonly mane?: string
   readonly mark: string
   readonly marking: NonNullable<AvatarPalette['coat']>['marking']
   readonly name: string
   readonly patch: string
   readonly shadow: string
+  readonly snout?: string
+  readonly spines?: string
+  readonly tail?: string
+  readonly teeth?: string
   readonly tone: string
 }
 
@@ -163,25 +169,72 @@ const naturalAnimalPalette = (options: NaturalAnimalPaletteOptions): AvatarPalet
     shadowColor: options.shadow
   })
   const ear = material(options.ear ?? options.tone)
+  const forelock = options.forelock == null ? null : material(options.forelock)
   const horn = options.horn == null ? null : material(options.horn)
+  const mane = options.mane == null ? null : material(options.mane)
+  const spines = options.spines == null ? null : material(options.spines)
+  const tail = options.tail == null ? null : material(options.tail)
+  const teeth = options.teeth == null ? null : material(options.teeth)
 
   return {
     background: options.tone,
     coat: { mark: options.mark, marking: options.marking, patch: options.patch },
     entityMaterials: {
-      'cheek-left': material(options.patch),
-      'cheek-right': material(options.patch),
+      'cheek-left': material(options.tone),
+      'cheek-right': material(options.tone),
       'ear-left': ear,
       'ear-right': ear,
-      muzzle: material(options.patch),
+      muzzle: material(options.tone),
       'nostril-left': material(options.foreground),
       'nostril-right': material(options.foreground),
-      snout: material(options.patch),
+      snout: material(options.snout ?? options.patch),
+      ...(forelock == null ? {} : {
+        'forelock-center': forelock,
+        'forelock-left': forelock,
+        'forelock-right': forelock,
+        'fringe-center': forelock,
+        'fringe-left': forelock,
+        'fringe-right': forelock
+      }),
       ...(horn == null ? {} : {
         'antler-left': horn,
         'antler-right': horn,
         'horn-left': horn,
         'horn-right': horn
+      }),
+      ...(mane == null ? {} : {
+        mane,
+        'mane-back': mane,
+        'mane-bottom': mane,
+        'mane-crown-left': mane,
+        'mane-crown-right': mane,
+        'mane-left': mane,
+        'mane-lower-left': mane,
+        'mane-lower-right': mane,
+        'mane-right': mane,
+        'mane-top': mane
+      }),
+      ...(spines == null ? {} : {
+        spines,
+        'spine-core': spines,
+        'spine-left': spines,
+        'spine-right': spines,
+        'spine-top': spines,
+        ...Object.fromEntries(Array.from({ length: 14 }, (_, index) => [`spine-${index}`, spines]))
+      }),
+      ...(tail == null ? {} : {
+        tail,
+        'tail-base': tail,
+        'tail-fringe': tail,
+        'tail-left': tail,
+        'tail-right': tail,
+        'tail-tip': tail
+      }),
+      ...(teeth == null ? {} : {
+        'incisor-left': teeth,
+        'incisor-right': teeth,
+        'tooth-left': teeth,
+        'tooth-right': teeth
       }),
       primary: material(options.tone)
     },
@@ -668,6 +721,81 @@ export const AVATAR_PALETTES: readonly AvatarPalette[] = [
   naturalAnimalPalette({ id: 'horned-ram', name: 'Horned Ram', tone: '#cec2ac', highlight: '#ece2d0', shadow: '#948674', foreground: '#43352d', ear: '#b6a58e', horn: '#977557', mark: '#aa947c', marking: 'muzzle', patch: '#efe3ce' }),
   naturalAnimalPalette({ id: 'lamb', name: 'Lamb', tone: '#f3eee5', highlight: '#fffdf8', shadow: '#d0c4b5', foreground: '#584038', ear: '#e2c5bf', mark: '#dfd1c5', marking: 'muzzle', patch: '#fff4ea' }),
   naturalAnimalPalette({ id: 'mountain-goat', name: 'Mountain Goat', tone: '#e5e0d4', highlight: '#fbf8f0', shadow: '#ada395', foreground: '#4b3b32', ear: '#cfc5b7', horn: '#806b58', mark: '#c4b5a5', marking: 'blaze', patch: '#f5eee2' }),
+  naturalAnimalPalette({ id: 'cream-alpaca', name: 'Cream Alpaca', tone: '#e6dccb', highlight: '#fff9eb', shadow: '#b7a893', foreground: '#473a32', ear: '#cdbca9', forelock: '#f4ead9', mark: '#c8b39b', marking: 'muzzle', patch: '#cbb6a0' }),
+  naturalAnimalPalette({ id: 'caramel-alpaca', name: 'Caramel Alpaca', tone: '#bb8251', highlight: '#e2b88c', shadow: '#765032', foreground: '#38271e', ear: '#a06b48', forelock: '#d5a171', mark: '#875a3c', marking: 'muzzle', patch: '#ead4ba' }),
+  naturalAnimalPalette({ id: 'gray-alpaca', name: 'Gray Alpaca', tone: '#888582', highlight: '#bcb8b0', shadow: '#575451', foreground: '#262424', ear: '#706d6a', forelock: '#a7a39d', mark: '#615e5b', marking: 'muzzle', patch: '#ddd6ca' }),
+  naturalAnimalPalette({ id: 'alpaca-cria', name: 'Alpaca Cria', tone: '#d8b995', highlight: '#f6e4ca', shadow: '#aa8662', foreground: '#453126', ear: '#c79f82', forelock: '#edd2af', mark: '#b38d68', marking: 'muzzle', patch: '#f7e9d6' }),
+  naturalAnimalPalette({ id: 'dairy-cow', name: 'Dairy Cow', tone: '#e8e3d8', highlight: '#fffdf3', shadow: '#bab2a4', foreground: '#252126', ear: '#303238', horn: '#c6b392', mark: '#57555a', marking: 'spots', patch: '#f6eee1', snout: '#d2a49e', forelock: '#d8d0c1' }),
+  naturalAnimalPalette({ id: 'jersey-cow', name: 'Jersey Cow', tone: '#b98b5d', highlight: '#e3bf93', shadow: '#775537', foreground: '#342720', ear: '#916640', horn: '#b4a184', mark: '#85603f', marking: 'muzzle', patch: '#eee0c8', snout: '#83584f', forelock: '#d0a574' }),
+  naturalAnimalPalette({ id: 'highland-cow', name: 'Highland Cow', tone: '#ac6942', highlight: '#dc9c68', shadow: '#6d3f2a', foreground: '#30221c', ear: '#925437', horn: '#d2b58d', mark: '#825039', marking: 'muzzle', patch: '#e9ceb0', snout: '#69473f', forelock: '#d18a57' }),
+  naturalAnimalPalette({ id: 'cow-calf', name: 'Cow Calf', tone: '#d2a47c', highlight: '#f1d1ad', shadow: '#986b4d', foreground: '#413029', ear: '#bc8b6a', mark: '#ae7757', marking: 'muzzle', patch: '#f7e7d2', snout: '#b47570', forelock: '#e6c099' }),
+  naturalAnimalPalette({ id: 'red-squirrel', name: 'Red Squirrel', tone: '#bc7045', highlight: '#e6a16f', shadow: '#78412b', foreground: '#36231b', ear: '#995537', mark: '#82442a', marking: 'muzzle', patch: '#f2dfc2', tail: '#9d5337' }),
+  naturalAnimalPalette({ id: 'gray-squirrel', name: 'Gray Squirrel', tone: '#85837e', highlight: '#b7b3aa', shadow: '#53514e', foreground: '#292726', ear: '#686661', mark: '#5d5b57', marking: 'muzzle', patch: '#ded7c9', tail: '#716f6a' }),
+  naturalAnimalPalette({ id: 'chipmunk', name: 'Chipmunk', tone: '#ae7b50', highlight: '#d9ac7c', shadow: '#704b32', foreground: '#38271e', ear: '#906342', mark: '#4e392c', marking: 'stripes', patch: '#f1dfbd', tail: '#946443' }),
+  naturalAnimalPalette({ id: 'black-squirrel', name: 'Black Squirrel', tone: '#393735', highlight: '#66615b', shadow: '#1d1c1a', foreground: '#e1be91', ear: '#302e2c', mark: '#242220', marking: 'muzzle', patch: '#8e7968', tail: '#2f2d2b' }),
+  naturalAnimalPalette({ id: 'bengal-tiger', name: 'Bengal Tiger', tone: '#d38a41', highlight: '#efba76', shadow: '#985620', foreground: '#38251a', ear: '#bd7135', mark: '#653923', marking: 'stripes', patch: '#f6e5cc' }),
+  naturalAnimalPalette({ id: 'white-tiger', name: 'White Tiger', tone: '#e5e0d5', highlight: '#fffaf1', shadow: '#b7aea0', foreground: '#353438', ear: '#ccc2b6', mark: '#66605b', marking: 'stripes', patch: '#fffaf0' }),
+  naturalAnimalPalette({ id: 'golden-tiger', name: 'Golden Tiger', tone: '#dda860', highlight: '#f7d391', shadow: '#ab7842', foreground: '#493224', ear: '#ca9151', mark: '#a26c43', marking: 'stripes', patch: '#fff0d7' }),
+  naturalAnimalPalette({ id: 'tiger-cub', name: 'Tiger Cub', tone: '#dca064', highlight: '#f6ca96', shadow: '#a36c40', foreground: '#3d2a20', ear: '#c18450', mark: '#775039', marking: 'stripes', patch: '#ffeedb' }),
+  naturalAnimalPalette({ id: 'african-lion', name: 'African Lion', tone: '#c79861', highlight: '#ebc58f', shadow: '#8c633e', foreground: '#422d20', ear: '#af7b4a', mark: '#8a5e3b', marking: 'muzzle', patch: '#f3dfbf', mane: '#795038' }),
+  naturalAnimalPalette({ id: 'lioness', name: 'Lioness', tone: '#cbae80', highlight: '#ebd2ad', shadow: '#947650', foreground: '#463225', ear: '#af9068', mark: '#9e7951', marking: 'muzzle', patch: '#f5e7cf' }),
+  naturalAnimalPalette({ id: 'white-lion', name: 'White Lion', tone: '#ded7c7', highlight: '#faf3e6', shadow: '#aca18c', foreground: '#44382e', ear: '#c8bdab', mark: '#b2a58f', marking: 'muzzle', patch: '#fff7e9', mane: '#bbb09e' }),
+  naturalAnimalPalette({ id: 'lion-cub', name: 'Lion Cub', tone: '#d5b183', highlight: '#f2d8b0', shadow: '#a27f58', foreground: '#493224', ear: '#bd986e', mark: '#a88662', marking: 'muzzle', patch: '#fbebd2', mane: '#c4a074' }),
+  naturalAnimalPalette({ id: 'european-hedgehog', name: 'European Hedgehog', tone: '#b9a58c', highlight: '#dccdb6', shadow: '#80705f', foreground: '#352a24', ear: '#9c8874', mark: '#77634f', marking: 'muzzle', patch: '#e9dbc5', spines: '#645443' }),
+  naturalAnimalPalette({ id: 'cream-hedgehog', name: 'Cream Hedgehog', tone: '#d7c8ad', highlight: '#f1e7d2', shadow: '#a5967e', foreground: '#473a2e', ear: '#c4b197', mark: '#a38f72', marking: 'muzzle', patch: '#fff1dc', spines: '#aa9476' }),
+  naturalAnimalPalette({ id: 'albino-hedgehog', name: 'Albino Hedgehog', tone: '#e9ddd1', highlight: '#fff8ed', shadow: '#c5b5a7', foreground: '#87564f', ear: '#dcc3b9', mark: '#cdbbae', marking: 'muzzle', patch: '#fff5eb', spines: '#cdbfad' }),
+  naturalAnimalPalette({ id: 'cinnamon-hedgehog', name: 'Cinnamon Hedgehog', tone: '#bb9275', highlight: '#ddba9c', shadow: '#86634e', foreground: '#442e25', ear: '#a47c65', mark: '#906c50', marking: 'muzzle', patch: '#efdbca', spines: '#785b46' }),
+  naturalAnimalPalette({ id: 'harbor-seal', name: 'Harbor Seal', tone: '#87918e', highlight: '#b4c0ba', shadow: '#596660', foreground: '#25312f', ear: '#78827e', mark: '#62706a', marking: 'muzzle', patch: '#e6dfd2' }),
+  naturalAnimalPalette({ id: 'harp-seal', name: 'Harp Seal', tone: '#e4e2d8', highlight: '#fffdf5', shadow: '#b9bbb0', foreground: '#333b3e', ear: '#d0d0c6', mark: '#a4aaa5', marking: 'muzzle', patch: '#c4b9a9' }),
+  naturalAnimalPalette({ id: 'gray-seal', name: 'Gray Seal', tone: '#666d70', highlight: '#939a9a', shadow: '#404749', foreground: '#e8dfcf', ear: '#575e60', mark: '#485153', marking: 'muzzle', patch: '#aeaaa0' }),
+  naturalAnimalPalette({ id: 'seal-pup', name: 'Seal Pup', tone: '#d9d2c2', highlight: '#f7f2e6', shadow: '#aea494', foreground: '#3d3530', ear: '#c4bba9', mark: '#b2a897', marking: 'muzzle', patch: '#f8f1e5' }),
+  naturalAnimalPalette({ id: 'north-american-beaver', name: 'North American Beaver', tone: '#896343', highlight: '#b68d65', shadow: '#533b2a', foreground: '#2e211a', ear: '#725039', mark: '#67472f', marking: 'muzzle', patch: '#d5b790', teeth: '#f7edda' }),
+  naturalAnimalPalette({ id: 'eurasian-beaver', name: 'Eurasian Beaver', tone: '#9b704d', highlight: '#c8a078', shadow: '#654631', foreground: '#35241c', ear: '#815a40', mark: '#765137', marking: 'muzzle', patch: '#ead3b1', teeth: '#f6ecd6' }),
+  naturalAnimalPalette({ id: 'dark-beaver', name: 'Dark Beaver', tone: '#59483d', highlight: '#806b5a', shadow: '#342921', foreground: '#ebd7b5', ear: '#493a31', mark: '#42342c', marking: 'muzzle', patch: '#b29a7c', teeth: '#f5ead5' }),
+  naturalAnimalPalette({ id: 'beaver-kit', name: 'Beaver Kit', tone: '#b08860', highlight: '#d9b48c', shadow: '#765437', foreground: '#39281f', ear: '#98704f', mark: '#856043', marking: 'muzzle', patch: '#f1dfc2', teeth: '#fff5df' }),
+  naturalAnimalPalette({ id: 'american-guinea-pig', name: 'American Guinea Pig', tone: '#bc8959', highlight: '#e1b78c', shadow: '#805a3e', foreground: '#38271e', ear: '#956e59', mark: '#825a3e', marking: 'muzzle', patch: '#f4e3c7' }),
+  naturalAnimalPalette({ id: 'abyssinian-guinea-pig', name: 'Abyssinian Guinea Pig', tone: '#9b6144', highlight: '#c8916d', shadow: '#653a2a', foreground: '#31221b', ear: '#794835', mark: '#75452f', marking: 'blaze', patch: '#ecd2af' }),
+  naturalAnimalPalette({ id: 'teddy-guinea-pig', name: 'Teddy Guinea Pig', tone: '#dbc39d', highlight: '#f4e3c9', shadow: '#ac906d', foreground: '#443126', ear: '#c1a184', mark: '#b4956e', marking: 'muzzle', patch: '#fff1d9' }),
+  naturalAnimalPalette({ id: 'guinea-pig-pup', name: 'Guinea Pig Pup', tone: '#a78b76', highlight: '#d0b7a0', shadow: '#725846', foreground: '#38271f', ear: '#916f63', mark: '#7c5e4d', marking: 'muzzle', patch: '#eedccc' }),
+  naturalAnimalPalette({ id: 'gray-chinchilla', name: 'Gray Chinchilla', tone: '#929197', highlight: '#c2c0c5', shadow: '#62616a', foreground: '#302e34', ear: '#77717a', mark: '#686770', marking: 'muzzle', patch: '#e7e1d9' }),
+  naturalAnimalPalette({ id: 'beige-chinchilla', name: 'Beige Chinchilla', tone: '#c0ab92', highlight: '#e6d8c3', shadow: '#8e7861', foreground: '#44342a', ear: '#a88b7d', mark: '#967f66', marking: 'muzzle', patch: '#f8ead8' }),
+  naturalAnimalPalette({ id: 'white-chinchilla', name: 'White Chinchilla', tone: '#dfddd5', highlight: '#fffdf5', shadow: '#b3b0a7', foreground: '#3c3633', ear: '#bea9aa', mark: '#bab7ad', marking: 'muzzle', patch: '#fffaf0' }),
+  naturalAnimalPalette({ id: 'black-velvet-chinchilla', name: 'Black Velvet Chinchilla', tone: '#494850', highlight: '#77757d', shadow: '#29282e', foreground: '#e7d5bc', ear: '#666068', mark: '#323138', marking: 'muzzle', patch: '#bdb3a7' }),
+  naturalAnimalPalette({ id: 'sable-ferret', name: 'Sable Ferret', tone: '#a48667', highlight: '#cfb291', shadow: '#70553d', foreground: '#2e211a', ear: '#80664f', mark: '#574536', marking: 'mask', patch: '#eee2cd' }),
+  naturalAnimalPalette({ id: 'albino-ferret', name: 'Albino Ferret', tone: '#e7dfd0', highlight: '#fff9ec', shadow: '#c1b5a5', foreground: '#76524b', ear: '#d4bcb6', mark: '#c8b5a3', marking: 'muzzle', patch: '#fff6e8' }),
+  naturalAnimalPalette({ id: 'cinnamon-ferret', name: 'Cinnamon Ferret', tone: '#bd8860', highlight: '#e3b694', shadow: '#83573c', foreground: '#422a21', ear: '#a56e53', mark: '#86573d', marking: 'mask', patch: '#f2e1cc' }),
+  naturalAnimalPalette({ id: 'panda-ferret', name: 'Panda Ferret', tone: '#66615d', highlight: '#948f86', shadow: '#413b37', foreground: '#332822', ear: '#514945', mark: '#423c39', marking: 'mask', patch: '#f2ece2' }),
+  naturalAnimalPalette({ id: 'macaque', name: 'Macaque', tone: '#9a785a', highlight: '#c6a382', shadow: '#654a35', foreground: '#3a2720', ear: '#866044', mark: '#78553c', marking: 'mask', patch: '#e5c8ad' }),
+  naturalAnimalPalette({ id: 'capuchin-monkey', name: 'Capuchin Monkey', tone: '#635146', highlight: '#8e7866', shadow: '#3d3028', foreground: '#241813', ear: '#514137', mark: '#40332b', marking: 'mask', patch: '#ead5b6' }),
+  naturalAnimalPalette({ id: 'golden-monkey', name: 'Golden Monkey', tone: '#ca995c', highlight: '#efd19b', shadow: '#916741', foreground: '#37302b', ear: '#ad7948', mark: '#98683f', marking: 'mask', patch: '#cfdae0' }),
+  naturalAnimalPalette({ id: 'baby-monkey', name: 'Baby Monkey', tone: '#b39271', highlight: '#dbbd99', shadow: '#7f6248', foreground: '#422d24', ear: '#a0725c', mark: '#89694e', marking: 'mask', patch: '#efd5bb' }),
+  naturalAnimalPalette({ id: 'yellow-chick', name: 'Yellow Chick', tone: '#efc84a', highlight: '#ffe787', shadow: '#bd8f27', foreground: '#392714', mark: '#d9a43b', marking: 'muzzle', patch: '#f8dd72' }),
+  naturalAnimalPalette({ id: 'silkie-chick', name: 'Silkie Chick', tone: '#e8e4da', highlight: '#fffdf7', shadow: '#b8b4ad', foreground: '#373433', mark: '#b7afa6', marking: 'muzzle', patch: '#fff8e9' }),
+  naturalAnimalPalette({ id: 'barred-rock-chick', name: 'Barred Rock Chick', tone: '#777a78', highlight: '#aaaead', shadow: '#484b4a', foreground: '#272929', mark: '#474a49', marking: 'stripes', patch: '#d6d4cc' }),
+  naturalAnimalPalette({ id: 'buff-orpington-chick', name: 'Buff Orpington Chick', tone: '#d8a566', highlight: '#f1ca91', shadow: '#9e7041', foreground: '#3e2b1d', mark: '#b57f48', marking: 'muzzle', patch: '#f5d8a6' }),
+  naturalAnimalPalette({ id: 'mallard-duck', name: 'Mallard Duck', tone: '#315c4a', highlight: '#5f8874', shadow: '#193c31', foreground: '#1d241f', mark: '#6b5236', marking: 'mask', patch: '#e8dfc3' }),
+  naturalAnimalPalette({ id: 'pekin-duck', name: 'Pekin Duck', tone: '#eee9dc', highlight: '#fffdf5', shadow: '#c2bbae', foreground: '#443329', mark: '#d8cfc0', marking: 'muzzle', patch: '#fff7e7' }),
+  naturalAnimalPalette({ id: 'muscovy-duck', name: 'Muscovy Duck', tone: '#383736', highlight: '#656260', shadow: '#1c1c1b', foreground: '#ead9c5', mark: '#b44f4d', marking: 'mask', patch: '#e7dfd3' }),
+  naturalAnimalPalette({ id: 'yellow-duckling', name: 'Yellow Duckling', tone: '#efc64d', highlight: '#ffe689', shadow: '#bb8e29', foreground: '#3c2b18', mark: '#d6a53e', marking: 'muzzle', patch: '#ffe47f' }),
+  naturalAnimalPalette({ id: 'emperor-penguin', name: 'Emperor Penguin', tone: '#292d31', highlight: '#555b60', shadow: '#111416', foreground: '#e0a34b', mark: '#e1b45e', marking: 'mask', patch: '#f4e9cb' }),
+  naturalAnimalPalette({ id: 'adelie-penguin', name: 'Adelie Penguin', tone: '#202427', highlight: '#4b5054', shadow: '#0b0d0f', foreground: '#f1ece3', mark: '#9fa2a0', marking: 'mask', patch: '#fff9ed' }),
+  naturalAnimalPalette({ id: 'gentoo-penguin', name: 'Gentoo Penguin', tone: '#30363b', highlight: '#5d656a', shadow: '#15191c', foreground: '#df8e38', mark: '#d5d3ce', marking: 'blaze', patch: '#f6f1e8' }),
+  naturalAnimalPalette({ id: 'penguin-chick', name: 'Penguin Chick', tone: '#777b7b', highlight: '#a8aaaa', shadow: '#4a4e4e', foreground: '#3b302a', mark: '#989895', marking: 'muzzle', patch: '#dedbd3' }),
+  naturalAnimalPalette({ id: 'barn-owl', name: 'Barn Owl', tone: '#b28a5e', highlight: '#d9b88c', shadow: '#765738', foreground: '#34281f', mark: '#8d745d', marking: 'mask', patch: '#f3e5c8' }),
+  naturalAnimalPalette({ id: 'snowy-owl', name: 'Snowy Owl', tone: '#e8e5dc', highlight: '#fffdf6', shadow: '#bab9b2', foreground: '#25272a', mark: '#747878', marking: 'spots', patch: '#fff9ec' }),
+  naturalAnimalPalette({ id: 'great-horned-owl', name: 'Great Horned Owl', tone: '#806046', highlight: '#ab896b', shadow: '#4e3929', foreground: '#30251d', mark: '#4d3e31', marking: 'mask', patch: '#d3b98f' }),
+  naturalAnimalPalette({ id: 'little-owl', name: 'Little Owl', tone: '#93816a', highlight: '#bca98f', shadow: '#625344', foreground: '#34271d', mark: '#665443', marking: 'mask', patch: '#e3d0ae' }),
+  naturalAnimalPalette({ id: 'scarlet-macaw', name: 'Scarlet Macaw', tone: '#c84235', highlight: '#e87962', shadow: '#87271f', foreground: '#2f2521', mark: '#f6e9d5', marking: 'mask', patch: '#f6e9d5' }),
+  naturalAnimalPalette({ id: 'blue-yellow-macaw', name: 'Blue-and-yellow Macaw', tone: '#276aaa', highlight: '#5796cc', shadow: '#174371', foreground: '#26231f', mark: '#efc34f', marking: 'mask', patch: '#f2eadb' }),
+  naturalAnimalPalette({ id: 'african-grey-parrot', name: 'African Grey Parrot', tone: '#85878a', highlight: '#b5b7b7', shadow: '#53565a', foreground: '#242426', mark: '#5f6265', marking: 'muzzle', patch: '#e0ddd4' }),
+  naturalAnimalPalette({ id: 'cockatiel', name: 'Cockatiel', tone: '#a7a39a', highlight: '#d1ccc0', shadow: '#737067', foreground: '#302a24', mark: '#efbd4c', marking: 'mask', patch: '#efd769' }),
+  naturalAnimalPalette({ id: 'greylag-goose', name: 'Greylag Goose', tone: '#95877a', highlight: '#bdb0a3', shadow: '#63594f', foreground: '#34291f', mark: '#75695c', marking: 'muzzle', patch: '#d8c6aa' }),
+  naturalAnimalPalette({ id: 'canada-goose', name: 'Canada Goose', tone: '#383834', highlight: '#65645e', shadow: '#1d1d1a', foreground: '#f2ece0', mark: '#e3ded2', marking: 'mask', patch: '#f2ece0' }),
+  naturalAnimalPalette({ id: 'snow-goose', name: 'Snow Goose', tone: '#e9e6dd', highlight: '#fffdf6', shadow: '#bbb7ad', foreground: '#3b3030', mark: '#d2cec5', marking: 'muzzle', patch: '#fff8ec' }),
+  naturalAnimalPalette({ id: 'white-gosling', name: 'White Gosling', tone: '#e8d9aa', highlight: '#fff1c8', shadow: '#b8a36f', foreground: '#473421', mark: '#cfb679', marking: 'muzzle', patch: '#fff3cf' }),
+  naturalAnimalPalette({ id: 'silkie-chick', name: 'Silkie Chick', tone: '#e5e2d7', highlight: '#fffdf4', shadow: '#b9b3a7', foreground: '#3c3430', mark: '#bdb8ad', marking: 'muzzle', patch: '#fff8e9' }),
+  naturalAnimalPalette({ id: 'barred-rock-chick', name: 'Barred Rock Chick', tone: '#65666b', highlight: '#95979d', shadow: '#3d3e43', foreground: '#f2d78c', mark: '#303238', marking: 'muzzle', patch: '#d6d4cc' }),
+  naturalAnimalPalette({ id: 'buff-orpington-chick', name: 'Buff Orpington Chick', tone: '#d9a65e', highlight: '#f4cc8a', shadow: '#9d713a', foreground: '#412a18', mark: '#a66f36', marking: 'muzzle', patch: '#f5d8a6' }),
   {
     id: 'red-fox',
     name: 'Red Fox',

@@ -13,6 +13,16 @@ import {
   resolveAvatarBreedPalette
 } from '../src/avatarBreedTone'
 import {
+  AVATAR_BEAR_BREED_TEMPLATES,
+  AVATAR_CAT_BREED_TEMPLATES,
+  AVATAR_DOG_BREED_TEMPLATES,
+  AVATAR_RABBIT_BREED_TEMPLATES,
+  resolveAvatarBearBreedTemplate,
+  resolveAvatarCatBreedTemplate,
+  resolveAvatarDogBreedTemplate,
+  resolveAvatarRabbitBreedTemplate
+} from '../src/avatarBreedTemplates'
+import {
   createFoxSurfaceDecals,
   getFoxEarStyle,
   getFoxHeadTaper
@@ -23,6 +33,8 @@ import {
   getAvatarAnimalBreedTemplate,
   getAvatarAnimalBreedTemplates,
   getAvatarAnimalDimensions,
+  getAvatarAnimalHornSeedField,
+  getAvatarAnimalScaleRange,
   resolveAvatarAnimalBreedTemplate
 } from '../src/avatarSpeciesBreeds'
 
@@ -40,15 +52,27 @@ describe('natural animal breed constraint profiles', () => {
       species,
       getAvatarAnimalBreedTemplates(species).length
     ]))).toEqual({
+      alpaca: 4,
+      beaver: 4,
       capybara: 4,
+      chinchilla: 4,
+      cow: 4,
       deer: 4,
+      ferret: 4,
       fox: 4,
+      'guinea-pig': 4,
       hamster: 4,
+      hedgehog: 4,
+      lion: 4,
+      monkey: 4,
       otter: 3,
       pig: 4,
-      sheep: 5
+      seal: 4,
+      sheep: 5,
+      squirrel: 4,
+      tiger: 4
     })
-    expect(AVATAR_ANIMAL_BREED_TEMPLATES).toHaveLength(28)
+    expect(AVATAR_ANIMAL_BREED_TEMPLATES).toHaveLength(76)
 
     for (const species of AVATAR_ANIMAL_SPECIES_IDS) {
       const palettes = new Set(getAvatarAnimalBreedTemplates(species).map(template => template.fixed.paletteId))
@@ -97,9 +121,7 @@ describe('natural animal breed constraint profiles', () => {
         }
 
         if (resolved.hornSize != null) {
-          const field = template.species === 'deer'
-            ? AVATAR_SEED_FIELD.deerAntlerSize
-            : AVATAR_SEED_FIELD.sheepHornSize
+          const field = getAvatarAnimalHornSeedField(template.species)!
           const range = template.seedDomain.ranges?.[field]
           expect(resolved.hornSize).toBeGreaterThanOrEqual(range!.min)
           expect(resolved.hornSize).toBeLessThanOrEqual(range!.max)
@@ -107,6 +129,155 @@ describe('natural animal breed constraint profiles', () => {
       }
       expect(distinctFurTones.size, `${template.id} should have multiple natural fur tones`).toBeGreaterThan(3)
     }
+  })
+
+  it('keeps all 105 existing animal breeds proportionate across repeated constrained Seeds', () => {
+    const profiles = [
+      ...AVATAR_ANIMAL_BREED_TEMPLATES.map(template => ({
+        id: template.id,
+        resolve: (seed: string) => resolveAvatarAnimalBreedTemplate(template, seed),
+        species: template.species
+      })),
+      ...AVATAR_CAT_BREED_TEMPLATES.map(template => ({
+        id: template.id,
+        resolve: (seed: string) => {
+          const resolved = resolveAvatarCatBreedTemplate(template, seed)
+          return {
+            earHeight: resolved.catEarHeight,
+            earWidth: resolved.catEarWidth,
+            entityParts: resolved.entityParts,
+            headHeight: 100,
+            headWidth: 100
+          }
+        },
+        species: 'cat'
+      })),
+      ...AVATAR_DOG_BREED_TEMPLATES.map(template => ({
+        id: template.id,
+        resolve: (seed: string) => {
+          const resolved = resolveAvatarDogBreedTemplate(template, seed)
+          return {
+            earHeight: resolved.dogEarHeight,
+            earWidth: resolved.dogEarWidth,
+            entityParts: resolved.entityParts,
+            headHeight: resolved.dogHeadHeight,
+            headWidth: resolved.dogHeadWidth
+          }
+        },
+        species: 'dog'
+      })),
+      ...AVATAR_RABBIT_BREED_TEMPLATES.map(template => ({
+        id: template.id,
+        resolve: (seed: string) => {
+          const resolved = resolveAvatarRabbitBreedTemplate(template, seed)
+          return {
+            earHeight: resolved.rabbitEarHeight,
+            earWidth: resolved.rabbitEarWidth,
+            entityParts: resolved.entityParts,
+            headHeight: resolved.rabbitHeadHeight,
+            headWidth: resolved.rabbitHeadWidth
+          }
+        },
+        species: 'rabbit'
+      })),
+      ...AVATAR_BEAR_BREED_TEMPLATES.map(template => ({
+        id: template.id,
+        resolve: (seed: string) => {
+          const resolved = resolveAvatarBearBreedTemplate(template, seed)
+          return {
+            earHeight: resolved.bearEarHeight,
+            earWidth: resolved.bearEarWidth,
+            entityParts: resolved.entityParts,
+            headHeight: resolved.bearHeadHeight,
+            headWidth: resolved.bearHeadWidth
+          }
+        },
+        species: 'bear'
+      }))
+    ]
+
+    expect(profiles).toHaveLength(105)
+
+    for (const profile of profiles) {
+      for (let index = 0; index < 48; index += 1) {
+        const resolved = profile.resolve(`v1-${profile.id}-proportion-${index}`)
+        const earLimit = profile.id === 'fennec-fox' ? 2.12 : profile.id === 'corgi' ? 1.9 : 1.5
+
+        expect(resolved.headWidth, `${profile.id} has an oversized head`).toBeLessThanOrEqual(135)
+        expect(resolved.headHeight, `${profile.id} has an oversized head`).toBeLessThanOrEqual(135)
+        expect(
+          Math.max(resolved.earHeight / resolved.headHeight, resolved.earWidth / resolved.headWidth),
+          `${profile.id} ears overwhelm its head`
+        ).toBeLessThanOrEqual(earLimit)
+
+        if ('hornSize' in resolved && typeof resolved.hornSize === 'number') {
+          const headSize = Math.sqrt(resolved.headWidth * resolved.headHeight)
+          const accessoryLimit = profile.species === 'lion'
+            ? profile.id === 'lion-cub' ? .86 : 1.06
+            : 1.42
+          expect(
+            resolved.hornSize / headSize,
+            `${profile.id} horns, tail, mane, or spines overwhelm its head`
+          ).toBeLessThanOrEqual(accessoryLimit)
+        }
+
+        const left = resolved.entityParts.find(part => /(?:^|-)ear-left$/u.test(part.id))
+        const right = resolved.entityParts.find(part => /(?:^|-)ear-right$/u.test(part.id))
+        expect(left?.x, `${profile.id} left ear is hidden inside its head`).toBeLessThan(-20)
+        expect(right?.x, `${profile.id} right ear is hidden inside its head`).toBeGreaterThan(20)
+
+        if (profile.id === 'highland-cow') {
+          expect(resolved.entityParts.filter(part => part.id.startsWith('forelock-'))
+            .every(part => part.y < -20)).toBe(true)
+        }
+      }
+    }
+  })
+
+  it('correlates compact lion manes with head size without restricting manual anatomy controls', () => {
+    const expected = {
+      'african-lion': { head: [104, 101], mane: 101, maneRange: [97, 105] },
+      'lion-cub': { head: [88, 93], mane: 72, maneRange: [68, 76] },
+      lioness: { head: [101, 98], mane: undefined, maneRange: undefined },
+      'white-lion': { head: [102, 99], mane: 98, maneRange: [94, 102] }
+    } as const
+
+    for (const template of getAvatarAnimalBreedTemplates('lion')) {
+      const authored = expected[template.id as keyof typeof expected]
+      expect([template.fixed.headWidth, template.fixed.headHeight]).toEqual(authored.head)
+      expect(template.fixed.hornSize).toBe(authored.mane)
+
+      const range = template.seedDomain.ranges?.[AVATAR_SEED_FIELD.lionManeSize]
+      if (authored.maneRange == null) {
+        expect(range).toBeUndefined()
+        expect(template.followByDefault).not.toContain(AVATAR_SEED_FIELD.lionManeSize)
+        continue
+      }
+
+      expect([range?.min, range?.max]).toEqual(authored.maneRange)
+      for (let index = 0; index < 96; index += 1) {
+        const resolved = resolveAvatarAnimalBreedTemplate(template, `v1-${template.id}-balanced-${index}`)
+        const headRatio = Math.sqrt(
+          resolved.headWidth / template.fixed.headWidth * resolved.headHeight / template.fixed.headHeight
+        )
+        expect(Math.abs(resolved.hornSize! - Math.round(authored.mane! * headRatio))).toBeLessThanOrEqual(2)
+      }
+    }
+
+    const template = getAvatarAnimalBreedTemplate('lion', 'african-lion')!
+    const resolved = resolveAvatarAnimalBreedTemplate(template, 'v1-lion-manual-dimensions')
+    const manuallySized = applyAvatarAnimalDimensions(resolved.entityParts, 'lion', {
+      headHeight: 130,
+      headWidth: 135,
+      hornSize: 145
+    }, 'full')
+    expect(getAvatarAnimalScaleRange('lion', 'head').max).toBe(135)
+    expect(getAvatarAnimalScaleRange('lion', 'horn').max).toBe(145)
+    expect(getAvatarAnimalDimensions('lion', manuallySized)).toMatchObject({
+      headHeight: 130,
+      headWidth: 135,
+      hornSize: 145
+    })
   })
 
   it('preserves readable adjacent facial layers at both ends of every breed-specific fur range', () => {
@@ -128,7 +299,7 @@ describe('natural animal breed constraint profiles', () => {
         }))
 
         for (const part of resolved.entityParts) {
-          if (part.id.startsWith('cheek-') || part.id === 'muzzle' || part.id === 'snout') {
+          if (part.id === 'snout') {
             layers.push({ color: part.baseColor, id: part.id, parent: head.baseColor })
           }
           if (part.id.startsWith('nostril-')) {
@@ -207,8 +378,8 @@ describe('natural animal breed constraint profiles', () => {
     }
   })
 
-  it('preserves true species-specific cheeks, the projecting capybara muzzle, and pig snouts', () => {
-    for (const species of ['hamster', 'capybara', 'otter', 'pig'] as const) {
+  it('preserves true species-specific cheeks, projecting snouts, and three-dimensional forelocks', () => {
+    for (const species of ['hamster', 'capybara', 'otter', 'pig', 'alpaca', 'cow', 'squirrel'] as const) {
       const resolved = resolveAvatarAnimalBreedTemplate(
         getAvatarAnimalBreedTemplates(species)[0]!,
         `v1-${species}-features`
@@ -231,6 +402,230 @@ describe('natural animal breed constraint profiles', () => {
         expect(resolved.entityParts.some(part => part.id === 'nostril-right')).toBe(true)
         expect(resolved.faceStyle.noseEnabled).toBe(false)
       }
+      if (species === 'alpaca') {
+        expect(resolved.entityParts.filter(part => part.id.startsWith('forelock-'))).toHaveLength(3)
+        expect(resolved.surfaceDecals?.some(decal => decal.id === 'alpaca-face-mask')).toBe(true)
+      }
+      if (species === 'cow') {
+        expect(resolved.entityParts.some(part => part.id === 'snout')).toBe(true)
+        expect(resolved.entityParts.some(part => part.id === 'nostril-left')).toBe(true)
+        expect(resolved.entityParts.some(part => part.id === 'nostril-right')).toBe(true)
+        expect(resolved.faceStyle.noseEnabled).toBe(false)
+      }
+      if (species === 'squirrel') {
+        expect(resolved.entityParts.filter(part => part.id.startsWith('tail-'))).toHaveLength(3)
+        expect(resolved.entityParts.filter(part => part.id.startsWith('tail-'))
+          .every(part => part.z < -40)).toBe(true)
+      }
+    }
+  })
+
+  it('separates third-batch anatomy from every facial color region', () => {
+    for (const species of ['seal', 'beaver', 'guinea-pig', 'chinchilla', 'ferret', 'monkey'] as const) {
+      for (const template of getAvatarAnimalBreedTemplates(species)) {
+        const resolved = resolveAvatarAnimalBreedTemplate(template, `v1-${template.id}-surface-anatomy`)
+        const head = resolved.entityParts.find(part => part.face)!
+        const partIds = new Set(resolved.entityParts.map(part => part.id))
+
+        expect(resolved.faceStyle.eyeShape).toBe('rounded')
+        expect(resolved.surfaceDecals?.every(decal => partIds.has(decal.targetPartId))).toBe(true)
+
+        if (species === 'seal' || species === 'beaver' || species === 'guinea-pig' || species === 'chinchilla') {
+          for (const side of ['left', 'right'] as const) {
+            const cheek = resolved.entityParts.find(part => part.id === `cheek-${side}`)!
+            expect(cheek.scaleZ).toBeGreaterThan(.12)
+            expect(cheek.baseColor).toBe(head.baseColor)
+            expect(cheek.highlightColor).toBe(head.highlightColor)
+            expect(cheek.shadowColor).toBe(head.shadowColor)
+            expect(resolved.surfaceDecals?.some(decal => (
+              decal.id === `${species}-cheek-${side}` && decal.targetPartId === `cheek-${side}`
+            ))).toBe(true)
+          }
+        }
+
+        if (species === 'beaver') {
+          const leftTooth = resolved.entityParts.find(part => part.id === 'tooth-left')!
+          expect(leftTooth.scaleZ).toBeGreaterThan(.1)
+          expect(leftTooth.baseColor).not.toBe(head.baseColor)
+        }
+
+        if (species === 'ferret') {
+          expect(resolved.entityParts.some(part => part.id === 'muzzle')).toBe(false)
+          expect(resolved.surfaceDecals?.filter(decal => decal.id.startsWith('ferret-eye-mask-')))
+            .toHaveLength(2)
+        }
+
+        if (species === 'monkey') {
+          const muzzle = resolved.entityParts.find(part => part.id === 'muzzle')!
+          expect(muzzle.scaleZ).toBeGreaterThan(.3)
+          expect(muzzle.baseColor).toBe(head.baseColor)
+          expect(resolved.surfaceDecals?.find(decal => decal.id === 'monkey-muzzle-skin'))
+            .toMatchObject({ targetPartId: 'muzzle' })
+          expect(resolved.surfaceDecals?.filter(decal => decal.id.startsWith('monkey-nostril-'))
+            .every(decal => decal.targetPartId === 'muzzle')).toBe(true)
+        }
+      }
+    }
+  })
+
+  it.each(['hamster', 'squirrel'] as const)(
+    'keeps every %s cheek as genuine body-colored volume with its pale fur projected onto the surface',
+    species => {
+      for (const template of getAvatarAnimalBreedTemplates(species)) {
+        for (const requestedTone of [template.toneJitter.min, 0, template.toneJitter.max]) {
+          const seed = Array.from({ length: 600 }, (_, index) => `v1-${template.id}-real-cheek-${index}`)
+            .find(candidate => (
+              resolveSeededAvatarPaletteTone(candidate, template.fixed.paletteId, template.seedDomain) === requestedTone
+            ))
+          expect(seed, `${template.id} should reach authored tone ${requestedTone}`).toBeDefined()
+
+          const resolved = resolveAvatarAnimalBreedTemplate(template, seed!)
+          const head = resolved.entityParts.find(part => part.face)!
+
+          for (const side of ['left', 'right'] as const) {
+            const cheek = resolved.entityParts.find(part => part.id === `cheek-${side}`)
+            const marking = resolved.surfaceDecals?.find(decal => decal.id === `${species}-cheek-${side}`)
+
+            expect(cheek?.baseColor, `${template.id} ${side} cheek must continue the head material`)
+              .toBe(head.baseColor)
+            expect(cheek?.highlightColor).toBe(head.highlightColor)
+            expect(cheek?.shadowColor).toBe(head.shadowColor)
+            expect(cheek?.scaleZ).toBeGreaterThan(.12)
+            expect(marking, `${template.id} ${side} cheek needs a real surface marking`).toMatchObject({
+              opacity: 100,
+              targetPartId: `cheek-${side}`
+            })
+            expect(Math.abs(perceivedLightness(marking!.color) - perceivedLightness(cheek!.baseColor)))
+              .toBeGreaterThan(.045)
+          }
+        }
+      }
+    }
+  )
+
+  it('keeps every capybara muzzle as body-colored anatomy with fur projected onto its true surface', () => {
+    for (const template of getAvatarAnimalBreedTemplates('capybara')) {
+      for (const requestedTone of [template.toneJitter.min, 0, template.toneJitter.max]) {
+        const seed = Array.from({ length: 600 }, (_, index) => `v1-${template.id}-real-muzzle-${index}`)
+          .find(candidate => (
+            resolveSeededAvatarPaletteTone(candidate, template.fixed.paletteId, template.seedDomain) === requestedTone
+          ))
+        expect(seed, `${template.id} should reach authored tone ${requestedTone}`).toBeDefined()
+
+        const resolved = resolveAvatarAnimalBreedTemplate(template, seed!)
+        const head = resolved.entityParts.find(part => part.face)!
+        const muzzle = resolved.entityParts.find(part => part.id === 'muzzle')
+        const marking = resolved.surfaceDecals?.find(decal => decal.id === 'capybara-muzzle-fur')
+
+        expect(muzzle?.baseColor, `${template.id} muzzle must continue the head material`).toBe(head.baseColor)
+        expect(muzzle?.highlightColor).toBe(head.highlightColor)
+        expect(muzzle?.shadowColor).toBe(head.shadowColor)
+        expect(muzzle?.scaleZ).toBeGreaterThan(.35)
+        expect(marking, `${template.id} muzzle needs a genuine surface fur marking`).toMatchObject({
+          opacity: 100,
+          side: 'front',
+          targetPartId: 'muzzle'
+        })
+        expect(Math.abs(perceivedLightness(marking!.color) - perceivedLightness(muzzle!.baseColor)))
+          .toBeGreaterThan(.045)
+      }
+    }
+  })
+
+  it('keeps chipmunk stripes attached to the actual three-dimensional head', () => {
+    const template = getAvatarAnimalBreedTemplate('squirrel', 'chipmunk')!
+    const resolved = resolveAvatarAnimalBreedTemplate(template, 'v1-chipmunk-stripes')
+    const stripes = resolveAvatarCoatPatternDecals({
+      entityParts: resolved.entityParts,
+      entityPreset: 'squirrel',
+      palette: resolveAvatarBreedPalette(template.fixed.paletteId, 'v1-chipmunk-stripes', template.seedDomain),
+      paletteId: resolved.paletteId,
+      pattern: resolved.coatPattern
+    })
+    expect(stripes.filter(decal => decal.id.startsWith('coat-chipmunk-'))).toHaveLength(5)
+    expect(stripes.every(decal => decal.targetPartId === 'primary')).toBe(true)
+  })
+
+  it('gives every tiger natural curved stripes bound to its real head and ears', () => {
+    for (const template of getAvatarAnimalBreedTemplates('tiger')) {
+      const seed = `v1-${template.id}-curved-stripes`
+      const resolved = resolveAvatarAnimalBreedTemplate(template, seed)
+      const stripes = resolveAvatarCoatPatternDecals({
+        entityParts: resolved.entityParts,
+        entityPreset: 'tiger',
+        palette: resolveAvatarBreedPalette(template.fixed.paletteId, seed, template.seedDomain),
+        paletteId: resolved.paletteId,
+        pattern: resolved.coatPattern
+      })
+      expect(resolved.coatPattern.enabled).toBe(true)
+      expect(stripes.length).toBeGreaterThan(5)
+      expect(stripes.every(decal => decal.id.startsWith('coat-tiger-'))).toBe(true)
+      expect(stripes.some(decal => decal.targetPartId === 'primary')).toBe(true)
+      expect(resolved.surfaceDecals?.some(decal => decal.id === 'tiger-face-mask')).toBe(true)
+      expect(resolved.entityParts.some(part => part.id === 'muzzle')).toBe(false)
+    }
+  })
+
+  it('distinguishes true Highland horns and bangs from a naturally hornless calf', () => {
+    const highland = resolveAvatarAnimalBreedTemplate(
+      getAvatarAnimalBreedTemplate('cow', 'highland-cow')!,
+      'v1-highland-cow-anatomy'
+    )
+    const calf = resolveAvatarAnimalBreedTemplate(
+      getAvatarAnimalBreedTemplate('cow', 'cow-calf')!,
+      'v1-cow-calf-anatomy'
+    )
+
+    expect(highland.entityParts.filter(part => /^horn-(?:left|right)/u.test(part.id))).toHaveLength(4)
+    expect(highland.entityParts.filter(part => part.id.startsWith('forelock-'))).toHaveLength(3)
+    expect(highland.entityParts.filter(part => part.id.startsWith('forelock-'))
+      .every(part => part.y < -20)).toBe(true)
+    expect(calf.entityParts.some(part => part.id.startsWith('horn-'))).toBe(false)
+    expect(calf.entityParts.filter(part => part.id.startsWith('forelock-'))).toHaveLength(1)
+  })
+
+  it('keeps dairy spots on real curved surfaces and visibly different from its eyes and nostrils', () => {
+    const template = getAvatarAnimalBreedTemplate('cow', 'dairy-cow')!
+    const seed = 'v1-dairy-cow-spot-contrast'
+    const resolved = resolveAvatarAnimalBreedTemplate(template, seed)
+    const palette = resolveAvatarBreedPalette(template.fixed.paletteId, seed, template.seedDomain)
+    const spots = resolveAvatarCoatPatternDecals({
+      entityParts: resolved.entityParts,
+      entityPreset: 'cow',
+      palette,
+      paletteId: resolved.paletteId,
+      pattern: resolved.coatPattern
+    })
+
+    expect(spots.length).toBeGreaterThan(3)
+    expect(spots.every(spot => (
+      spot.targetPartId === 'primary' || spot.targetPartId === 'ear-left' || spot.targetPartId === 'ear-right'
+    ))).toBe(true)
+    expect(Math.abs(perceivedLightness(palette.coat!.mark) - perceivedLightness(palette.foreground)))
+      .toBeGreaterThan(.08)
+    expect(resolved.entityParts.find(part => part.id === 'nostril-left')?.baseColor).toBe(palette.foreground)
+  })
+
+  it('distinguishes real full, juvenile, and absent lion manes', () => {
+    const count = (id: string) => resolveAvatarAnimalBreedTemplate(
+      getAvatarAnimalBreedTemplate('lion', id)!,
+      `v1-${id}-mane`
+    ).entityParts.filter(part => part.id.startsWith('mane-')).length
+
+    expect(count('african-lion')).toBe(9)
+    expect(count('white-lion')).toBe(9)
+    expect(count('lion-cub')).toBe(3)
+    expect(count('lioness')).toBe(0)
+  })
+
+  it('gives each hedgehog genuinely three-dimensional natural quills', () => {
+    for (const template of getAvatarAnimalBreedTemplates('hedgehog')) {
+      const resolved = resolveAvatarAnimalBreedTemplate(template, `v1-${template.id}-spines`)
+      const spines = resolved.entityParts.filter(part => part.id.startsWith('spine-'))
+      expect(spines).toHaveLength(template.id === 'albino-hedgehog' ? 8 : 15)
+      expect(spines.some(part => part.id === 'spine-core')).toBe(true)
+      expect(spines.every(part => (part.scaleZ ?? 0) > .1)).toBe(true)
+      expect(resolved.surfaceDecals?.some(decal => decal.id === 'hedgehog-face-mask')).toBe(true)
     }
   })
 

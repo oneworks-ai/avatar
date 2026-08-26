@@ -161,6 +161,8 @@ import {
   AVATAR_SEED_FIELD,
   AVATAR_SEED_FIELDS,
   createRandomAvatarSeed,
+  getAvatarAnimalEarSeedFields,
+  getAvatarAnimalSpeciesKey,
   getAvatarSeedFieldEntityPreset,
   isAvatarAnimalSpeciesId,
   normalizeEditorAvatarSeed,
@@ -191,7 +193,10 @@ import {
   getAvatarAnimalBreedTemplate,
   getAvatarAnimalBreedTemplates,
   getAvatarAnimalDimensions,
+  getAvatarAnimalDetailSeedField,
+  getAvatarAnimalHornSeedField,
   getAvatarAnimalScaleRange,
+  resolveAvatarAnimalAccessorySize,
   resolveAvatarAnimalBreedTemplate
 } from './avatarSpeciesBreeds'
 import {
@@ -287,6 +292,7 @@ interface AvatarQueryConfig {
   readonly cameraFrame: AvatarCameraFrame
   readonly cameraMode: boolean
   readonly animalBreedTemplateId: string | null
+  readonly animalDetailSize: number | null
   readonly animalEarHeight: number | null
   readonly animalEarWidth: number | null
   readonly animalHeadHeight: number | null
@@ -540,9 +546,6 @@ const parseQueryConfig = (
     ? queryPaletteId
     : coatPattern.enabled ? DEFAULT_TABBY_PALETTE_ID : DEFAULT_PALETTE_ID
   const queryBackgroundStyle = params.get('bg')
-  const backgroundStyle = isAvatarBackgroundStyle(queryBackgroundStyle)
-    ? queryBackgroundStyle
-    : DEFAULT_BACKGROUND_STYLE
   const leftEye = parts[0] ?? INITIAL_PARTS[0] ?? '0'
   const mouth = parts[1] ?? INITIAL_PARTS[1] ?? 'w'
   const queryRightEye = parts[2] ?? INITIAL_PARTS[2] ?? '0'
@@ -551,9 +554,6 @@ const parseQueryConfig = (
 
   const animationSelectionKey = parseAnimationSelectionKey(params.get('animation'))
   const entityPreset = parseAvatarEntityPreset(params.get('entity'))
-  const defaultViewState = entityPreset === 'fox'
-    ? getAvatarEntityPresetScene('fox')?.viewState ?? DEFAULT_AVATAR_VIEW_STATE
-    : DEFAULT_AVATAR_VIEW_STATE
   const breedParam = params.get('breed')
   const animalBreedTemplateId = isAvatarAnimalSpeciesId(entityPreset) && breedParam != null && breedParam.trim() !== ''
     ? breedParam.trim()
@@ -574,6 +574,13 @@ const parseQueryConfig = (
   const animalBreedTemplate = isAvatarAnimalSpeciesId(entityPreset)
     ? getAvatarAnimalBreedTemplate(entityPreset, animalBreedTemplateId)
     : null
+  const authoredEntityScene = entityPreset === 'fox' || entityPreset === 'lion' || animalBreedTemplate != null
+    ? getAvatarEntityPresetScene(entityPreset)
+    : null
+  const defaultViewState = authoredEntityScene?.viewState ?? DEFAULT_AVATAR_VIEW_STATE
+  const backgroundStyle = isAvatarBackgroundStyle(queryBackgroundStyle)
+    ? queryBackgroundStyle
+    : authoredEntityScene?.backgroundStyle ?? DEFAULT_BACKGROUND_STYLE
   const concreteSeed = normalizeEditorAvatarSeed(params.get('seed') ?? fallbackSeed)
   const defaultBearBreed = entityPreset === 'bear' && bearBreedTemplate != null
     ? resolveAvatarBearBreedTemplate(bearBreedTemplate, concreteSeed, coatPattern)
@@ -636,23 +643,43 @@ const parseQueryConfig = (
   const animalHeadRange = isAvatarAnimalSpeciesId(entityPreset)
     ? getAvatarAnimalScaleRange(entityPreset, 'head')
     : { max: 134, min: 76 }
-  const animalEarWidth = isAvatarAnimalSpeciesId(entityPreset) && params.has(`${entityPreset}EarWidth`)
-    ? parseRangeValue(params.get(`${entityPreset}EarWidth`), 100, animalEarRange.min, animalEarRange.max)
+  const animalSpeciesKey = isAvatarAnimalSpeciesId(entityPreset)
+    ? getAvatarAnimalSpeciesKey(entityPreset)
     : null
-  const animalEarHeight = isAvatarAnimalSpeciesId(entityPreset) && params.has(`${entityPreset}EarHeight`)
-    ? parseRangeValue(params.get(`${entityPreset}EarHeight`), 100, animalEarRange.min, animalEarRange.max)
+  const animalEarFields = isAvatarAnimalSpeciesId(entityPreset)
+    ? getAvatarAnimalEarSeedFields(entityPreset)
     : null
-  const animalHeadWidth = isAvatarAnimalSpeciesId(entityPreset) && params.has(`${entityPreset}HeadWidth`)
-    ? parseRangeValue(params.get(`${entityPreset}HeadWidth`), 100, animalHeadRange.min, animalHeadRange.max)
+  const animalEarWidth = animalEarFields != null && animalSpeciesKey != null && params.has(`${animalSpeciesKey}EarWidth`)
+    ? parseRangeValue(params.get(`${animalSpeciesKey}EarWidth`), 100, animalEarRange.min, animalEarRange.max)
     : null
-  const animalHeadHeight = isAvatarAnimalSpeciesId(entityPreset) && params.has(`${entityPreset}HeadHeight`)
-    ? parseRangeValue(params.get(`${entityPreset}HeadHeight`), 100, animalHeadRange.min, animalHeadRange.max)
+  const animalEarHeight = animalEarFields != null && animalSpeciesKey != null && params.has(`${animalSpeciesKey}EarHeight`)
+    ? parseRangeValue(params.get(`${animalSpeciesKey}EarHeight`), 100, animalEarRange.min, animalEarRange.max)
     : null
-  const animalHornQueryKey = entityPreset === 'deer'
-    ? 'deerAntlerSize'
-    : entityPreset === 'sheep' ? 'sheepHornSize' : null
+  const animalHeadWidth = animalSpeciesKey != null && params.has(`${animalSpeciesKey}HeadWidth`)
+    ? parseRangeValue(params.get(`${animalSpeciesKey}HeadWidth`), 100, animalHeadRange.min, animalHeadRange.max)
+    : null
+  const animalHeadHeight = animalSpeciesKey != null && params.has(`${animalSpeciesKey}HeadHeight`)
+    ? parseRangeValue(params.get(`${animalSpeciesKey}HeadHeight`), 100, animalHeadRange.min, animalHeadRange.max)
+    : null
+  const animalHornField = isAvatarAnimalSpeciesId(entityPreset)
+    ? getAvatarAnimalHornSeedField(entityPreset)
+    : null
+  const animalHornQueryKey = animalHornField?.slice('scene.entity.'.length) ?? null
+  const animalHornRange = isAvatarAnimalSpeciesId(entityPreset)
+    ? getAvatarAnimalScaleRange(entityPreset, 'horn')
+    : { max: 155, min: 55 }
   const animalHornSize = animalHornQueryKey != null && params.has(animalHornQueryKey)
-    ? parseRangeValue(params.get(animalHornQueryKey), 100, 60, 145)
+    ? parseRangeValue(params.get(animalHornQueryKey), 100, animalHornRange.min, animalHornRange.max)
+    : null
+  const animalDetailField = isAvatarAnimalSpeciesId(entityPreset)
+    ? getAvatarAnimalDetailSeedField(entityPreset)
+    : null
+  const animalDetailQueryKey = animalDetailField?.slice('scene.entity.'.length) ?? null
+  const animalDetailRange = isAvatarAnimalSpeciesId(entityPreset)
+    ? getAvatarAnimalScaleRange(entityPreset, 'detail')
+    : { max: 145, min: 65 }
+  const animalDetailSize = animalDetailQueryKey != null && params.has(animalDetailQueryKey)
+    ? parseRangeValue(params.get(animalDetailQueryKey), 100, animalDetailRange.min, animalDetailRange.max)
     : null
   const entityParts = entityPreset === 'cat'
     ? applyCatEarScale(rawEntityParts, catEarWidth ?? undefined, catEarHeight ?? undefined)
@@ -679,8 +706,9 @@ const parseQueryConfig = (
           ...(animalEarHeight == null ? {} : { earHeight: animalEarHeight }),
           ...(animalHeadWidth == null ? {} : { headWidth: animalHeadWidth }),
           ...(animalHeadHeight == null ? {} : { headHeight: animalHeadHeight }),
-          ...(animalHornSize == null ? {} : { hornSize: animalHornSize })
-        }, animalBreedTemplate?.fixed.hornStyle)
+          ...(animalHornSize == null ? {} : { hornSize: animalHornSize }),
+          ...(animalDetailSize == null ? {} : { detailSize: animalDetailSize })
+        }, animalBreedTemplate?.fixed.hornStyle, animalBreedTemplate?.fixed.detailStyle)
       : rawEntityParts
   const sharedAnimation = animationSelectionKey === 'shared'
     ? deserializeSharedAvatarAnimation(params.get('animationData'))
@@ -697,6 +725,52 @@ const parseQueryConfig = (
       const fieldEntityPreset = getAvatarSeedFieldEntityPreset(field)
       return fieldEntityPreset == null || fieldEntityPreset === entityPreset
     })
+  const authoredSurfaceDecals = defaultAnimalBreed?.surfaceDecals?.map(decal => {
+    if (
+      !params.has('entityParts') ||
+      seededFields.includes(AVATAR_SEED_FIELD.palette) ||
+      animalBreedTemplate?.fixed.surfaceFaceMarkings == null
+    ) {
+      return decal
+    }
+
+    const usesConcreteFurColor =
+      (entityPreset === 'deer' || entityPreset === 'otter') && decal.id === `${entityPreset}-face-mask` ||
+      entityPreset === 'capybara' && decal.id === 'capybara-muzzle-fur' ||
+      (entityPreset === 'hamster' || entityPreset === 'squirrel') && (
+        decal.id === `${entityPreset}-face-mask` || decal.id.startsWith(`${entityPreset}-cheek-`)
+      )
+    if (!usesConcreteFurColor) return decal
+
+    const concretePalette = resolveAvatarBreedPaletteFromEntityParts(
+      getAvatarPalette(selectedPaletteId),
+      entityParts
+    )
+    return {
+      ...decal,
+      color: concretePalette.coat?.patch ?? animalBreedTemplate.fixed.surfaceFaceMarkings.color
+    }
+  }) ?? []
+  const persistedSurfaceDecals = params.has('decals')
+    ? deserializeAvatarSurfaceDecals(params.get('decals'), entityParts.map(part => part.id))
+    : null
+  const requiredAnatomicalDecals = authoredSurfaceDecals.filter(decal => (
+    entityPreset === 'hamster' && (
+      decal.id.startsWith('hamster-cheek-') || decal.id.startsWith('hamster-inner-ear-')
+    ) ||
+    entityPreset === 'squirrel' && (
+      decal.id === 'squirrel-face-mask' || decal.id.startsWith('squirrel-cheek-')
+    ) ||
+    entityPreset === 'capybara' && decal.id === 'capybara-muzzle-fur'
+  ))
+  const restoredSurfaceDecals = persistedSurfaceDecals == null
+    ? authoredSurfaceDecals
+    : [
+        ...persistedSurfaceDecals,
+        ...requiredAnatomicalDecals.filter(required => (
+          !persistedSurfaceDecals.some(persisted => persisted.id === required.id)
+        ))
+      ]
   return {
     animationOpen: parseShadow(params.get('animationPanel')),
     animationSelectionKey: animationSelectionKey === 'shared' && sharedAnimation == null
@@ -752,10 +826,17 @@ const parseQueryConfig = (
       AVATAR_ENTITY_RANGES.bottomTaper.min,
       AVATAR_ENTITY_RANGES.bottomTaper.max
     ),
-    cameraBackground: parseCameraBackground(params.get('cameraBg')),
-    cameraFrame: parseCameraFrame(params.get('cameraFrame')),
-    cameraMode: parseShadow(params.get('camera')),
+    cameraBackground: params.has('cameraBg')
+      ? parseCameraBackground(params.get('cameraBg'))
+      : authoredEntityScene?.cameraBackground ?? parseCameraBackground(null),
+    cameraFrame: params.has('cameraFrame')
+      ? parseCameraFrame(params.get('cameraFrame'))
+      : authoredEntityScene?.cameraFrame ?? parseCameraFrame(null),
+    cameraMode: params.has('camera')
+      ? parseShadow(params.get('camera'))
+      : authoredEntityScene?.cameraMode ?? false,
     animalBreedTemplateId,
+    animalDetailSize,
     animalEarHeight,
     animalEarWidth,
     animalHeadHeight,
@@ -1051,30 +1132,7 @@ const parseQueryConfig = (
     showAvatarShadow: parseShadow(params.get('avatarShadow')),
     showFrameShadow: params.get('frameShadow') == null ? true : parseShadow(params.get('frameShadow')),
     showShadow: parseShadow(params.get('shadow')),
-    surfaceDecals: (
-      params.has('decals')
-        ? deserializeAvatarSurfaceDecals(params.get('decals'), entityParts.map(part => part.id))
-        : defaultAnimalBreed?.surfaceDecals?.map(decal => {
-          if (
-            !params.has('entityParts') ||
-            seededFields.includes(AVATAR_SEED_FIELD.palette) ||
-            animalBreedTemplate?.fixed.surfaceFaceMarkings == null ||
-            decal.id !== `${entityPreset}-face-mask`
-          ) {
-            return decal
-          }
-
-          const concretePalette = resolveAvatarBreedPaletteFromEntityParts(
-            getAvatarPalette(selectedPaletteId),
-            entityParts
-          )
-          const color = entityPreset === 'deer' || entityPreset === 'otter'
-            ? concretePalette.coat?.patch ?? animalBreedTemplate.fixed.surfaceFaceMarkings.color
-            : animalBreedTemplate.fixed.surfaceFaceMarkings.color
-
-          return { ...decal, color }
-        }) ?? []
-    ).filter(decal => !decal.id.startsWith('seed-tabby-')),
+    surfaceDecals: restoredSurfaceDecals.filter(decal => !decal.id.startsWith('seed-tabby-')),
     sharedAnimation,
     viewState: {
       pitch: parseFiniteValue(params.get('pitch'), defaultViewState.pitch),
@@ -1128,11 +1186,16 @@ const resolveSeededQueryConfig = (config: AvatarQueryConfig): AvatarQueryConfig 
         : applyAvatarEntityPalette(parts, getAvatarPalette(config.selectedPaletteId)),
       entityPreset: preset,
       animalBreedTemplateId: isAvatarAnimalSpeciesId(preset) ? config.animalBreedTemplateId : null,
+      animalDetailSize: isAvatarAnimalSpeciesId(preset) && getAvatarAnimalDetailSeedField(preset) != null
+        ? config.animalDetailSize
+        : null,
       animalEarHeight: isAvatarAnimalSpeciesId(preset) ? config.animalEarHeight : null,
       animalEarWidth: isAvatarAnimalSpeciesId(preset) ? config.animalEarWidth : null,
       animalHeadHeight: isAvatarAnimalSpeciesId(preset) ? config.animalHeadHeight : null,
       animalHeadWidth: isAvatarAnimalSpeciesId(preset) ? config.animalHeadWidth : null,
-      animalHornSize: preset === 'deer' || preset === 'sheep' ? config.animalHornSize : null,
+      animalHornSize: isAvatarAnimalSpeciesId(preset) && getAvatarAnimalHornSeedField(preset) != null
+        ? config.animalHornSize
+        : null,
       catBreedTemplateId: preset === 'cat' ? config.catBreedTemplateId : null,
       dogBreedTemplateId: preset === 'dog' ? config.dogBreedTemplateId : null,
       rabbitBreedTemplateId: preset === 'rabbit' ? config.rabbitBreedTemplateId : null,
@@ -1145,14 +1208,14 @@ const resolveSeededQueryConfig = (config: AvatarQueryConfig): AvatarQueryConfig 
   if (isAvatarAnimalSpeciesId(next.entityPreset)) {
     const species = next.entityPreset
     const fields = AVATAR_ANIMAL_SPECIES_SEED_FIELDS[species]
-    const hornField = species === 'deer'
-      ? AVATAR_SEED_FIELD.deerAntlerSize
-      : species === 'sheep' ? AVATAR_SEED_FIELD.sheepHornSize : null
-    const animalEarWidth = config.seededFields.includes(fields.earWidth)
-      ? resolveSeededAvatarAnimalScale(config.seed, fields.earWidth, seedDomain)
+    const earFields = getAvatarAnimalEarSeedFields(species)
+    const hornField = getAvatarAnimalHornSeedField(species)
+    const detailField = getAvatarAnimalDetailSeedField(species)
+    const animalEarWidth = earFields != null && config.seededFields.includes(earFields.earWidth)
+      ? resolveSeededAvatarAnimalScale(config.seed, earFields.earWidth, seedDomain)
       : next.animalEarWidth
-    const animalEarHeight = config.seededFields.includes(fields.earHeight)
-      ? resolveSeededAvatarAnimalScale(config.seed, fields.earHeight, seedDomain)
+    const animalEarHeight = earFields != null && config.seededFields.includes(earFields.earHeight)
+      ? resolveSeededAvatarAnimalScale(config.seed, earFields.earHeight, seedDomain)
       : next.animalEarHeight
     const animalHeadWidth = config.seededFields.includes(fields.headWidth)
       ? resolveSeededAvatarAnimalScale(config.seed, fields.headWidth, seedDomain)
@@ -1160,15 +1223,24 @@ const resolveSeededQueryConfig = (config: AvatarQueryConfig): AvatarQueryConfig 
     const animalHeadHeight = config.seededFields.includes(fields.headHeight)
       ? resolveSeededAvatarAnimalScale(config.seed, fields.headHeight, seedDomain)
       : next.animalHeadHeight
-    const animalHornSize = hornField != null && config.seededFields.includes(hornField)
-      ? resolveSeededAvatarAnimalScale(config.seed, hornField, seedDomain)
-      : next.animalHornSize
     const animalTemplate = getAvatarAnimalBreedTemplate(species, next.animalBreedTemplateId)
+    const animalHornSize = hornField != null && config.seededFields.includes(hornField)
+      ? resolveAvatarAnimalAccessorySize(
+        animalTemplate,
+        animalHeadWidth ?? animalTemplate?.fixed.headWidth,
+        animalHeadHeight ?? animalTemplate?.fixed.headHeight,
+        resolveSeededAvatarAnimalScale(config.seed, hornField, seedDomain)
+      ) ?? null
+      : next.animalHornSize
+    const animalDetailSize = detailField != null && config.seededFields.includes(detailField)
+      ? resolveSeededAvatarAnimalScale(config.seed, detailField, seedDomain)
+      : next.animalDetailSize
 
     next = {
       ...next,
       animalEarHeight,
       animalEarWidth,
+      animalDetailSize,
       animalHeadHeight,
       animalHeadWidth,
       animalHornSize,
@@ -1177,8 +1249,9 @@ const resolveSeededQueryConfig = (config: AvatarQueryConfig): AvatarQueryConfig 
         ...(animalEarHeight == null ? {} : { earHeight: animalEarHeight }),
         ...(animalHeadWidth == null ? {} : { headWidth: animalHeadWidth }),
         ...(animalHeadHeight == null ? {} : { headHeight: animalHeadHeight }),
-        ...(animalHornSize == null ? {} : { hornSize: animalHornSize })
-      }, animalTemplate?.fixed.hornStyle)
+        ...(animalHornSize == null ? {} : { hornSize: animalHornSize }),
+        ...(animalDetailSize == null ? {} : { detailSize: animalDetailSize })
+      }, animalTemplate?.fixed.hornStyle, animalTemplate?.fixed.detailStyle)
     }
   }
   const dogEarWidthSeeded = config.seededFields.includes(AVATAR_SEED_FIELD.dogEarWidth)
@@ -1374,6 +1447,7 @@ const getInitialQueryConfig = (definition?: AvatarDefinition) => {
       ? null
       : getAvatarAnimalDimensions(animalSpecies, state.entityParts)
     const animalSeedFields = animalSpecies == null ? null : AVATAR_ANIMAL_SPECIES_SEED_FIELDS[animalSpecies]
+    const animalEarSeedFields = animalSpecies == null ? null : getAvatarAnimalEarSeedFields(animalSpecies)
     return {
       ...config,
       avatarOutlineStyle: state.avatarOutlineStyle,
@@ -1384,10 +1458,11 @@ const getInitialQueryConfig = (definition?: AvatarDefinition) => {
       cameraBackground: state.cameraBackground,
       cameraFrame: state.cameraFrame,
       animalBreedTemplateId: animalSpecies == null ? null : state.generation?.profileId ?? null,
-      animalEarHeight: animalSeedFields != null && definitionSeedFields.includes(animalSeedFields.earHeight)
+      animalDetailSize: concreteAnimalScale?.detailSize ?? null,
+      animalEarHeight: animalEarSeedFields != null && definitionSeedFields.includes(animalEarSeedFields.earHeight)
         ? concreteAnimalScale?.earHeight ?? null
         : null,
-      animalEarWidth: animalSeedFields != null && definitionSeedFields.includes(animalSeedFields.earWidth)
+      animalEarWidth: animalEarSeedFields != null && definitionSeedFields.includes(animalEarSeedFields.earWidth)
         ? concreteAnimalScale?.earWidth ?? null
         : null,
       animalHeadHeight: animalSeedFields != null && definitionSeedFields.includes(animalSeedFields.headHeight)
@@ -1496,6 +1571,7 @@ const getInitialQueryConfig = (definition?: AvatarDefinition) => {
     cameraFrame: scene.cameraFrame,
     cameraMode: scene.cameraMode,
     animalBreedTemplateId: null,
+    animalDetailSize: null,
     animalEarHeight: null,
     animalEarWidth: null,
     animalHeadHeight: null,
@@ -1618,6 +1694,7 @@ function App({
   const [animalBreedTemplateId, setAnimalBreedTemplateId] = useState<string | null>(
     initialConfig.animalBreedTemplateId
   )
+  const [animalDetailSize, setAnimalDetailSize] = useState<number | null>(initialConfig.animalDetailSize)
   const [animalEarWidth, setAnimalEarWidth] = useState<number | null>(initialConfig.animalEarWidth)
   const [animalEarHeight, setAnimalEarHeight] = useState<number | null>(initialConfig.animalEarHeight)
   const [animalHeadWidth, setAnimalHeadWidth] = useState<number | null>(initialConfig.animalHeadWidth)
@@ -1659,6 +1736,17 @@ function App({
   const [seed, setSeed] = useState(initialConfig.seed)
   const [seededFields, setSeededFields] = useState<readonly string[]>(initialConfig.seededFields)
   const appliedPaletteSeedRef = useRef(initialConfig.seed)
+  const [initiallyManualSeedFields] = useState(() => {
+    if (typeof window === 'undefined') return new Set<AvatarSeedField>()
+    const sharedParams = new URLSearchParams(window.location.search)
+    return new Set(AVATAR_SEED_FIELDS.filter(field => (
+      field.startsWith('scene.entity.') &&
+      !initialConfig.seededFields.includes(field) &&
+      getAvatarSeedFieldEntityPreset(field) === initialConfig.entityPreset &&
+      sharedParams.has(field.slice('scene.entity.'.length))
+    )))
+  })
+  const manuallyFixedSeedFieldsRef = useRef(initiallyManualSeedFields)
   const paletteManuallyFixedRef = useRef(
     !initialConfig.seededFields.includes(AVATAR_SEED_FIELD.palette) && (
       definition != null || typeof window !== 'undefined' && new URLSearchParams(window.location.search).has('palette')
@@ -1773,6 +1861,7 @@ function App({
   const resolvedAnimalHeadWidth = animalHeadWidth ?? concreteAnimalDimensions?.headWidth ?? 100
   const resolvedAnimalHeadHeight = animalHeadHeight ?? concreteAnimalDimensions?.headHeight ?? 100
   const resolvedAnimalHornSize = animalHornSize ?? concreteAnimalDimensions?.hornSize ?? 100
+  const resolvedAnimalDetailSize = animalDetailSize ?? concreteAnimalDimensions?.detailSize ?? 100
   const generatedCoatDecals = useMemo(() => coatPattern.enabled
     ? resolveAvatarCoatPatternDecals({
       entityParts,
@@ -2170,12 +2259,19 @@ function App({
       if (entityPreset === 'bear' && bearHeadWidth != null) params.set('bearHeadWidth', String(bearHeadWidth))
       if (entityPreset === 'bear' && bearHeadHeight != null) params.set('bearHeadHeight', String(bearHeadHeight))
       if (isAvatarAnimalSpeciesId(entityPreset)) {
-        if (animalEarWidth != null) params.set(`${entityPreset}EarWidth`, String(animalEarWidth))
-        if (animalEarHeight != null) params.set(`${entityPreset}EarHeight`, String(animalEarHeight))
-        if (animalHeadWidth != null) params.set(`${entityPreset}HeadWidth`, String(animalHeadWidth))
-        if (animalHeadHeight != null) params.set(`${entityPreset}HeadHeight`, String(animalHeadHeight))
-        if (animalHornSize != null && entityPreset === 'deer') params.set('deerAntlerSize', String(animalHornSize))
-        if (animalHornSize != null && entityPreset === 'sheep') params.set('sheepHornSize', String(animalHornSize))
+        const speciesKey = getAvatarAnimalSpeciesKey(entityPreset)
+        if (animalEarWidth != null) params.set(`${speciesKey}EarWidth`, String(animalEarWidth))
+        if (animalEarHeight != null) params.set(`${speciesKey}EarHeight`, String(animalEarHeight))
+        if (animalHeadWidth != null) params.set(`${speciesKey}HeadWidth`, String(animalHeadWidth))
+        if (animalHeadHeight != null) params.set(`${speciesKey}HeadHeight`, String(animalHeadHeight))
+        const hornField = getAvatarAnimalHornSeedField(entityPreset)
+        if (animalHornSize != null && hornField != null) {
+          params.set(hornField.slice('scene.entity.'.length), String(animalHornSize))
+        }
+        const detailField = getAvatarAnimalDetailSeedField(entityPreset)
+        if (animalDetailSize != null && detailField != null) {
+          params.set(detailField.slice('scene.entity.'.length), String(animalDetailSize))
+        }
       }
     }
     if (surfaceDecals.length > 0) params.set('decals', serializeAvatarSurfaceDecals(surfaceDecals))
@@ -2224,6 +2320,7 @@ function App({
     cameraBackground,
     cameraFrame,
     animalBreedTemplateId,
+    animalDetailSize,
     animalEarHeight,
     animalEarWidth,
     animalHeadHeight,
@@ -2328,6 +2425,7 @@ function App({
       setEntityParts(config.entityParts)
       setEntityPreset(config.entityPreset)
       setAnimalBreedTemplateId(config.animalBreedTemplateId)
+      setAnimalDetailSize(config.animalDetailSize)
       setAnimalEarHeight(config.animalEarHeight)
       setAnimalEarWidth(config.animalEarWidth)
       setAnimalHeadHeight(config.animalHeadHeight)
@@ -2715,6 +2813,7 @@ function App({
     setSelectedPaletteId(resolved.paletteId)
     paletteManuallyFixedRef.current = false
     appliedPaletteSeedRef.current = seed
+    for (const field of template.followByDefault) manuallyFixedSeedFieldsRef.current.delete(field)
     setSeededFields(current => [
       ...getApplicableAvatarSeedFields('cat', false).filter(field => (
         template.followByDefault.includes(field) ||
@@ -2777,6 +2876,7 @@ function App({
     setSelectedPaletteId(resolved.paletteId)
     paletteManuallyFixedRef.current = false
     appliedPaletteSeedRef.current = seed
+    for (const field of template.followByDefault) manuallyFixedSeedFieldsRef.current.delete(field)
     setSeededFields(current => [
       ...getApplicableAvatarSeedFields('dog', false).filter(field => (
         template.followByDefault.includes(field) ||
@@ -2839,6 +2939,7 @@ function App({
     setSelectedPaletteId(resolved.paletteId)
     paletteManuallyFixedRef.current = false
     appliedPaletteSeedRef.current = seed
+    for (const field of template.followByDefault) manuallyFixedSeedFieldsRef.current.delete(field)
     setSeededFields(current => [
       ...getApplicableAvatarSeedFields('rabbit', false).filter(field => (
         template.followByDefault.includes(field) || (
@@ -2903,6 +3004,7 @@ function App({
     setSelectedPaletteId(resolved.paletteId)
     paletteManuallyFixedRef.current = false
     appliedPaletteSeedRef.current = seed
+    for (const field of template.followByDefault) manuallyFixedSeedFieldsRef.current.delete(field)
     setSeededFields(current => [
       ...getApplicableAvatarSeedFields('bear', false).filter(field => (
         template.followByDefault.includes(field) || (
@@ -2949,8 +3051,8 @@ function App({
     setEntityPreset(species)
     setEntityParts(resolved.entityParts)
     if (resolved.surfaceDecals != null) setSurfaceDecals(resolved.surfaceDecals)
-    setAnimalEarWidth(resolved.earWidth)
-    setAnimalEarHeight(resolved.earHeight)
+    setAnimalEarWidth(resolved.earWidth ?? null)
+    setAnimalEarHeight(resolved.earHeight ?? null)
     setAnimalHeadWidth(resolved.headWidth)
     setAnimalHeadHeight(resolved.headHeight)
     setAnimalHornSize(resolved.hornSize ?? null)
@@ -2974,6 +3076,7 @@ function App({
     setSelectedPaletteId(resolved.paletteId)
     paletteManuallyFixedRef.current = false
     appliedPaletteSeedRef.current = seed
+    for (const field of template.followByDefault) manuallyFixedSeedFieldsRef.current.delete(field)
     const controlledFields = getAvatarAnimalBreedControlledFields(species)
     setSeededFields(current => [
       ...getApplicableAvatarSeedFields(species, false).filter(field => (
@@ -2993,6 +3096,7 @@ function App({
   }
 
   const markSeedFieldsManual = (...fields: readonly AvatarSeedField[]) => {
+    for (const field of fields) manuallyFixedSeedFieldsRef.current.add(field)
     setSeededFields(current => current.filter(field => !fields.includes(field as AvatarSeedField)))
   }
 
@@ -3077,11 +3181,12 @@ function App({
       : entityParts
     const animalSpecies = isAvatarAnimalSpeciesId(resolvedEntityPreset) ? resolvedEntityPreset : null
     const animalFields = animalSpecies == null ? null : AVATAR_ANIMAL_SPECIES_SEED_FIELDS[animalSpecies]
-    const nextAnimalEarWidth = animalFields != null && fields.includes(animalFields.earWidth)
-      ? resolveSeededAvatarAnimalScale(nextSeed, animalFields.earWidth, seedDomain)
+    const animalEarFields = animalSpecies == null ? null : getAvatarAnimalEarSeedFields(animalSpecies)
+    const nextAnimalEarWidth = animalEarFields != null && fields.includes(animalEarFields.earWidth)
+      ? resolveSeededAvatarAnimalScale(nextSeed, animalEarFields.earWidth, seedDomain)
       : animalEarWidth
-    const nextAnimalEarHeight = animalFields != null && fields.includes(animalFields.earHeight)
-      ? resolveSeededAvatarAnimalScale(nextSeed, animalFields.earHeight, seedDomain)
+    const nextAnimalEarHeight = animalEarFields != null && fields.includes(animalEarFields.earHeight)
+      ? resolveSeededAvatarAnimalScale(nextSeed, animalEarFields.earHeight, seedDomain)
       : animalEarHeight
     const nextAnimalHeadWidth = animalFields != null && fields.includes(animalFields.headWidth)
       ? resolveSeededAvatarAnimalScale(nextSeed, animalFields.headWidth, seedDomain)
@@ -3089,14 +3194,22 @@ function App({
     const nextAnimalHeadHeight = animalFields != null && fields.includes(animalFields.headHeight)
       ? resolveSeededAvatarAnimalScale(nextSeed, animalFields.headHeight, seedDomain)
       : animalHeadHeight
-    const hornField = animalSpecies === 'deer'
-      ? AVATAR_SEED_FIELD.deerAntlerSize
-      : animalSpecies === 'sheep'
-        ? AVATAR_SEED_FIELD.sheepHornSize
-        : null
+    const hornField = animalSpecies == null ? null : getAvatarAnimalHornSeedField(animalSpecies)
+    const detailField = animalSpecies == null ? null : getAvatarAnimalDetailSeedField(animalSpecies)
+    const animalTemplate = animalSpecies == null
+      ? null
+      : getAvatarAnimalBreedTemplate(animalSpecies, animalBreedTemplateId)
     const nextAnimalHornSize = hornField != null && fields.includes(hornField)
-      ? resolveSeededAvatarAnimalScale(nextSeed, hornField, seedDomain)
+      ? resolveAvatarAnimalAccessorySize(
+        animalTemplate,
+        nextAnimalHeadWidth ?? animalTemplate?.fixed.headWidth,
+        nextAnimalHeadHeight ?? animalTemplate?.fixed.headHeight,
+        resolveSeededAvatarAnimalScale(nextSeed, hornField, seedDomain)
+      ) ?? null
       : animalHornSize
+    const nextAnimalDetailSize = detailField != null && fields.includes(detailField)
+      ? resolveSeededAvatarAnimalScale(nextSeed, detailField, seedDomain)
+      : animalDetailSize
     const nextCatEarWidth = fields.includes(AVATAR_SEED_FIELD.catEarWidth)
       ? resolveSeededAvatarCatEarScale(nextSeed, 'width', seedDomain)
       : catEarWidth
@@ -3168,9 +3281,11 @@ function App({
                   earWidth: nextAnimalEarWidth ?? undefined,
                   headHeight: nextAnimalHeadHeight ?? undefined,
                   headWidth: nextAnimalHeadWidth ?? undefined,
-                  hornSize: nextAnimalHornSize ?? undefined
+                  hornSize: nextAnimalHornSize ?? undefined,
+                  detailSize: nextAnimalDetailSize ?? undefined
                 },
-                getAvatarAnimalBreedTemplate(animalSpecies, animalBreedTemplateId)?.fixed.hornStyle
+                animalTemplate?.fixed.hornStyle,
+                animalTemplate?.fixed.detailStyle
               )
               : resolvedEntityParts
     const coatPatternFields = orderedFields.filter(field => field.startsWith('scene.appearance.coatPattern.'))
@@ -3228,10 +3343,10 @@ function App({
       }
       if (animalSpecies != null && animalFields != null) {
         let nextDimensions: Partial<ReturnType<typeof getAvatarAnimalDimensions>> | null = null
-        if (field === animalFields.earWidth) {
+        if (field === animalEarFields?.earWidth) {
           setAnimalEarWidth(nextAnimalEarWidth)
           nextDimensions = { earWidth: nextAnimalEarWidth ?? undefined }
-        } else if (field === animalFields.earHeight) {
+        } else if (field === animalEarFields?.earHeight) {
           setAnimalEarHeight(nextAnimalEarHeight)
           nextDimensions = { earHeight: nextAnimalEarHeight ?? undefined }
         } else if (field === animalFields.headWidth) {
@@ -3243,6 +3358,9 @@ function App({
         } else if (field === hornField) {
           setAnimalHornSize(nextAnimalHornSize)
           nextDimensions = { hornSize: nextAnimalHornSize ?? undefined }
+        } else if (field === detailField) {
+          setAnimalDetailSize(nextAnimalDetailSize)
+          nextDimensions = { detailSize: nextAnimalDetailSize ?? undefined }
         }
         if (nextDimensions != null) {
           const dimensions = nextDimensions
@@ -3250,7 +3368,8 @@ function App({
             currentParts,
             animalSpecies,
             dimensions,
-            getAvatarAnimalBreedTemplate(animalSpecies, animalBreedTemplateId)?.fixed.hornStyle
+            animalTemplate?.fixed.hornStyle,
+            animalTemplate?.fixed.detailStyle
           ))
           continue
         }
@@ -3440,14 +3559,18 @@ function App({
     const randomEntityPreset = entityPreset === 'custom'
       ? resolveSeededAvatarEntityPreset(nextSeed)
       : entityPreset
-    const activeFields = seededFields.length === 0
+    const initialRandomFields = seededFields.length === 0
       ? breedTemplate == null
         ? getApplicableAvatarSeedFields(randomEntityPreset, entityPreset === 'custom')
         : paletteManuallyFixedRef.current
           ? breedTemplate.followByDefault.filter(field => field !== AVATAR_SEED_FIELD.palette)
           : breedTemplate.followByDefault
       : seededFields
-    const randomFields = breedTemplate != null && !activeFields.includes(AVATAR_SEED_FIELD.viewPose)
+    const activeFields = initialRandomFields.filter(field => !manuallyFixedSeedFieldsRef.current.has(field as AvatarSeedField))
+    const randomFields = breedTemplate != null &&
+      entityPreset !== 'lion' &&
+      !activeFields.includes(AVATAR_SEED_FIELD.viewPose) &&
+      !manuallyFixedSeedFieldsRef.current.has(AVATAR_SEED_FIELD.viewPose)
       ? [...activeFields, AVATAR_SEED_FIELD.viewPose]
       : activeFields
     setGenerationEnabled(true)
@@ -3469,6 +3592,7 @@ function App({
       markSeedFieldsManual(field)
       return
     }
+    manuallyFixedSeedFieldsRef.current.delete(field)
     if (field === AVATAR_SEED_FIELD.palette) paletteManuallyFixedRef.current = false
     const nextSeed = normalizeEditorAvatarSeed(seed)
     setSeed(nextSeed)
@@ -3510,7 +3634,12 @@ function App({
           AVATAR_SEED_FIELD.bearHeadHeight,
           ...Object.values(AVATAR_ANIMAL_SPECIES_SEED_FIELDS).flatMap(candidate => Object.values(candidate)),
           AVATAR_SEED_FIELD.deerAntlerSize,
-          AVATAR_SEED_FIELD.sheepHornSize
+          AVATAR_SEED_FIELD.sheepHornSize,
+          AVATAR_SEED_FIELD.cowHornSize,
+          AVATAR_SEED_FIELD.squirrelTailSize,
+          AVATAR_SEED_FIELD.lionManeSize,
+          AVATAR_SEED_FIELD.hedgehogSpineSize,
+          AVATAR_SEED_FIELD.beaverToothSize
         ]
           .filter(candidate => seededFields.includes(candidate))
       ]
@@ -3645,6 +3774,7 @@ function App({
     setEntityParts(config.entityParts)
     setEntityPreset(config.entityPreset)
     setAnimalBreedTemplateId(config.animalBreedTemplateId)
+    setAnimalDetailSize(config.animalDetailSize)
     setAnimalEarHeight(config.animalEarHeight)
     setAnimalEarWidth(config.animalEarWidth)
     setAnimalHeadHeight(config.animalHeadHeight)
@@ -4557,6 +4687,11 @@ function App({
               ...Object.values(AVATAR_ANIMAL_SPECIES_SEED_FIELDS).flatMap(fields => Object.values(fields)),
               AVATAR_SEED_FIELD.deerAntlerSize,
               AVATAR_SEED_FIELD.sheepHornSize,
+              AVATAR_SEED_FIELD.cowHornSize,
+              AVATAR_SEED_FIELD.squirrelTailSize,
+              AVATAR_SEED_FIELD.lionManeSize,
+              AVATAR_SEED_FIELD.hedgehogSpineSize,
+              AVATAR_SEED_FIELD.beaverToothSize,
               ...AVATAR_COAT_PATTERN_SEED_FIELDS
             )
             setBodyShape(shape)
@@ -4710,7 +4845,9 @@ function App({
           onAnimalBreedTemplateChange={handleAnimalBreedTemplateChange}
           onAnimalEarHeightChange={(value) => {
             if (!isAvatarAnimalSpeciesId(entityPreset)) return
-            markSeedFieldsManual(AVATAR_ANIMAL_SPECIES_SEED_FIELDS[entityPreset].earHeight)
+            const earFields = getAvatarAnimalEarSeedFields(entityPreset)
+            if (earFields == null) return
+            markSeedFieldsManual(earFields.earHeight)
             setAnimalEarHeight(value)
             setEntityParts(parts => applyAvatarAnimalDimensions(parts, entityPreset, { earHeight: value }))
             setSelectedSavedPresetId(null)
@@ -4718,7 +4855,9 @@ function App({
           }}
           onAnimalEarWidthChange={(value) => {
             if (!isAvatarAnimalSpeciesId(entityPreset)) return
-            markSeedFieldsManual(AVATAR_ANIMAL_SPECIES_SEED_FIELDS[entityPreset].earWidth)
+            const earFields = getAvatarAnimalEarSeedFields(entityPreset)
+            if (earFields == null) return
+            markSeedFieldsManual(earFields.earWidth)
             setAnimalEarWidth(value)
             setEntityParts(parts => applyAvatarAnimalDimensions(parts, entityPreset, { earWidth: value }))
             setSelectedSavedPresetId(null)
@@ -4741,10 +4880,10 @@ function App({
             setCopyState('idle')
           }}
           onAnimalHornSizeChange={(value) => {
-            if (entityPreset !== 'deer' && entityPreset !== 'sheep') return
-            markSeedFieldsManual(
-              entityPreset === 'deer' ? AVATAR_SEED_FIELD.deerAntlerSize : AVATAR_SEED_FIELD.sheepHornSize
-            )
+            if (!isAvatarAnimalSpeciesId(entityPreset)) return
+            const field = getAvatarAnimalHornSeedField(entityPreset)
+            if (field == null) return
+            markSeedFieldsManual(field)
             setAnimalHornSize(value)
             setEntityParts(parts => applyAvatarAnimalDimensions(
               parts,
@@ -4922,12 +5061,13 @@ function App({
             }
             if (isAvatarAnimalSpeciesId(entityPreset)) {
               const fields = AVATAR_ANIMAL_SPECIES_SEED_FIELDS[entityPreset]
-              if (/ear-(left|right)/u.test(id) && nextPart.scaleX != null) {
-                markSeedFieldsManual(fields.earWidth)
+              const earFields = getAvatarAnimalEarSeedFields(entityPreset)
+              if (earFields != null && /ear-(left|right)/u.test(id) && nextPart.scaleX != null) {
+                markSeedFieldsManual(earFields.earWidth)
                 setAnimalEarWidth(null)
               }
-              if (/ear-(left|right)/u.test(id) && nextPart.scaleY != null) {
-                markSeedFieldsManual(fields.earHeight)
+              if (earFields != null && /ear-(left|right)/u.test(id) && nextPart.scaleY != null) {
+                markSeedFieldsManual(earFields.earHeight)
                 setAnimalEarHeight(null)
               }
               if (id === 'primary' && nextPart.scaleX != null) {
@@ -4938,13 +5078,14 @@ function App({
                 markSeedFieldsManual(fields.headHeight)
                 setAnimalHeadHeight(null)
               }
-              if (/^(antler|horn)-(left|right)/u.test(id) && (
+              if (/^(?:(?:antler|horn)-(?:left|right)|tail-|mane-|spine-)/u.test(id) && (
                 nextPart.scaleX != null || nextPart.scaleY != null
               )) {
-                markSeedFieldsManual(
-                  entityPreset === 'deer' ? AVATAR_SEED_FIELD.deerAntlerSize : AVATAR_SEED_FIELD.sheepHornSize
-                )
-                setAnimalHornSize(null)
+                const field = getAvatarAnimalHornSeedField(entityPreset)
+                if (field != null) {
+                  markSeedFieldsManual(field)
+                  setAnimalHornSize(null)
+                }
               }
             }
             if (

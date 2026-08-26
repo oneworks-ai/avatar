@@ -39,6 +39,7 @@ import type {
   ProjectedFace
 } from './avatarGeometry'
 import type { AvatarSurfaceDecal } from './avatarSurfaceDecals'
+import { buildAvatarFragmentRenderGraph, resolveFrontmostPartAtPoint } from './avatarFragmentRenderGraph'
 
 export { AVATAR_BODY_SHAPES }
 export type { AvatarBodyShape }
@@ -125,11 +126,14 @@ interface ProjectedSurfaceDecal extends AvatarSurfaceDecal {
 }
 
 interface DragOrigin extends AvatarPose {
+  readonly moved: boolean
   readonly mode: AvatarInteractionMode
   readonly pointerId: number
   readonly positionX: number
   readonly positionY: number
   readonly scale: number
+  readonly selectable: boolean
+  readonly selectionPartId: string | null
   readonly x: number
   readonly y: number
 }
@@ -140,9 +144,15 @@ const KEY_ROTATION = Math.PI / 12
 const KEY_POSITION_MOVE = 8
 const WHEEL_SCALE_SPEED = 0.0015
 const FACE_STYLE_ANIMATION_MS = 180
-const ENTITY_OCCLUSION_DEPTH_TOLERANCE = 24
+const ENTITY_SELECTION_DRAG_THRESHOLD = 4
 
 const clamp = (value: number, min: number, max: number) => Math.min(Math.max(value, min), max)
+
+const percentile = (values: readonly number[], ratio: number) => {
+  if (values.length === 0) return 0
+  const sorted = [...values].sort((left, right) => left - right)
+  return sorted[Math.min(sorted.length - 1, Math.max(0, Math.ceil(sorted.length * ratio) - 1))]!
+}
 const interpolate = (from: number, to: number, progress: number) => from + (to - from) * progress
 
 const ENTITY_PREVIEW_FACE_STYLE: AvatarFaceStyle = {
@@ -156,12 +166,14 @@ function EntityPrimitive({
   clipId,
   geometry,
   part,
+  showBase = true,
   showLight,
   lightDistance
 }: {
   readonly clipId: string
   readonly geometry: ReturnType<typeof buildAvatarBodyGeometry>
   readonly part: AvatarEntityPart
+  readonly showBase?: boolean
   readonly showLight: boolean
   readonly lightDistance: number
 }) {
@@ -173,7 +185,7 @@ function EntityPrimitive({
         </clipPath>
       </defs>
       <g clipPath={`url(#${clipId})`}>
-        <path d={geometry.outlinePath} fill={part.baseColor} />
+        {showBase ? <path d={geometry.outlinePath} fill={part.baseColor} /> : null}
         {showLight
           ? geometry.cells.map(cell => (
             <polygon
@@ -189,8 +201,12 @@ function EntityPrimitive({
   )
 }
 
-const getEntityPartGeometryOptions = (part: AvatarEntityPart): AvatarBodyGeometryOptions => ({
+const getEntityPartGeometryOptions = (
+  part: AvatarEntityPart,
+  compositorDensity: number = 2
+): AvatarBodyGeometryOptions => ({
   bottomTaper: part.bottomTaper,
+  compositorDensity,
   cutAngle: part.cutAngle,
   hollow: part.hollow,
   occlusionAmount: part.occlusionAmount,
@@ -217,17 +233,43 @@ const buildEntityPartGeometry = (
   part: AvatarEntityPart,
   pose: AvatarPose,
   lightDirection: AvatarLightDirection,
-  gridDensity: number
-) => buildAvatarBodyGeometry(part.shape, pose, lightDirection, gridDensity, getEntityPartGeometryOptions(part))
+  gridDensity: number,
+  compositorDensity: number
+) => buildAvatarBodyGeometry(
+  part.shape,
+  pose,
+  lightDirection,
+  gridDensity,
+  getEntityPartGeometryOptions(part, compositorDensity)
+)
+
+const entityPartGeometryCache = new WeakMap<readonly AvatarEntityPart[], Map<string, Record<string, BodyGeometry>>>()
 
 const buildEntityPartGeometries = (
   parts: readonly AvatarEntityPart[],
   pose: AvatarPose,
   lightDirection: AvatarLightDirection,
-  gridDensity: number
+  gridDensity: number,
+  compositorDensity: number
 ): Record<string, BodyGeometry> => {
+  const cacheKey = [
+    pose.pitch.toFixed(5),
+    pose.yaw.toFixed(5),
+    lightDirection.azimuth.toFixed(3),
+    lightDirection.elevation.toFixed(3),
+    gridDensity,
+    compositorDensity.toFixed(3)
+  ].join(':')
+  const partCache = entityPartGeometryCache.get(parts) ?? new Map<string, Record<string, BodyGeometry>>()
+  entityPartGeometryCache.set(parts, partCache)
+  const cachedGeometries = partCache.get(cacheKey)
+  if (cachedGeometries != null) {
+    partCache.delete(cacheKey)
+    partCache.set(cacheKey, cachedGeometries)
+    return cachedGeometries
+  }
   const cache = new Map<string, BodyGeometry>()
-  return Object.fromEntries(parts.map(part => {
+  const geometries = Object.fromEntries(parts.map(part => {
     const geometryKey = JSON.stringify([
       part.shape,
       part.rotationX ?? 0,
@@ -239,28 +281,36 @@ const buildEntityPartGeometries = (
       part.occlusionAmount ?? 0,
       part.occlusionPole ?? null,
       part.bottomTaper ?? 0,
+      part.topScale ?? null,
+      compositorDensity,
       part.scaleX,
       part.scaleY,
       resolveAvatarEntityPartScaleZ(part)
     ])
     let geometry = cache.get(geometryKey)
     if (geometry == null) {
-      geometry = buildEntityPartGeometry(part, pose, lightDirection, gridDensity)
+      geometry = buildEntityPartGeometry(part, pose, lightDirection, gridDensity, compositorDensity)
       cache.set(geometryKey, geometry)
     }
     return [part.id, geometry]
   }))
+  partCache.set(cacheKey, geometries)
+  if (partCache.size > 8) partCache.delete(partCache.keys().next().value!)
+  return geometries
 }
 
 function EntityPresetBody({
   avatarOutlineStyle,
   face,
   faceStyle,
+  fragmentGeometries,
   geometries,
   idPrefix,
   interactive,
+  interactiveQuality = false,
+  isDragging = false,
   lightDistance,
-  onPartSelect,
+  partHitResolverRef,
   parts,
   pose,
   preset,
@@ -276,11 +326,14 @@ function EntityPresetBody({
   readonly avatarOutlineStyle?: AvatarOutlineStyle
   readonly face: ProjectedFace
   readonly faceStyle: AvatarFaceStyle
+  readonly fragmentGeometries?: Readonly<Record<string, BodyGeometry>>
   readonly geometries: Readonly<Record<string, BodyGeometry>>
   readonly idPrefix: string
   readonly interactive: boolean
+  readonly interactiveQuality?: boolean
+  readonly isDragging?: boolean
   readonly lightDistance: number
-  readonly onPartSelect?: (id: string) => void
+  readonly partHitResolverRef?: { current: ((x: number, y: number) => string | null) | null }
   readonly parts: readonly AvatarEntityPart[]
   readonly pose: AvatarPose
   readonly preset: AvatarEntityPreset
@@ -297,37 +350,83 @@ function EntityPresetBody({
   const sinYaw = Math.sin(pose.yaw)
   const cosPitch = Math.cos(pose.pitch)
   const sinPitch = Math.sin(pose.pitch)
-  const projectedParts = parts.map((part, index) => {
+  const projectedPartSurfaces = useMemo(() => parts.map((part, index) => {
     const yawX = part.x * cosYaw + part.z * sinYaw
     const yawZ = -part.x * sinYaw + part.z * cosYaw
     return {
       ...part,
-      depth: -part.y * sinPitch + yawZ * cosPitch,
+      anchorDepth: -part.y * sinPitch + yawZ * cosPitch,
+      geometry: (fragmentGeometries ?? geometries)[part.id],
       index,
       projectedX: yawX,
-      projectedY: part.y * cosPitch + yawZ * sinPitch
+      projectedY: part.y * cosPitch + yawZ * sinPitch,
+      occludedByFaceHint: part.occludedByFace
     }
-  }).sort((left, right) => left.depth - right.depth)
+  }), [cosPitch, cosYaw, fragmentGeometries, geometries, parts, sinPitch, sinYaw])
+  const fragmentGraphBuildCountRef = useRef(0)
+  const fragmentDragBuildSamplesRef = useRef<number[]>([])
+  const fragmentReleaseBuildMsRef = useRef(0)
+  const fragmentSettleBuildMsRef = useRef(0)
+  const fragmentPreviousBuildWasDraggingRef = useRef(false)
+  const fragmentPreviousInteractiveQualityRef = useRef(false)
+  const fragmentGraphBuild = useMemo(() => {
+    const startedAt = performance.now()
+    const graph = buildAvatarFragmentRenderGraph(projectedPartSurfaces, {
+      quality: interactiveQuality ? 'interactive' : 'full'
+    })
+    const duration = performance.now() - startedAt
+    fragmentGraphBuildCountRef.current += 1
+    if (isDragging) {
+      if (!fragmentPreviousBuildWasDraggingRef.current) fragmentDragBuildSamplesRef.current = []
+      fragmentDragBuildSamplesRef.current.push(duration)
+      if (fragmentDragBuildSamplesRef.current.length > 512) fragmentDragBuildSamplesRef.current.shift()
+    } else if (fragmentPreviousBuildWasDraggingRef.current) {
+      fragmentReleaseBuildMsRef.current = duration
+    }
+    if (!interactiveQuality && fragmentPreviousInteractiveQualityRef.current) {
+      fragmentSettleBuildMsRef.current = duration
+    }
+    fragmentPreviousBuildWasDraggingRef.current = isDragging
+    fragmentPreviousInteractiveQualityRef.current = interactiveQuality
+    return { duration, graph }
+  }, [interactiveQuality, isDragging, projectedPartSurfaces])
+  const fragmentGraph = fragmentGraphBuild.graph
+  const fragmentDragBuildSamples = fragmentDragBuildSamplesRef.current
+  const fragmentDragBuildMean = fragmentDragBuildSamples.length === 0
+    ? 0
+    : fragmentDragBuildSamples.reduce((total, sample) => total + sample, 0) / fragmentDragBuildSamples.length
+  if (partHitResolverRef != null) {
+    partHitResolverRef.current = (x, y) => resolveFrontmostPartAtPoint(fragmentGraph, x, y)?.partId ?? null
+  }
+  const projectedPartById = new Map(projectedPartSurfaces.map(part => [part.id, part]))
+  const projectedParts = fragmentGraph.nodes.map(node => ({
+    ...projectedPartById.get(node.partId)!,
+    depth: node.depth,
+    fragmentNode: node
+  }))
   const outlineWidth = avatarOutlineStyle?.width ?? 0
   const outlineEnabled = showOutline && avatarOutlineStyle != null && outlineWidth > 0
   const facePart = projectedParts.find(part => part.face) ?? projectedParts.at(-1)
   const selectedPart = projectedParts.find(part => part.id === selectedPartId)
-  const faceGeometry = facePart == null ? null : geometries[facePart.id]
+  // Keep the authored selection while it rotates behind the head, but only draw
+  // interaction overlays when the same fragment ownership graph used for paint
+  // and hit-testing still assigns a visible region to the selected anatomy.
+  const selectedPartIsVisible = selectedPart != null && selectedPart.fragmentNode.interactionVisibleArea > 0
   const partTransform = (part: (typeof projectedParts)[number]) => (
     `translate(${part.projectedX} ${part.projectedY})`
   )
-  const occlusionMaskId = (part: (typeof projectedParts)[number]) => `${idPrefix}-entity-occlusion-${part.index}`
-  const occlusionClipId = (part: (typeof projectedParts)[number]) => `${idPrefix}-entity-occlusion-clip-${part.index}`
-  const isOccludedByFace = (part: (typeof projectedParts)[number]) => (
-    part.occludedByFace === true &&
-    facePart != null &&
-    part.id !== facePart.id &&
-    part.depth <= facePart.depth + ENTITY_OCCLUSION_DEPTH_TOLERANCE
+  const visibilityMaskId = (part: (typeof projectedParts)[number]) => (
+    `${idPrefix}-entity-visibility-${part.index}`
   )
-  const hitTestParts = [...projectedParts].sort((left, right) => {
-    const areaDifference = right.scaleX * right.scaleY - left.scaleX * left.scaleY
-    return areaDifference === 0 ? left.depth - right.depth : areaDifference
-  })
+  const visibilityMask = (part: (typeof projectedParts)[number]) => (
+    part.fragmentNode.occlusionPath == null ? undefined : `url(#${visibilityMaskId(part)})`
+  )
+  const interactionClipId = (part: (typeof projectedParts)[number]) => (
+    `${idPrefix}-entity-interaction-${part.index}`
+  )
+  const sharedPaintClipId = (part: (typeof projectedParts)[number]) => (
+    `${idPrefix}-entity-shared-paint-${part.index}`
+  )
   const shadowDirection = shadowStyle.direction * Math.PI / 180
   const faceShadowTransform = (depth: number) => {
     const distance = shadowStyle.distance * depth
@@ -335,9 +434,95 @@ function EntityPresetBody({
       (Math.sin(shadowDirection) * distance).toFixed(2)
     })`
   }
+  const renderFaceSurfaceLayer = (part: (typeof projectedParts)[number]) => {
+    if (!face.visible || facePart == null || part.id !== facePart.id) return null
+    return (
+      <g data-avatar-face-surface-layer={part.id}>
+        {showShadow
+          ? face.eyes.map(eye => (
+            <path
+              key={`shadow-${eye.id}`}
+              d={eye.path}
+              transform={faceShadowTransform(eye.depth)}
+              fill={shadowStyle.color ?? facePart.shadowColor}
+              filter={shadowStyle.softness > 0 ? `url(#${idPrefix}-entity-face-shadow)` : undefined}
+              opacity={shadowStyle.opacity / 100 * eye.depth ** 2}
+            />
+          ))
+          : null}
+        {face.eyes.map(eye => <path key={eye.id} data-avatar-face-feature={eye.id} d={eye.path} fill={facePart.foregroundColor} />)}
+        {face.eyeHighlights.map(highlight => (
+          <path
+            key={highlight.id}
+            data-avatar-eye-highlight={highlight.id}
+            data-avatar-face-feature={highlight.id}
+            clipPath={`url(#${idPrefix}-entity-${highlight.id.replace('eye-highlight-', 'eye-')}-highlight-clip)`}
+            d={highlight.path}
+            fill={faceStyle.eyeHighlight.color}
+            fillOpacity={faceStyle.eyeHighlight.opacity / 100}
+          />
+        ))}
+        {!faceStyle.noseEnabled || face.nose == null
+          ? null
+          : (
+            <>
+              {showShadow
+                ? (
+                  <path
+                    d={face.nose.path}
+                    transform={faceShadowTransform(face.nose.depth)}
+                    fill={shadowStyle.color ?? facePart.shadowColor}
+                    filter={shadowStyle.softness > 0 ? `url(#${idPrefix}-entity-face-shadow)` : undefined}
+                    opacity={shadowStyle.opacity / 100 * face.nose.depth ** 2}
+                  />
+                )
+                : null}
+              <path data-avatar-face-feature='nose' d={face.nose.path} fill={facePart.foregroundColor} />
+            </>
+          )}
+        {!faceStyle.mouthEnabled || face.mouth == null
+          ? null
+          : (
+            <>
+              {showShadow
+                ? (
+                  <path
+                    d={face.mouth.path}
+                    transform={faceShadowTransform(face.mouth.depth)}
+                    fill={shadowStyle.color ?? facePart.shadowColor}
+                    filter={shadowStyle.softness > 0 ? `url(#${idPrefix}-entity-face-shadow)` : undefined}
+                    opacity={shadowStyle.opacity / 100 * face.mouth.depth ** 2}
+                  />
+                )
+                : null}
+              <path data-avatar-face-feature='mouth' d={face.mouth.path} fill={facePart.foregroundColor} />
+            </>
+          )}
+      </g>
+    )
+  }
 
   return (
-    <g data-avatar-entity-preset={preset}>
+    <g
+      data-avatar-entity-fragment-root='true'
+      data-avatar-entity-preset={preset}
+      data-avatar-fragment-build-count={fragmentGraphBuildCountRef.current}
+      data-avatar-fragment-build-ms={fragmentGraphBuild.duration.toFixed(3)}
+      data-avatar-fragment-drag-build-max-ms={Math.max(0, ...fragmentDragBuildSamples).toFixed(3)}
+      data-avatar-fragment-drag-build-mean-ms={fragmentDragBuildMean.toFixed(3)}
+      data-avatar-fragment-drag-build-p95-ms={percentile(fragmentDragBuildSamples, .95).toFixed(3)}
+      data-avatar-fragment-drag-build-samples={fragmentDragBuildSamples.length}
+      data-avatar-fragment-quality={interactiveQuality ? 'interactive' : 'full'}
+      data-avatar-fragment-revision={fragmentGraph.cacheKey}
+      data-avatar-fragment-release-build-ms={fragmentReleaseBuildMsRef.current.toFixed(3)}
+      data-avatar-fragment-settle-build-ms={fragmentSettleBuildMsRef.current.toFixed(3)}
+      data-avatar-fragment-intersections={fragmentGraph.metrics.intersectingPartCount}
+      data-avatar-fragment-path-characters={fragmentGraph.metrics.occlusionPathCharacterCount}
+      data-avatar-fragment-patches={fragmentGraph.metrics.occlusionPatchCount}
+      data-avatar-fragment-raster-error={fragmentGraph.metrics.rasterizationErrorRatio.toFixed(6)}
+      data-avatar-fragment-raster-measured={fragmentGraph.metrics.rasterizationMeasured}
+      data-avatar-fragment-segments={fragmentGraph.metrics.occlusionSegmentCount}
+    >
       <defs>
         <filter id={`${idPrefix}-entity-face-shadow`} x='-50%' y='-50%' width='200%' height='200%'>
           <feGaussianBlur stdDeviation={shadowStyle.softness} />
@@ -355,23 +540,10 @@ function EntityPresetBody({
             </filter>
           )
           : null}
-        {facePart == null || faceGeometry == null
-          ? null
-          : projectedParts.filter(isOccludedByFace).map(part =>
-            geometries[part.id].occlusionPath == null
-              ? null
-              : (
-                <clipPath key={`occlusion-clip-${part.id}`} id={occlusionClipId(part)}>
-                  <path d={geometries[part.id].occlusionPath} transform={partTransform(part)} />
-                </clipPath>
-              )
-          )}
-        {facePart == null || faceGeometry == null
-          ? null
-          : projectedParts.filter(isOccludedByFace).map(part => (
+        {projectedParts.filter(part => part.fragmentNode.occlusionPath != null).map(part => (
             <mask
-              key={`mask-${part.id}`}
-              id={occlusionMaskId(part)}
+              key={`visibility-mask-${part.id}`}
+              id={visibilityMaskId(part)}
               x={-VIEW_SIZE}
               y={-VIEW_SIZE}
               width={VIEW_SIZE * 3}
@@ -379,15 +551,45 @@ function EntityPresetBody({
               maskUnits='userSpaceOnUse'
             >
               <rect x={-VIEW_SIZE} y={-VIEW_SIZE} width={VIEW_SIZE * 3} height={VIEW_SIZE * 3} fill='white' />
-              {geometries[part.id].occlusionPath == null
-                ? <path d={faceGeometry.outlinePath} fill='black' transform={partTransform(facePart)} />
-                : (
-                  <g clipPath={`url(#${occlusionClipId(part)})`}>
-                    <path d={faceGeometry.outlinePath} fill='black' transform={partTransform(facePart)} />
-                  </g>
-                )}
+              <path
+                data-avatar-fragment-occlusion-overdraw={part.id}
+                d={part.fragmentNode.occlusionPath}
+                fill='black'
+                {...(fragmentGraph.compositionMode === 'shared-pair'
+                  ? {}
+                  : {
+                      stroke: 'white',
+                      strokeLinejoin: 'round' as const,
+                      strokeWidth: Math.min(2, Math.max(.8, part.fragmentNode.boundaryCellDiagonal * .45))
+                    })}
+              />
             </mask>
-          ))}
+        ))}
+        {projectedParts.filter(part => part.fragmentNode.sharedPaintPath != null).map(part => (
+          <clipPath
+            key={`shared-paint-clip-${fragmentGraph.cacheKey}-${part.id}`}
+            id={sharedPaintClipId(part)}
+            clipPathUnits='userSpaceOnUse'
+          >
+            <path
+              data-avatar-fragment-shared-paint={part.id}
+              d={part.fragmentNode.sharedPaintPath}
+            />
+          </clipPath>
+        ))}
+        {projectedParts.filter(part => part.fragmentNode.interactionVisiblePath != null).map(part => (
+          <clipPath
+            key={`interaction-clip-${fragmentGraph.cacheKey}-${part.id}`}
+            id={interactionClipId(part)}
+            clipPathUnits='userSpaceOnUse'
+          >
+            <path
+              d={part.fragmentNode.interactionVisiblePath}
+              clipRule='evenodd'
+              fillRule='evenodd'
+            />
+          </clipPath>
+        ))}
         {face.eyes.map(eye => (
           <clipPath key={`highlight-clip-${eye.id}`} id={`${idPrefix}-entity-${eye.id}-highlight-clip`}>
             <path d={eye.path} />
@@ -395,52 +597,79 @@ function EntityPresetBody({
         ))}
       </defs>
       <g filter={outlineEnabled ? `url(#${idPrefix}-entity-outline)` : undefined}>
+        {fragmentGraph.compositionMode === 'shared-pair'
+          ? null
+          : (
+            <g data-avatar-entity-undercoat pointerEvents='none'>
+              {projectedParts.map(part => (
+                <g key={`undercoat-${part.id}`} transform={partTransform(part)}>
+                  <path
+                    d={geometries[part.id].outlinePath}
+                    fill={part.baseColor}
+                  />
+                </g>
+              ))}
+            </g>
+          )}
         {projectedParts.map(part => (
           <g
             key={part.id}
             data-avatar-entity-part={part.id}
-            mask={isOccludedByFace(part) ? `url(#${occlusionMaskId(part)})` : undefined}
+            data-avatar-fragment-intersects={part.fragmentNode.intersects}
+            data-avatar-fragment-patches={part.fragmentNode.occlusionPatchCount}
+            data-avatar-fragment-interaction-area={String(part.fragmentNode.interactionVisibleArea)}
+            data-avatar-fragment-interaction-ratio={String(part.fragmentNode.interactionVisibleRatio)}
+            data-avatar-fragment-projected-area={String(part.fragmentNode.projectedAreaEstimate)}
+            data-avatar-fragment-visible-area={String(part.fragmentNode.visibleAreaEstimate)}
+            mask={part.fragmentNode.sharedPaintPath == null ? visibilityMask(part) : undefined}
             pointerEvents={interactive ? 'none' : undefined}
           >
-            <g transform={partTransform(part)}>
-              <EntityPrimitive
-                clipId={`${idPrefix}-entity-${preset}-${part.index}`}
-                geometry={geometries[part.id]}
-                part={part}
-                showLight={showLight && renderSurfaceCells && (part.face || part.scaleX * part.scaleY >= .075)}
-                lightDistance={lightDistance}
-              />
-              <g clipPath={`url(#${idPrefix}-entity-${preset}-${part.index})`}>
-                {surfaceDecals.filter(decal => decal.targetPartId === part.id).map(decal => (
-                  <path
-                    key={decal.id}
-                    data-avatar-surface-decal={decal.id}
-                    d={decal.path}
-                    fill={decal.color}
-                    fillOpacity={decal.opacity / 100}
-                    transform={decal.transform}
-                  />
-                ))}
+            <g clipPath={part.fragmentNode.sharedPaintPath == null
+              ? undefined
+              : `url(#${sharedPaintClipId(part)})`}
+            >
+              <g transform={partTransform(part)}>
+                <EntityPrimitive
+                  clipId={`${idPrefix}-entity-${preset}-${part.index}`}
+                  geometry={geometries[part.id]}
+                  part={part}
+                  showLight={showLight && renderSurfaceCells && (part.face || part.scaleX * part.scaleY >= .075)}
+                  lightDistance={lightDistance}
+                />
+                <g clipPath={`url(#${idPrefix}-entity-${preset}-${part.index})`}>
+                  {surfaceDecals.filter(decal => decal.targetPartId === part.id).map(decal => (
+                    <path
+                      key={decal.id}
+                      data-avatar-surface-decal={decal.id}
+                      d={decal.path}
+                      fill={decal.color}
+                      fillOpacity={decal.opacity / 100}
+                      transform={decal.transform}
+                    />
+                  ))}
+                  {renderFaceSurfaceLayer(part)}
+                </g>
+                {geometries[part.id].cavityPath == null
+                  ? null
+                  : (
+                    <path
+                      data-avatar-entity-cavity={part.id}
+                      d={geometries[part.id].cavityPath}
+                      fill={part.shadowColor}
+                      fillOpacity='.9'
+                    />
+                  )}
               </g>
-              {geometries[part.id].cavityPath == null
-                ? null
-                : (
-                  <path
-                    data-avatar-entity-cavity={part.id}
-                    d={geometries[part.id].cavityPath}
-                    fill={part.shadowColor}
-                    fillOpacity='.9'
-                  />
-                )}
             </g>
           </g>
         ))}
       </g>
-      {showGrid && selectedPart != null
+      {showGrid && selectedPartIsVisible
         ? [selectedPart].map(part => (
           <g
             key={`grid-${part.index}`}
-            mask={isOccludedByFace(part) ? `url(#${occlusionMaskId(part)})` : undefined}
+            data-avatar-entity-grid={part.id}
+            clipPath={`url(#${interactionClipId(part)})`}
             pointerEvents='none'
           >
             <g transform={partTransform(part)}>
@@ -458,107 +687,26 @@ function EntityPresetBody({
           </g>
         ))
         : null}
-      {interactive && selectedPart != null
+      {interactive && selectedPartIsVisible
         ? (
           <g
-            mask={isOccludedByFace(selectedPart) ? `url(#${occlusionMaskId(selectedPart)})` : undefined}
+            key={`selection-${fragmentGraph.cacheKey}-${selectedPart.id}`}
+            data-avatar-entity-selection={selectedPart.id}
+            data-avatar-fragment-interaction-area={String(selectedPart.fragmentNode.interactionVisibleArea)}
+            data-avatar-fragment-interaction-ratio={String(selectedPart.fragmentNode.interactionVisibleRatio)}
             pointerEvents='none'
           >
-            <g transform={partTransform(selectedPart)}>
-              <path
-                d={geometries[selectedPart.id].outlinePath}
-                fill='none'
-                stroke='var(--primary-color)'
-                strokeDasharray='5 4'
-                strokeWidth={2}
-              />
-            </g>
+            <path
+              d={selectedPart.fragmentNode.interactionVisiblePath}
+              fill='none'
+              fillRule='evenodd'
+              stroke='var(--primary-color)'
+              strokeDasharray='5 4'
+              strokeLinejoin='round'
+              strokeWidth={2}
+            />
           </g>
         )
-        : null}
-      {face.visible && facePart != null
-        ? (
-          <g
-            transform={partTransform(facePart)}
-          >
-            {showShadow
-              ? face.eyes.map(eye => (
-                <path
-                  key={`shadow-${eye.id}`}
-                  d={eye.path}
-                  transform={faceShadowTransform(eye.depth)}
-                  fill={shadowStyle.color ?? facePart.shadowColor}
-                  filter={shadowStyle.softness > 0 ? `url(#${idPrefix}-entity-face-shadow)` : undefined}
-                  opacity={shadowStyle.opacity / 100 * eye.depth ** 2}
-                />
-              ))
-              : null}
-            {face.eyes.map(eye => <path key={eye.id} d={eye.path} fill={facePart.foregroundColor} />)}
-            {face.eyeHighlights.map(highlight => (
-              <path
-                key={highlight.id}
-                data-avatar-eye-highlight={highlight.id}
-                clipPath={`url(#${idPrefix}-entity-${highlight.id.replace('eye-highlight-', 'eye-')}-highlight-clip)`}
-                d={highlight.path}
-                fill={faceStyle.eyeHighlight.color}
-                fillOpacity={faceStyle.eyeHighlight.opacity / 100}
-              />
-            ))}
-            {!faceStyle.noseEnabled || face.nose == null
-              ? null
-              : (
-                <>
-                  {showShadow
-                    ? (
-                      <path
-                        d={face.nose.path}
-                        transform={faceShadowTransform(face.nose.depth)}
-                        fill={shadowStyle.color ?? facePart.shadowColor}
-                        filter={shadowStyle.softness > 0 ? `url(#${idPrefix}-entity-face-shadow)` : undefined}
-                        opacity={shadowStyle.opacity / 100 * face.nose.depth ** 2}
-                      />
-                    )
-                    : null}
-                  <path d={face.nose.path} fill={facePart.foregroundColor} />
-                </>
-              )}
-            {!faceStyle.mouthEnabled || face.mouth == null
-              ? null
-              : (
-                <>
-                  {showShadow
-                    ? (
-                      <path
-                        d={face.mouth.path}
-                        transform={faceShadowTransform(face.mouth.depth)}
-                        fill={shadowStyle.color ?? facePart.shadowColor}
-                        filter={shadowStyle.softness > 0 ? `url(#${idPrefix}-entity-face-shadow)` : undefined}
-                        opacity={shadowStyle.opacity / 100 * face.mouth.depth ** 2}
-                      />
-                    )
-                    : null}
-                  <path d={face.mouth.path} fill={facePart.foregroundColor} />
-                </>
-              )}
-          </g>
-        )
-        : null}
-      {interactive
-        ? hitTestParts.map(part => (
-          <g
-            key={`hit-${part.id}`}
-            data-avatar-entity-part-hit={part.id}
-            mask={isOccludedByFace(part) ? `url(#${occlusionMaskId(part)})` : undefined}
-          >
-            <g transform={partTransform(part)}>
-              <path
-                d={geometries[part.id].outlinePath}
-                fill='transparent'
-                pointerEvents='all'
-              />
-            </g>
-          </g>
-        ))
         : null}
     </g>
   )
@@ -614,7 +762,7 @@ export const EntityPresetPreview = memo(function EntityPresetPreview({
       }]
     }), [parts, pose, preset, providedSurfaceDecals, scene])
   const geometries = useMemo(
-    () => buildEntityPartGeometries(parts, pose, lightDirection, 25),
+    () => buildEntityPartGeometries(parts, pose, lightDirection, 25, 1),
     [lightDirection, parts, pose]
   )
   const facePart = parts.find(part => part.face)
@@ -830,6 +978,30 @@ function InteractiveAvatarComponent({
   viewState
 }: InteractiveAvatarProps) {
   const [dragging, setDragging] = useState(false)
+  const [fragmentInteractiveQuality, setFragmentInteractiveQuality] = useState(false)
+  const [gridInteractiveQuality, setGridInteractiveQuality] = useState(false)
+  const [renderingInteractively, setRenderingInteractively] = useState(false)
+  const [dragMetricsRevision, setDragMetricsRevision] = useState(0)
+  const dragRuntimeStatsRef = useRef({
+    longTasks: [] as number[],
+    rafIntervals: [] as number[]
+  })
+  const dragRuntimeFrameRef = useRef<number>()
+  const dragReleaseFrameMsRef = useRef(0)
+  const dragReleaseStartedAtRef = useRef<number>()
+  const dragSettleFrameMsRef = useRef(0)
+  const dragSettleStartedAtRef = useRef<number>()
+  const fragmentSettleFrameMsRef = useRef(0)
+  const fragmentSettleHandleRef = useRef<number>()
+  const fragmentSettleStartedAtRef = useRef<number>()
+  const fragmentSettleUsesIdleRef = useRef(false)
+  const gridSettleFrameMsRef = useRef(0)
+  const gridSettleHandleRef = useRef<number>()
+  const gridSettleStartedAtRef = useRef<number>()
+  const gridSettleUsesIdleRef = useRef(false)
+  const renderSettleHandleRef = useRef<number>()
+  const renderSettleUsesIdleRef = useRef(false)
+  const pendingCommittedViewStateRef = useRef<AvatarViewState | null>(null)
   const [transientViewState, setTransientViewState] = useState<AvatarViewState | null>(null)
   const renderedViewState = transientViewState ?? viewState
   const pose = useMemo<AvatarPose>(() => ({
@@ -864,13 +1036,21 @@ function InteractiveAvatarComponent({
   const pixelRenderMountedRef = useRef(true)
   const pixelRenderPendingRef = useRef(false)
   const sourceSvgRef = useRef<SVGSVGElement>(null)
+  const entityPartHitResolverRef = useRef<((x: number, y: number) => string | null) | null>(null)
+  const entityGeometryDragBuildSamplesRef = useRef<number[]>([])
+  const entityGeometryGridSettleBuildMsRef = useRef(0)
+  const entityGeometryReleaseBuildMsRef = useRef(0)
+  const entityGeometrySettleBuildMsRef = useRef(0)
+  const entityGeometryPreviousBuildWasDraggingRef = useRef(false)
+  const entityGeometryPreviousGridInteractiveQualityRef = useRef(false)
+  const entityGeometryPreviousInteractiveQualityRef = useRef(false)
   const [pixelReady, setPixelReady] = useState(false)
   const rawId = useId()
   const id = rawId.replaceAll(':', '')
   const animatedFaceStyle = useAnimatedFaceStyle(faceStyle, faceStyleTransitionsEnabled)
   const resolvedGridDensity = gridDensity ?? AVATAR_GRID_DENSITY.default
-  const renderedGridDensity = dragging
-    ? Math.min(resolvedGridDensity, 50)
+  const renderedGridDensity = gridInteractiveQuality
+    ? Math.min(resolvedGridDensity, 24)
     : resolvedGridDensity
   const bodyGeometryOptions = useMemo<AvatarBodyGeometryOptions>(
     () => ({ bottomTaper }),
@@ -899,9 +1079,51 @@ function InteractiveAvatarComponent({
       })),
     [colorGrade, sourceEntityParts]
   )
-  const entityGeometries = useMemo(
-    () => buildEntityPartGeometries(sourceEntityParts, pose, lightDirection, renderedGridDensity),
-    [lightDirection, pose, renderedGridDensity, sourceEntityParts]
+  const entityGeometryBuild = useMemo(() => {
+    const startedAt = performance.now()
+    const geometries = buildEntityPartGeometries(
+      sourceEntityParts,
+      pose,
+      lightDirection,
+      renderedGridDensity,
+      renderingInteractively ? .5 : 1
+    )
+    const duration = performance.now() - startedAt
+    if (dragging) {
+      if (!entityGeometryPreviousBuildWasDraggingRef.current) entityGeometryDragBuildSamplesRef.current = []
+      entityGeometryDragBuildSamplesRef.current.push(duration)
+      if (entityGeometryDragBuildSamplesRef.current.length > 512) entityGeometryDragBuildSamplesRef.current.shift()
+    } else if (entityGeometryPreviousBuildWasDraggingRef.current) {
+      entityGeometryReleaseBuildMsRef.current = duration
+    }
+    if (!renderingInteractively && entityGeometryPreviousInteractiveQualityRef.current) {
+      entityGeometrySettleBuildMsRef.current = duration
+    }
+    if (!gridInteractiveQuality && entityGeometryPreviousGridInteractiveQualityRef.current) {
+      entityGeometryGridSettleBuildMsRef.current = duration
+    }
+    entityGeometryPreviousBuildWasDraggingRef.current = dragging
+    entityGeometryPreviousGridInteractiveQualityRef.current = gridInteractiveQuality
+    entityGeometryPreviousInteractiveQualityRef.current = renderingInteractively
+    return { duration, geometries }
+  }, [
+    dragging,
+    gridInteractiveQuality,
+    lightDirection,
+    pose,
+    renderedGridDensity,
+    renderingInteractively,
+    sourceEntityParts
+  ])
+  const entityGeometries = entityGeometryBuild.geometries
+  // Two intersecting surfaces use a shared ownership partition. Keep that
+  // structural mesh identical while dragging and at rest; interactive quality
+  // may simplify lighting and boundary output, but must not change topology.
+  const entityFragmentGeometries = useMemo(
+    () => sourceEntityParts.length === 2
+      ? buildEntityPartGeometries(sourceEntityParts, pose, lightDirection, renderedGridDensity, 1)
+      : entityGeometries,
+    [entityGeometries, lightDirection, pose, renderedGridDensity, sourceEntityParts]
   )
   const entityFacePart = sourceEntityParts.find(part => part.face)
   const entityFace = useMemo(
@@ -1020,12 +1242,124 @@ function InteractiveAvatarComponent({
       pixelRenderMountedRef.current = false
       pixelRenderEpochRef.current += 1
       if (dragRenderFrameRef.current != null) window.cancelAnimationFrame(dragRenderFrameRef.current)
+      if (renderSettleHandleRef.current != null) {
+        if (renderSettleUsesIdleRef.current) window.cancelIdleCallback(renderSettleHandleRef.current)
+        else window.clearTimeout(renderSettleHandleRef.current)
+      }
+      if (fragmentSettleHandleRef.current != null) {
+        if (fragmentSettleUsesIdleRef.current) window.cancelIdleCallback(fragmentSettleHandleRef.current)
+        else window.clearTimeout(fragmentSettleHandleRef.current)
+      }
+      if (gridSettleHandleRef.current != null) {
+        if (gridSettleUsesIdleRef.current) window.cancelIdleCallback(gridSettleHandleRef.current)
+        else window.clearTimeout(gridSettleHandleRef.current)
+      }
       if (pixelRenderFrameRef.current != null) {
         window.cancelAnimationFrame(pixelRenderFrameRef.current)
         pixelRenderFrameRef.current = undefined
       }
     }
   }, [])
+
+  useEffect(() => {
+    if (!dragging) return
+    const stats = dragRuntimeStatsRef.current
+    stats.longTasks = []
+    stats.rafIntervals = []
+    let previousFrame: number | null = null
+    const sampleFrame = (now: number) => {
+      if (previousFrame != null) {
+        stats.rafIntervals.push(now - previousFrame)
+        if (stats.rafIntervals.length > 1_024) stats.rafIntervals.shift()
+      }
+      previousFrame = now
+      dragRuntimeFrameRef.current = window.requestAnimationFrame(sampleFrame)
+    }
+    dragRuntimeFrameRef.current = window.requestAnimationFrame(sampleFrame)
+    const longTaskObserver = typeof PerformanceObserver === 'undefined'
+      || !PerformanceObserver.supportedEntryTypes.includes('longtask')
+      ? null
+      : new PerformanceObserver(entries => {
+        stats.longTasks.push(...entries.getEntries().map(entry => entry.duration))
+      })
+    longTaskObserver?.observe({ entryTypes: ['longtask'] })
+    return () => {
+      if (dragRuntimeFrameRef.current != null) {
+        window.cancelAnimationFrame(dragRuntimeFrameRef.current)
+        dragRuntimeFrameRef.current = undefined
+      }
+      longTaskObserver?.disconnect()
+      if (pixelRenderMountedRef.current) setDragMetricsRevision(revision => revision + 1)
+    }
+  }, [dragging])
+
+  useEffect(() => {
+    if (dragging || dragReleaseStartedAtRef.current == null) return
+    const startedAt = dragReleaseStartedAtRef.current
+    dragReleaseStartedAtRef.current = undefined
+    const frame = window.requestAnimationFrame(() => {
+      dragReleaseFrameMsRef.current = performance.now() - startedAt
+      if (pixelRenderMountedRef.current) setDragMetricsRevision(revision => revision + 1)
+    })
+    return () => window.cancelAnimationFrame(frame)
+  }, [dragging])
+
+  useEffect(() => {
+    if (renderingInteractively || dragSettleStartedAtRef.current == null) return
+    const startedAt = dragSettleStartedAtRef.current
+    dragSettleStartedAtRef.current = undefined
+    const frame = window.requestAnimationFrame(() => {
+      dragSettleFrameMsRef.current = performance.now() - startedAt
+      if (pixelRenderMountedRef.current) setDragMetricsRevision(revision => revision + 1)
+    })
+    if (fragmentInteractiveQuality && fragmentSettleHandleRef.current == null) {
+      const settleFragments = () => {
+        fragmentSettleHandleRef.current = undefined
+        fragmentSettleUsesIdleRef.current = false
+        fragmentSettleStartedAtRef.current = performance.now()
+        setFragmentInteractiveQuality(false)
+      }
+      fragmentSettleUsesIdleRef.current = typeof window.requestIdleCallback === 'function'
+      fragmentSettleHandleRef.current = fragmentSettleUsesIdleRef.current
+        ? window.requestIdleCallback(settleFragments, { timeout: 160 })
+        : window.setTimeout(settleFragments, 32)
+    }
+    return () => window.cancelAnimationFrame(frame)
+  }, [fragmentInteractiveQuality, renderingInteractively])
+
+  useEffect(() => {
+    if (fragmentInteractiveQuality || fragmentSettleStartedAtRef.current == null) return
+    const startedAt = fragmentSettleStartedAtRef.current
+    fragmentSettleStartedAtRef.current = undefined
+    const frame = window.requestAnimationFrame(() => {
+      fragmentSettleFrameMsRef.current = performance.now() - startedAt
+      if (pixelRenderMountedRef.current) setDragMetricsRevision(revision => revision + 1)
+    })
+    if (gridInteractiveQuality && gridSettleHandleRef.current == null) {
+      const settleGrid = () => {
+        gridSettleHandleRef.current = undefined
+        gridSettleUsesIdleRef.current = false
+        gridSettleStartedAtRef.current = performance.now()
+        setGridInteractiveQuality(false)
+      }
+      gridSettleUsesIdleRef.current = typeof window.requestIdleCallback === 'function'
+      gridSettleHandleRef.current = gridSettleUsesIdleRef.current
+        ? window.requestIdleCallback(settleGrid, { timeout: 160 })
+        : window.setTimeout(settleGrid, 32)
+    }
+    return () => window.cancelAnimationFrame(frame)
+  }, [fragmentInteractiveQuality, gridInteractiveQuality])
+
+  useEffect(() => {
+    if (gridInteractiveQuality || gridSettleStartedAtRef.current == null) return
+    const startedAt = gridSettleStartedAtRef.current
+    gridSettleStartedAtRef.current = undefined
+    const frame = window.requestAnimationFrame(() => {
+      gridSettleFrameMsRef.current = performance.now() - startedAt
+      if (pixelRenderMountedRef.current) setDragMetricsRevision(revision => revision + 1)
+    })
+    return () => window.cancelAnimationFrame(frame)
+  }, [gridInteractiveQuality])
 
   useEffect(() => {
     if (pixelEffect?.enabled !== true) {
@@ -1050,6 +1384,13 @@ function InteractiveAvatarComponent({
       const pendingState = pendingDragViewStateRef.current
       if (pendingState != null) setTransientViewState(pendingState)
     })
+  }
+
+  const flushPendingViewStateCommit = () => {
+    const pendingState = pendingCommittedViewStateRef.current
+    if (pendingState == null) return
+    pendingCommittedViewStateRef.current = null
+    onViewStateChange(pendingState)
   }
 
   const updatePose = (nextPose: AvatarPose) => {
@@ -1091,22 +1432,54 @@ function InteractiveAvatarComponent({
 
   const handlePointerDown = (event: PointerEvent<SVGSVGElement>) => {
     if (event.button !== 0 && event.button !== 2) return
+    // A new gesture can arrive before the idle commit from the previous drag. Flush
+    // that final state before cancelling its settle callback so the controlled parent
+    // cannot snap the avatar back to the previous prop value.
+    flushPendingViewStateCommit()
     onInteractionStart?.()
-    if (event.button === 0 && event.target instanceof Element) {
-      const partHitTarget = event.target.closest<SVGGElement>('[data-avatar-entity-part-hit]')
-      const partId = partHitTarget?.dataset.avatarEntityPartHit
-      onEntityPartSelect?.(partId ?? null)
-    }
     const temporaryMove = event.button === 2 || (event.pointerType === 'mouse' && event.detail >= 2)
+    let selectionPartId: string | null = null
+    if (event.button === 0 && !temporaryMove && usesEntityParts && entityPartHitResolverRef.current != null) {
+      const fragmentRoot = event.currentTarget.querySelector<SVGGElement>('[data-avatar-entity-fragment-root]')
+      const screenMatrix = fragmentRoot?.getScreenCTM()
+      if (screenMatrix != null) {
+        const screenPoint = event.currentTarget.createSVGPoint()
+        screenPoint.x = event.clientX
+        screenPoint.y = event.clientY
+        const localPoint = screenPoint.matrixTransform(screenMatrix.inverse())
+        selectionPartId = entityPartHitResolverRef.current(localPoint.x, localPoint.y)
+      }
+    }
     if (temporaryMove) event.preventDefault()
+    if (renderSettleHandleRef.current != null) {
+      if (renderSettleUsesIdleRef.current) window.cancelIdleCallback(renderSettleHandleRef.current)
+      else window.clearTimeout(renderSettleHandleRef.current)
+      renderSettleHandleRef.current = undefined
+    }
+    if (fragmentSettleHandleRef.current != null) {
+      if (fragmentSettleUsesIdleRef.current) window.cancelIdleCallback(fragmentSettleHandleRef.current)
+      else window.clearTimeout(fragmentSettleHandleRef.current)
+      fragmentSettleHandleRef.current = undefined
+    }
+    if (gridSettleHandleRef.current != null) {
+      if (gridSettleUsesIdleRef.current) window.cancelIdleCallback(gridSettleHandleRef.current)
+      else window.clearTimeout(gridSettleHandleRef.current)
+      gridSettleHandleRef.current = undefined
+    }
+    setFragmentInteractiveQuality(true)
+    setGridInteractiveQuality(true)
+    setRenderingInteractively(true)
     event.currentTarget.setPointerCapture(event.pointerId)
     dragOriginRef.current = {
+      moved: false,
       mode: temporaryMove ? 'move' : interactionMode,
       pitch: poseRef.current.pitch,
       pointerId: event.pointerId,
       positionX: positionRef.current.x,
       positionY: positionRef.current.y,
       scale: VIEW_SIZE / event.currentTarget.getBoundingClientRect().width,
+      selectable: event.button === 0 && !temporaryMove,
+      selectionPartId,
       x: event.clientX,
       y: event.clientY,
       yaw: poseRef.current.yaw
@@ -1117,6 +1490,9 @@ function InteractiveAvatarComponent({
   const handlePointerMove = (event: PointerEvent<SVGSVGElement>) => {
     const origin = dragOriginRef.current
     if (origin == null || origin.pointerId !== event.pointerId) return
+    if (!origin.moved && Math.hypot(event.clientX - origin.x, event.clientY - origin.y) > ENTITY_SELECTION_DRAG_THRESHOLD) {
+      dragOriginRef.current = { ...origin, moved: true }
+    }
     if (origin.mode === 'move') {
       const nextPosition = {
         x: clamp(
@@ -1157,7 +1533,8 @@ function InteractiveAvatarComponent({
   }
 
   const finishPointerInteraction = (event: PointerEvent<SVGSVGElement>) => {
-    if (dragOriginRef.current?.pointerId !== event.pointerId) return
+    const origin = dragOriginRef.current
+    if (origin?.pointerId !== event.pointerId) return
     if (event.currentTarget.hasPointerCapture(event.pointerId)) {
       event.currentTarget.releasePointerCapture(event.pointerId)
     }
@@ -1167,10 +1544,43 @@ function InteractiveAvatarComponent({
     }
     const finalViewState = pendingDragViewStateRef.current
     pendingDragViewStateRef.current = undefined
+    if (finalViewState != null) pendingCommittedViewStateRef.current = finalViewState
     dragOriginRef.current = undefined
-    setTransientViewState(null)
+    if (finalViewState == null) setTransientViewState(null)
+    dragReleaseStartedAtRef.current = performance.now()
     setDragging(false)
-    if (finalViewState != null) onViewStateChange(finalViewState)
+    const settleRendering = () => {
+      renderSettleHandleRef.current = undefined
+      renderSettleUsesIdleRef.current = false
+      dragSettleStartedAtRef.current = performance.now()
+      fragmentSettleStartedAtRef.current = performance.now()
+      setRenderingInteractively(false)
+      setFragmentInteractiveQuality(false)
+    }
+    const commitViewState = () => {
+      renderSettleHandleRef.current = undefined
+      renderSettleUsesIdleRef.current = false
+      if (pendingCommittedViewStateRef.current != null) {
+        flushPendingViewStateCommit()
+        setTransientViewState(null)
+      }
+      renderSettleUsesIdleRef.current = typeof window.requestIdleCallback === 'function'
+      renderSettleHandleRef.current = renderSettleUsesIdleRef.current
+        ? window.requestIdleCallback(settleRendering, { timeout: 160 })
+        : window.setTimeout(settleRendering, 32)
+    }
+    renderSettleUsesIdleRef.current = typeof window.requestIdleCallback === 'function'
+    renderSettleHandleRef.current = renderSettleUsesIdleRef.current
+      ? window.requestIdleCallback(commitViewState, { timeout: 96 })
+      : window.setTimeout(commitViewState, 16)
+    if (
+      origin.selectable &&
+      event.type !== 'pointercancel' &&
+      !origin.moved &&
+      Math.hypot(event.clientX - origin.x, event.clientY - origin.y) <= ENTITY_SELECTION_DRAG_THRESHOLD
+    ) {
+      onEntityPartSelect?.(origin.selectionPartId)
+    }
   }
 
   const handleWheel = (event: WheelEvent<SVGSVGElement>) => {
@@ -1221,10 +1631,39 @@ function InteractiveAvatarComponent({
     })
   }
 
+  const dragRuntimeStats = dragRuntimeStatsRef.current
+
   return (
     <div
       className='interactive-avatar'
+      data-avatar-drag-long-task-count={dragRuntimeStats.longTasks.length}
+      data-avatar-drag-long-task-max-ms={Math.max(0, ...dragRuntimeStats.longTasks).toFixed(3)}
+      data-avatar-drag-long-task-p95-ms={percentile(dragRuntimeStats.longTasks, .95).toFixed(3)}
+      data-avatar-drag-metrics-revision={dragMetricsRevision}
+      data-avatar-drag-raf-max-ms={Math.max(0, ...dragRuntimeStats.rafIntervals).toFixed(3)}
+      data-avatar-drag-raf-p95-ms={percentile(dragRuntimeStats.rafIntervals, .95).toFixed(3)}
+      data-avatar-drag-raf-samples={dragRuntimeStats.rafIntervals.length}
+      data-avatar-release-frame-ms={dragReleaseFrameMsRef.current.toFixed(3)}
+      data-avatar-fragment-settle-frame-ms={fragmentSettleFrameMsRef.current.toFixed(3)}
+      data-avatar-grid-settle-frame-ms={gridSettleFrameMsRef.current.toFixed(3)}
+      data-avatar-settle-frame-ms={dragSettleFrameMsRef.current.toFixed(3)}
+      data-avatar-geometry-build-ms={entityGeometryBuild.duration.toFixed(3)}
+      data-avatar-geometry-drag-build-max-ms={Math.max(0, ...entityGeometryDragBuildSamplesRef.current).toFixed(3)}
+      data-avatar-geometry-drag-build-mean-ms={(
+        entityGeometryDragBuildSamplesRef.current.length === 0
+          ? 0
+          : entityGeometryDragBuildSamplesRef.current.reduce((total, sample) => total + sample, 0)
+            / entityGeometryDragBuildSamplesRef.current.length
+      ).toFixed(3)}
+      data-avatar-geometry-drag-build-p95-ms={percentile(entityGeometryDragBuildSamplesRef.current, .95).toFixed(3)}
+      data-avatar-geometry-drag-build-samples={entityGeometryDragBuildSamplesRef.current.length}
+      data-avatar-geometry-grid-settle-build-ms={entityGeometryGridSettleBuildMsRef.current.toFixed(3)}
+      data-avatar-geometry-release-build-ms={entityGeometryReleaseBuildMsRef.current.toFixed(3)}
+      data-avatar-geometry-settle-build-ms={entityGeometrySettleBuildMsRef.current.toFixed(3)}
+      data-avatar-compositor-quality={renderingInteractively ? 'interactive' : 'full'}
       data-dragging={dragging}
+      data-avatar-fragment-quality={fragmentInteractiveQuality ? 'interactive' : 'full'}
+      data-avatar-grid-quality={gridInteractiveQuality ? 'interactive' : 'full'}
       data-interaction-mode={interactionMode}
       data-object-position-x={position.x}
       data-object-position-y={position.y}
@@ -1427,11 +1866,14 @@ function InteractiveAvatarComponent({
                 avatarOutlineStyle={avatarOutlineStyle}
                 face={entityFace}
                 faceStyle={animatedFaceStyle}
+                fragmentGeometries={entityFragmentGeometries}
                 geometries={entityGeometries}
                 idPrefix={id}
                 interactive={interactive}
+                interactiveQuality={fragmentInteractiveQuality}
+                isDragging={dragging}
                 lightDistance={lightDistance}
-                onPartSelect={onEntityPartSelect}
+                partHitResolverRef={entityPartHitResolverRef}
                 parts={resolvedEntityParts}
                 pose={pose}
                 preset={entityPreset}

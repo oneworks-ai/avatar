@@ -8,9 +8,11 @@ import type { Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { AvatarControls } from '../src/AvatarControls'
+import { resolveAvatarBreedPalette } from '../src/avatarBreedTone'
 import { createAvatarEntityParts } from '../src/avatarEntityPresets'
 import { DEFAULT_AVATAR_FACE_SHADOW_STYLE, DEFAULT_AVATAR_FACE_STYLE } from '../src/avatarGeometry'
 import { AvatarLocaleProvider } from '../src/avatarLocale'
+import { AVATAR_ANIMAL_SPECIES_IDS } from '../src/avatarSeed'
 import { getAvatarAnimalBreedTemplates, resolveAvatarAnimalBreedTemplate } from '../src/avatarSpeciesBreeds'
 import { createAvatarSurfaceDecal } from '../src/avatarSurfaceDecals'
 
@@ -675,7 +677,7 @@ describe('AvatarControls Seed authoring', () => {
 })
 
 describe('AvatarControls natural animal breeds', () => {
-  it.each(['fox', 'hamster', 'capybara', 'otter', 'pig', 'deer', 'sheep'] as const)(
+  it.each(AVATAR_ANIMAL_SPECIES_IDS)(
     'renders real %s breed previews and independent head/ear controls',
     species => {
       const templates = getAvatarAnimalBreedTemplates(species)
@@ -710,7 +712,59 @@ describe('AvatarControls natural animal breeds', () => {
           '[data-avatar-surface-decal="fox-cheek-left"]'
         ) != null)).toBe(true)
       }
-      if (species === 'sheep' || species === 'deer' || species === 'otter') {
+      if (species === 'hamster' || species === 'squirrel') {
+        for (const button of buttons) {
+          for (const side of ['left', 'right'] as const) {
+            expect(button.querySelector(
+              `[data-avatar-entity-part="cheek-${side}"] ` +
+              `[data-avatar-surface-decal="${species}-cheek-${side}"]`
+            )).not.toBeNull()
+          }
+        }
+        if (species === 'hamster') {
+          expect([...buttons].every(button => button.querySelector(
+            '[data-avatar-entity-part="ear-left"] [data-avatar-surface-decal="hamster-inner-ear-left"]'
+          ) != null)).toBe(true)
+        }
+        if (species === 'squirrel') {
+          expect([...buttons].every(button => button.querySelector(
+            '[data-avatar-entity-part="primary"] [data-avatar-surface-decal="squirrel-face-mask"]'
+          ) != null)).toBe(true)
+        }
+      }
+      if (species === 'capybara') {
+        expect([...buttons].every(button => button.querySelector(
+          '[data-avatar-entity-part="muzzle"] [data-avatar-surface-decal="capybara-muzzle-fur"]'
+        ) != null)).toBe(true)
+      }
+      if (species === 'seal' || species === 'guinea-pig' || species === 'chinchilla') {
+        expect([...buttons].every(button => ['left', 'right'].every(side => button.querySelector(
+          `[data-avatar-entity-part="cheek-${side}"] ` +
+          `[data-avatar-surface-decal="${species}-cheek-${side}"]`
+        ) != null))).toBe(true)
+      }
+      if (species === 'beaver') {
+        expect([...buttons].every(button => button.querySelector(
+          '[data-avatar-entity-part="tooth-left"]'
+        ) != null)).toBe(true)
+      }
+      if (species === 'ferret') {
+        expect([...buttons].every(button => button.querySelector(
+          '[data-avatar-entity-part="primary"] [data-avatar-surface-decal="ferret-eye-mask-left"]'
+        ) != null)).toBe(true)
+        expect([...buttons].every(button => button.querySelector(
+          '[data-avatar-entity-part="muzzle"]'
+        ) == null)).toBe(true)
+      }
+      if (species === 'monkey') {
+        expect([...buttons].every(button => button.querySelector(
+          '[data-avatar-entity-part="muzzle"] [data-avatar-surface-decal="monkey-muzzle-skin"]'
+        ) != null)).toBe(true)
+        expect([...buttons].every(button => button.querySelector(
+          '[data-avatar-entity-part="muzzle"] [data-avatar-surface-decal="monkey-nostril-left"]'
+        ) != null)).toBe(true)
+      }
+      if (species === 'sheep' || species === 'deer' || species === 'otter' || species === 'alpaca') {
         expect([...buttons].every(button => button.querySelector(
           `[data-avatar-entity-part="primary"] [data-avatar-surface-decal="${species}-face-mask"]`
         ) != null)).toBe(true)
@@ -718,9 +772,14 @@ describe('AvatarControls natural animal breeds', () => {
           '[data-avatar-entity-part="muzzle"]'
         ) == null)).toBe(true)
       }
-      const label = species === 'capybara' ? 'Capybara' : `${species[0]!.toUpperCase()}${species.slice(1)}`
+      const label = host.querySelector<HTMLElement>('.avatar-controls__animal-head-size .avatar-controls__label')
+        ?.textContent?.replace(' head size', '') ?? ''
       expect(host.querySelector<HTMLInputElement>(`[aria-label="${label} head width"]`)?.value).toBe('113')
-      expect(host.querySelector<HTMLInputElement>(`[aria-label="${label} ear width"]`)?.value).toBe('104')
+      if (species === 'seal') {
+        expect(host.querySelector('.avatar-controls__animal-ear-size')).toBeNull()
+      } else {
+        expect(host.querySelector<HTMLInputElement>(`[aria-label="${label} ear width"]`)?.value).toBe('104')
+      }
       act(() => buttons[1]?.click())
       expect(onBreed).toHaveBeenCalledWith(templates[1]!.id)
     }
@@ -731,7 +790,13 @@ describe('AvatarControls natural animal breeds', () => {
       ['deer', 'reindeer', 'Deer antler size', true],
       ['deer', 'deer-fawn', 'Deer antler size', false],
       ['sheep', 'horned-ram', 'Sheep horn size', true],
-      ['sheep', 'lamb', 'Sheep horn size', false]
+      ['sheep', 'lamb', 'Sheep horn size', false],
+      ['cow', 'highland-cow', 'Cow horn size', true],
+      ['cow', 'cow-calf', 'Cow horn size', false],
+      ['squirrel', 'red-squirrel', 'Squirrel tail size', true],
+      ['lion', 'african-lion', 'Lion mane size', true],
+      ['lion', 'lioness', 'Lion mane size', false],
+      ['hedgehog', 'european-hedgehog', 'Hedgehog spine size', true]
     ] as const
     for (const [species, id, label, present] of cases) {
       const template = getAvatarAnimalBreedTemplates(species).find(candidate => candidate.id === id)!
@@ -750,6 +815,41 @@ describe('AvatarControls natural animal breeds', () => {
       )))
       expect(host.querySelector(`[aria-label="${label}"]`) != null).toBe(present)
     }
+  })
+
+  it.each([
+    ['cow', 'dairy-cow', 'coat-cow-spots-', 'mark'],
+    ['squirrel', 'chipmunk', 'coat-chipmunk-left-light', 'patch'],
+    ['tiger', 'bengal-tiger', 'coat-tiger-', 'mark']
+  ] as const)('keeps %s preview markings coordinated with their seeded natural fur tone', (species, id, decalId, color) => {
+    const template = getAvatarAnimalBreedTemplates(species).find(candidate => candidate.id === id)!
+    const basePalette = getAvatarPalette(id)
+    const seed = Array.from({ length: 50 }, (_, index) => `v1-${id}-preview-tone-${index}`).find(candidate => (
+      resolveAvatarBreedPalette(id, candidate, template.seedDomain).background !== basePalette.background
+    ))
+    expect(seed).toBeDefined()
+    const palette = resolveAvatarBreedPalette(id, seed!, template.seedDomain)
+    const props = {
+      ...createProps(),
+      animalBreedTemplateId: id,
+      entityParts: resolveAvatarAnimalBreedTemplate(template, seed!).entityParts,
+      entityPreset: species,
+      seed: seed!,
+      selectedPalette: palette
+    }
+
+    act(() => root.render(createElement(
+      AvatarLocaleProvider,
+      { initialLocale: 'en', persist: false },
+      createElement(AvatarControls, props)
+    )))
+
+    const decal = host.querySelector<SVGElement>(
+      `[data-animal-breed="${id}"] [data-avatar-surface-decal^="${decalId}"]`
+    )
+    expect(decal).not.toBeNull()
+    expect(decal?.getAttribute('fill')).toBe(palette.coat?.[color])
+    if (color === 'patch') expect(palette.coat?.patch).not.toBe(basePalette.coat?.patch)
   })
 })
 
