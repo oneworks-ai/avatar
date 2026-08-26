@@ -212,15 +212,15 @@ const RED_PANDA_FACE_STYLE: AvatarFaceStyle = {
 
 const HAMSTER_FACE_STYLE: AvatarFaceStyle = {
   ...DEFAULT_AVATAR_FACE_STYLE,
+  eyeRoundness: 100,
+  eyeShape: 'ellipse',
   gap: 40,
+  height: 48,
   leftEyeRotation: -2,
   mouthEnabled: false,
-  noseEnabled: true,
-  noseHeight: 10,
-  noseShape: 'ellipse',
-  noseWidth: 14,
-  noseY: 27,
-  rightEyeRotation: 2
+  noseEnabled: false,
+  rightEyeRotation: 2,
+  width: 30
 } as const
 
 const BUN_FACE_STYLE: AvatarFaceStyle = {
@@ -520,15 +520,17 @@ const HAMSTER_PRESET_SCENE = {
   showOutline: true,
   showShadow: false,
   surfaceDecals: [
-    { color: '#f8ddb0', height: 66, id: 'hamster-cheek-left', label: 'Left cheek', opacity: 100, rotation: -4, shape: 'ellipse', side: 'front', targetPartId: 'hamster-head', width: 80, x: -36, y: 34 },
-    { color: '#f8ddb0', height: 66, id: 'hamster-cheek-right', label: 'Right cheek', opacity: 100, rotation: 4, shape: 'ellipse', side: 'front', targetPartId: 'hamster-head', width: 80, x: 36, y: 34 }
+    { color: '#f6d39f', height: 68, id: 'hamster-cheek-left', label: 'Left cheek pouch', opacity: 100, rotation: -4, shape: 'ellipse', side: 'front', targetPartId: 'hamster-head', width: 66, x: -49, y: 36 },
+    { color: '#f6d39f', height: 68, id: 'hamster-cheek-right', label: 'Right cheek pouch', opacity: 100, rotation: 4, shape: 'ellipse', side: 'front', targetPartId: 'hamster-head', width: 66, x: 49, y: 36 },
+    { color: '#f9e5bf', height: 34, id: 'hamster-muzzle', label: 'Muzzle', opacity: 100, rotation: 0, shape: 'ellipse', side: 'front', targetPartId: 'hamster-head', width: 48, x: 0, y: 41 },
+    { color: '#8f4b50', height: 10, id: 'hamster-nose', label: 'Pink nose', opacity: 100, rotation: 0, shape: 'ellipse', side: 'front', targetPartId: 'hamster-head', width: 14, x: 0, y: 28 }
   ],
   viewState: {
     pitch: -.04,
     positionX: 26,
-    positionY: 74,
+    positionY: 70,
     roll: .07,
-    scale: 1.72,
+    scale: 1.7,
     yaw: .09
   }
 } as const satisfies AvatarEntityPresetScene
@@ -689,7 +691,7 @@ const BEAR_PARTS: readonly AvatarEntityPart[] = [
 const OTTER_PARTS: readonly AvatarEntityPart[] = [
   { ...OTTER_EAR_MATERIAL, face: false, id: 'otter-ear-left', label: 'Left ear', occludedByFace: true, occlusionAmount: 8, occlusionPole: 'bottom', rotationX: -4, rotationY: -8, rotationZ: -7, scaleX: .11, scaleY: .13, scaleZ: .11, shape: 'sphere', x: -78, y: -28, z: -14 },
   { ...OTTER_EAR_MATERIAL, face: false, id: 'otter-ear-right', label: 'Right ear', occludedByFace: true, occlusionAmount: 8, occlusionPole: 'bottom', rotationX: -4, rotationY: 8, rotationZ: 7, scaleX: .11, scaleY: .13, scaleZ: .11, shape: 'sphere', x: 78, y: -28, z: -14 },
-  { ...OTTER_MATERIAL, face: true, id: 'otter-head', label: 'Head', scaleX: .82, scaleY: .6, scaleZ: .62, shape: 'ellipse', x: 0, y: 16, z: 0 }
+  { ...OTTER_MATERIAL, face: true, id: 'otter-head', label: 'Head', scaleX: .79, scaleY: .67, scaleZ: .66, shape: 'ellipse', x: 0, y: 16, z: 0 }
 ]
 
 const RED_PANDA_PARTS: readonly AvatarEntityPart[] = [

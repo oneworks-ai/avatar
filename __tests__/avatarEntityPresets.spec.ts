@@ -254,9 +254,9 @@ describe('built-in entity preset scenes', () => {
     ))).toBe(true)
     expect(otter.find(part => part.face)).toMatchObject({
       id: 'otter-head',
-      scaleX: .82,
-      scaleY: .6,
-      scaleZ: .62,
+      scaleX: .79,
+      scaleY: .67,
+      scaleZ: .66,
       shape: 'ellipse'
     })
     expect(face).toMatchObject({
@@ -305,14 +305,16 @@ describe('built-in entity preset scenes', () => {
     })
     expect(hamsterScene.surfaceDecals.map(decal => decal.id)).toEqual([
       'hamster-cheek-left',
-      'hamster-cheek-right'
+      'hamster-cheek-right',
+      'hamster-muzzle',
+      'hamster-nose'
     ])
 
     const otterEars = otter.filter(part => !part.face)
     expect(otter.find(part => part.face)).toMatchObject({
       id: 'otter-head',
-      scaleX: .82,
-      scaleY: .6,
+      scaleX: .79,
+      scaleY: .67,
       shape: 'ellipse'
     })
     expect(otterEars.every(part => part.y === -28 && part.scaleX === .11)).toBe(true)
