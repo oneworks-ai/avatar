@@ -113,7 +113,6 @@ const ZH_HANS_TRANSLATIONS: Readonly<Record<string, string>> = {
   'Fixed position': '固定位置',
   'Frustum': '圆台',
   'Frown': '皱眉',
-  'Hamster': '仓鼠',
   'Gap': '间距',
   'Gradient': '渐变',
   'Grid density': '网格密度',

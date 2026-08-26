@@ -26,7 +26,7 @@ describe('built-in entity preset scenes', () => {
   })
 
   it('gives every built-in entity a distinct complete camera composition', () => {
-    const presets = ['cloud', 'sun', 'cat', 'dog', 'bear', 'red-panda', 'hamster', 'otter', 'rabbit', 'bun'] as const
+    const presets = ['cloud', 'sun', 'cat', 'dog', 'bear', 'red-panda', 'otter', 'rabbit', 'bun'] as const
     const scenes = presets.map(preset => {
       const scene = getAvatarEntityPresetScene(preset)
       expect(scene).not.toBeNull()
@@ -255,8 +255,8 @@ describe('built-in entity preset scenes', () => {
     expect(otter.find(part => part.face)).toMatchObject({
       id: 'otter-head',
       scaleX: .79,
-      scaleY: .67,
-      scaleZ: .66,
+      scaleY: .76,
+      scaleZ: .7,
       shape: 'ellipse'
     })
     expect(face).toMatchObject({
@@ -278,12 +278,10 @@ describe('built-in entity preset scenes', () => {
     }])
   })
 
-  it('keeps the red panda, hamster, and otter as distinct authored silhouettes', () => {
+  it('keeps the red panda and otter as distinct authored silhouettes', () => {
     const redPanda = createAvatarEntityParts('red-panda')
-    const hamster = createAvatarEntityParts('hamster')
     const otter = createAvatarEntityParts('otter')
     const redPandaScene = getAvatarEntityPresetScene('red-panda')!
-    const hamsterScene = getAvatarEntityPresetScene('hamster')!
 
     expect(redPanda.find(part => part.face)).toMatchObject({
       id: 'red-panda-head',
@@ -297,27 +295,14 @@ describe('built-in entity preset scenes', () => {
       'red-panda-muzzle'
     ])
 
-    expect(hamster.find(part => part.face)).toMatchObject({
-      id: 'hamster-head',
-      scaleX: .71,
-      scaleY: .7,
-      shape: 'sphere'
-    })
-    expect(hamsterScene.surfaceDecals.map(decal => decal.id)).toEqual([
-      'hamster-cheek-left',
-      'hamster-cheek-right',
-      'hamster-muzzle',
-      'hamster-nose'
-    ])
-
     const otterEars = otter.filter(part => !part.face)
     expect(otter.find(part => part.face)).toMatchObject({
       id: 'otter-head',
       scaleX: .79,
-      scaleY: .67,
+      scaleY: .76,
       shape: 'ellipse'
     })
-    expect(otterEars.every(part => part.y === -28 && part.scaleX === .11)).toBe(true)
+    expect(otterEars.every(part => part.y === -32 && part.scaleX === .17)).toBe(true)
   })
 
   it('uses the clean large-eye face on the rabbit', () => {
