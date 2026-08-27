@@ -5,7 +5,7 @@
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset=".github/assets/avatar-cover-dark-zh-Hans.jpg">
   <source media="(prefers-color-scheme: light)" srcset=".github/assets/avatar-cover-light-zh-Hans.jpg">
-  <img alt="OneWorks Avatar——四款几何 3D 形象模板" src=".github/assets/avatar-cover-light-zh-Hans.jpg" width="1600">
+  <img alt="OneWorks Avatar——不断扩展的几何 3D 头像与像素风格" src=".github/assets/avatar-cover-light-zh-Hans.jpg" width="1600">
 </picture>
 
 直接在浏览器中创建、制作动画并导出几何 3D 头像。

@@ -1,0 +1,346 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>OneWorks Avatar README cover</title>
+    <style>
+      :root {
+        font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+        color-scheme: light;
+      }
+
+      * { box-sizing: border-box; }
+      html, body { margin: 0; min-height: 100%; overflow: hidden; }
+      body { background: #f7f8fb; }
+      body[data-theme="dark"] { background: #090b0f; }
+
+      #cover {
+        position: relative;
+        width: 1600px;
+        height: 900px;
+        overflow: hidden;
+        transform-origin: left top;
+        color: #111827;
+        background:
+          radial-gradient(circle at 78% 50%, rgba(71, 101, 255, .16), transparent 34%),
+          linear-gradient(135deg, #fafbfe 0%, #f3f5fa 100%);
+      }
+
+      body[data-theme="dark"] #cover {
+        color: #f8fafc;
+        background:
+          radial-gradient(circle at 78% 50%, rgba(54, 88, 255, .22), transparent 36%),
+          linear-gradient(135deg, #090b0f 0%, #111722 100%);
+      }
+
+      .brand {
+        position: absolute;
+        top: 60px;
+        left: 80px;
+        display: flex;
+        align-items: center;
+        gap: 18px;
+        font-size: 28px;
+        font-weight: 760;
+        letter-spacing: -.03em;
+      }
+
+      .brand-mark {
+        position: relative;
+        width: 46px;
+        height: 46px;
+        border-radius: 15px;
+        background: currentColor;
+      }
+
+      .brand-mark::before,
+      .brand-mark::after {
+        content: "";
+        position: absolute;
+        top: 15px;
+        width: 6px;
+        height: 16px;
+        border-radius: 4px;
+        background: #f7f8fb;
+      }
+
+      body[data-theme="dark"] .brand-mark::before,
+      body[data-theme="dark"] .brand-mark::after { background: #090b0f; }
+      .brand-mark::before { left: 13px; }
+      .brand-mark::after { right: 13px; }
+
+      .copy {
+        position: absolute;
+        z-index: 2;
+        top: 250px;
+        left: 82px;
+        width: 1080px;
+      }
+
+      .kicker {
+        display: inline-block;
+        margin: 0 0 28px;
+        color: #ff5a3c;
+        font-size: 21px;
+        font-weight: 820;
+        letter-spacing: .06em;
+      }
+
+      h1 {
+        max-width: none;
+        margin: 0;
+        font-size: 86px;
+        line-height: .98;
+        letter-spacing: -.075em;
+        white-space: nowrap;
+        text-shadow: 0 1px 3px rgba(250, 251, 254, .92);
+      }
+
+      body[data-locale="zh-Hans"] h1 {
+        max-width: 560px;
+        font-size: 80px;
+        line-height: 1.04;
+        letter-spacing: -.065em;
+      }
+
+      .lede {
+        width: 780px;
+        margin: 34px 0 28px;
+        color: #465065;
+        font-size: 24px;
+        line-height: 1.45;
+        text-shadow: 0 1px 2px rgba(250, 251, 254, .96);
+      }
+
+      body[data-theme="dark"] h1 { text-shadow: 0 1px 3px rgba(9, 11, 15, .92); }
+      body[data-theme="dark"] .lede {
+        color: #b6bfce;
+        text-shadow: 0 1px 2px rgba(9, 11, 15, .96);
+      }
+
+      .features { display: flex; flex-wrap: wrap; gap: 12px; }
+      .features span {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        padding: 10px 18px;
+        border: 1px solid rgba(255, 255, 255, .74);
+        border-radius: 999px;
+        background: rgba(255, 255, 255, .52);
+        box-shadow: inset 0 1px 0 rgba(255, 255, 255, .78), 0 8px 22px rgba(33, 46, 72, .10);
+        font-size: 16px;
+        font-weight: 760;
+        letter-spacing: .04em;
+        backdrop-filter: blur(12px) saturate(1.25);
+      }
+
+      .features svg {
+        width: 17px;
+        height: 17px;
+        flex: 0 0 auto;
+        stroke: currentColor;
+        stroke-width: 1.8;
+        stroke-linecap: round;
+        stroke-linejoin: round;
+        fill: none;
+      }
+
+      .features .pixel-icon rect { fill: currentColor; stroke: none; }
+
+      body[data-theme="dark"] .features span {
+        border-color: rgba(255, 255, 255, .18);
+        background: rgba(21, 27, 38, .52);
+        box-shadow: inset 0 1px 0 rgba(255, 255, 255, .12), 0 8px 22px rgba(0, 0, 0, .28);
+      }
+
+      .gallery {
+        position: absolute;
+        z-index: 1;
+        top: 41px;
+        right: -62px;
+        display: grid;
+        width: 1186px;
+        grid-template-columns: repeat(13, 82px);
+        grid-auto-rows: 82px;
+        grid-auto-flow: dense;
+        gap: 10px;
+        transform: rotate(-1.1deg);
+        -webkit-mask-image: linear-gradient(90deg, transparent 0%, rgba(0, 0, 0, .10) 24%, rgba(0, 0, 0, .48) 42%, #000 58%);
+        mask-image: linear-gradient(90deg, transparent 0%, rgba(0, 0, 0, .10) 24%, rgba(0, 0, 0, .48) 42%, #000 58%);
+      }
+
+      .tile {
+        position: relative;
+        min-width: 0;
+        min-height: 0;
+        overflow: hidden;
+        border: 1px solid rgba(24, 33, 51, .12);
+        border-radius: 19px;
+        background: #8ea2b8;
+        box-shadow: 0 18px 42px rgba(39, 55, 86, .15);
+      }
+
+      body[data-theme="dark"] .tile {
+        border-color: rgba(255, 255, 255, .10);
+        box-shadow: 0 28px 60px rgba(0, 0, 0, .38);
+      }
+
+      .tile[data-size="hero"] { grid-column: span 3; grid-row: span 3; }
+      .tile[data-size="large"] { grid-column: span 2; grid-row: span 2; }
+      .tile[data-slot="a"] { grid-column: 1 / span 3; grid-row: 1 / span 3; }
+      .tile[data-slot="b"] { grid-column: 5 / span 3; grid-row: 4 / span 3; }
+      .tile[data-slot="c"] { grid-column: 10 / span 3; grid-row: 7 / span 3; }
+      .tile[data-slot="d"] { grid-column: 5 / span 2; grid-row: 1 / span 2; }
+      .tile[data-slot="e"] { grid-column: 8 / span 2; grid-row: 1 / span 2; }
+      .tile[data-slot="f"] { grid-column: 11 / span 2; grid-row: 1 / span 2; }
+      .tile[data-slot="g"] { grid-column: 1 / span 2; grid-row: 4 / span 2; }
+      .tile[data-slot="h"] { grid-column: 10 / span 2; grid-row: 3 / span 2; }
+      .tile[data-slot="i"] { grid-column: 1 / span 2; grid-row: 7 / span 2; }
+      .tile[data-slot="j"] { grid-column: 3 / span 2; grid-row: 4 / span 2; }
+      .tile[data-slot="k"] { grid-column: 8 / span 2; grid-row: 5 / span 2; }
+      .tile[data-slot="l"] { grid-column: 3 / span 2; grid-row: 7 / span 2; }
+      .tile[data-slot="m"] { grid-column: 6 / span 2; grid-row: 7 / span 2; }
+      .tile[data-slot="n"] { grid-column: 8 / span 2; grid-row: 7 / span 2; }
+      .tile[data-slot="o"] { grid-column: 11 / span 2; grid-row: 5 / span 2; }
+
+      .tile img {
+        display: block;
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+      }
+
+      .url {
+        position: absolute;
+        left: 84px;
+        bottom: 60px;
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        color: #596275;
+        font-size: 17px;
+        font-weight: 720;
+      }
+
+      body[data-theme="dark"] .url { color: #bac2d1; }
+      .url::before {
+        content: "";
+        width: 14px;
+        height: 14px;
+        border-radius: 50%;
+        background: #ff5a3c;
+      }
+
+      [data-copy="zh-Hans"] { display: none; }
+      body[data-locale="zh-Hans"] [data-copy="en"] { display: none; }
+      body[data-locale="zh-Hans"] [data-copy="zh-Hans"] { display: block; }
+    </style>
+  </head>
+  <body>
+    <main id="cover">
+      <div class="brand"><i class="brand-mark"></i><span>OneWorks Avatar</span></div>
+
+      <section class="copy" data-copy="en">
+        <p class="kicker">CREATE · CUSTOMIZE · ANIMATE · EXPORT</p>
+        <h1>Bring every avatar to life</h1>
+        <p class="lede">A browser-based geometric 3D avatar studio with a growing gallery of characters and styles.</p>
+        <div class="features">
+          <span><svg viewBox="0 0 18 18" aria-hidden="true"><path d="M6.5 4.5 2.5 9l4 4.5M11.5 4.5l4 4.5-4 4.5"/></svg>SVG</span>
+          <span><svg viewBox="0 0 18 18" aria-hidden="true"><rect x="2.5" y="3" width="13" height="12" rx="2"/><circle cx="6.2" cy="6.7" r="1.2"/><path d="m4.5 13 3.2-3.2 2.2 2.1 1.8-1.8 2 2"/></svg>PNG</span>
+          <span><svg viewBox="0 0 18 18" aria-hidden="true"><rect x="2.5" y="3" width="13" height="12" rx="2"/><path d="m7.5 6.2 4 2.8-4 2.8Z"/></svg>GIF</span>
+          <span><svg class="pixel-icon" viewBox="0 0 18 18" aria-hidden="true"><rect x="2.5" y="2.5" width="5" height="5" rx=".6"/><rect x="10.5" y="2.5" width="5" height="5" rx=".6"/><rect x="2.5" y="10.5" width="5" height="5" rx=".6"/><rect x="10.5" y="10.5" width="5" height="5" rx=".6"/></svg>PIXEL</span>
+        </div>
+      </section>
+
+      <section class="copy" data-copy="zh-Hans">
+        <p class="kicker">创建 · 定制 · 动画 · 导出</p>
+        <h1>让每一个形象动起来</h1>
+        <p class="lede">在浏览器中创作几何 3D 头像，探索不断扩展的角色与视觉风格。</p>
+        <div class="features">
+          <span><svg viewBox="0 0 18 18" aria-hidden="true"><path d="M6.5 4.5 2.5 9l4 4.5M11.5 4.5l4 4.5-4 4.5"/></svg>SVG</span>
+          <span><svg viewBox="0 0 18 18" aria-hidden="true"><rect x="2.5" y="3" width="13" height="12" rx="2"/><circle cx="6.2" cy="6.7" r="1.2"/><path d="m4.5 13 3.2-3.2 2.2 2.1 1.8-1.8 2 2"/></svg>PNG</span>
+          <span><svg viewBox="0 0 18 18" aria-hidden="true"><rect x="2.5" y="3" width="13" height="12" rx="2"/><path d="m7.5 6.2 4 2.8-4 2.8Z"/></svg>GIF</span>
+          <span><svg class="pixel-icon" viewBox="0 0 18 18" aria-hidden="true"><rect x="2.5" y="2.5" width="5" height="5" rx=".6"/><rect x="10.5" y="2.5" width="5" height="5" rx=".6"/><rect x="2.5" y="10.5" width="5" height="5" rx=".6"/><rect x="10.5" y="10.5" width="5" height="5" rx=".6"/></svg>像素风</span>
+        </div>
+      </section>
+
+      <section class="gallery" aria-label="Avatar style gallery">
+        <div class="tile" data-size="wide"><img src="../src/avatarPresetSnapshots/breeds/owl--barn-owl.svg" alt=""></div>
+        <div class="tile"><img src="../src/avatarPresetSnapshots/breeds/hamster--syrian-hamster.svg" alt=""></div>
+        <div class="tile" data-size="large" data-slot="d"><img src="../src/avatarPresetSnapshots/breeds/bear--brown-bear.svg" alt=""></div>
+        <div class="tile"><img src="../src/avatarPresetSnapshots/pixel/cat.svg" alt=""></div>
+        <div class="tile" data-size="tall"><img src="../src/avatarPresetSnapshots/breeds/rabbit--holland-lop.svg" alt=""></div>
+        <div class="tile"><img src="../src/avatarPresetSnapshots/breeds/parrot--scarlet-macaw.svg" alt=""></div>
+        <div class="tile" data-size="wide"><img src="../src/avatarPresetSnapshots/breeds/cow--dairy-cow.svg" alt=""></div>
+        <div class="tile"><img src="../src/avatarPresetSnapshots/breeds/fox--fennec-fox.svg" alt=""></div>
+        <div class="tile"><img src="../src/avatarPresetSnapshots/pixel/owl.svg" alt=""></div>
+        <div class="tile" data-size="large" data-slot="e"><img src="../src/avatarPresetSnapshots/breeds/capybara--capybara.svg" alt=""></div>
+        <div class="tile"><img src="../src/avatarPresetSnapshots/breeds/penguin--gentoo-penguin.svg" alt=""></div>
+        <div class="tile" data-size="large" data-slot="j"><img src="../src/avatarPresetSnapshots/breeds/tiger--tiger-cub.svg" alt=""></div>
+        <div class="tile"><img src="../src/avatarPresetSnapshots/breeds/sheep--lamb.svg" alt=""></div>
+        <div class="tile"><img src="../src/avatarPresetSnapshots/breeds/deer--reindeer.svg" alt=""></div>
+        <div class="tile" data-size="hero" data-slot="a"><img src="../src/avatarPresetSnapshots/breeds/cat--orange-tabby.svg" alt=""></div>
+        <div class="tile"><img src="../src/avatarPresetSnapshots/pixel/fox.svg" alt=""></div>
+        <div class="tile" data-size="tall"><img src="../src/avatarPresetSnapshots/breeds/dog--border-collie.svg" alt=""></div>
+        <div class="tile"><img src="../src/avatarPresetSnapshots/breeds/chinchilla--gray-chinchilla.svg" alt=""></div>
+        <div class="tile" data-size="large" data-slot="k"><img src="../src/avatarPresetSnapshots/breeds/otter--sea-otter.svg" alt=""></div>
+        <div class="tile"><img src="../src/avatarPresetSnapshots/pixel/rabbit.svg" alt=""></div>
+        <div class="tile"><img src="../src/avatarPresetSnapshots/breeds/chick--yellow-chick.svg" alt=""></div>
+        <div class="tile" data-size="large" data-slot="f"><img src="../src/avatarPresetSnapshots/breeds/hedgehog--european-hedgehog.svg" alt=""></div>
+        <div class="tile" data-size="hero" data-slot="b"><img src="../src/avatarPresetSnapshots/breeds/bear--red-panda.svg" alt=""></div>
+        <div class="tile"><img src="../src/avatarPresetSnapshots/pixel/cow.svg" alt=""></div>
+        <div class="tile" data-size="large" data-slot="g"><img src="../src/avatarPresetSnapshots/breeds/lion--african-lion.svg" alt=""></div>
+        <div class="tile"><img src="../src/avatarPresetSnapshots/breeds/goose--canada-goose.svg" alt=""></div>
+        <div class="tile" data-size="tall"><img src="../src/avatarPresetSnapshots/breeds/guinea-pig--abyssinian-guinea-pig.svg" alt=""></div>
+        <div class="tile"><img src="../src/avatarPresetSnapshots/pixel/bear.svg" alt=""></div>
+        <div class="tile" data-size="large" data-slot="h"><img src="../src/avatarPresetSnapshots/breeds/fox--red-fox.svg" alt=""></div>
+        <div class="tile"><img src="../src/avatarPresetSnapshots/breeds/monkey--golden-monkey.svg" alt=""></div>
+        <div class="tile" data-size="large" data-slot="l"><img src="../src/avatarPresetSnapshots/breeds/cow--highland-cow.svg" alt=""></div>
+        <div class="tile"><img src="../src/avatarPresetSnapshots/pixel/parrot.svg" alt=""></div>
+        <div class="tile"><img src="../src/avatarPresetSnapshots/breeds/seal--harp-seal.svg" alt=""></div>
+        <div class="tile" data-size="tall"><img src="../src/avatarPresetSnapshots/breeds/alpaca--cream-alpaca.svg" alt=""></div>
+        <div class="tile"><img src="../src/avatarPresetSnapshots/breeds/pig--pink-pig.svg" alt=""></div>
+        <div class="tile" data-size="large" data-slot="n"><img src="../src/avatarPresetSnapshots/breeds/rabbit--english-spot.svg" alt=""></div>
+        <div class="tile"><img src="../src/avatarPresetSnapshots/pixel/dog.svg" alt=""></div>
+        <div class="tile" data-size="hero" data-slot="c"><img src="../src/avatarPresetSnapshots/breeds/owl--great-horned-owl.svg" alt=""></div>
+        <div class="tile"><img src="../src/avatarPresetSnapshots/breeds/ferret--sable-ferret.svg" alt=""></div>
+        <div class="tile"><img src="../src/avatarPresetSnapshots/breeds/duck--yellow-duckling.svg" alt=""></div>
+        <div class="tile" data-size="large" data-slot="m"><img src="../src/avatarPresetSnapshots/breeds/bear--giant-panda.svg" alt=""></div>
+        <div class="tile"><img src="../src/avatarPresetSnapshots/pixel/sheep.svg" alt=""></div>
+        <div class="tile" data-size="tall"><img src="../src/avatarPresetSnapshots/breeds/squirrel--red-squirrel.svg" alt=""></div>
+        <div class="tile"><img src="../src/avatarPresetSnapshots/breeds/deer--sika-deer.svg" alt=""></div>
+        <div class="tile" data-size="large" data-slot="i"><img src="../src/avatarPresetSnapshots/breeds/dog--shiba-inu.svg" alt=""></div>
+        <div class="tile"><img src="../src/avatarPresetSnapshots/pixel/penguin.svg" alt=""></div>
+        <div class="tile" data-size="large" data-slot="o"><img src="../src/avatarPresetSnapshots/breeds/cat--siamese.svg" alt=""></div>
+        <div class="tile"><img src="../src/avatarPresetSnapshots/breeds/chick--silkie-chick.svg" alt=""></div>
+        <div class="tile"><img src="../src/avatarPresetSnapshots/breeds/cat--black-cat.svg" alt=""></div>
+        <div class="tile"><img src="../src/avatarPresetSnapshots/breeds/dog--corgi.svg" alt=""></div>
+        <div class="tile"><img src="../src/avatarPresetSnapshots/breeds/bear--polar-bear.svg" alt=""></div>
+        <div class="tile"><img src="../src/avatarPresetSnapshots/breeds/owl--snowy-owl.svg" alt=""></div>
+        <div class="tile"><img src="../src/avatarPresetSnapshots/breeds/rabbit--netherland-dwarf.svg" alt=""></div>
+        <div class="tile"><img src="../src/avatarPresetSnapshots/breeds/chick--barred-rock-chick.svg" alt=""></div>
+        <div class="tile"><img src="../src/avatarPresetSnapshots/breeds/alpaca--caramel-alpaca.svg" alt=""></div>
+        <div class="tile"><img src="../src/avatarPresetSnapshots/breeds/fox--arctic-fox.svg" alt=""></div>
+        <div class="tile"><img src="../src/avatarPresetSnapshots/breeds/deer--white-deer.svg" alt=""></div>
+      </section>
+
+      <div class="url">oneworks.cloud/avatar</div>
+    </main>
+
+    <script>
+      const params = new URLSearchParams(window.location.search)
+      document.body.dataset.locale = params.get('locale') === 'zh-Hans' ? 'zh-Hans' : 'en'
+      document.body.dataset.theme = params.get('theme') === 'dark' ? 'dark' : 'light'
+      document.documentElement.lang = document.body.dataset.locale
+      const fit = () => {
+        const scale = window.innerWidth / 1600
+        document.querySelector('#cover').style.transform = `scale(${scale})`
+        document.body.style.width = `${window.innerWidth}px`
+        document.body.style.height = `${900 * scale}px`
+      }
+      fit()
+      window.addEventListener('resize', fit)
+    </script>
+  </body>
+</html>
