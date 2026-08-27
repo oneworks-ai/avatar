@@ -1,0 +1,145 @@
+:root {
+  color: #171717;
+  background: #f5f4f0;
+  font-family: Inter, ui-sans-serif, system-ui, sans-serif;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+}
+
+button {
+  min-height: 34px;
+  padding: 0 12px;
+  border: 1px solid #c8c5be;
+  border-radius: 8px;
+  color: inherit;
+  background: #ffffff;
+  font: inherit;
+}
+
+button[aria-pressed='true'] {
+  border-color: #171717;
+  color: #ffffff;
+  background: #171717;
+}
+
+.two-sphere-lab {
+  width: min(100% - 32px, 920px);
+  margin: 0 auto;
+  padding: 24px 0 32px;
+}
+
+.two-sphere-lab__header,
+.two-sphere-lab__controls,
+.two-sphere-lab__comparison {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.two-sphere-lab__header h1,
+.two-sphere-lab__header p,
+.two-sphere-lab__comparison figure {
+  margin: 0;
+}
+
+.two-sphere-lab__header h1 {
+  font-size: 20px;
+  line-height: 1.2;
+}
+
+.two-sphere-lab__header p,
+.two-sphere-lab__metrics,
+.two-sphere-lab__comparison figcaption {
+  color: #66625b;
+  font-size: 13px;
+}
+
+.two-sphere-lab__header p {
+  margin-top: 5px;
+}
+
+.two-sphere-lab__controls {
+  justify-content: flex-start;
+  margin: 20px 0 14px;
+}
+
+.two-sphere-lab__controls fieldset {
+  display: flex;
+  gap: 4px;
+  margin: 0;
+  padding: 4px;
+  border: 1px solid #d8d5ce;
+  border-radius: 10px;
+}
+
+.two-sphere-lab__controls legend {
+  position: absolute;
+  overflow: hidden;
+  width: 1px;
+  height: 1px;
+  clip: rect(0, 0, 0, 0);
+}
+
+.two-sphere-lab__comparison {
+  align-items: flex-start;
+}
+
+.two-sphere-lab__comparison figure {
+  width: 420px;
+}
+
+.two-sphere-lab__comparison figcaption {
+  margin-bottom: 7px;
+}
+
+.two-sphere-lab__stage {
+  display: block;
+  width: 420px;
+  height: 420px;
+  overflow: hidden;
+  border-radius: 12px;
+}
+
+.two-sphere-lab__stage > .interactive-avatar,
+.two-sphere-lab__stage .interactive-avatar__canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.two-sphere-lab__stage--transparent {
+  background-color: #ffffff;
+  background-image:
+    linear-gradient(45deg, #dddddd 25%, transparent 25%),
+    linear-gradient(-45deg, #dddddd 25%, transparent 25%),
+    linear-gradient(45deg, transparent 75%, #dddddd 75%),
+    linear-gradient(-45deg, transparent 75%, #dddddd 75%);
+  background-position: 0 0, 0 8px, 8px -8px, -8px 0;
+  background-size: 16px 16px;
+}
+
+.two-sphere-lab__metrics {
+  display: block;
+  margin-top: 12px;
+  font-variant-numeric: tabular-nums;
+}
+
+@media (max-width: 900px) {
+  .two-sphere-lab__comparison {
+    flex-direction: column;
+  }
+
+  .two-sphere-lab__comparison figure,
+  .two-sphere-lab__stage {
+    width: min(100%, 420px);
+    height: auto;
+    aspect-ratio: 1;
+  }
+}

@@ -1,4 +1,4 @@
-import { AVATAR_PALETTES } from './catalog.js'
+import { AVATAR_PALETTES, type AvatarPalette } from './catalog.js'
 
 export * from './catalog.js'
 
@@ -34,11 +34,143 @@ export const AVATAR_CAMERA_BACKGROUND_PRESETS = deepFreeze([
   '#8ec5a4'
 ] as const)
 export const AVATAR_SEED_FIELD_PATHS = deepFreeze({
+  alpacaEarHeight: 'scene.entity.alpacaEarHeight',
+  alpacaEarWidth: 'scene.entity.alpacaEarWidth',
+  alpacaHeadHeight: 'scene.entity.alpacaHeadHeight',
+  alpacaHeadWidth: 'scene.entity.alpacaHeadWidth',
   backgroundStyle: 'scene.appearance.backgroundStyle',
+  beaverEarHeight: 'scene.entity.beaverEarHeight',
+  beaverEarWidth: 'scene.entity.beaverEarWidth',
+  beaverHeadHeight: 'scene.entity.beaverHeadHeight',
+  beaverHeadWidth: 'scene.entity.beaverHeadWidth',
+  beaverToothSize: 'scene.entity.beaverToothSize',
+  beaverToothStyle: 'scene.entity.beaverToothStyle',
   cameraBackground: 'scene.camera.background',
   cameraFrame: 'scene.camera.frame',
+  capybaraEarHeight: 'scene.entity.capybaraEarHeight',
+  capybaraEarWidth: 'scene.entity.capybaraEarWidth',
+  capybaraHeadHeight: 'scene.entity.capybaraHeadHeight',
+  capybaraHeadWidth: 'scene.entity.capybaraHeadWidth',
   catEarHeight: 'scene.entity.catEarHeight',
   catEarWidth: 'scene.entity.catEarWidth',
+  chinchillaEarHeight: 'scene.entity.chinchillaEarHeight',
+  chinchillaEarWidth: 'scene.entity.chinchillaEarWidth',
+  chinchillaHeadHeight: 'scene.entity.chinchillaHeadHeight',
+  chinchillaHeadWidth: 'scene.entity.chinchillaHeadWidth',
+  chickBeakSize: 'scene.entity.chickBeakSize',
+  chickBeakStyle: 'scene.entity.chickBeakStyle',
+  chickCrestSize: 'scene.entity.chickCrestSize',
+  chickCrestStyle: 'scene.entity.chickCrestStyle',
+  chickHeadHeight: 'scene.entity.chickHeadHeight',
+  chickHeadWidth: 'scene.entity.chickHeadWidth',
+  cowEarHeight: 'scene.entity.cowEarHeight',
+  cowEarWidth: 'scene.entity.cowEarWidth',
+  cowForelockStyle: 'scene.entity.cowForelockStyle',
+  cowHeadHeight: 'scene.entity.cowHeadHeight',
+  cowHeadWidth: 'scene.entity.cowHeadWidth',
+  cowHornSize: 'scene.entity.cowHornSize',
+  cowHornStyle: 'scene.entity.cowHornStyle',
+  dogEarHeight: 'scene.entity.dogEarHeight',
+  dogEarWidth: 'scene.entity.dogEarWidth',
+  dogHeadHeight: 'scene.entity.dogHeadHeight',
+  dogHeadWidth: 'scene.entity.dogHeadWidth',
+  duckBillSize: 'scene.entity.duckBillSize',
+  duckBillStyle: 'scene.entity.duckBillStyle',
+  duckHeadHeight: 'scene.entity.duckHeadHeight',
+  duckHeadWidth: 'scene.entity.duckHeadWidth',
+  deerAntlerSize: 'scene.entity.deerAntlerSize',
+  deerAntlerStyle: 'scene.entity.deerAntlerStyle',
+  deerEarHeight: 'scene.entity.deerEarHeight',
+  deerEarWidth: 'scene.entity.deerEarWidth',
+  deerHeadHeight: 'scene.entity.deerHeadHeight',
+  deerHeadWidth: 'scene.entity.deerHeadWidth',
+  foxEarHeight: 'scene.entity.foxEarHeight',
+  foxEarStyle: 'scene.entity.foxEarStyle',
+  foxEarWidth: 'scene.entity.foxEarWidth',
+  foxHeadHeight: 'scene.entity.foxHeadHeight',
+  foxHeadTaper: 'scene.entity.foxHeadTaper',
+  foxHeadWidth: 'scene.entity.foxHeadWidth',
+  ferretEarHeight: 'scene.entity.ferretEarHeight',
+  ferretEarWidth: 'scene.entity.ferretEarWidth',
+  ferretHeadHeight: 'scene.entity.ferretHeadHeight',
+  ferretHeadWidth: 'scene.entity.ferretHeadWidth',
+  guineaPigEarHeight: 'scene.entity.guineaPigEarHeight',
+  guineaPigEarWidth: 'scene.entity.guineaPigEarWidth',
+  guineaPigHeadHeight: 'scene.entity.guineaPigHeadHeight',
+  guineaPigHeadWidth: 'scene.entity.guineaPigHeadWidth',
+  gooseBillSize: 'scene.entity.gooseBillSize',
+  gooseBillStyle: 'scene.entity.gooseBillStyle',
+  gooseHeadHeight: 'scene.entity.gooseHeadHeight',
+  gooseHeadWidth: 'scene.entity.gooseHeadWidth',
+  hamsterEarHeight: 'scene.entity.hamsterEarHeight',
+  hamsterEarWidth: 'scene.entity.hamsterEarWidth',
+  hamsterHeadHeight: 'scene.entity.hamsterHeadHeight',
+  hamsterHeadWidth: 'scene.entity.hamsterHeadWidth',
+  hedgehogEarHeight: 'scene.entity.hedgehogEarHeight',
+  hedgehogEarWidth: 'scene.entity.hedgehogEarWidth',
+  hedgehogHeadHeight: 'scene.entity.hedgehogHeadHeight',
+  hedgehogHeadWidth: 'scene.entity.hedgehogHeadWidth',
+  hedgehogSpineSize: 'scene.entity.hedgehogSpineSize',
+  hedgehogSpineStyle: 'scene.entity.hedgehogSpineStyle',
+  lionEarHeight: 'scene.entity.lionEarHeight',
+  lionEarWidth: 'scene.entity.lionEarWidth',
+  lionHeadHeight: 'scene.entity.lionHeadHeight',
+  lionHeadWidth: 'scene.entity.lionHeadWidth',
+  lionManeSize: 'scene.entity.lionManeSize',
+  lionManeStyle: 'scene.entity.lionManeStyle',
+  monkeyEarHeight: 'scene.entity.monkeyEarHeight',
+  monkeyEarWidth: 'scene.entity.monkeyEarWidth',
+  monkeyHeadHeight: 'scene.entity.monkeyHeadHeight',
+  monkeyHeadWidth: 'scene.entity.monkeyHeadWidth',
+  otterEarHeight: 'scene.entity.otterEarHeight',
+  otterEarWidth: 'scene.entity.otterEarWidth',
+  otterHeadHeight: 'scene.entity.otterHeadHeight',
+  otterHeadWidth: 'scene.entity.otterHeadWidth',
+  owlBeakSize: 'scene.entity.owlBeakSize',
+  owlBeakStyle: 'scene.entity.owlBeakStyle',
+  owlHeadHeight: 'scene.entity.owlHeadHeight',
+  owlHeadWidth: 'scene.entity.owlHeadWidth',
+  owlTuftSize: 'scene.entity.owlTuftSize',
+  owlTuftStyle: 'scene.entity.owlTuftStyle',
+  parrotBeakSize: 'scene.entity.parrotBeakSize',
+  parrotBeakStyle: 'scene.entity.parrotBeakStyle',
+  parrotHeadHeight: 'scene.entity.parrotHeadHeight',
+  parrotHeadWidth: 'scene.entity.parrotHeadWidth',
+  pigEarHeight: 'scene.entity.pigEarHeight',
+  pigEarWidth: 'scene.entity.pigEarWidth',
+  pigHeadHeight: 'scene.entity.pigHeadHeight',
+  pigHeadWidth: 'scene.entity.pigHeadWidth',
+  penguinBeakSize: 'scene.entity.penguinBeakSize',
+  penguinBeakStyle: 'scene.entity.penguinBeakStyle',
+  penguinHeadHeight: 'scene.entity.penguinHeadHeight',
+  penguinHeadWidth: 'scene.entity.penguinHeadWidth',
+  bearEarHeight: 'scene.entity.bearEarHeight',
+  bearEarWidth: 'scene.entity.bearEarWidth',
+  bearHeadHeight: 'scene.entity.bearHeadHeight',
+  bearHeadWidth: 'scene.entity.bearHeadWidth',
+  rabbitEarHeight: 'scene.entity.rabbitEarHeight',
+  rabbitEarWidth: 'scene.entity.rabbitEarWidth',
+  rabbitHeadHeight: 'scene.entity.rabbitHeadHeight',
+  rabbitHeadWidth: 'scene.entity.rabbitHeadWidth',
+  sealEarHeight: 'scene.entity.sealEarHeight',
+  sealEarWidth: 'scene.entity.sealEarWidth',
+  sealHeadHeight: 'scene.entity.sealHeadHeight',
+  sealHeadWidth: 'scene.entity.sealHeadWidth',
+  sheepEarHeight: 'scene.entity.sheepEarHeight',
+  sheepEarWidth: 'scene.entity.sheepEarWidth',
+  sheepHeadHeight: 'scene.entity.sheepHeadHeight',
+  sheepHeadWidth: 'scene.entity.sheepHeadWidth',
+  sheepHornSize: 'scene.entity.sheepHornSize',
+  sheepHornStyle: 'scene.entity.sheepHornStyle',
+  squirrelEarHeight: 'scene.entity.squirrelEarHeight',
+  squirrelEarWidth: 'scene.entity.squirrelEarWidth',
+  squirrelHeadHeight: 'scene.entity.squirrelHeadHeight',
+  squirrelHeadWidth: 'scene.entity.squirrelHeadWidth',
+  squirrelTailSize: 'scene.entity.squirrelTailSize',
+  tigerEarHeight: 'scene.entity.tigerEarHeight',
+  tigerEarWidth: 'scene.entity.tigerEarWidth',
+  tigerHeadHeight: 'scene.entity.tigerHeadHeight',
+  tigerHeadWidth: 'scene.entity.tigerHeadWidth',
   coatPatternAlgorithm: 'scene.appearance.coatPattern.algorithm',
   coatPatternBreakup: 'scene.appearance.coatPattern.breakup',
   coatPatternContrast: 'scene.appearance.coatPattern.contrast',
@@ -120,6 +252,7 @@ export const AVATAR_SEEDED_VIEW_POSE = deepFreeze(
 )
 export const AVATAR_ENTITY_RANGES = deepFreeze(
   {
+    bottomTaper: { max: 100, min: 0 },
     occlusionAmount: { max: 100, min: 0 },
     roundness: { max: 100, min: 0 },
     scaleX: { max: 1.5, min: .08 },
@@ -202,6 +335,26 @@ export const AVATAR_TABBY_COMPATIBLE_PALETTE_IDS = deepFreeze([
   'russian-blue',
   'orange-tabby'
 ] as const)
+export const AVATAR_DOG_COMPATIBLE_PALETTE_IDS = deepFreeze([
+  'shiba-inu',
+  'husky',
+  'corgi',
+  'golden-retriever',
+  'border-collie',
+  'dalmatian'
+] as const)
+export const AVATAR_RABBIT_COMPATIBLE_PALETTE_IDS = deepFreeze([
+  'holland-lop',
+  'netherland-dwarf',
+  'dutch-rabbit',
+  'himalayan-rabbit',
+  'lionhead-rabbit',
+  'english-spot'
+] as const)
+export const AVATAR_BEAR_COMPATIBLE_PALETTE_IDS = deepFreeze([
+  'brown-bear', 'polar-bear', 'asian-black-bear', 'giant-panda', 'spectacled-bear', 'sun-bear',
+  'red-panda', 'koala', 'raccoon', 'wombat', 'teddy-bear'
+] as const)
 
 export type AvatarBackgroundStyle = 'gradient' | 'solid'
 export type AvatarBodyShape =
@@ -219,7 +372,102 @@ export type AvatarBodyShape =
 export type AvatarCameraFrame = 'circle' | 'rounded' | 'square'
 export type AvatarCoatPatternAlgorithm = 'broken-mackerel' | 'classic' | 'mackerel' | 'random' | 'spotted'
 export type AvatarCoatPatternLightPatchShape = 'ellipse' | 'face-mask' | 'rounded'
-export type AvatarEntityPreset = 'bear' | 'bun' | 'cat' | 'cloud' | 'custom' | 'dog' | 'rabbit' | 'sun'
+export const AVATAR_ENTITY_PRESET_VALUES = deepFreeze([
+  'alpaca', 'bear', 'beaver', 'bun', 'capybara', 'cat', 'cloud', 'cow', 'custom',
+  'chick', 'chinchilla', 'deer', 'dog', 'duck', 'ferret', 'fox', 'goose', 'hamster', 'hedgehog', 'lion', 'monkey', 'otter', 'pig', 'rabbit',
+  'guinea-pig', 'owl', 'parrot', 'penguin', 'seal', 'sheep', 'squirrel', 'sun', 'tiger'
+] as const)
+export type AvatarEntityPreset = (typeof AVATAR_ENTITY_PRESET_VALUES)[number]
+export type AvatarBeaverToothStyle = 'none' | 'paired'
+export type AvatarChickBeakStyle = 'pointed' | 'short'
+export type AvatarChickCrestStyle = 'comb' | 'fluffy' | 'none'
+export type AvatarCowForelockStyle = 'highland' | 'none' | 'soft'
+export type AvatarCowHornStyle = 'highland' | 'none' | 'short'
+export type AvatarDeerAntlerStyle = 'branched' | 'forked' | 'none' | 'reindeer' | 'spike'
+export type AvatarDuckBillStyle = 'broad' | 'flat'
+export type AvatarFoxEarStyle = 'fennec' | 'pointed' | 'rounded'
+export type AvatarGooseBillStyle = 'broad' | 'short'
+export type AvatarHedgehogSpineStyle = 'full' | 'none' | 'short'
+export type AvatarLionManeStyle = 'full' | 'juvenile' | 'none'
+export type AvatarPenguinBeakStyle = 'short' | 'tapered'
+export type AvatarOwlBeakStyle = 'hooked' | 'short'
+export type AvatarOwlTuftStyle = 'none' | 'paired'
+export type AvatarParrotBeakStyle = 'hooked' | 'macaw'
+export type AvatarSheepHornStyle = 'curled' | 'curved' | 'none' | 'straight'
+export type AvatarAnimalSurfaceMarkingShape = 'ellipse' | 'face-mask' | 'rounded' | 'rounded-triangle'
+
+export interface AvatarAnimalSurfaceMarkingStyle {
+  readonly color?: string
+  readonly height?: number
+  readonly opacity?: number
+  readonly shape?: AvatarAnimalSurfaceMarkingShape
+  readonly width?: number
+  readonly x?: number
+  readonly y?: number
+}
+export type AvatarAlpacaSurfaceMarkingStyle = AvatarAnimalSurfaceMarkingStyle
+export type AvatarBeaverSurfaceMarkingStyle = AvatarAnimalSurfaceMarkingStyle
+export type AvatarGuineaPigSurfaceMarkingStyle = AvatarAnimalSurfaceMarkingStyle & {
+  readonly innerEarColor?: string
+}
+export type AvatarGooseSurfaceMarkingStyle = AvatarAnimalSurfaceMarkingStyle & {
+  readonly billColor?: string
+  readonly nostrilColor?: string
+  readonly seamColor?: string
+}
+export type AvatarCapybaraSurfaceMarkingStyle = AvatarAnimalSurfaceMarkingStyle
+export type AvatarChickSurfaceMarkingStyle = AvatarAnimalSurfaceMarkingStyle & {
+  readonly beakColor?: string
+  readonly combColor?: string
+  readonly nostrilColor?: string
+  readonly seamColor?: string
+}
+export type AvatarChinchillaSurfaceMarkingStyle = AvatarAnimalSurfaceMarkingStyle & {
+  readonly innerEarColor?: string
+}
+export type AvatarCowSurfaceMarkingStyle = AvatarAnimalSurfaceMarkingStyle
+export type AvatarHamsterSurfaceMarkingStyle = AvatarAnimalSurfaceMarkingStyle & {
+  readonly innerEarColor?: string
+}
+export type AvatarHedgehogSurfaceMarkingStyle = AvatarAnimalSurfaceMarkingStyle
+export type AvatarLionSurfaceMarkingStyle = AvatarAnimalSurfaceMarkingStyle
+export type AvatarMonkeySurfaceMarkingStyle = AvatarAnimalSurfaceMarkingStyle & {
+  readonly innerEarColor?: string
+  readonly nostrilColor?: string
+}
+export type AvatarPenguinSurfaceMarkingStyle = AvatarAnimalSurfaceMarkingStyle & {
+  readonly beakColor?: string
+  readonly nostrilColor?: string
+  readonly seamColor?: string
+}
+export type AvatarOwlSurfaceMarkingStyle = AvatarAnimalSurfaceMarkingStyle & {
+  readonly beakColor?: string
+  readonly eyeRingColor?: string
+  readonly nostrilColor?: string
+  readonly seamColor?: string
+  readonly tuftColor?: string
+}
+export type AvatarParrotSurfaceMarkingStyle = AvatarAnimalSurfaceMarkingStyle & {
+  readonly beakColor?: string
+  readonly nostrilColor?: string
+  readonly seamColor?: string
+}
+export type AvatarDeerSurfaceMarkingStyle = AvatarAnimalSurfaceMarkingStyle
+export type AvatarDuckSurfaceMarkingStyle = AvatarAnimalSurfaceMarkingStyle & {
+  readonly billColor?: string
+  readonly nostrilColor?: string
+  readonly seamColor?: string
+}
+export type AvatarFerretSurfaceMarkingStyle = AvatarAnimalSurfaceMarkingStyle & {
+  readonly innerEarColor?: string
+  readonly maskColor?: string
+}
+export type AvatarOtterSurfaceMarkingStyle = AvatarAnimalSurfaceMarkingStyle
+export type AvatarSealSurfaceMarkingStyle = AvatarAnimalSurfaceMarkingStyle
+export type AvatarSheepSurfaceMarkingShape = AvatarAnimalSurfaceMarkingShape
+export type AvatarSheepSurfaceMarkingStyle = AvatarAnimalSurfaceMarkingStyle
+export type AvatarSquirrelSurfaceMarkingStyle = AvatarAnimalSurfaceMarkingStyle
+export type AvatarTigerSurfaceMarkingStyle = AvatarAnimalSurfaceMarkingStyle
 export type AvatarEyeShape = 'chevron' | 'ellipse' | 'rounded'
 export type AvatarSurfaceDecalSide = 'back' | 'face' | 'front' | 'left' | 'right'
 export type AvatarSurfaceDecalShape =
@@ -264,8 +512,8 @@ export interface AvatarFace {
   readonly gap: number
   readonly height: number
   readonly leftEyeHeight?: number
-  readonly leftEyeWidth?: number
   readonly leftEyeShape?: AvatarEyeShape
+  readonly leftEyeWidth?: number
   readonly leftEyeRotation: number
   readonly mouthCurve: number
   readonly mouthEnabled: boolean
@@ -282,8 +530,8 @@ export interface AvatarFace {
   readonly noseY: number
   readonly rotation: number
   readonly rightEyeHeight?: number
-  readonly rightEyeWidth?: number
   readonly rightEyeShape?: AvatarEyeShape
+  readonly rightEyeWidth?: number
   readonly rightEyeRotation: number
   readonly width: number
 }
@@ -295,6 +543,10 @@ export interface AvatarEyeHighlight {
   readonly offsetY: number
   readonly opacity: number
   readonly size: number
+}
+
+export type AvatarFaceOverride = Partial<Omit<AvatarFace, 'eyeHighlight'>> & {
+  readonly eyeHighlight?: Partial<AvatarEyeHighlight>
 }
 
 export interface AvatarSurfaceDecal {
@@ -315,6 +567,7 @@ export interface AvatarSurfaceDecal {
 
 export interface AvatarEntityPart {
   readonly baseColor: string
+  readonly bottomTaper?: number
   readonly cutAngle?: number
   readonly face: boolean
   readonly foregroundColor: string
@@ -383,6 +636,7 @@ export interface AvatarScene {
   readonly appearance: {
     readonly backgroundStyle: AvatarBackgroundStyle
     readonly bodyShape: AvatarBodyShape
+    readonly bottomTaper?: number
     readonly coatPattern?: AvatarCoatPattern
     readonly paletteId: string
   }
@@ -802,6 +1056,157 @@ const AVATAR_TABBY_DARK_GROUPS: readonly (readonly AvatarCoatPatternMarkSpec[])[
   AVATAR_TABBY_VARIABLE_GROUPS[10]!
 ])
 
+const resolveAvatarDogCoatPatternDecals = ({
+  facePartId,
+  leftEarId,
+  palette,
+  pattern,
+  rightEarId,
+  species = 'dog'
+}: {
+  readonly facePartId: string
+  readonly leftEarId: string | undefined
+  readonly palette: (typeof AVATAR_PALETTES)[number]
+  readonly pattern: AvatarCoatPattern
+  readonly rightEarId: string | undefined
+  readonly species?: 'bear' | 'cow' | 'deer' | 'dog' | 'pig' | 'rabbit'
+}): readonly AvatarSurfaceDecal[] => {
+  const marking = palette.coat?.marking
+  if (marking == null) return []
+  const patch = palette.coat?.patch ?? palette.gradient[1]
+  const mark = palette.coat?.mark ?? palette.foreground
+  const contrast = pattern.contrast / 100
+  const opacity = Math.round(76 + contrast * 20)
+  const width = pattern.lightPatchWidth ?? 100
+  const length = pattern.lightPatchLength ?? 100
+  const offsetY = pattern.lightPatchOffsetY ?? 0
+  const speciesLabel = species.charAt(0).toUpperCase() + species.slice(1)
+  const fixed = (
+    id: string,
+    label: string,
+    color: string,
+    shape: AvatarSurfaceDecalShape,
+    x: number,
+    y: number,
+    decalWidth: number,
+    height: number,
+    rotation = 0,
+    side: AvatarSurfaceDecalSide = 'face',
+    targetPartId = facePartId
+  ): AvatarSurfaceDecal => ({
+    color,
+    height: Math.max(AVATAR_SURFACE_DECAL_RANGES.height.min, Math.min(AVATAR_SURFACE_DECAL_RANGES.height.max, Math.round(height))),
+    id: `coat-${species}-${marking}-${id}`,
+    label,
+    opacity: color === patch ? 100 : opacity,
+    rotation,
+    shape,
+    side,
+    targetPartId,
+    width: Math.max(AVATAR_SURFACE_DECAL_RANGES.width.min, Math.min(AVATAR_SURFACE_DECAL_RANGES.width.max, Math.round(decalWidth))),
+    x,
+    y
+  })
+  if (marking === 'muzzle') {
+    return [fixed('muzzle', `${speciesLabel} cream muzzle`, patch, 'ellipse', 0, 42 + offsetY, width * 1.05, length * .66)]
+  }
+  if (marking === 'blaze') {
+    return [
+      fixed('blaze', `${speciesLabel} face blaze`, patch, 'rounded', 0, -45 + offsetY, width * .32, length * 1.22),
+      fixed('muzzle', `${speciesLabel} cream muzzle`, patch, 'ellipse', 0, 40 + offsetY, width * .96, length * .58)
+    ]
+  }
+  if (marking === 'mask') {
+    return [fixed('mask', `${speciesLabel} face mask`, patch, 'face-mask', 0, 40 + offsetY, width * 1.08, length * 1.12)]
+  }
+  const count = Math.max(8, Math.round(10 + pattern.density / 100 * 16))
+  const headSides = ['front', 'front', 'left', 'front', 'right', 'front', 'back', 'front'] as const
+  return Array.from({ length: count }, (_, index) => {
+    const earPartId = index % 12 === 0 ? leftEarId : index % 12 === 1 ? rightEarId : undefined
+    const side = earPartId == null ? headSides[index % headSides.length]! : 'front'
+    const isEarSpot = earPartId != null
+    const rawX = resolveAvatarSeededInteger(
+      pattern.seed,
+      `coat.${species}.spots.${index}.x`,
+      isEarSpot ? -34 : side === 'front' ? -118 : -70,
+      isEarSpot ? 34 : side === 'front' ? 118 : 70
+    )
+    const y = resolveAvatarSeededInteger(
+      pattern.seed,
+      `coat.${species}.spots.${index}.y`,
+      isEarSpot ? -44 : -112,
+      isEarSpot ? 46 : 112
+    )
+    const spotWidth = resolveAvatarSeededInteger(
+      pattern.seed,
+      `coat.${species}.spots.${index}.width`,
+      isEarSpot ? 13 : 16,
+      isEarSpot ? 24 : 34
+    ) * pattern.thickness / 100
+    const spotHeight = resolveAvatarSeededInteger(
+      pattern.seed,
+      `coat.${species}.spots.${index}.height`,
+      isEarSpot ? 16 : 18,
+      isEarSpot ? 28 : 42
+    ) * pattern.thickness / 100
+    const overlapsFacialFeatures = !isEarSpot && side === 'front' &&
+      Math.abs(rawX) < 64 + Math.ceil(spotWidth) / 2 &&
+      y > -24 - Math.ceil(spotHeight) / 2 && y < 60 + Math.ceil(spotHeight) / 2
+    const x = overlapsFacialFeatures
+      ? (rawX < 0 ? -1 : 1) * (90 + Math.abs(rawX) % 20)
+      : rawX
+    const rotation = resolveAvatarSeededInteger(pattern.seed, `coat.${species}.spots.${index}.rotation`, -55, 55)
+    return fixed(
+      `spot-${index + 1}`,
+      species === 'dog' ? 'Dalmatian coat spot' : `${speciesLabel} coat spot`,
+      mark,
+      'ellipse',
+      x,
+      y,
+      spotWidth,
+      spotHeight,
+      rotation,
+      side,
+      earPartId
+    )
+  })
+}
+
+const resolveAvatarBearCoatPatternDecals = ({ facePartId, palette, pattern }: {
+  readonly facePartId: string
+  readonly palette: (typeof AVATAR_PALETTES)[number]
+  readonly pattern: AvatarCoatPattern
+}): readonly AvatarSurfaceDecal[] => {
+  const marking = palette.coat?.marking
+  const mark = palette.coat?.mark ?? palette.foreground
+  const patch = palette.coat?.patch ?? palette.gradient[1]
+  const fixed = (id: string, label: string, color: string, shape: AvatarSurfaceDecalShape, x: number, y: number, width: number, height: number, rotation = 0): AvatarSurfaceDecal => ({
+    color, height: Math.max(10, Math.round(height)), id: `coat-bear-${marking}-${id}`, label, opacity: 100, rotation, shape, side: 'face', targetPartId: facePartId, width: Math.max(10, Math.round(width)), x, y
+  })
+  if (marking === 'panda') return [
+    fixed('eye-left', 'Panda left eye patch', mark, 'ellipse', -48, -4, 62, 76, -20),
+    fixed('eye-right', 'Panda right eye patch', mark, 'ellipse', 48, -4, 62, 76, 20),
+    fixed('muzzle', 'Panda cream muzzle', patch, 'ellipse', 0, 44, 104, 54)
+  ]
+  if (marking === 'spectacles') return [
+    fixed('ring-left', 'Spectacled bear left eye ring', mark, 'ellipse', -48, -4, 52, 55, 0),
+    fixed('ring-right', 'Spectacled bear right eye ring', mark, 'ellipse', 48, -4, 52, 55, 0),
+    fixed('muzzle', 'Spectacled bear muzzle', patch, 'ellipse', 0, 43, 100, 48)
+  ]
+  if (marking === 'moon') return [fixed('moon', 'Asian black bear moon chest', patch, 'rounded-triangle', 0, 50, 88, 54, 180)]
+  if (marking === 'sun') return [fixed('sun', 'Sun bear chest crescent', patch, 'rounded-triangle', 0, 48, 76, 52, 180)]
+  if (marking === 'red-panda') return [
+    fixed('brow-left', 'Red panda left brow', patch, 'rounded', -48, -37, 42, 18, -16),
+    fixed('brow-right', 'Red panda right brow', patch, 'rounded', 48, -37, 42, 18, 16),
+    fixed('cheek-left', 'Red panda left cheek', patch, 'ellipse', -52, 37, 58, 54, -18),
+    fixed('cheek-right', 'Red panda right cheek', patch, 'ellipse', 52, 37, 58, 54, 18),
+    fixed('muzzle', 'Red panda muzzle', '#fff2d8', 'ellipse', 0, 44, 78, 40)
+  ]
+  if (marking === 'raccoon') return [fixed('mask', 'Raccoon eye mask', mark, 'face-mask', 0, 2, 146, 76), fixed('muzzle', 'Raccoon muzzle', patch, 'ellipse', 0, 47, 88, 44)]
+  if (marking === 'wombat') return [fixed('muzzle', 'Wombat broad muzzle', patch, 'ellipse', 0, 43, 122, 54)]
+  return resolveAvatarDogCoatPatternDecals({ facePartId, leftEarId: undefined, palette, pattern, rightEarId: undefined, species: 'bear' })
+}
+
 const resolveAvatarCoatPatternAlgorithm = (pattern: AvatarCoatPattern) => (
   pattern.algorithm === 'random'
     ? resolveAvatarSeededOption(
@@ -815,20 +1220,74 @@ const resolveAvatarCoatPatternAlgorithm = (pattern: AvatarCoatPattern) => (
 export const resolveAvatarCoatPatternDecals = ({
   entityParts,
   entityPreset,
+  palette: paletteOverride,
   paletteId,
   pattern
 }: {
   readonly entityParts: readonly AvatarEntityPart[]
   readonly entityPreset: AvatarEntityPreset
+  readonly palette?: AvatarPalette
   readonly paletteId: string
   readonly pattern: AvatarCoatPattern
 }): readonly AvatarSurfaceDecal[] => {
-  if (!pattern.enabled || entityPreset !== 'cat') return []
+  if (!pattern.enabled || (
+    entityPreset !== 'cat' && entityPreset !== 'dog' && entityPreset !== 'rabbit' &&
+    entityPreset !== 'bear' && entityPreset !== 'cow' && entityPreset !== 'deer' && entityPreset !== 'pig' &&
+    entityPreset !== 'squirrel' && entityPreset !== 'tiger'
+  )) return []
   const facePartId = entityParts.find(part => part.face)?.id
   if (facePartId == null) return []
   const leftEarId = entityParts.find(part => /ear-left|left-ear/u.test(part.id))?.id
   const rightEarId = entityParts.find(part => /ear-right|right-ear/u.test(part.id))?.id
-  const palette = AVATAR_PALETTES.find(candidate => candidate.id === paletteId) ?? AVATAR_PALETTES[0]!
+  const palette = paletteOverride ?? AVATAR_PALETTES.find(candidate => candidate.id === paletteId) ?? AVATAR_PALETTES[0]!
+  if (entityPreset === 'bear') return resolveAvatarBearCoatPatternDecals({ facePartId, palette, pattern })
+  if (entityPreset === 'tiger' && palette.coat?.marking !== 'stripes') return []
+  if (entityPreset === 'squirrel') {
+    if (palette.coat?.marking !== 'stripes') return []
+    const thickness = pattern.thickness / 100
+    const opacity = Math.round(72 + pattern.contrast * .23)
+    const chipmunkStripe = (
+      id: string,
+      x: number,
+      width: number,
+      rotation: number,
+      bend: number,
+      color: string
+    ): AvatarSurfaceDecal => ({
+      bend,
+      color,
+      height: 112,
+      id: `coat-chipmunk-${id}`,
+      label: 'Natural curved chipmunk stripe',
+      opacity,
+      rotation,
+      shape: 'tapered-band',
+      side: 'face',
+      targetPartId: facePartId,
+      width: Math.max(6, Math.round(width * thickness)),
+      x,
+      y: -14
+    })
+    return [
+      chipmunkStripe('center', 0, 14, 0, 0, palette.coat.mark),
+      chipmunkStripe('left', -42, 12, -11, -17, palette.coat.mark),
+      chipmunkStripe('right', 42, 12, 11, 17, palette.coat.mark),
+      chipmunkStripe('left-light', -23, 9, -5, -9, palette.coat.patch),
+      chipmunkStripe('right-light', 23, 9, 5, 9, palette.coat.patch)
+    ]
+  }
+  if ((entityPreset === 'cow' || entityPreset === 'deer' || entityPreset === 'pig') && palette.coat?.marking !== 'spots') return []
+  if (
+    entityPreset === 'dog' || entityPreset === 'rabbit' ||
+    entityPreset === 'cow' || entityPreset === 'deer' || entityPreset === 'pig'
+  ) return resolveAvatarDogCoatPatternDecals({
+    facePartId,
+    leftEarId,
+    palette,
+    pattern,
+    rightEarId,
+    species: entityPreset
+  })
   const algorithm = resolveAvatarCoatPatternAlgorithm(pattern)
   const contrast = pattern.contrast / 100
   const stripeColor = palette.coat?.mark ?? mixAvatarHexColor(palette.background, palette.foreground, contrast)
@@ -850,7 +1309,7 @@ export const resolveAvatarCoatPatternDecals = ({
     resolveAvatarSeededInteger(pattern.seed, `coat.${algorithm}.${path}.${axis}`, -100, 100) / 100 * amount * jitterAmount
   )
   const selectedGroups = [
-    ...AVATAR_TABBY_TONE_GROUPS,
+    ...(entityPreset === 'tiger' ? [] : AVATAR_TABBY_TONE_GROUPS),
     ...AVATAR_TABBY_DARK_GROUPS.slice(0, densityCount)
   ]
   return selectedGroups.flatMap(group => group.map(spec => {
@@ -901,8 +1360,10 @@ export const resolveAvatarCoatPatternDecals = ({
           : Math.round(spec.height * heightScale) + Math.abs(pairedJitter('height', 8 * jitterScale)),
         AVATAR_SURFACE_DECAL_RANGES.height
       ),
-      id: `coat-${algorithm}-${spec.id}`,
-      label: isTone ? 'Tabby coat patch' : spotted || broken ? 'Tabby spot' : 'Tabby stripe',
+      id: `coat-${entityPreset === 'tiger' ? 'tiger-' : ''}${algorithm}-${spec.id}`,
+      label: entityPreset === 'tiger'
+        ? 'Natural curved tiger stripe'
+        : isTone ? 'Tabby coat patch' : spotted || broken ? 'Tabby spot' : 'Tabby stripe',
       opacity,
       rotation: clampDecalValue(
         spec.rotation + pairedJitter('rotation', 14 * jitterScale),
@@ -1200,7 +1661,6 @@ const isAvatarFace = (value: unknown): value is AvatarFace => (
     'height',
     'leftEyeHeight',
     'leftEyeWidth',
-    'leftEyeShape',
     'leftEyeRotation',
     'mouthCurve',
     'mouthEnabled',
@@ -1218,7 +1678,6 @@ const isAvatarFace = (value: unknown): value is AvatarFace => (
     'rotation',
     'rightEyeHeight',
     'rightEyeWidth',
-    'rightEyeShape',
     'rightEyeRotation',
     'width'
   ]) && hasOwnKeys(value, [
@@ -1246,9 +1705,7 @@ const isAvatarFace = (value: unknown): value is AvatarFace => (
     'width'
   ]) && isAvatarEyeHighlight(value.eyeHighlight) &&
   isFiniteInRange(value.eyeRoundness, AVATAR_FACE_RANGES.eyeRoundness) &&
-  isOneOf(value.eyeShape, ['chevron', 'ellipse', 'rounded']) && isFiniteInRange(value.gap, AVATAR_FACE_RANGES.gap) &&
-  (value.leftEyeShape === undefined || isOneOf(value.leftEyeShape, ['chevron', 'ellipse', 'rounded'])) &&
-  (value.rightEyeShape === undefined || isOneOf(value.rightEyeShape, ['chevron', 'ellipse', 'rounded'])) &&
+  isOneOf(value.eyeShape, ['ellipse', 'rounded']) && isFiniteInRange(value.gap, AVATAR_FACE_RANGES.gap) &&
   isFiniteInRange(value.height, AVATAR_FACE_RANGES.height) &&
   (value.leftEyeHeight === undefined || isFiniteInRange(value.leftEyeHeight, AVATAR_FACE_RANGES.leftEyeHeight)) &&
   (value.leftEyeWidth === undefined || isFiniteInRange(value.leftEyeWidth, AVATAR_FACE_RANGES.leftEyeWidth)) &&
@@ -1275,6 +1732,7 @@ const isAvatarFace = (value: unknown): value is AvatarFace => (
 const isAvatarEntityPart = (value: unknown): value is AvatarEntityPart => (
   isRecord(value) && hasOnlyKeys(value, [
     'baseColor',
+    'bottomTaper',
     'cutAngle',
     'face',
     'foregroundColor',
@@ -1312,7 +1770,9 @@ const isAvatarEntityPart = (value: unknown): value is AvatarEntityPart => (
     'x',
     'y',
     'z'
-  ]) && isHexColor(value.baseColor) && isOptionalNumber(value.cutAngle) &&
+  ]) && isHexColor(value.baseColor) &&
+  (value.bottomTaper === undefined || isFiniteInRange(value.bottomTaper, AVATAR_ENTITY_RANGES.bottomTaper)) &&
+  isOptionalNumber(value.cutAngle) &&
   isBoolean(value.face) && isHexColor(value.foregroundColor) && isHexColor(value.highlightColor) &&
   (value.hollow === undefined || isBoolean(value.hollow)) && isString(value.id) && value.id.trim().length > 0 &&
   isString(value.label) &&
@@ -1382,8 +1842,6 @@ const isPartialAvatarFace = (value: unknown) => {
     ...booleanKeys,
     'eyeHighlight',
     'eyeShape',
-    'leftEyeShape',
-    'rightEyeShape',
     'mouthShape',
     'noseShape'
   ]
@@ -1394,9 +1852,7 @@ const isPartialAvatarFace = (value: unknown) => {
       return range != null && isFiniteInRange(field, range)
     }
     if (booleanKeys.includes(key)) return isBoolean(field)
-    if (key === 'eyeShape' || key === 'leftEyeShape' || key === 'rightEyeShape') {
-      return isOneOf(field, ['chevron', 'ellipse', 'rounded'])
-    }
+    if (key === 'eyeShape') return isOneOf(field, ['ellipse', 'rounded'])
     if (key === 'eyeHighlight') return isAvatarEyeHighlight(field)
     if (key === 'mouthShape') {
       return isOneOf(field, ['curve', 'ellipse', 'rounded', 'rounded-triangle'])
@@ -1553,6 +2009,7 @@ const isAvatarDefinitionValue = (value: unknown): value is AvatarDefinition => {
   return isRecord(scene.appearance) && hasOnlyKeys(scene.appearance, [
     'backgroundStyle',
     'bodyShape',
+    'bottomTaper',
     'coatPattern',
     'paletteId'
   ]) && hasOwnKeys(scene.appearance, ['backgroundStyle', 'bodyShape', 'paletteId']) &&
@@ -1569,7 +2026,9 @@ const isAvatarDefinitionValue = (value: unknown): value is AvatarDefinition => {
       'sphere',
       'teardrop',
       'trapezoid'
-    ]) && (scene.appearance.coatPattern === undefined || isAvatarCoatPattern(scene.appearance.coatPattern)) &&
+    ]) && (scene.appearance.bottomTaper === undefined ||
+      isFiniteInRange(scene.appearance.bottomTaper, AVATAR_ENTITY_RANGES.bottomTaper)) &&
+    (scene.appearance.coatPattern === undefined || isAvatarCoatPattern(scene.appearance.coatPattern)) &&
     isString(scene.appearance.paletteId) &&
     isRecord(scene.camera) && hasOnlyKeys(scene.camera, [
       'background',
@@ -1619,7 +2078,7 @@ const isAvatarDefinitionValue = (value: unknown): value is AvatarDefinition => {
     new Set(scene.entity.parts.map(part => part.id)).size === scene.entity.parts.length &&
     (scene.entity.parts.length === 0 || scene.entity.parts.filter(part => part.face).length === 1) &&
     decalTargetsAreValid &&
-    isOneOf(scene.entity.preset, ['bear', 'bun', 'cat', 'cloud', 'custom', 'dog', 'rabbit', 'sun']) &&
+    isOneOf(scene.entity.preset, AVATAR_ENTITY_PRESET_VALUES) &&
     isAvatarFace(scene.face) && isOneOf(scene.interactionMode, ['move', 'rotate']) &&
     isRecord(scene.lighting) && hasOnlyKeys(scene.lighting, [
       'azimuth',

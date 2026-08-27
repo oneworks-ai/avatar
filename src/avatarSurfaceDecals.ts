@@ -89,7 +89,9 @@ export const deserializeAvatarSurfaceDecals = (
       if (item[1] != null && typeof item[1] !== 'string') return []
       if (!AVATAR_SURFACE_DECAL_SHAPES.includes(item[2] as AvatarSurfaceDecalShape)) return []
       if (!isHexColor(item[8])) return []
-      const requestedTarget = typeof item[1] === 'string' && item[1].trim() !== '' ? item[1] : null
+      if (typeof item[1] === 'string' && item[1].trim() === '') return []
+      const requestedTarget = typeof item[1] === 'string' ? item[1] : null
+      if (requestedTarget != null && validTargets != null && !validTargets.has(requestedTarget)) return []
       const targetPartId = requestedTarget != null && (validTargets == null || validTargets.has(requestedTarget))
         ? requestedTarget
         : null

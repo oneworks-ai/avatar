@@ -1,5 +1,11 @@
 import { describe, expect, it, vi } from 'vitest'
-import { AVATAR_TABBY_COMPATIBLE_PALETTE_IDS, DEFAULT_AVATAR_COAT_PATTERN } from '@oneworks/avatar'
+import {
+  AVATAR_BEAR_COMPATIBLE_PALETTE_IDS,
+  AVATAR_RABBIT_COMPATIBLE_PALETTE_IDS,
+  AVATAR_SEED_FIELD_PATHS,
+  AVATAR_TABBY_COMPATIBLE_PALETTE_IDS,
+  DEFAULT_AVATAR_COAT_PATTERN
+} from '@oneworks/avatar'
 
 import {
   AVATAR_SEED_FIELD,
@@ -7,12 +13,16 @@ import {
   createRandomAvatarSeed,
   interpolateAvatarView,
   parseAvatarSeedFields,
+  resolveSeededAvatarBearEarScale,
+  resolveSeededAvatarBearHeadScale,
   resolveSeededAvatarCameraBackground,
   resolveSeededAvatarCoatPattern,
   resolveSeededAvatarEntityPreset,
   resolveSeededAvatarFacePreset,
   resolveSeededAvatarPaletteId,
   resolveSeededAvatarTabbyPaletteId,
+  resolveSeededAvatarRabbitEarScale,
+  resolveSeededAvatarRabbitHeadScale,
   resolveSeededAvatarView,
   serializeAvatarSeedFields
 } from '../src/avatarSeed'
@@ -26,6 +36,12 @@ describe('avatar editor seed fields', () => {
     expect(resolveSeededAvatarCameraBackground(seed)).toBe(resolveSeededAvatarCameraBackground(seed))
   })
 
+  it('only generates rounded geometric eyes when facial expressions follow Seed', () => {
+    for (let index = 0; index < 120; index += 1) {
+      expect(resolveSeededAvatarFacePreset(`v1-rounded-eyes-${index}`).style.eyeShape).toBe('rounded')
+    }
+  })
+
   it('uses a deterministic natural palette candidate set for tabby coats', () => {
     for (const seed of ['v1-tabby-a', 'v1-tabby-b', 'v1-tabby-c', 'v1-tabby-d']) {
       const paletteId = resolveSeededAvatarTabbyPaletteId(seed)
@@ -35,6 +51,46 @@ describe('avatar editor seed fields', () => {
     expect(AVATAR_TABBY_COMPATIBLE_PALETTE_IDS).not.toContain('coral')
     expect(AVATAR_TABBY_COMPATIBLE_PALETTE_IDS).not.toContain('cow-cat')
     expect(AVATAR_TABBY_COMPATIBLE_PALETTE_IDS).not.toContain('black-cat')
+  })
+
+  it('supports Rabbit-only virtual dimensions without adding camera-frame randomization', () => {
+    const seed = 'v1-rabbit-scales'
+    expect(AVATAR_RABBIT_COMPATIBLE_PALETTE_IDS).toEqual([
+      'holland-lop', 'netherland-dwarf', 'dutch-rabbit', 'himalayan-rabbit', 'lionhead-rabbit', 'english-spot'
+    ])
+    expect(resolveSeededAvatarRabbitEarScale(seed, 'width')).toBe(resolveSeededAvatarRabbitEarScale(seed, 'width'))
+    expect(resolveSeededAvatarRabbitHeadScale(seed, 'height')).toBeGreaterThanOrEqual(76)
+    expect(AVATAR_SEED_FIELDS).toContain(AVATAR_SEED_FIELD_PATHS.rabbitEarWidth)
+    expect(AVATAR_SEED_FIELDS).toContain(AVATAR_SEED_FIELD_PATHS.rabbitHeadHeight)
+    expect(AVATAR_SEED_FIELDS).not.toContain('scene.camera.frame')
+  })
+
+  it('recognizes Fox-only anatomy fields without randomizing the camera frame', () => {
+    expect(AVATAR_SEED_FIELDS).toContain(AVATAR_SEED_FIELD_PATHS.foxEarWidth)
+    expect(AVATAR_SEED_FIELDS).toContain(AVATAR_SEED_FIELD_PATHS.foxEarHeight)
+    expect(AVATAR_SEED_FIELDS).toContain(AVATAR_SEED_FIELD_PATHS.foxHeadWidth)
+    expect(AVATAR_SEED_FIELDS).toContain(AVATAR_SEED_FIELD_PATHS.foxHeadHeight)
+    expect(AVATAR_SEED_FIELDS).toContain(AVATAR_SEED_FIELD_PATHS.foxEarStyle)
+    expect(AVATAR_SEED_FIELDS).toContain(AVATAR_SEED_FIELD_PATHS.foxHeadTaper)
+    expect(AVATAR_SEED_FIELDS).not.toContain('scene.camera.frame')
+  })
+
+  it('keeps Bear-only virtual dimensions and natural palettes deterministic and constrained', () => {
+    expect(AVATAR_BEAR_COMPATIBLE_PALETTE_IDS).toEqual([
+      'brown-bear', 'polar-bear', 'asian-black-bear', 'giant-panda', 'spectacled-bear', 'sun-bear',
+      'red-panda', 'koala', 'raccoon', 'wombat', 'teddy-bear'
+    ])
+    const seed = 'v1-bear-scales'
+    expect(resolveSeededAvatarBearEarScale(seed, 'width')).toBe(resolveSeededAvatarBearEarScale(seed, 'width'))
+    expect(resolveSeededAvatarBearEarScale(seed, 'height')).toBeGreaterThanOrEqual(55)
+    expect(resolveSeededAvatarBearEarScale(seed, 'height')).toBeLessThanOrEqual(155)
+    expect(resolveSeededAvatarBearHeadScale(seed, 'width')).toBeGreaterThanOrEqual(76)
+    expect(resolveSeededAvatarBearHeadScale(seed, 'width')).toBeLessThanOrEqual(132)
+    expect(AVATAR_SEED_FIELDS).toContain(AVATAR_SEED_FIELD_PATHS.bearEarWidth)
+    expect(AVATAR_SEED_FIELDS).toContain(AVATAR_SEED_FIELD_PATHS.bearEarHeight)
+    expect(AVATAR_SEED_FIELDS).toContain(AVATAR_SEED_FIELD_PATHS.bearHeadWidth)
+    expect(AVATAR_SEED_FIELDS).toContain(AVATAR_SEED_FIELD_PATHS.bearHeadHeight)
+    expect(AVATAR_SEED_FIELDS).not.toContain('scene.camera.frame')
   })
 
   it('filters the legacy Seed camera-frame binding while preserving future field paths', () => {

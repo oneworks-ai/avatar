@@ -52,6 +52,7 @@ export interface AvatarDefinitionState {
   readonly avatarShadowStyle: AvatarDropShadowStyle
   readonly backgroundStyle: AvatarBackgroundStyle
   readonly bodyShape: AvatarBodyShape
+  readonly bodyBottomTaper?: number
   readonly cameraBackground: string
   readonly cameraFrame: AvatarCameraFrame
   readonly coatPattern?: AvatarCoatPattern
@@ -95,6 +96,7 @@ export const avatarDefinitionToState = (definition: AvatarDefinition): AvatarDef
     avatarShadowStyle: scene.effects.avatarShadow,
     backgroundStyle: scene.appearance.backgroundStyle,
     bodyShape: scene.appearance.bodyShape,
+    bodyBottomTaper: scene.appearance.bottomTaper ?? 0,
     cameraBackground: scene.camera.background,
     cameraFrame: scene.camera.frame,
     coatPattern: scene.appearance.coatPattern,
@@ -229,6 +231,7 @@ export const createAvatarDefinition = (
   previous?: AvatarDefinition
 ): AvatarDefinition => {
   const pixelEffect = state.pixelEffect ?? DEFAULT_AVATAR_PIXEL_EFFECT
+  const bottomTaper = state.bodyBottomTaper ?? previous?.scene.appearance.bottomTaper ?? 0
   const coatPattern = state.coatPattern ?? previous?.scene.appearance.coatPattern
   const preservePixelEffect = previous?.scene.effects.pixelate != null ||
     pixelEffect.enabled ||
@@ -252,6 +255,9 @@ export const createAvatarDefinition = (
       appearance: {
         backgroundStyle: state.backgroundStyle,
         bodyShape: state.bodyShape,
+        ...(bottomTaper !== 0 || previous?.scene.appearance.bottomTaper != null
+          ? { bottomTaper }
+          : {}),
         ...(state.coatPattern?.enabled === true || previous?.scene.appearance.coatPattern != null
           ? { coatPattern: { ...coatPattern! } }
           : {}),
@@ -314,6 +320,7 @@ export const avatarDefinitionToSearchParams = (definition: AvatarDefinition) => 
   params.set('palette', scene.appearance.paletteId)
   params.set('bg', scene.appearance.backgroundStyle)
   params.set('shape', scene.appearance.bodyShape)
+  if (scene.appearance.bottomTaper != null) params.set('bottomTaper', String(scene.appearance.bottomTaper))
   if (scene.appearance.coatPattern != null) {
     const pattern = scene.appearance.coatPattern
     setBoolean(params, 'coat', pattern.enabled)

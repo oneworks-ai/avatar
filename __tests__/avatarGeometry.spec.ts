@@ -4,14 +4,65 @@ import {
   AVATAR_GRID_DENSITY,
   DEFAULT_AVATAR_FACE_STYLE,
   buildAvatarBodyGeometry,
+  buildAvatarSurfaceDecalLocalBoundaries,
+  getAvatarBodyCompilerShapeSpec,
+  mapAvatarPrimitiveLocalPointToAuthoredSurface,
   projectAvatarSurfaceDecal,
   projectDefaultFace,
   resolveAvatarSurfaceShadeOpacity
 } from '../src/avatarGeometry'
 import { AVATAR_FACE_PRESETS } from '../src/avatarFacePresets'
+import {
+  applySheepHeadScale,
+  createAvatarEntityParts,
+  createCapybaraSurfaceDecals,
+  createCowSurfaceDecals,
+  createMonkeySurfaceDecals,
+  createOwlSurfaceDecals,
+  createParrotSurfaceDecals,
+  createSheepSurfaceDecals
+} from '../src/avatarEntityPresets'
 
 const POSE = { pitch: -.35, yaw: .4 }
 const LIGHT = { azimuth: -92, elevation: 64 }
+
+it('maps rotated half-cone and side surfaces back to the authored decal chart', () => {
+  const roundness = 42
+  const exponent = 1 + (.56 - 1) * roundness / 100
+  const ring = .5 ** exponent
+  const authoredX = .2
+  const cutAngle = Math.PI / 3
+  const longitude = cutAngle + Math.asin(authoredX / ring)
+  const halfCone = mapAvatarPrimitiveLocalPointToAuthoredSurface(
+    'half-cone',
+    { x: ring * Math.sin(longitude), y: 0, z: ring * Math.cos(longitude) },
+    'front',
+    { cutAngle: 60, roundness }
+  )
+  expect(halfCone.x).toBeCloseTo(authoredX, 6)
+  expect(halfCone.y).toBe(0)
+  expect(halfCone.frontDepth).toBeGreaterThan(0)
+
+  const sideFacingHalfCone = mapAvatarPrimitiveLocalPointToAuthoredSurface(
+    'half-cone',
+    { x: ring, y: 0, z: 0 },
+    'front',
+    { cutAngle: 90, roundness }
+  )
+  expect(sideFacingHalfCone.x).toBeCloseTo(0, 6)
+  expect(sideFacingHalfCone.frontDepth).toBeCloseTo(ring, 6)
+
+  const spec = getAvatarBodyCompilerShapeSpec('ellipse')
+  const sideX = .25
+  const sideZ = .8
+  const left = mapAvatarPrimitiveLocalPointToAuthoredSurface('ellipse', {
+    x: -sideZ * spec.radiusZ / spec.radiusX,
+    y: -.15,
+    z: sideX * spec.radiusX / spec.radiusZ
+  }, 'left')
+  expect(left).toMatchObject({ x: expect.closeTo(sideX, 6), y: -.15 })
+  expect(left.frontDepth).toBeCloseTo(sideZ, 6)
+})
 
 const projectedPathExtent = (path: string) => {
   const values = Array.from(path.matchAll(/-?\d+(?:\.\d+)?/g), match => Number(match[0]))
@@ -22,6 +73,49 @@ const projectedPathExtent = (path: string) => {
     width: Math.max(...xs) - Math.min(...xs)
   }
 }
+
+const projectedPathBandWidth = (path: string, minY: number, maxY: number) => {
+  const values = Array.from(path.matchAll(/-?\d+(?:\.\d+)?/g), match => Number(match[0]))
+  const xs = values.flatMap((value, index) => {
+    if (index % 2 !== 0) return []
+    const y = values[index + 1]
+    return y != null && y >= minY && y <= maxY ? [value] : []
+  })
+  return Math.max(...xs) - Math.min(...xs)
+}
+
+const projectedPathArea = (path: string | undefined) => {
+  if (path == null) return 0
+  return path.split(/(?=M )/).reduce((total, subpath) => {
+    const values = Array.from(subpath.matchAll(/-?\d+(?:\.\d+)?/g), match => Number(match[0]))
+    const points = Array.from({ length: Math.floor(values.length / 2) }, (_, index) => ({
+      x: values[index * 2]!,
+      y: values[index * 2 + 1]!
+    }))
+    if (points.length < 3) return total
+    const signedArea = points.reduce((area, point, index) => {
+      const next = points[(index + 1) % points.length]!
+      return area + point.x * next.y - next.x * point.y
+    }, 0) / 2
+    return total + Math.abs(signedArea)
+  }, 0)
+}
+
+const getPartGeometryOptions = (part: ReturnType<typeof createAvatarEntityParts>[number]) => ({
+  bottomTaper: part.bottomTaper,
+  cutAngle: part.cutAngle,
+  hollow: part.hollow,
+  occlusionAmount: part.occlusionAmount,
+  occlusionPole: part.occlusionPole,
+  rotationX: part.rotationX,
+  rotationY: part.rotationY,
+  rotationZ: part.rotationZ,
+  roundness: part.roundness,
+  scaleX: part.scaleX,
+  scaleY: part.scaleY,
+  scaleZ: part.scaleZ,
+  topScale: part.topScale
+})
 
 describe('avatar surface lighting', () => {
   it('uses stronger near shadows and attenuates all contrast with distance', () => {
@@ -64,6 +158,24 @@ describe('avatar surface lighting', () => {
     expect(geometry.outlinePath).toContain('M ')
     expect(geometry.occlusionPath).toContain('M ')
     expect(geometry.outlinePath).not.toBe(ellipse.outlinePath)
+  })
+
+  it('tapers only the lower half of an ellipse without changing its zero-taper silhouette', () => {
+    const pose = { pitch: 0, yaw: 0 }
+    const original = buildAvatarBodyGeometry('ellipse', pose, LIGHT)
+    const explicitZero = buildAvatarBodyGeometry('ellipse', pose, LIGHT, 100, { bottomTaper: 0 })
+    const tapered = buildAvatarBodyGeometry('ellipse', pose, LIGHT, 100, { bottomTaper: 75 })
+    const unchangedSphere = buildAvatarBodyGeometry('sphere', pose, LIGHT, 100, { bottomTaper: 75 })
+
+    expect(explicitZero.outlinePath).toBe(original.outlinePath)
+    expect(tapered.outlinePath).not.toBe(original.outlinePath)
+    expect(projectedPathBandWidth(tapered.outlinePath, 110, 145))
+      .toBeCloseTo(projectedPathBandWidth(original.outlinePath, 110, 145), 1)
+    expect(projectedPathBandWidth(tapered.outlinePath, 255, 290))
+      .toBeLessThan(projectedPathBandWidth(original.outlinePath, 255, 290) * .92)
+    expect(projectedPathBandWidth(tapered.outlinePath, 255, 270))
+      .toBeGreaterThan(projectedPathBandWidth(tapered.outlinePath, 195, 210) * .64)
+    expect(unchangedSphere.outlinePath).toBe(buildAvatarBodyGeometry('sphere', pose, LIGHT).outlinePath)
   })
 
   it('scales multipart geometry in local X, Y, and Z axes before rotation', () => {
@@ -194,6 +306,131 @@ describe('avatar surface lighting', () => {
 })
 
 describe('avatar face-anchored surface decals', () => {
+  it('clips face-side markings continuously as their target crosses the visible horizon', () => {
+    const fixtures = [
+      { createDecals: createOwlSurfaceDecals, id: 'owl-facial-disc', preset: 'owl' as const },
+      { createDecals: createParrotSurfaceDecals, id: 'parrot-face-patch', preset: 'parrot' as const },
+      { createDecals: createMonkeySurfaceDecals, id: 'monkey-face-mask', preset: 'monkey' as const },
+      { createDecals: createCowSurfaceDecals, id: 'cow-face-mask', preset: 'cow' as const }
+    ]
+
+    for (const fixture of fixtures) {
+      const parts = createAvatarEntityParts(fixture.preset)
+      const decal = fixture.createDecals().find(candidate => candidate.id === fixture.id)!
+      const target = parts.find(part => part.id === decal.targetPartId) ?? parts.find(part => part.face)!
+      const areas = [88, 89, 90, 91, 92].map(yaw => projectedPathArea(projectAvatarSurfaceDecal(
+        { pitch: 0, yaw: yaw * Math.PI / 180 },
+        target.shape,
+        decal,
+        getPartGeometryOptions(target)
+      )?.path))
+      const frontArea = projectedPathArea(projectAvatarSurfaceDecal(
+        { pitch: 0, yaw: 0 },
+        target.shape,
+        decal,
+        getPartGeometryOptions(target)
+      )?.path)
+      const largestStep = Math.max(...areas.slice(1).map((area, index) => Math.abs(area - areas[index]!)))
+
+      expect(areas[2], `${fixture.id} must retain the still-visible half at an exact 90 degree yaw`)
+        .toBeGreaterThan(0)
+      expect(largestStep, `${fixture.id} must shrink at the horizon instead of disappearing as one sheet`)
+        .toBeLessThan(frontArea * .08)
+    }
+  })
+
+  it('clips individual face features continuously instead of toggling the whole face group', () => {
+    const areas = [88, 89, 90, 91, 92].map(yaw => {
+      const face = projectDefaultFace(
+        { pitch: 0, yaw: yaw * Math.PI / 180 },
+        'sphere',
+        DEFAULT_AVATAR_FACE_STYLE
+      )
+      return face.eyes.reduce((total, eye) => total + projectedPathArea(eye.path), 0) +
+        projectedPathArea(face.nose?.path) + projectedPathArea(face.mouth?.path)
+    })
+    const front = projectDefaultFace({ pitch: 0, yaw: 0 }, 'sphere', DEFAULT_AVATAR_FACE_STYLE)
+    const frontArea = front.eyes.reduce((total, eye) => total + projectedPathArea(eye.path), 0) +
+      projectedPathArea(front.nose?.path) + projectedPathArea(front.mouth?.path)
+    const largestStep = Math.max(...areas.slice(1).map((area, index) => Math.abs(area - areas[index]!)))
+
+    expect(largestStep).toBeLessThan(frontArea * .08)
+    expect(projectDefaultFace(
+      { pitch: 0, yaw: Math.PI / 2 },
+      'sphere',
+      DEFAULT_AVATAR_FACE_STYLE
+    ).visible).toBe(true)
+    expect(projectDefaultFace({ pitch: 0, yaw: Math.PI }, 'sphere', DEFAULT_AVATAR_FACE_STYLE).eyes)
+      .toHaveLength(0)
+  })
+
+  it('makes the capybara muzzle a real side-profile volume with its marking on that same curved surface', () => {
+    const parts = createAvatarEntityParts('capybara')
+    const head = parts.find(part => part.face)!
+    const muzzle = parts.find(part => part.id === 'muzzle')!
+    const pose = { pitch: -.12, yaw: 1.18 }
+    const headGeometry = buildAvatarBodyGeometry(head.shape, pose, LIGHT, 100, {
+      roundness: head.roundness,
+      scaleX: head.scaleX,
+      scaleY: head.scaleY,
+      scaleZ: head.scaleZ,
+      topScale: head.topScale
+    })
+    const muzzleOptions = {
+      rotationX: muzzle.rotationX,
+      roundness: muzzle.roundness,
+      scaleX: muzzle.scaleX,
+      scaleY: muzzle.scaleY,
+      scaleZ: muzzle.scaleZ
+    }
+    const muzzleGeometry = buildAvatarBodyGeometry(muzzle.shape, pose, LIGHT, 100, muzzleOptions)
+    const headRight = projectedPathExtent(headGeometry.outlinePath).width / 2
+    const muzzleRight = muzzle.x * Math.cos(pose.yaw)
+      + muzzle.z * Math.sin(pose.yaw)
+      + projectedPathExtent(muzzleGeometry.outlinePath).width / 2
+
+    expect(muzzle.baseColor).toBe(head.baseColor)
+    expect(muzzleRight, 'the fur-covered muzzle must genuinely alter the visible side silhouette')
+      .toBeGreaterThan(headRight + 12)
+
+    const marking = createCapybaraSurfaceDecals()[0]!
+    expect(marking.targetPartId).toBe('muzzle')
+    expect(marking.color).not.toBe(muzzle.baseColor)
+    expect(projectAvatarSurfaceDecal(pose, muzzle.shape, marking, muzzleOptions)?.path)
+      .not.toContain('NaN')
+  })
+
+  it('keeps sheep heads and wool rounded from side views while face masks follow the same thick surface', () => {
+    const parts = createAvatarEntityParts('sheep')
+    const head = parts.find(part => part.face)!
+    const options = {
+      bottomTaper: head.bottomTaper,
+      scaleX: head.scaleX,
+      scaleY: head.scaleY,
+      scaleZ: head.scaleZ
+    }
+    const front = buildAvatarBodyGeometry('ellipse', { pitch: 0, yaw: 0 }, LIGHT, 100, options)
+    const side = buildAvatarBodyGeometry('ellipse', { pitch: 0, yaw: 1.38 }, LIGHT, 100, options)
+    const top = buildAvatarBodyGeometry('ellipse', { pitch: -.95, yaw: .32 }, LIGHT, 100, options)
+
+    expect(projectedPathExtent(side.outlinePath).width)
+      .toBeGreaterThan(projectedPathExtent(front.outlinePath).width * .88)
+    expect(projectedPathExtent(top.outlinePath).height)
+      .toBeGreaterThan(projectedPathExtent(front.outlinePath).height * .74)
+
+    for (const pose of [{ pitch: 0, yaw: 0 }, { pitch: -.24, yaw: .78 }, { pitch: -.5, yaw: 1.1 }]) {
+      const projected = projectAvatarSurfaceDecal(pose, 'ellipse', createSheepSurfaceDecals()[0]!, options)
+      expect(projected?.path, `sheep surface marking must follow ${JSON.stringify(pose)}`).toContain(' Z')
+      expect(projected?.path).not.toContain('NaN')
+    }
+
+    const expanded = applySheepHeadScale(parts, 125, 110)
+    const expandedHead = expanded.find(part => part.face)!
+    expect(expandedHead.scaleZ).toBeGreaterThan(head.scaleZ!)
+    expect(expanded.find(part => part.id === 'wool-crown-center')!.scaleZ)
+      .toBeGreaterThan(parts.find(part => part.id === 'wool-crown-center')!.scaleZ!)
+  })
+
   it('uses the same projection as facial features at extreme poses', () => {
     const pose = { pitch: -.96, yaw: 1.32 }
     const face = projectDefaultFace(pose, 'sphere', {
@@ -219,5 +456,89 @@ describe('avatar face-anchored surface decals', () => {
     })
 
     expect(anchored?.path).toBe(face.mouth?.path)
+  })
+
+  it('keeps facial features and face decals attached to a tapered ellipse in 3D', () => {
+    const pose = { pitch: -.24, yaw: .52 }
+    const options = { bottomTaper: 72 }
+    const style = {
+      ...DEFAULT_AVATAR_FACE_STYLE,
+      mouthHeight: 20,
+      mouthShape: 'ellipse' as const,
+      mouthWidth: 20,
+      mouthY: 52
+    }
+    const decal = {
+      color: '#ffffff', height: 20, id: 'tapered-anchor', label: 'Tapered anchor', opacity: 100,
+      rotation: 0, shape: 'ellipse' as const, side: 'face' as const, targetPartId: null,
+      width: 20, x: 0, y: 52
+    }
+    const taperedFace = projectDefaultFace(pose, 'ellipse', style, options)
+    const taperedDecal = projectAvatarSurfaceDecal(pose, 'ellipse', decal, options)
+    const originalDecal = projectAvatarSurfaceDecal(pose, 'ellipse', decal)
+
+    expect(taperedDecal?.path).toBe(taperedFace.mouth?.path)
+    expect(taperedDecal?.path).not.toBe(originalDecal?.path)
+    expect(taperedDecal?.path).not.toContain('NaN')
+  })
+
+  it('splits full-crown radial markings at the object-space horizon', () => {
+    const boundaries = buildAvatarSurfaceDecalLocalBoundaries({
+      color: '#d9b985',
+      height: 64,
+      id: 'crown-pleats',
+      label: 'Crown pleats',
+      opacity: 62,
+      rotation: 0,
+      shape: 'radial-pleats',
+      side: 'front',
+      targetPartId: 'crown',
+      width: 5,
+      x: -42,
+      y: 0
+    }, 'sphere')
+    const front = boundaries.filter(boundary => boundary[0]?.surfaceSide === 'front')
+    const back = boundaries.filter(boundary => boundary[0]?.surfaceSide === 'back')
+
+    expect(front.length).toBeGreaterThan(5)
+    expect(back.length).toBeGreaterThan(5)
+    for (const boundary of boundaries) {
+      expect(new Set(boundary.map(point => point.surfaceSide))).toHaveLength(1)
+      expect(boundary.length).toBeGreaterThanOrEqual(3)
+    }
+
+    const legacyNonFrontSide = buildAvatarSurfaceDecalLocalBoundaries({
+      color: '#d9b985',
+      height: 64,
+      id: 'legacy-side-crown-pleats',
+      label: 'Legacy side crown pleats',
+      opacity: 62,
+      rotation: 0,
+      shape: 'radial-pleats',
+      side: 'left',
+      targetPartId: 'crown',
+      width: 5,
+      x: -42,
+      y: 0
+    }, 'sphere')
+    expect(legacyNonFrontSide).toEqual(boundaries)
+
+    const rotatedHalfCone = buildAvatarSurfaceDecalLocalBoundaries({
+      color: '#d9b985',
+      height: 64,
+      id: 'rotated-half-cone-pleats',
+      label: 'Rotated half-cone pleats',
+      opacity: 62,
+      rotation: 0,
+      shape: 'radial-pleats',
+      side: 'front',
+      targetPartId: 'crown',
+      width: 5,
+      x: -42,
+      y: 0
+    }, 'half-cone', { cutAngle: 90, roundness: 42 })
+    expect(rotatedHalfCone).not.toHaveLength(0)
+    expect(rotatedHalfCone.every(boundary => boundary[0]?.surfaceSide === 'front')).toBe(true)
+    expect(rotatedHalfCone.flat().every(point => Math.abs(point.x) <= 139.001)).toBe(true)
   })
 })

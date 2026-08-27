@@ -45,7 +45,7 @@ describe('avatar surface decal URL state', () => {
       ])
   })
 
-  it('normalizes blank and unknown multipart targets to the primary body', () => {
+  it('keeps explicit primary targets but drops unknown multipart targets', () => {
     const encoded = serializeAvatarSurfaceDecals([
       {
         color: '#ffffff', height: 24, id: 'known', label: 'Known', opacity: 100,
@@ -61,7 +61,9 @@ describe('avatar surface decal URL state', () => {
       }
     ])
 
-    expect(deserializeAvatarSurfaceDecals(encoded, ['head']).map(decal => decal.targetPartId))
-      .toEqual(['head', null, null])
+    expect(deserializeAvatarSurfaceDecals(encoded, ['head']).map(decal => [decal.id, decal.targetPartId]))
+      .toEqual([
+        ['known', 'head']
+      ])
   })
 })

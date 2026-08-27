@@ -11,6 +11,7 @@ import {
   AVATAR_PIXEL_EFFECT_RANGES,
   AVATAR_SHADOW_RANGES,
   AVATAR_SURFACE_DECAL_RANGES,
+  getAvatarPalette,
   resolveAvatarCoatPatternDecals
 } from '@oneworks/avatar'
 import type {
@@ -22,14 +23,20 @@ import type {
   AvatarPixelEffect,
   AvatarPixelSampling
 } from '@oneworks/avatar'
-import { useEffect, useId, useRef, useState } from 'react'
+import { memo, useEffect, useId, useRef, useState } from 'react'
 import type { CSSProperties, KeyboardEvent, PointerEvent, ReactNode } from 'react'
 
 import { AVATAR_BODY_SHAPES, EntityPresetPreview } from './InteractiveAvatar'
 import type { AvatarBodyShape, AvatarDropShadowStyle, AvatarOutlineStyle } from './InteractiveAvatar'
 import {
   AVATAR_BUILT_IN_ENTITY_PRESETS,
+  BEAR_EAR_SCALE_RANGE,
+  BEAR_HEAD_SCALE_RANGE,
   CAT_EAR_SCALE_RANGE,
+  DOG_EAR_SCALE_RANGE,
+  DOG_HEAD_SCALE_RANGE,
+  RABBIT_EAR_SCALE_RANGE,
+  RABBIT_HEAD_SCALE_RANGE,
   hasMultipleAvatarEntityMaterials,
   resolveAvatarEntityPartScaleZ
 } from './avatarEntityPresets'
@@ -45,10 +52,40 @@ import type {
   AvatarNoseShape
 } from './avatarGeometry'
 import { useAvatarLocale } from './avatarLocale'
-import { AVATAR_CAT_BREED_TEMPLATES, resolveAvatarCatBreedTemplate } from './avatarBreedTemplates'
-import type { AvatarCatBreedTemplateId } from './avatarBreedTemplates'
-import { AVATAR_CAMERA_BACKGROUND_PRESETS, AVATAR_SEED_FIELD } from './avatarSeed'
-import type { AvatarSeedField } from './avatarSeed'
+import {
+  AVATAR_ENTITY_PRESET_SNAPSHOT_URLS,
+  DEFAULT_AVATAR_PREVIEW_LIGHT,
+  getAvatarBreedPresetSnapshotUrl
+} from './avatarPresetSnapshots'
+import {
+  AVATAR_BEAR_BREED_TEMPLATES,
+  AVATAR_CAT_BREED_TEMPLATES,
+  AVATAR_DOG_BREED_TEMPLATES,
+  AVATAR_RABBIT_BREED_TEMPLATES,
+  resolveAvatarBearBreedTemplate,
+  resolveAvatarCatBreedTemplate,
+  resolveAvatarDogBreedTemplate,
+  resolveAvatarRabbitBreedTemplate
+} from './avatarBreedTemplates'
+import type { AvatarBearBreedTemplateId, AvatarCatBreedTemplateId, AvatarDogBreedTemplateId, AvatarRabbitBreedTemplateId } from './avatarBreedTemplates'
+import { resolveAvatarBreedPaletteFromEntityParts } from './avatarBreedTone'
+import {
+  AVATAR_ANIMAL_SPECIES_SEED_FIELDS,
+  AVATAR_CAMERA_BACKGROUND_PRESETS,
+  AVATAR_SEED_FIELD,
+  getAvatarAnimalEarSeedFields,
+  isAvatarAnimalSpeciesId
+} from './avatarSeed'
+import type { AvatarAnimalSpeciesId, AvatarSeedField } from './avatarSeed'
+import {
+  getAvatarAnimalBreedTemplate,
+  getAvatarAnimalBreedTemplates,
+  getAvatarAnimalDetailSeedField,
+  getAvatarAnimalHornSeedField,
+  getAvatarAnimalScaleRange,
+  resolveAvatarAnimalBreedTemplate
+} from './avatarSpeciesBreeds'
+import type { AvatarAnimalBreedTemplate } from './avatarSpeciesBreeds'
 import {
   loadAvatarPresetUsage,
   persistAvatarPresetUsage,
@@ -106,12 +143,215 @@ interface GeometricShapeOption<T extends string> {
   readonly label: string
 }
 
+interface AvatarPreviewScheduler {
+  cacheSnapshot: (key: string, svg: string) => string
+  enqueue: (key: string, activate: () => void) => () => void
+  getSnapshot: (key: string) => string | null
+  isReady: (key: string) => boolean
+  markReady: (key: string) => void
+}
+
+type AvatarPreviewIdleWindow = Window & typeof globalThis & {
+  cancelIdleCallback?: (handle: number) => void
+  requestIdleCallback?: (callback: () => void, options?: { timeout: number }) => number
+}
+
+const AVATAR_PREVIEW_SNAPSHOT_LIMIT = 96
+const avatarPreviewSnapshotCache = new Map<string, string>()
+
+const getAvatarPreviewSnapshot = (key: string) => {
+  const snapshot = avatarPreviewSnapshotCache.get(key)
+  if (snapshot == null) return null
+  avatarPreviewSnapshotCache.delete(key)
+  avatarPreviewSnapshotCache.set(key, snapshot)
+  return snapshot
+}
+
+const cacheAvatarPreviewSnapshot = (key: string, svg: string) => {
+  const namespacedSvg = svg.includes('xmlns=')
+    ? svg
+    : svg.replace('<svg ', '<svg xmlns="http://www.w3.org/2000/svg" ')
+  const snapshot = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(namespacedSvg)}`
+  avatarPreviewSnapshotCache.delete(key)
+  avatarPreviewSnapshotCache.set(key, snapshot)
+  while (avatarPreviewSnapshotCache.size > AVATAR_PREVIEW_SNAPSHOT_LIMIT) {
+    avatarPreviewSnapshotCache.delete(avatarPreviewSnapshotCache.keys().next().value!)
+  }
+  return snapshot
+}
+
+const createAvatarPreviewScheduler = (): AvatarPreviewScheduler => {
+  const readyKeys = new Set<string>()
+  const queuedKeys: string[] = []
+  const subscribers = new Map<string, Set<() => void>>()
+  let idleHandle: number | null = null
+  let frameHandle: number | null = null
+
+  const activateNext = () => {
+    idleHandle = null
+    let key = queuedKeys.shift()
+    while (key != null && subscribers.get(key)?.size === 0) key = queuedKeys.shift()
+    if (key == null) return
+    readyKeys.add(key)
+    const listeners = subscribers.get(key)
+    subscribers.delete(key)
+    listeners?.forEach(listener => listener())
+    const idleWindow = window as AvatarPreviewIdleWindow
+    if (idleWindow.requestIdleCallback == null) {
+      scheduleNext()
+      return
+    }
+    frameHandle = window.requestAnimationFrame(() => {
+      frameHandle = null
+      scheduleNext()
+    })
+  }
+
+  const scheduleNext = () => {
+    if (idleHandle != null || frameHandle != null || queuedKeys.length === 0) return
+    const idleWindow = window as AvatarPreviewIdleWindow
+    if (idleWindow.requestIdleCallback == null) {
+      // Capability fallback: environments without an idle scheduler keep the
+      // previous eager behavior rather than leaving blank previews behind.
+      activateNext()
+      return
+    }
+    idleHandle = idleWindow.requestIdleCallback(activateNext, { timeout: 120 })
+  }
+
+  const markReady = (key: string) => {
+    if (readyKeys.has(key)) return
+    readyKeys.add(key)
+    const listeners = subscribers.get(key)
+    subscribers.delete(key)
+    listeners?.forEach(listener => listener())
+  }
+
+  return {
+    cacheSnapshot: cacheAvatarPreviewSnapshot,
+    enqueue: (key, activate) => {
+      if (readyKeys.has(key) || getAvatarPreviewSnapshot(key) != null) {
+        activate()
+        return () => undefined
+      }
+      let listeners = subscribers.get(key)
+      if (listeners == null) {
+        listeners = new Set()
+        subscribers.set(key, listeners)
+        queuedKeys.push(key)
+      }
+      listeners.add(activate)
+      scheduleNext()
+      return () => listeners?.delete(activate)
+    },
+    getSnapshot: getAvatarPreviewSnapshot,
+    isReady: key => readyKeys.has(key) || getAvatarPreviewSnapshot(key) != null,
+    markReady
+  }
+}
+
+const DeferredEntityPresetPreview = memo(function DeferredEntityPresetPreview({
+  eager,
+  previewKey,
+  renderPreview,
+  scheduler,
+  staticSnapshot
+}: {
+  readonly eager: boolean
+  readonly previewKey: string
+  readonly renderPreview: () => ReactNode
+  readonly scheduler: AvatarPreviewScheduler
+  readonly staticSnapshot?: string | null
+}) {
+  const containerRef = useRef<HTMLSpanElement>(null)
+  const [visible, setVisible] = useState(eager || typeof IntersectionObserver === 'undefined')
+  const [readyKey, setReadyKey] = useState<string | null>(() => (
+    eager || staticSnapshot != null || scheduler.isReady(previewKey) ? previewKey : null
+  ))
+  const [, setSnapshotKey] = useState<string | null>(() => (
+    scheduler.getSnapshot(previewKey) == null ? null : previewKey
+  ))
+  const runtimeSnapshot = scheduler.getSnapshot(previewKey)
+  const snapshot = staticSnapshot ?? runtimeSnapshot
+  const ready = eager || snapshot != null || readyKey === previewKey || scheduler.isReady(previewKey)
+
+  useEffect(() => {
+    if (eager || typeof IntersectionObserver === 'undefined') {
+      setVisible(true)
+      return
+    }
+    const element = containerRef.current
+    if (element == null) return
+    const observer = new IntersectionObserver(entries => {
+      if (entries.some(entry => entry.isIntersecting)) setVisible(true)
+    }, { rootMargin: '96px' })
+    observer.observe(element)
+    return () => observer.disconnect()
+  }, [eager, previewKey])
+
+  useEffect(() => {
+    if (eager) {
+      scheduler.markReady(previewKey)
+      setReadyKey(previewKey)
+      return
+    }
+    if (!visible || ready) return
+    return scheduler.enqueue(previewKey, () => setReadyKey(previewKey))
+  }, [eager, previewKey, ready, scheduler, visible])
+
+  useEffect(() => {
+    if (!ready || snapshot != null) return
+    const frame = window.requestAnimationFrame(() => {
+      const svg = containerRef.current?.querySelector(':scope > svg')
+      if (svg == null) return
+      scheduler.cacheSnapshot(previewKey, svg.outerHTML)
+      setSnapshotKey(previewKey)
+    })
+    return () => window.cancelAnimationFrame(frame)
+  }, [previewKey, ready, scheduler, snapshot])
+
+  return (
+    <span
+      ref={containerRef}
+      className={`avatar-controls__deferred-entity-preview${ready ? '' : ' avatar-controls__deferred-entity-preview--pending'}`}
+      data-preview-key={previewKey}
+      data-preview-ready={ready ? 'true' : 'false'}
+      data-preview-static={snapshot == null ? 'false' : 'true'}
+      data-preview-source={staticSnapshot != null
+        ? 'prebuilt'
+        : runtimeSnapshot != null ? 'runtime-cache' : ready ? 'live' : 'pending'}
+      aria-hidden='true'
+    >
+      {snapshot == null
+        ? ready ? renderPreview() : null
+        : <img className='avatar-controls__entity-preset-icon' alt='' decoding='async' src={snapshot} />}
+    </span>
+  )
+}, (previous, next) => (
+  previous.eager === next.eager &&
+  previous.previewKey === next.previewKey &&
+  previous.scheduler === next.scheduler &&
+  previous.staticSnapshot === next.staticSnapshot
+))
+
 interface AvatarControlsProps {
   readonly activeTab: AvatarControlTab
+  readonly animalBreedTemplateId?: string | null
+  readonly animalEarHeight?: number
+  readonly animalEarWidth?: number
+  readonly animalHeadHeight?: number
+  readonly animalHeadWidth?: number
+  readonly animalHornSize?: number
   readonly avatarShadowStyle: AvatarDropShadowStyle
   readonly avatarOutlineStyle: AvatarOutlineStyle
   readonly backgroundStyle: AvatarBackgroundStyle
   readonly bodyShape: AvatarBodyShape
+  readonly bodyBottomTaper: number
+  readonly bearBreedTemplateId: AvatarBearBreedTemplateId | null
+  readonly bearEarHeight: number
+  readonly bearEarWidth: number
+  readonly bearHeadHeight: number
+  readonly bearHeadWidth: number
   readonly cameraBackground: string
   readonly cameraFrame: AvatarCameraFrame
   readonly catBreedTemplateId: AvatarCatBreedTemplateId | null
@@ -121,6 +361,16 @@ interface AvatarControlsProps {
   readonly controlsWidth: number
   readonly entityParts: readonly AvatarEntityPart[]
   readonly entityPreset: AvatarEntityPreset
+  readonly dogBreedTemplateId: AvatarDogBreedTemplateId | null
+  readonly dogEarHeight: number
+  readonly dogEarWidth: number
+  readonly dogHeadHeight: number
+  readonly dogHeadWidth: number
+  readonly rabbitBreedTemplateId: AvatarRabbitBreedTemplateId | null
+  readonly rabbitEarHeight: number
+  readonly rabbitEarWidth: number
+  readonly rabbitHeadHeight: number
+  readonly rabbitHeadWidth: number
   readonly faceStyle: AvatarFaceStyle
   readonly faceShadowStyle: AvatarFaceShadowStyle
   readonly frameShadowStyle: AvatarDropShadowStyle
@@ -131,14 +381,36 @@ interface AvatarControlsProps {
   readonly lightDistance: number
   readonly lightElevation: number
   readonly onBackgroundStyleChange: (style: AvatarBackgroundStyle) => void
+  readonly onAnimalBreedTemplateChange?: (id: string | null) => void
+  readonly onAnimalEarHeightChange?: (value: number) => void
+  readonly onAnimalEarWidthChange?: (value: number) => void
+  readonly onAnimalHeadHeightChange?: (value: number) => void
+  readonly onAnimalHeadWidthChange?: (value: number) => void
+  readonly onAnimalHornSizeChange?: (value: number) => void
   readonly onAvatarShadowStyleChange: (style: Partial<AvatarDropShadowStyle>) => void
   readonly onAvatarOutlineStyleChange: (style: Partial<AvatarOutlineStyle>) => void
+  readonly onBodyBottomTaperChange: (value: number) => void
+  readonly onBearBreedTemplateChange: (id: AvatarBearBreedTemplateId | null) => void
+  readonly onBearEarHeightChange: (value: number) => void
+  readonly onBearEarWidthChange: (value: number) => void
+  readonly onBearHeadHeightChange: (value: number) => void
+  readonly onBearHeadWidthChange: (value: number) => void
   readonly onBodyShapeChange: (shape: AvatarBodyShape) => void
   readonly onCameraBackgroundChange: (color: string) => void
   readonly onCameraFrameChange: (frame: AvatarCameraFrame) => void
   readonly onCatBreedTemplateChange: (id: AvatarCatBreedTemplateId | null) => void
   readonly onCatEarHeightChange: (value: number) => void
   readonly onCatEarWidthChange: (value: number) => void
+  readonly onDogBreedTemplateChange: (id: AvatarDogBreedTemplateId | null) => void
+  readonly onDogEarHeightChange: (value: number) => void
+  readonly onDogEarWidthChange: (value: number) => void
+  readonly onDogHeadHeightChange: (value: number) => void
+  readonly onDogHeadWidthChange: (value: number) => void
+  readonly onRabbitBreedTemplateChange: (id: AvatarRabbitBreedTemplateId | null) => void
+  readonly onRabbitEarHeightChange: (value: number) => void
+  readonly onRabbitEarWidthChange: (value: number) => void
+  readonly onRabbitHeadHeightChange: (value: number) => void
+  readonly onRabbitHeadWidthChange: (value: number) => void
   readonly onCoatPatternChange: (pattern: Partial<AvatarCoatPattern>, manualField?: AvatarSeedField) => void
   readonly onConvertCoatPatternToDecals: () => void
   readonly onCollapse: () => void
@@ -250,14 +522,41 @@ const BODY_SHAPE_LABELS: Readonly<Record<AvatarBodyShape, string>> = {
   trapezoid: 'Rounded trapezoid'
 }
 
-const ENTITY_PRESET_LABELS: Readonly<Record<Exclude<AvatarEntityPreset, 'custom'>, string>> = {
+const ENTITY_PRESET_LABELS: Readonly<
+  Record<Exclude<AvatarEntityPreset, 'custom'>, string> & Record<AvatarAnimalSpeciesId, string>
+> = {
+  alpaca: 'Alpaca',
   bear: 'Bear',
+  beaver: 'Beaver',
   bun: 'Bun',
+  capybara: 'Capybara',
   cat: 'Cat',
+  chick: 'Chick',
+  chinchilla: 'Chinchilla',
   cloud: 'Cloud',
+  cow: 'Cow',
+  deer: 'Deer',
+  duck: 'Duck',
+  ferret: 'Ferret',
   dog: 'Dog',
+  fox: 'Fox',
+  'guinea-pig': 'Guinea Pig',
+  hamster: 'Hamster',
+  hedgehog: 'Hedgehog',
+  lion: 'Lion',
+  monkey: 'Monkey',
+  otter: 'Otter',
+  owl: 'Owl',
+  parrot: 'Parrot',
+  penguin: 'Penguin',
+  pig: 'Pig',
   rabbit: 'Rabbit',
-  sun: 'Sun'
+  seal: 'Seal',
+  sheep: 'Sheep',
+  squirrel: 'Squirrel',
+  sun: 'Sun',
+  tiger: 'Tiger',
+  goose: 'Goose'
 }
 
 const EYE_SHAPE_OPTIONS: readonly GeometricShapeOption<AvatarEyeShape>[] = [
@@ -693,10 +992,22 @@ function NumberField({ ariaLabel, label, onChange, suffix = '', value }: {
 
 export function AvatarControls({
   activeTab,
+  animalBreedTemplateId = null,
+  animalEarHeight = 100,
+  animalEarWidth = 100,
+  animalHeadHeight = 100,
+  animalHeadWidth = 100,
+  animalHornSize = 100,
   avatarOutlineStyle,
   avatarShadowStyle,
   backgroundStyle,
   bodyShape,
+  bodyBottomTaper,
+  bearBreedTemplateId,
+  bearEarHeight,
+  bearEarWidth,
+  bearHeadHeight,
+  bearHeadWidth,
   cameraBackground,
   cameraFrame,
   catBreedTemplateId,
@@ -706,6 +1017,16 @@ export function AvatarControls({
   controlsWidth,
   entityParts,
   entityPreset,
+  dogBreedTemplateId,
+  dogEarHeight,
+  dogEarWidth,
+  dogHeadHeight,
+  dogHeadWidth,
+  rabbitBreedTemplateId,
+  rabbitEarHeight,
+  rabbitEarWidth,
+  rabbitHeadHeight,
+  rabbitHeadWidth,
   faceStyle,
   faceShadowStyle,
   frameShadowStyle,
@@ -716,15 +1037,37 @@ export function AvatarControls({
   lightDistance,
   lightElevation,
   pixelEffect,
+  onAnimalBreedTemplateChange,
+  onAnimalEarHeightChange,
+  onAnimalEarWidthChange,
+  onAnimalHeadHeightChange,
+  onAnimalHeadWidthChange,
+  onAnimalHornSizeChange,
   onBackgroundStyleChange,
   onAvatarOutlineStyleChange,
   onAvatarShadowStyleChange,
+  onBodyBottomTaperChange,
+  onBearBreedTemplateChange,
+  onBearEarHeightChange,
+  onBearEarWidthChange,
+  onBearHeadHeightChange,
+  onBearHeadWidthChange,
   onBodyShapeChange,
   onCameraBackgroundChange,
   onCameraFrameChange,
   onCatBreedTemplateChange,
   onCatEarHeightChange,
   onCatEarWidthChange,
+  onDogBreedTemplateChange,
+  onDogEarHeightChange,
+  onDogEarWidthChange,
+  onDogHeadHeightChange,
+  onDogHeadWidthChange,
+  onRabbitBreedTemplateChange,
+  onRabbitEarHeightChange,
+  onRabbitEarWidthChange,
+  onRabbitHeadHeightChange,
+  onRabbitHeadWidthChange,
   onCoatPatternChange,
   onConvertCoatPatternToDecals,
   onCollapse,
@@ -787,6 +1130,9 @@ export function AvatarControls({
   const paletteConfirmActionRef = useRef<HTMLButtonElement>(null)
   const presetSearchRef = useRef<HTMLInputElement>(null)
   const resizeStartRef = useRef<{ pointerX: number; width: number } | null>(null)
+  const previewSchedulerRef = useRef<AvatarPreviewScheduler | null>(null)
+  if (previewSchedulerRef.current == null) previewSchedulerRef.current = createAvatarPreviewScheduler()
+  const previewScheduler = previewSchedulerRef.current
   const lastCameraColorRef = useRef(
     cameraBackground === 'transparent' ? DEFAULT_CAMERA_BACKGROUND_COLOR : cameraBackground
   )
@@ -877,28 +1223,236 @@ export function AvatarControls({
     if (presetBrowser != null) presetSearchRef.current?.focus()
   }, [presetBrowser])
 
-  const renderEntityPresetPreview = (preset: Exclude<AvatarEntityPreset, 'custom'>) => (
-    <EntityPresetPreview
-      preset={preset}
-      lightDirection={{ azimuth: lightAzimuth, elevation: lightElevation }}
+  useEffect(() => {
+    if (lightAzimuth !== DEFAULT_AVATAR_PREVIEW_LIGHT.azimuth ||
+      lightElevation !== DEFAULT_AVATAR_PREVIEW_LIGHT.elevation) return
+    const preload = () => Object.values(AVATAR_ENTITY_PRESET_SNAPSHOT_URLS).forEach(source => {
+      const image = new Image()
+      image.decoding = 'async'
+      image.src = source
+    })
+    const idleWindow = window as AvatarPreviewIdleWindow
+    if (idleWindow.requestIdleCallback == null) {
+      const frame = window.requestAnimationFrame(preload)
+      return () => window.cancelAnimationFrame(frame)
+    }
+    const idle = idleWindow.requestIdleCallback(preload, { timeout: 600 })
+    return () => idleWindow.cancelIdleCallback?.(idle)
+  }, [lightAzimuth, lightElevation])
+
+  const renderEntityPresetPreview = (
+    preset: Exclude<AvatarEntityPreset, 'custom'>,
+    eager = false
+  ) => {
+    const staticSnapshot = lightAzimuth === DEFAULT_AVATAR_PREVIEW_LIGHT.azimuth &&
+      lightElevation === DEFAULT_AVATAR_PREVIEW_LIGHT.elevation
+      ? AVATAR_ENTITY_PRESET_SNAPSHOT_URLS[preset]
+      : null
+    return <DeferredEntityPresetPreview
+      eager={eager}
+      previewKey={`entity:${preset}:light:${lightAzimuth}:${lightElevation}`}
+      scheduler={previewScheduler}
+      staticSnapshot={staticSnapshot}
+      renderPreview={() => (
+        <EntityPresetPreview
+          preset={preset}
+          lightDirection={{ azimuth: lightAzimuth, elevation: lightElevation }}
+        />
+      )}
     />
+  }
+
+  const getStaticBreedPreview = (species: string, breed: string) => (
+    lightAzimuth === DEFAULT_AVATAR_PREVIEW_LIGHT.azimuth &&
+      lightElevation === DEFAULT_AVATAR_PREVIEW_LIGHT.elevation
+      ? getAvatarBreedPresetSnapshotUrl(species, breed)
+      : null
   )
 
-  const renderCatBreedPreview = (template: (typeof AVATAR_CAT_BREED_TEMPLATES)[number]) => {
-    const resolved = resolveAvatarCatBreedTemplate(template, seed)
-    const decals = resolveAvatarCoatPatternDecals({
-      entityParts: resolved.entityParts,
-      entityPreset: 'cat',
-      paletteId: resolved.paletteId,
-      pattern: resolved.coatPattern
-    })
+  const renderCatBreedPreview = (
+    template: (typeof AVATAR_CAT_BREED_TEMPLATES)[number],
+    eager = false
+  ) => {
+    const staticSnapshot = getStaticBreedPreview('cat', template.id)
     return (
-      <EntityPresetPreview
-        entityParts={resolved.entityParts}
-        lightDirection={{ azimuth: lightAzimuth, elevation: lightElevation }}
-        preset='cat'
-        previewBackground={template.previewBackground}
-        surfaceDecals={decals}
+      <DeferredEntityPresetPreview
+        eager={eager}
+        previewKey={staticSnapshot == null
+          ? `breed:cat:${template.id}:seed:${seed}:light:${lightAzimuth}:${lightElevation}`
+          : `breed:cat:${template.id}:prebuilt`}
+        scheduler={previewScheduler}
+        staticSnapshot={staticSnapshot}
+        renderPreview={() => {
+          const resolved = resolveAvatarCatBreedTemplate(template, seed)
+          const decals = resolveAvatarCoatPatternDecals({
+            entityParts: resolved.entityParts,
+            entityPreset: 'cat',
+            ...{ palette: resolveAvatarBreedPaletteFromEntityParts(getAvatarPalette(resolved.paletteId), resolved.entityParts) },
+            paletteId: resolved.paletteId,
+            pattern: resolved.coatPattern
+          })
+          return (
+            <EntityPresetPreview
+              entityParts={resolved.entityParts}
+              lightDirection={{ azimuth: lightAzimuth, elevation: lightElevation }}
+              preset='cat'
+              previewBackground={template.previewBackground}
+              surfaceDecals={decals}
+            />
+          )
+        }}
+      />
+    )
+  }
+
+  const renderDogBreedPreview = (
+    template: (typeof AVATAR_DOG_BREED_TEMPLATES)[number],
+    eager = false
+  ) => {
+    const staticSnapshot = getStaticBreedPreview('dog', template.id)
+    return (
+      <DeferredEntityPresetPreview
+        eager={eager}
+        previewKey={staticSnapshot == null
+          ? `breed:dog:${template.id}:seed:${seed}:light:${lightAzimuth}:${lightElevation}`
+          : `breed:dog:${template.id}:prebuilt`}
+        scheduler={previewScheduler}
+        staticSnapshot={staticSnapshot}
+        renderPreview={() => {
+          const resolved = resolveAvatarDogBreedTemplate(template, seed)
+          const decals = resolveAvatarCoatPatternDecals({
+            entityParts: resolved.entityParts,
+            entityPreset: 'dog',
+            ...{ palette: resolveAvatarBreedPaletteFromEntityParts(getAvatarPalette(resolved.paletteId), resolved.entityParts) },
+            paletteId: resolved.paletteId,
+            pattern: resolved.coatPattern
+          })
+          return (
+            <EntityPresetPreview
+              entityParts={resolved.entityParts}
+              lightDirection={{ azimuth: lightAzimuth, elevation: lightElevation }}
+              preset='dog'
+              previewBackground={template.previewBackground}
+              surfaceDecals={decals}
+            />
+          )
+        }}
+      />
+    )
+  }
+
+  const renderRabbitBreedPreview = (
+    template: (typeof AVATAR_RABBIT_BREED_TEMPLATES)[number],
+    eager = false
+  ) => {
+    const staticSnapshot = getStaticBreedPreview('rabbit', template.id)
+    return (
+      <DeferredEntityPresetPreview
+        eager={eager}
+        previewKey={staticSnapshot == null
+          ? `breed:rabbit:${template.id}:seed:${seed}:light:${lightAzimuth}:${lightElevation}`
+          : `breed:rabbit:${template.id}:prebuilt`}
+        scheduler={previewScheduler}
+        staticSnapshot={staticSnapshot}
+        renderPreview={() => {
+          const resolved = resolveAvatarRabbitBreedTemplate(template, seed)
+          const decals = resolveAvatarCoatPatternDecals({
+            entityParts: resolved.entityParts,
+            entityPreset: 'rabbit',
+            ...{ palette: resolveAvatarBreedPaletteFromEntityParts(getAvatarPalette(resolved.paletteId), resolved.entityParts) },
+            paletteId: resolved.paletteId,
+            pattern: resolved.coatPattern
+          })
+          return (
+            <EntityPresetPreview
+              entityParts={resolved.entityParts}
+              lightDirection={{ azimuth: lightAzimuth, elevation: lightElevation }}
+              preset='rabbit'
+              previewBackground={template.previewBackground}
+              surfaceDecals={decals}
+            />
+          )
+        }}
+      />
+    )
+  }
+
+  const renderBearBreedPreview = (
+    template: (typeof AVATAR_BEAR_BREED_TEMPLATES)[number],
+    eager = false
+  ) => {
+    const staticSnapshot = getStaticBreedPreview('bear', template.id)
+    return (
+      <DeferredEntityPresetPreview
+        eager={eager}
+        previewKey={staticSnapshot == null
+          ? `breed:bear:${template.id}:seed:${seed}:light:${lightAzimuth}:${lightElevation}`
+          : `breed:bear:${template.id}:prebuilt`}
+        scheduler={previewScheduler}
+        staticSnapshot={staticSnapshot}
+        renderPreview={() => {
+          const resolved = resolveAvatarBearBreedTemplate(template, seed)
+          const decals = resolveAvatarCoatPatternDecals({
+            entityParts: resolved.entityParts,
+            entityPreset: 'bear',
+            ...{ palette: resolveAvatarBreedPaletteFromEntityParts(getAvatarPalette(resolved.paletteId), resolved.entityParts) },
+            paletteId: resolved.paletteId,
+            pattern: resolved.coatPattern
+          })
+          return (
+            <EntityPresetPreview
+              entityParts={resolved.entityParts}
+              faceStyle={resolved.faceStyle}
+              lightDirection={{ azimuth: lightAzimuth, elevation: lightElevation }}
+              preset='bear'
+              previewBackground={template.previewBackground}
+              surfaceDecals={decals}
+            />
+          )
+        }}
+      />
+    )
+  }
+
+  const animalSpecies = isAvatarAnimalSpeciesId(entityPreset) ? entityPreset : null
+  const animalEarSeedFields = animalSpecies == null ? null : getAvatarAnimalEarSeedFields(animalSpecies)
+  const animalTemplate = animalSpecies == null
+    ? null
+    : getAvatarAnimalBreedTemplate(animalSpecies, animalBreedTemplateId)
+
+  const renderAnimalBreedPreview = (template: AvatarAnimalBreedTemplate, eager = false) => {
+    const staticSnapshot = getStaticBreedPreview(template.species, template.id)
+    return (
+      <DeferredEntityPresetPreview
+        eager={eager}
+        previewKey={staticSnapshot == null
+          ? `breed:${template.species}:${template.id}:seed:${seed}:light:${lightAzimuth}:${lightElevation}`
+          : `breed:${template.species}:${template.id}:prebuilt`}
+        scheduler={previewScheduler}
+        staticSnapshot={staticSnapshot}
+        renderPreview={() => {
+          const resolved = resolveAvatarAnimalBreedTemplate(template, seed)
+          const decals = [
+            ...resolveAvatarCoatPatternDecals({
+              entityParts: resolved.entityParts,
+              entityPreset: template.species,
+              ...{ palette: resolveAvatarBreedPaletteFromEntityParts(getAvatarPalette(resolved.paletteId), resolved.entityParts) },
+              paletteId: resolved.paletteId,
+              pattern: resolved.coatPattern
+            }),
+            ...(resolved.surfaceDecals ?? [])
+          ]
+          return (
+            <EntityPresetPreview
+              entityParts={resolved.entityParts}
+              faceStyle={resolved.faceStyle}
+              lightDirection={{ azimuth: lightAzimuth, elevation: lightElevation }}
+              preset={template.species}
+              previewBackground={template.previewBackground}
+              surfaceDecals={decals}
+            />
+          )
+        }}
       />
     )
   }
@@ -993,7 +1547,7 @@ export function AvatarControls({
     </button>
   )
 
-  const renderSavedPresetItem = (item: AvatarSavedPresetItem) => {
+  const renderSavedPresetItem = (item: AvatarSavedPresetItem, eagerPreview = false) => {
     if (item.kind === 'entity') {
       return (
         <button
@@ -1005,7 +1559,7 @@ export function AvatarControls({
           data-entity-preset={item.preset}
           onClick={() => selectSavedPreset(item)}
         >
-          {renderEntityPresetPreview(item.preset)}
+          {renderEntityPresetPreview(item.preset, eagerPreview)}
         </button>
       )
     }
@@ -1219,7 +1773,7 @@ export function AvatarControls({
               <section className='avatar-controls__field-group' aria-label={t('Avatar type')}>
                 {renderSeedFieldHeader('build', 'Avatar type', AVATAR_SEED_FIELD.entityPreset)}
                 <div className='avatar-controls__saved-preset-list'>
-                  {compactEntityPresetItems.map(renderSavedPresetItem)}
+                  {compactEntityPresetItems.map(item => renderSavedPresetItem(item, true))}
                   {entityPresetItems.length > compactPresetCapacity
                     ? renderMorePresetButton('entities')
                     : null}
@@ -1257,6 +1811,129 @@ export function AvatarControls({
                 )
                 : null}
 
+              {entityPreset === 'dog'
+                ? (
+                  <section className='avatar-controls__field-group' aria-label={t('Dog types')}>
+                    <div className='avatar-controls__field-header'>
+                      <span className='avatar-controls__label'>
+                        <ControlIcon name='style' />
+                        {t('Dog types')}
+                      </span>
+                    </div>
+                    <div className='avatar-controls__saved-preset-list avatar-controls__dog-breed-list'>
+                      {AVATAR_DOG_BREED_TEMPLATES.map(template => (
+                        <button
+                          key={template.id}
+                          className='avatar-controls__saved-preset avatar-controls__saved-preset--entity-preset avatar-controls__dog-breed-preset'
+                          type='button'
+                          aria-label={t(template.label)}
+                          aria-pressed={dogBreedTemplateId === template.id}
+                          data-dog-breed={template.id}
+                          title={t(template.label)}
+                          onClick={() => onDogBreedTemplateChange(
+                            dogBreedTemplateId === template.id ? null : template.id
+                          )}
+                        >
+                          {renderDogBreedPreview(template)}
+                        </button>
+                      ))}
+                    </div>
+                  </section>
+                )
+                : null}
+
+              {entityPreset === 'rabbit'
+                ? (
+                  <section className='avatar-controls__field-group' aria-label={t('Rabbit types')}>
+                    <div className='avatar-controls__field-header'>
+                      <span className='avatar-controls__label'>
+                        <ControlIcon name='style' />
+                        {t('Rabbit types')}
+                      </span>
+                    </div>
+                    <div className='avatar-controls__saved-preset-list avatar-controls__rabbit-breed-list'>
+                      {AVATAR_RABBIT_BREED_TEMPLATES.map(template => (
+                        <button
+                          key={template.id}
+                          className='avatar-controls__saved-preset avatar-controls__saved-preset--entity-preset avatar-controls__rabbit-breed-preset'
+                          type='button'
+                          aria-label={t(template.label)}
+                          aria-pressed={rabbitBreedTemplateId === template.id}
+                          data-rabbit-breed={template.id}
+                          title={t(template.label)}
+                          onClick={() => onRabbitBreedTemplateChange(
+                            rabbitBreedTemplateId === template.id ? null : template.id
+                          )}
+                        >
+                          {renderRabbitBreedPreview(template)}
+                        </button>
+                      ))}
+                    </div>
+                  </section>
+                )
+                : null}
+
+              {entityPreset === 'bear'
+                ? (
+                  <section className='avatar-controls__field-group' aria-label={t('Bear types')}>
+                    <div className='avatar-controls__field-header'>
+                      <span className='avatar-controls__label'>
+                        <ControlIcon name='style' />
+                        {t('Bear types')}
+                      </span>
+                    </div>
+                    <div className='avatar-controls__saved-preset-list avatar-controls__bear-breed-list'>
+                      {AVATAR_BEAR_BREED_TEMPLATES.map(template => (
+                        <button
+                          key={template.id}
+                          className='avatar-controls__saved-preset avatar-controls__saved-preset--entity-preset avatar-controls__bear-breed-preset'
+                          type='button'
+                          aria-label={t(template.label)}
+                          aria-pressed={bearBreedTemplateId === template.id}
+                          data-bear-breed={template.id}
+                          title={t(template.label)}
+                          onClick={() => onBearBreedTemplateChange(bearBreedTemplateId === template.id ? null : template.id)}
+                        >
+                          {renderBearBreedPreview(template)}
+                        </button>
+                      ))}
+                    </div>
+                  </section>
+                )
+                : null}
+
+              {animalSpecies == null
+                ? null
+                : (
+                  <section
+                    className='avatar-controls__field-group'
+                    aria-label={t(`${ENTITY_PRESET_LABELS[animalSpecies]} types`)}
+                  >
+                    <div className='avatar-controls__field-header'>
+                      <span className='avatar-controls__label'>
+                        <ControlIcon name='style' />
+                        {t(`${ENTITY_PRESET_LABELS[animalSpecies]} types`)}
+                      </span>
+                    </div>
+                    <div className='avatar-controls__saved-preset-list avatar-controls__animal-breed-list'>
+                      {getAvatarAnimalBreedTemplates(animalSpecies).map(template => (
+                        <button
+                          key={template.id}
+                          className='avatar-controls__saved-preset avatar-controls__saved-preset--entity-preset avatar-controls__animal-breed-preset'
+                          type='button'
+                          aria-label={t(template.label)}
+                          aria-pressed={animalBreedTemplateId === template.id}
+                          data-animal-breed={template.id}
+                          title={t(template.label)}
+                          onClick={() => onAnimalBreedTemplateChange?.(template.id)}
+                        >
+                          {renderAnimalBreedPreview(template)}
+                        </button>
+                      ))}
+                    </div>
+                  </section>
+                )}
+
               {savedPresetItems.length === 0
                 ? null
                 : (
@@ -1266,7 +1943,7 @@ export function AvatarControls({
                       {t('Saved looks')}
                     </span>
                     <div className='avatar-controls__saved-preset-list'>
-                      {compactSavedPresetItems.map(renderSavedPresetItem)}
+                      {compactSavedPresetItems.map(item => renderSavedPresetItem(item))}
                       {savedPresetItems.length > compactPresetCapacity
                         ? renderMorePresetButton('saved')
                         : null}
@@ -1330,6 +2007,358 @@ export function AvatarControls({
                   </section>
                 )
                 : null}
+
+              {entityPreset === 'dog'
+                ? (
+                  <section className='avatar-controls__field-group avatar-controls__dog-head-size' aria-label={t('Dog head size')}>
+                    <div className='avatar-controls__field-header'>
+                      <span className='avatar-controls__label'>
+                        <ControlIcon name='body' />
+                        {t('Dog head size')}
+                      </span>
+                    </div>
+                    <div className='avatar-controls__coat-row'>
+                      <div className='avatar-controls__coat-row-header'>
+                        <span>{t('Head width')}</span>
+                        <SeedFieldToggle
+                          enabled={seededFields.includes(AVATAR_SEED_FIELD.dogHeadWidth)}
+                          label='Head width'
+                          onChange={() => onSeedFieldToggle(
+                            AVATAR_SEED_FIELD.dogHeadWidth,
+                            !seededFields.includes(AVATAR_SEED_FIELD.dogHeadWidth)
+                          )}
+                        />
+                      </div>
+                      <ValueSlider
+                        ariaLabel='Dog head width'
+                        label='Width'
+                        min={DOG_HEAD_SCALE_RANGE.min}
+                        max={DOG_HEAD_SCALE_RANGE.max}
+                        suffix='%'
+                        value={dogHeadWidth}
+                        onChange={onDogHeadWidthChange}
+                      />
+                    </div>
+                    <div className='avatar-controls__coat-row'>
+                      <div className='avatar-controls__coat-row-header'>
+                        <span>{t('Head height')}</span>
+                        <SeedFieldToggle
+                          enabled={seededFields.includes(AVATAR_SEED_FIELD.dogHeadHeight)}
+                          label='Head height'
+                          onChange={() => onSeedFieldToggle(
+                            AVATAR_SEED_FIELD.dogHeadHeight,
+                            !seededFields.includes(AVATAR_SEED_FIELD.dogHeadHeight)
+                          )}
+                        />
+                      </div>
+                      <ValueSlider
+                        ariaLabel='Dog head height'
+                        label='Height'
+                        min={DOG_HEAD_SCALE_RANGE.min}
+                        max={DOG_HEAD_SCALE_RANGE.max}
+                        suffix='%'
+                        value={dogHeadHeight}
+                        onChange={onDogHeadHeightChange}
+                      />
+                    </div>
+                  </section>
+                )
+                : null}
+
+              {entityPreset === 'dog'
+                ? (
+                  <section className='avatar-controls__field-group avatar-controls__dog-ear-size' aria-label={t('Dog ear size')}>
+                    <div className='avatar-controls__field-header'>
+                      <span className='avatar-controls__label'>
+                        <ControlIcon name='body' />
+                        {t('Dog ear size')}
+                      </span>
+                    </div>
+                    <div className='avatar-controls__coat-row'>
+                      <div className='avatar-controls__coat-row-header'>
+                        <span>{t('Ear width')}</span>
+                        <SeedFieldToggle
+                          enabled={seededFields.includes(AVATAR_SEED_FIELD.dogEarWidth)}
+                          label='Ear width'
+                          onChange={() => onSeedFieldToggle(
+                            AVATAR_SEED_FIELD.dogEarWidth,
+                            !seededFields.includes(AVATAR_SEED_FIELD.dogEarWidth)
+                          )}
+                        />
+                      </div>
+                      <ValueSlider
+                        ariaLabel='Dog ear width'
+                        label='Width'
+                        min={DOG_EAR_SCALE_RANGE.min}
+                        max={DOG_EAR_SCALE_RANGE.max}
+                        suffix='%'
+                        value={dogEarWidth}
+                        onChange={onDogEarWidthChange}
+                      />
+                    </div>
+                    <div className='avatar-controls__coat-row'>
+                      <div className='avatar-controls__coat-row-header'>
+                        <span>{t('Ear height')}</span>
+                        <SeedFieldToggle
+                          enabled={seededFields.includes(AVATAR_SEED_FIELD.dogEarHeight)}
+                          label='Ear height'
+                          onChange={() => onSeedFieldToggle(
+                            AVATAR_SEED_FIELD.dogEarHeight,
+                            !seededFields.includes(AVATAR_SEED_FIELD.dogEarHeight)
+                          )}
+                        />
+                      </div>
+                      <ValueSlider
+                        ariaLabel='Dog ear height'
+                        label='Height'
+                        min={DOG_EAR_SCALE_RANGE.min}
+                        max={DOG_EAR_SCALE_RANGE.max}
+                        suffix='%'
+                        value={dogEarHeight}
+                        onChange={onDogEarHeightChange}
+                      />
+                    </div>
+                  </section>
+                )
+                : null}
+
+              {entityPreset === 'rabbit'
+                ? (
+                  <section className='avatar-controls__field-group avatar-controls__rabbit-head-size' aria-label={t('Rabbit head size')}>
+                    <div className='avatar-controls__field-header'>
+                      <span className='avatar-controls__label'>
+                        <ControlIcon name='body' />
+                        {t('Rabbit head size')}
+                      </span>
+                    </div>
+                    <div className='avatar-controls__coat-row'>
+                      <div className='avatar-controls__coat-row-header'>
+                        <span>{t('Head width')}</span>
+                        <SeedFieldToggle enabled={seededFields.includes(AVATAR_SEED_FIELD.rabbitHeadWidth)} label='Head width' onChange={() => onSeedFieldToggle(AVATAR_SEED_FIELD.rabbitHeadWidth, !seededFields.includes(AVATAR_SEED_FIELD.rabbitHeadWidth))} />
+                      </div>
+                      <ValueSlider ariaLabel='Rabbit head width' label='Width' min={RABBIT_HEAD_SCALE_RANGE.min} max={RABBIT_HEAD_SCALE_RANGE.max} suffix='%' value={rabbitHeadWidth} onChange={onRabbitHeadWidthChange} />
+                    </div>
+                    <div className='avatar-controls__coat-row'>
+                      <div className='avatar-controls__coat-row-header'>
+                        <span>{t('Head height')}</span>
+                        <SeedFieldToggle enabled={seededFields.includes(AVATAR_SEED_FIELD.rabbitHeadHeight)} label='Head height' onChange={() => onSeedFieldToggle(AVATAR_SEED_FIELD.rabbitHeadHeight, !seededFields.includes(AVATAR_SEED_FIELD.rabbitHeadHeight))} />
+                      </div>
+                      <ValueSlider ariaLabel='Rabbit head height' label='Height' min={RABBIT_HEAD_SCALE_RANGE.min} max={RABBIT_HEAD_SCALE_RANGE.max} suffix='%' value={rabbitHeadHeight} onChange={onRabbitHeadHeightChange} />
+                    </div>
+                  </section>
+                )
+                : null}
+
+              {entityPreset === 'rabbit'
+                ? (
+                  <section className='avatar-controls__field-group avatar-controls__rabbit-ear-size' aria-label={t('Rabbit ear size')}>
+                    <div className='avatar-controls__field-header'>
+                      <span className='avatar-controls__label'>
+                        <ControlIcon name='body' />
+                        {t('Rabbit ear size')}
+                      </span>
+                    </div>
+                    <div className='avatar-controls__coat-row'>
+                      <div className='avatar-controls__coat-row-header'>
+                        <span>{t('Ear width')}</span>
+                        <SeedFieldToggle enabled={seededFields.includes(AVATAR_SEED_FIELD.rabbitEarWidth)} label='Ear width' onChange={() => onSeedFieldToggle(AVATAR_SEED_FIELD.rabbitEarWidth, !seededFields.includes(AVATAR_SEED_FIELD.rabbitEarWidth))} />
+                      </div>
+                      <ValueSlider ariaLabel='Rabbit ear width' label='Width' min={RABBIT_EAR_SCALE_RANGE.min} max={RABBIT_EAR_SCALE_RANGE.max} suffix='%' value={rabbitEarWidth} onChange={onRabbitEarWidthChange} />
+                    </div>
+                    <div className='avatar-controls__coat-row'>
+                      <div className='avatar-controls__coat-row-header'>
+                        <span>{t('Ear height')}</span>
+                        <SeedFieldToggle enabled={seededFields.includes(AVATAR_SEED_FIELD.rabbitEarHeight)} label='Ear height' onChange={() => onSeedFieldToggle(AVATAR_SEED_FIELD.rabbitEarHeight, !seededFields.includes(AVATAR_SEED_FIELD.rabbitEarHeight))} />
+                      </div>
+                      <ValueSlider ariaLabel='Rabbit ear height' label='Height' min={RABBIT_EAR_SCALE_RANGE.min} max={RABBIT_EAR_SCALE_RANGE.max} suffix='%' value={rabbitEarHeight} onChange={onRabbitEarHeightChange} />
+                    </div>
+                  </section>
+                )
+                : null}
+
+              {entityPreset === 'bear'
+                ? (
+                  <section className='avatar-controls__field-group avatar-controls__bear-head-size' aria-label={t('Bear head size')}>
+                    <div className='avatar-controls__field-header'><span className='avatar-controls__label'><ControlIcon name='body' />{t('Bear head size')}</span></div>
+                    <div className='avatar-controls__coat-row'>
+                      <div className='avatar-controls__coat-row-header'><span>{t('Head width')}</span><SeedFieldToggle enabled={seededFields.includes(AVATAR_SEED_FIELD.bearHeadWidth)} label='Head width' onChange={() => onSeedFieldToggle(AVATAR_SEED_FIELD.bearHeadWidth, !seededFields.includes(AVATAR_SEED_FIELD.bearHeadWidth))} /></div>
+                      <ValueSlider ariaLabel='Bear head width' label='Width' min={BEAR_HEAD_SCALE_RANGE.min} max={BEAR_HEAD_SCALE_RANGE.max} suffix='%' value={bearHeadWidth} onChange={onBearHeadWidthChange} />
+                    </div>
+                    <div className='avatar-controls__coat-row'>
+                      <div className='avatar-controls__coat-row-header'><span>{t('Head height')}</span><SeedFieldToggle enabled={seededFields.includes(AVATAR_SEED_FIELD.bearHeadHeight)} label='Head height' onChange={() => onSeedFieldToggle(AVATAR_SEED_FIELD.bearHeadHeight, !seededFields.includes(AVATAR_SEED_FIELD.bearHeadHeight))} /></div>
+                      <ValueSlider ariaLabel='Bear head height' label='Height' min={BEAR_HEAD_SCALE_RANGE.min} max={BEAR_HEAD_SCALE_RANGE.max} suffix='%' value={bearHeadHeight} onChange={onBearHeadHeightChange} />
+                    </div>
+                  </section>
+                )
+                : null}
+
+              {entityPreset === 'bear'
+                ? (
+                  <section className='avatar-controls__field-group avatar-controls__bear-ear-size' aria-label={t('Bear ear size')}>
+                    <div className='avatar-controls__field-header'><span className='avatar-controls__label'><ControlIcon name='body' />{t('Bear ear size')}</span></div>
+                    <div className='avatar-controls__coat-row'>
+                      <div className='avatar-controls__coat-row-header'><span>{t('Ear width')}</span><SeedFieldToggle enabled={seededFields.includes(AVATAR_SEED_FIELD.bearEarWidth)} label='Ear width' onChange={() => onSeedFieldToggle(AVATAR_SEED_FIELD.bearEarWidth, !seededFields.includes(AVATAR_SEED_FIELD.bearEarWidth))} /></div>
+                      <ValueSlider ariaLabel='Bear ear width' label='Width' min={BEAR_EAR_SCALE_RANGE.min} max={BEAR_EAR_SCALE_RANGE.max} suffix='%' value={bearEarWidth} onChange={onBearEarWidthChange} />
+                    </div>
+                    <div className='avatar-controls__coat-row'>
+                      <div className='avatar-controls__coat-row-header'><span>{t('Ear height')}</span><SeedFieldToggle enabled={seededFields.includes(AVATAR_SEED_FIELD.bearEarHeight)} label='Ear height' onChange={() => onSeedFieldToggle(AVATAR_SEED_FIELD.bearEarHeight, !seededFields.includes(AVATAR_SEED_FIELD.bearEarHeight))} /></div>
+                      <ValueSlider ariaLabel='Bear ear height' label='Height' min={BEAR_EAR_SCALE_RANGE.min} max={BEAR_EAR_SCALE_RANGE.max} suffix='%' value={bearEarHeight} onChange={onBearEarHeightChange} />
+                    </div>
+                  </section>
+                )
+                : null}
+
+              {animalSpecies == null
+                ? null
+                : (
+                  <>
+                    <section
+                      className='avatar-controls__field-group avatar-controls__animal-head-size'
+                      aria-label={t(`${ENTITY_PRESET_LABELS[animalSpecies]} head size`)}
+                    >
+                      <div className='avatar-controls__field-header'>
+                        <span className='avatar-controls__label'>
+                          <ControlIcon name='body' />
+                          {t(`${ENTITY_PRESET_LABELS[animalSpecies]} head size`)}
+                        </span>
+                      </div>
+                      <div className='avatar-controls__coat-row'>
+                        <div className='avatar-controls__coat-row-header'>
+                          <span>{t('Head width')}</span>
+                          <SeedFieldToggle
+                            enabled={seededFields.includes(AVATAR_ANIMAL_SPECIES_SEED_FIELDS[animalSpecies].headWidth)}
+                            label='Head width'
+                            onChange={() => onSeedFieldToggle(
+                              AVATAR_ANIMAL_SPECIES_SEED_FIELDS[animalSpecies].headWidth,
+                              !seededFields.includes(AVATAR_ANIMAL_SPECIES_SEED_FIELDS[animalSpecies].headWidth)
+                            )}
+                          />
+                        </div>
+                        <ValueSlider
+                          ariaLabel={`${ENTITY_PRESET_LABELS[animalSpecies]} head width`}
+                          label='Width'
+                          min={getAvatarAnimalScaleRange(animalSpecies, 'head').min}
+                          max={getAvatarAnimalScaleRange(animalSpecies, 'head').max}
+                          suffix='%'
+                          value={animalHeadWidth}
+                          onChange={value => onAnimalHeadWidthChange?.(value)}
+                        />
+                      </div>
+                      <div className='avatar-controls__coat-row'>
+                        <div className='avatar-controls__coat-row-header'>
+                          <span>{t('Head height')}</span>
+                          <SeedFieldToggle
+                            enabled={seededFields.includes(AVATAR_ANIMAL_SPECIES_SEED_FIELDS[animalSpecies].headHeight)}
+                            label='Head height'
+                            onChange={() => onSeedFieldToggle(
+                              AVATAR_ANIMAL_SPECIES_SEED_FIELDS[animalSpecies].headHeight,
+                              !seededFields.includes(AVATAR_ANIMAL_SPECIES_SEED_FIELDS[animalSpecies].headHeight)
+                            )}
+                          />
+                        </div>
+                        <ValueSlider
+                          ariaLabel={`${ENTITY_PRESET_LABELS[animalSpecies]} head height`}
+                          label='Height'
+                          min={getAvatarAnimalScaleRange(animalSpecies, 'head').min}
+                          max={getAvatarAnimalScaleRange(animalSpecies, 'head').max}
+                          suffix='%'
+                          value={animalHeadHeight}
+                          onChange={value => onAnimalHeadHeightChange?.(value)}
+                        />
+                      </div>
+                    </section>
+
+                    {animalSpecies === 'seal' || animalEarSeedFields == null ? null : <section
+                      className='avatar-controls__field-group avatar-controls__animal-ear-size'
+                      aria-label={t(`${ENTITY_PRESET_LABELS[animalSpecies]} ear size`)}
+                    >
+                      <div className='avatar-controls__field-header'>
+                        <span className='avatar-controls__label'>
+                          <ControlIcon name='body' />
+                          {t(`${ENTITY_PRESET_LABELS[animalSpecies]} ear size`)}
+                        </span>
+                      </div>
+                      <div className='avatar-controls__coat-row'>
+                        <div className='avatar-controls__coat-row-header'>
+                          <span>{t('Ear width')}</span>
+                          <SeedFieldToggle
+                            enabled={seededFields.includes(animalEarSeedFields.earWidth)}
+                            label='Ear width'
+                            onChange={() => onSeedFieldToggle(
+                              animalEarSeedFields.earWidth,
+                              !seededFields.includes(animalEarSeedFields.earWidth)
+                            )}
+                          />
+                        </div>
+                        <ValueSlider
+                          ariaLabel={`${ENTITY_PRESET_LABELS[animalSpecies]} ear width`}
+                          label='Width'
+                          min={getAvatarAnimalScaleRange(animalSpecies, 'ear').min}
+                          max={getAvatarAnimalScaleRange(animalSpecies, 'ear').max}
+                          suffix='%'
+                          value={animalEarWidth}
+                          onChange={value => onAnimalEarWidthChange?.(value)}
+                        />
+                      </div>
+                      <div className='avatar-controls__coat-row'>
+                        <div className='avatar-controls__coat-row-header'>
+                          <span>{t('Ear height')}</span>
+                          <SeedFieldToggle
+                            enabled={seededFields.includes(animalEarSeedFields.earHeight)}
+                            label='Ear height'
+                            onChange={() => onSeedFieldToggle(
+                              animalEarSeedFields.earHeight,
+                              !seededFields.includes(animalEarSeedFields.earHeight)
+                            )}
+                          />
+                        </div>
+                        <ValueSlider
+                          ariaLabel={`${ENTITY_PRESET_LABELS[animalSpecies]} ear height`}
+                          label='Height'
+                          min={getAvatarAnimalScaleRange(animalSpecies, 'ear').min}
+                          max={getAvatarAnimalScaleRange(animalSpecies, 'ear').max}
+                          suffix='%'
+                          value={animalEarHeight}
+                          onChange={value => onAnimalEarHeightChange?.(value)}
+                        />
+                      </div>
+                    </section>}
+
+                    {getAvatarAnimalHornSeedField(animalSpecies) != null &&
+                      animalTemplate?.fixed.hornSize != null && animalTemplate.fixed.hornStyle !== 'none'
+                      ? (
+                        <section
+                          className='avatar-controls__field-group avatar-controls__animal-horn-size'
+                            aria-label={t(animalSpecies === 'deer' ? 'Antler size' : animalSpecies === 'cow' ? 'Cow horn size' : animalSpecies === 'squirrel' ? 'Tail size' : animalSpecies === 'lion' ? 'Mane size' : animalSpecies === 'hedgehog' ? 'Spine size' : animalSpecies === 'beaver' ? 'Incisor size' : 'Horn size')}
+                        >
+                          <div className='avatar-controls__field-header'>
+                            <span className='avatar-controls__label'>
+                              <ControlIcon name='body' />
+                              {t(animalSpecies === 'deer' ? 'Antler size' : animalSpecies === 'cow' ? 'Cow horn size' : animalSpecies === 'squirrel' ? 'Tail size' : animalSpecies === 'lion' ? 'Mane size' : animalSpecies === 'hedgehog' ? 'Spine size' : animalSpecies === 'beaver' ? 'Incisor size' : 'Horn size')}
+                            </span>
+                            <SeedFieldToggle
+                              enabled={seededFields.includes(getAvatarAnimalHornSeedField(animalSpecies)!)}
+                              label={animalSpecies === 'deer' ? 'Antler size' : animalSpecies === 'cow' ? 'Cow horn size' : animalSpecies === 'squirrel' ? 'Tail size' : animalSpecies === 'lion' ? 'Mane size' : animalSpecies === 'hedgehog' ? 'Spine size' : animalSpecies === 'beaver' ? 'Incisor size' : 'Horn size'}
+                              onChange={() => {
+                                const field = getAvatarAnimalHornSeedField(animalSpecies)!
+                                onSeedFieldToggle(field, !seededFields.includes(field))
+                              }}
+                            />
+                          </div>
+                          <ValueSlider
+                            ariaLabel={animalSpecies === 'deer' ? 'Deer antler size' : animalSpecies === 'cow' ? 'Cow horn size' : animalSpecies === 'squirrel' ? 'Squirrel tail size' : animalSpecies === 'lion' ? 'Lion mane size' : animalSpecies === 'hedgehog' ? 'Hedgehog spine size' : animalSpecies === 'beaver' ? 'Incisor size' : 'Sheep horn size'}
+                            label='Size'
+                            min={getAvatarAnimalScaleRange(animalSpecies, 'horn').min}
+                            max={getAvatarAnimalScaleRange(animalSpecies, 'horn').max}
+                            suffix='%'
+                            value={animalHornSize}
+                            onChange={value => onAnimalHornSizeChange?.(value)}
+                          />
+                        </section>
+                      )
+                      : null}
+                  </>
+                )}
 
               <div className='avatar-controls__field-group'>
                 {renderSeedFieldHeader('eyes', 'Face', AVATAR_SEED_FIELD.facePreset)}
@@ -1653,7 +2682,8 @@ export function AvatarControls({
                   )
                   : null}
               </div>
-              {entityPreset === 'cat'
+              {entityPreset === 'cat' || entityPreset === 'dog' || entityPreset === 'rabbit' ||
+                (entityPreset === 'bear' && bearBreedTemplateId != null) || isAvatarAnimalSpeciesId(entityPreset)
                 ? (
                   <div className='avatar-controls__field-group avatar-controls__coat-pattern' data-enabled={coatPattern.enabled}>
                     <div className='avatar-controls__field-header'>
@@ -2196,7 +3226,21 @@ export function AvatarControls({
                 )
                 : null}
               {editingEntityPart == null
-                ? null
+                ? bodyShape === 'ellipse'
+                  ? (
+                    <div className='avatar-controls__parameter-controls'>
+                      <ValueSlider
+                        ariaLabel='Body bottom taper'
+                        label='Bottom taper'
+                        min={AVATAR_ENTITY_RANGES.bottomTaper.min}
+                        max={AVATAR_ENTITY_RANGES.bottomTaper.max}
+                        suffix='%'
+                        value={bodyBottomTaper}
+                        onChange={onBodyBottomTaperChange}
+                      />
+                    </div>
+                  )
+                  : null
                 : (
                   <div className='avatar-controls__parameter-controls'>
                     <NumberField
@@ -2244,6 +3288,19 @@ export function AvatarControls({
                       value={resolveAvatarEntityPartScaleZ(editingEntityPart) * 100}
                       onChange={value => onEntityPartChange(editingEntityPart.id, { scaleZ: value / 100 })}
                     />
+                    {editingEntityPart.shape === 'ellipse'
+                      ? (
+                        <ValueSlider
+                          ariaLabel='Part bottom taper'
+                          label='Bottom taper'
+                          min={AVATAR_ENTITY_RANGES.bottomTaper.min}
+                          max={AVATAR_ENTITY_RANGES.bottomTaper.max}
+                          suffix='%'
+                          value={editingEntityPart.bottomTaper ?? 0}
+                          onChange={bottomTaper => onEntityPartChange(editingEntityPart.id, { bottomTaper })}
+                        />
+                      )
+                      : null}
                     <NumberField
                       ariaLabel='Part rotation X'
                       label='Rotation X'
@@ -2733,8 +3790,8 @@ export function AvatarControls({
                     {presetBrowser === 'faces'
                       ? searchedFacePresets.map(renderFacePresetButton)
                       : presetBrowser === 'entities'
-                        ? searchedEntityPresetItems.map(renderSavedPresetItem)
-                        : searchedSavedPresetItems.map(renderSavedPresetItem)}
+                        ? searchedEntityPresetItems.map(item => renderSavedPresetItem(item, false))
+                        : searchedSavedPresetItems.map(item => renderSavedPresetItem(item))}
                   </div>
                 )}
             </section>

@@ -19,6 +19,8 @@ export const AVATAR_BODY_SHAPES = [
 export type AvatarBodyShape = (typeof AVATAR_BODY_SHAPES)[number]
 
 export interface AvatarBodyGeometryOptions {
+  readonly bottomTaper?: number
+  readonly compositorDensity?: number
   readonly cutAngle?: number
   readonly faceOffsetY?: number
   readonly hollow?: boolean
@@ -32,6 +34,12 @@ export interface AvatarBodyGeometryOptions {
   readonly scaleY?: number
   readonly scaleZ?: number
   readonly topScale?: number
+}
+
+export interface AvatarAuthoredSurfacePoint {
+  readonly frontDepth: number
+  readonly x: number
+  readonly y: number
 }
 
 export interface AvatarPose {
@@ -175,11 +183,33 @@ export interface BodyCell {
   readonly shade: number
 }
 
+export interface BodySurfaceVertex {
+  readonly depth: number
+  readonly x: number
+  readonly y: number
+}
+
+export interface BodySurfaceTriangle {
+  readonly bounds: {
+    readonly maxX: number
+    readonly maxY: number
+    readonly minX: number
+    readonly minY: number
+  }
+  readonly id: string
+  readonly maxDepth: number
+  readonly meanDepth: number
+  readonly minDepth: number
+  readonly vertices: readonly [BodySurfaceVertex, BodySurfaceVertex, BodySurfaceVertex]
+}
+
 export interface BodyGeometry {
   readonly cells: readonly BodyCell[]
   readonly cavityPath?: string
   readonly occlusionPath?: string
+  readonly outlinePoints: readonly BodySurfaceVertex[]
   readonly outlinePath: string
+  readonly surfaceTriangles: readonly BodySurfaceTriangle[]
 }
 
 export interface ProjectedFace {
@@ -197,7 +227,7 @@ export interface ProjectedEye {
   readonly transform?: string
 }
 
-interface ShapeSpec {
+export interface AvatarBodyCompilerShapeSpec {
   readonly exponent: number
   readonly faceCurvature: number
   readonly faceScale: number
@@ -241,6 +271,8 @@ const CENTER_X = VIEW_SIZE / 2
 const CENTER_Y = 202
 const BASE_LATITUDE_STEPS = 14
 const BASE_LONGITUDE_STEPS = 28
+const COMPOSITOR_LATITUDE_STEPS = 6
+const COMPOSITOR_LONGITUDE_STEPS = 12
 const OUTLINE_LATITUDE_STEPS = 28
 const OUTLINE_LONGITUDE_STEPS = 72
 const NORMAL_DELTA = 0.006
@@ -253,7 +285,7 @@ const TAPERED_BAND_STEPS = 20
 const TRIANGLE_EDGE_STEPS = 10
 const FACE_MASK_EDGE_STEPS = 12
 
-const SHAPE_SPECS: Readonly<Record<AvatarBodyShape, ShapeSpec>> = {
+const SHAPE_SPECS: Readonly<Record<AvatarBodyShape, AvatarBodyCompilerShapeSpec>> = {
   capsule: { exponent: 0.52, faceCurvature: 0.52, faceScale: 0.52, profile: 'superellipsoid', radiusX: 150, radiusY: 109, radiusZ: 109 },
   cone: { exponent: 1, faceCurvature: .8, faceScale: .8, profile: 'cone', radiusX: 139, radiusY: 139, radiusZ: 124 },
   diamond: { exponent: 1.65, faceCurvature: 0.72, faceScale: 1.12, profile: 'superellipsoid', radiusX: 139, radiusY: 139, radiusZ: 106 },
@@ -267,8 +299,29 @@ const SHAPE_SPECS: Readonly<Record<AvatarBodyShape, ShapeSpec>> = {
   trapezoid: { exponent: .56, faceCurvature: .62, faceScale: .72, profile: 'trapezoid', radiusX: 142, radiusY: 132, radiusZ: 116 }
 }
 
+/**
+ * Internal geometry-compiler contract. The production compiled renderer uses
+ * the same authored primitive dimensions and profiles as the legacy vector
+ * projector instead of maintaining a second, visually divergent shape table.
+ */
+export const getAvatarBodyCompilerShapeSpec = (
+  shape: AvatarBodyShape
+): AvatarBodyCompilerShapeSpec => SHAPE_SPECS[shape]
+
 const clamp = (value: number, min: number, max: number) => Math.min(Math.max(value, min), max)
 const signedPow = (value: number, exponent: number) => Math.sign(value) * Math.abs(value) ** exponent
+
+const resolveEllipseLowerTaper = (
+  spec: AvatarBodyCompilerShapeSpec,
+  vertical: number,
+  options: AvatarBodyGeometryOptions
+) => {
+  if (spec !== SHAPE_SPECS.ellipse) return 1
+
+  // Keep the profile convex and its lower pole rounded rather than collapsing into a sharp V.
+  const intensity = clamp(options.bottomTaper ?? 0, 0, 100) / 100
+  return 1 - intensity * .62 * Math.max(vertical, 0) ** 2
+}
 
 const subtract = (left: Vec3, right: Vec3): Vec3 => ({
   x: left.x - right.x,
@@ -335,7 +388,7 @@ const project = (point: Vec3): Vec2 => ({
 })
 
 const getSurfacePoint = (
-  spec: ShapeSpec,
+  spec: AvatarBodyCompilerShapeSpec,
   longitude: number,
   latitude: number,
   faceCoordinates = false,
@@ -404,16 +457,57 @@ const getSurfacePoint = (
   const scaledLatitude = latitude * scale
   const latitudeRadius = Math.max(Math.cos(scaledLatitude), 0)
   const latitudeFactor = latitudeRadius ** spec.exponent
+  const vertical = signedPow(Math.sin(scaledLatitude), spec.exponent)
+  const lowerTaper = resolveEllipseLowerTaper(spec, vertical, options)
 
   return {
-    x: spec.radiusX * latitudeFactor * signedPow(Math.sin(scaledLongitude), spec.exponent),
-    y: spec.radiusY * signedPow(Math.sin(scaledLatitude), spec.exponent),
-    z: spec.radiusZ * latitudeFactor * signedPow(Math.cos(scaledLongitude), spec.exponent)
+    x: spec.radiusX * latitudeFactor * lowerTaper * signedPow(Math.sin(scaledLongitude), spec.exponent),
+    y: spec.radiusY * vertical,
+    z: spec.radiusZ * latitudeFactor * lowerTaper * signedPow(Math.cos(scaledLongitude), spec.exponent)
+  }
+}
+
+/**
+ * Maps a normalized physical primitive-space point back into the two-dimensional
+ * authoring chart used by surface decals. Most production profiles preserve x/y
+ * exactly; half-cones need the cut-angle inverse, while side markings need the
+ * same radius-aware axis exchange used by the legacy projector.
+ */
+export const mapAvatarPrimitiveLocalPointToAuthoredSurface = (
+  bodyShape: AvatarBodyShape,
+  point: Vec3,
+  side: AvatarSurfaceDecal['side'] = 'front',
+  options: AvatarBodyGeometryOptions = {}
+): AvatarAuthoredSurfacePoint => {
+  const spec = SHAPE_SPECS[bodyShape]
+  const radiusZToX = spec.radiusZ / spec.radiusX
+  const radiusXToZ = spec.radiusX / spec.radiusZ
+  const oriented = side === 'back'
+    ? { x: point.x, y: point.y, z: -point.z }
+    : side === 'left'
+      ? { x: point.z * radiusZToX, y: point.y, z: -point.x * radiusXToZ }
+      : side === 'right'
+        ? { x: -point.z * radiusZToX, y: point.y, z: point.x * radiusXToZ }
+        : point
+  if (spec.profile !== 'half-cone') {
+    return { frontDepth: oriented.z, x: oriented.x, y: oriented.y }
+  }
+  const progress = clamp((oriented.y + 1) / 2, 0, 1)
+  const roundness = clamp(options.roundness ?? 24, 0, 100) / 100
+  const ringRadius = progress ** interpolate(1, .56, roundness)
+  const cutAngle = (options.cutAngle ?? 0) * Math.PI / 180
+  const longitude = Math.atan2(oriented.x, oriented.z) - cutAngle
+  return {
+    // A half-cone's authored front axis rotates with its cut angle. Using
+    // global +Z here incorrectly rejects the center of a 90-degree cut face.
+    frontDepth: oriented.x * Math.sin(cutAngle) + oriented.z * Math.cos(cutAngle),
+    x: ringRadius * Math.sin(longitude),
+    y: oriented.y
   }
 }
 
 const getSurfaceNormal = (
-  spec: ShapeSpec,
+  spec: AvatarBodyCompilerShapeSpec,
   longitude: number,
   latitude: number,
   faceCoordinates = false,
@@ -827,6 +921,226 @@ const buildTaperedBandBoundary = (
   ].map(point => rotateFacePoint(point, centerX, centerY, rotationDegrees))
 }
 
+/**
+ * Returns the authored two-dimensional boundary that is later sampled on a
+ * compiled primitive surface. Asset-backed and procedural multi-ray decals
+ * retain their dedicated renderer until they have an equivalent surface
+ * membership representation.
+ */
+export const buildAvatarSurfaceDecalLocalBoundary = (
+  decal: AvatarSurfaceDecal
+): readonly { readonly x: number, readonly y: number }[] | null => {
+  if (decal.shape === 'ellipse') {
+    return buildEllipseBoundary(decal.x, decal.y, decal.width, decal.height, decal.rotation)
+  }
+  if (decal.shape === 'face-mask') {
+    return buildFaceMaskBoundary(decal.x, decal.y, decal.width, decal.height, decal.rotation)
+  }
+  if (decal.shape === 'tapered-band') {
+    return buildTaperedBandBoundary(
+      decal.x,
+      decal.y,
+      decal.width,
+      decal.height,
+      decal.rotation,
+      decal.bend ?? 0
+    )
+  }
+  if (decal.shape === 'rounded-triangle') {
+    return buildRoundedInvertedTriangleBoundary(
+      decal.x,
+      decal.y,
+      decal.width,
+      decal.height,
+      decal.rotation
+    )
+  }
+  if (decal.shape === 'rounded') {
+    return buildRoundedRectangleBoundary(
+      decal.x,
+      decal.y,
+      decal.width,
+      decal.height,
+      decal.rotation,
+      100
+    )
+  }
+  return null
+}
+
+const sampleClaudeSparkBoundary = () => {
+  const tokens = CLAUDE_SPARK_PATH.match(/[MLCZ]|-?(?:\d+\.?\d*|\.\d+)(?:e[-+]?\d+)?/gi) ?? []
+  const points: Vec2[] = []
+  let command = ''
+  let cursor = 0
+  let current = { x: 0, y: 0 }
+  while (cursor < tokens.length) {
+    const token = tokens[cursor]!
+    if (/^[MLCZ]$/i.test(token)) {
+      command = token.toUpperCase()
+      cursor += 1
+      if (command === 'Z') break
+      continue
+    }
+    if (command === 'M' || command === 'L') {
+      current = { x: Number(tokens[cursor]!), y: Number(tokens[cursor + 1]!) }
+      points.push(current)
+      cursor += 2
+      if (command === 'M') command = 'L'
+      continue
+    }
+    if (command === 'C') {
+      const start = current
+      const first = { x: Number(tokens[cursor]!), y: Number(tokens[cursor + 1]!) }
+      const second = { x: Number(tokens[cursor + 2]!), y: Number(tokens[cursor + 3]!) }
+      const end = { x: Number(tokens[cursor + 4]!), y: Number(tokens[cursor + 5]!) }
+      for (let step = 1; step <= 6; step += 1) {
+        const progress = step / 6
+        const inverse = 1 - progress
+        points.push({
+          x: inverse ** 3 * start.x + 3 * inverse ** 2 * progress * first.x +
+            3 * inverse * progress ** 2 * second.x + progress ** 3 * end.x,
+          y: inverse ** 3 * start.y + 3 * inverse ** 2 * progress * first.y +
+            3 * inverse * progress ** 2 * second.y + progress ** 3 * end.y
+        })
+      }
+      current = end
+      cursor += 6
+      continue
+    }
+    cursor += 1
+  }
+  return points
+}
+
+const CLAUDE_SPARK_BOUNDARY = sampleClaudeSparkBoundary()
+
+export interface AvatarSurfaceDecalLocalBoundaryPoint {
+  readonly surfaceSide?: 'back' | 'front'
+  readonly x: number
+  readonly y: number
+}
+
+/**
+ * Returns every authored region that belongs to one semantic marking. Most
+ * decals have one boundary; procedural pleats have twelve disjoint bands.
+ * Special asset geometry is sampled here so the compiled renderer can bind it
+ * to the target surface instead of applying an already-projected SVG asset.
+ */
+export const buildAvatarSurfaceDecalLocalBoundaries = (
+  decal: AvatarSurfaceDecal,
+  bodyShape?: AvatarBodyShape,
+  options: AvatarBodyGeometryOptions = {}
+): readonly (readonly AvatarSurfaceDecalLocalBoundaryPoint[])[] => {
+  const boundary = buildAvatarSurfaceDecalLocalBoundary(decal)
+  if (boundary != null) return [boundary]
+  if (decal.shape === 'claude-spark') {
+    const halfWidth = decal.width / 2
+    const halfHeight = decal.height / 2
+    return [CLAUDE_SPARK_BOUNDARY.map(point => rotateFacePoint({
+      x: decal.x - halfWidth + point.x / CLAUDE_SPARK_VIEWBOX_SIZE * decal.width,
+      y: decal.y - halfHeight + point.y / CLAUDE_SPARK_VIEWBOX_SIZE * decal.height
+    }, decal.x, decal.y, decal.rotation))]
+  }
+  if (decal.shape !== 'radial-pleats' || bodyShape == null) return []
+  const spec = SHAPE_SPECS[bodyShape]
+  const rayCount = 12
+  const samplesPerRay = 9
+  const phase = decal.rotation * Math.PI / 180
+  const curveRadians = decal.x * Math.PI / 180
+  const startProgress = .06
+  const endProgress = clamp(.2 + decal.height / 160, .3, .82)
+  const angularHalfWidth = clamp(decal.width / spec.radiusX, .008, .08)
+  return Array.from({ length: rayCount }, (_, rayIndex) => {
+    const baseLongitude = phase + rayIndex / rayCount * Math.PI * 2
+    const curvedLongitude = (progress: number) => {
+      const normalizedProgress = (progress - startProgress) / (endProgress - startProgress)
+      const easedProgress = normalizedProgress * normalizedProgress * (3 - 2 * normalizedProgress)
+      return baseLongitude + curveRadians * easedProgress
+    }
+    const samples = Array.from({ length: samplesPerRay }, (_, sampleIndex) => {
+      const progress = startProgress + sampleIndex / (samplesPerRay - 1) * (endProgress - startProgress)
+      return {
+        latitude: progress * Math.PI - Math.PI / 2,
+        longitude: curvedLongitude(progress)
+      }
+    })
+    const surfaceLongitude = (longitude: number) => spec.profile === 'half-cone'
+      ? ((longitude + Math.PI) % (Math.PI * 2) + Math.PI * 2) % (Math.PI * 2) - Math.PI
+      : longitude
+    const physicalSurfacePoints = [
+      ...samples.map(sample => getSurfacePoint(
+        spec,
+        surfaceLongitude(sample.longitude - angularHalfWidth),
+        sample.latitude,
+        false,
+        options
+      )),
+      ...[...samples].reverse().map(sample => getSurfacePoint(
+        spec,
+        surfaceLongitude(sample.longitude + angularHalfWidth),
+        sample.latitude,
+        false,
+        options
+      ))
+    ]
+    const surfacePoints = physicalSurfacePoints.map(point => {
+      // radial-pleats is a full-crown object-space marking. Its legacy/public
+      // `side` value never selected a different authored chart; interpreting
+      // left/right/back here would make the front/back hemisphere tags below
+      // describe coordinates from a different chart. Always encode the crown
+      // in the canonical front chart, then split that same physical loop into
+      // complementary front/back components.
+      const authored = mapAvatarPrimitiveLocalPointToAuthoredSurface(
+        bodyShape,
+        {
+          x: point.x / spec.radiusX,
+          y: point.y / spec.radiusY,
+          z: point.z / spec.radiusZ
+        },
+        'front',
+        options
+      )
+      return {
+        frontDepth: authored.frontDepth,
+        x: authored.x * spec.radiusX,
+        y: authored.y * spec.radiusY
+      }
+    })
+    const clipHemisphere = (front: boolean): AvatarSurfaceDecalLocalBoundaryPoint[] => {
+      const clipped: AvatarSurfaceDecalLocalBoundaryPoint[] = []
+      const surfaceSide = front ? 'front' : 'back'
+      for (let pointIndex = 0; pointIndex < surfacePoints.length; pointIndex += 1) {
+        const previous = surfacePoints[(pointIndex + surfacePoints.length - 1) % surfacePoints.length]!
+        const current = surfacePoints[pointIndex]!
+        const previousInside = front ? previous.frontDepth >= 0 : previous.frontDepth <= 0
+        const currentInside = front ? current.frontDepth >= 0 : current.frontDepth <= 0
+        if (previousInside !== currentInside) {
+          const progress = Math.max(0, Math.min(
+            1,
+            -previous.frontDepth / (current.frontDepth - previous.frontDepth || 1)
+          ))
+          clipped.push({
+            surfaceSide,
+            x: previous.x + (current.x - previous.x) * progress,
+            y: previous.y + (current.y - previous.y) * progress
+          })
+        }
+        if (currentInside) clipped.push({ surfaceSide, x: current.x, y: current.y })
+      }
+      return clipped
+    }
+    return [clipHemisphere(true), clipHemisphere(false)].filter(boundary => {
+      if (boundary.length < 3) return false
+      const doubledArea = Math.abs(boundary.reduce((total, point, pointIndex) => {
+        const next = boundary[(pointIndex + 1) % boundary.length]!
+        return total + point.x * next.y - next.x * point.y
+      }, 0))
+      return doubledArea > 1e-4
+    })
+  }).flat()
+}
+
 const buildMouthBoundary = (
   centerX: number,
   centerY: number,
@@ -879,7 +1193,15 @@ const buildMouthBoundary = (
     .map(point => rotateFacePoint(point, centerX, centerY, rotationDegrees))
 }
 
-const getFacePoint = (spec: ShapeSpec, point: Vec2): Vec3 => {
+const getFacePoint = (
+  spec: AvatarBodyCompilerShapeSpec,
+  point: Vec2,
+  options: AvatarBodyGeometryOptions = {}
+): Vec3 => {
+  if (spec === SHAPE_SPECS.ellipse && (options.bottomTaper ?? 0) > 0) {
+    const surfacePoint = getShapeFacePoint(spec, point, options)
+    return { ...surfacePoint, z: surfacePoint.z + .8 }
+  }
   const normalizedRadius = Math.min(
     point.x ** 2 / spec.radiusX ** 2 + point.y ** 2 / spec.radiusY ** 2,
     0.98
@@ -889,8 +1211,15 @@ const getFacePoint = (spec: ShapeSpec, point: Vec2): Vec3 => {
   return { x: point.x, y: point.y, z: depth + 0.8 }
 }
 
-const getFaceNormal = (spec: ShapeSpec, point: Vec2): Vec3 => {
-  const surfacePoint = getFacePoint(spec, point)
+const getFaceNormal = (
+  spec: AvatarBodyCompilerShapeSpec,
+  point: Vec2,
+  options: AvatarBodyGeometryOptions = {}
+): Vec3 => {
+  if (spec === SHAPE_SPECS.ellipse && (options.bottomTaper ?? 0) > 0) {
+    return getShapeFaceNormal(spec, point, options)
+  }
+  const surfacePoint = getFacePoint(spec, point, options)
   return normalize({
     x: point.x / spec.radiusX ** 2,
     y: point.y / spec.radiusY ** 2,
@@ -901,7 +1230,7 @@ const getFaceNormal = (spec: ShapeSpec, point: Vec2): Vec3 => {
 const inverseSignedPow = (value: number, exponent: number) => signedPow(value, 1 / exponent)
 
 const getShapeFacePoint = (
-  spec: ShapeSpec,
+  spec: AvatarBodyCompilerShapeSpec,
   point: Vec2,
   options: AvatarBodyGeometryOptions = {}
 ): Vec3 => {
@@ -971,19 +1300,20 @@ const getShapeFacePoint = (
 
   const latitude = Math.asin(clamp(inverseSignedPow(normalizedY, spec.exponent), -.995, .995))
   const latitudeFactor = Math.max(Math.cos(latitude), 0) ** spec.exponent
+  const lowerTaper = resolveEllipseLowerTaper(spec, normalizedY, options)
   const longitude = Math.asin(clamp(inverseSignedPow(
-    point.x / Math.max(spec.radiusX * latitudeFactor, .001),
+    point.x / Math.max(spec.radiusX * latitudeFactor * lowerTaper, .001),
     spec.exponent
   ), -.995, .995))
   return {
-    x: spec.radiusX * latitudeFactor * signedPow(Math.sin(longitude), spec.exponent),
+    x: spec.radiusX * latitudeFactor * lowerTaper * signedPow(Math.sin(longitude), spec.exponent),
     y: spec.radiusY * signedPow(Math.sin(latitude), spec.exponent),
-    z: spec.radiusZ * latitudeFactor * signedPow(Math.cos(longitude), spec.exponent)
+    z: spec.radiusZ * latitudeFactor * lowerTaper * signedPow(Math.cos(longitude), spec.exponent)
   }
 }
 
 const getShapeFaceNormal = (
-  spec: ShapeSpec,
+  spec: AvatarBodyCompilerShapeSpec,
   point: Vec2,
   options: AvatarBodyGeometryOptions = {}
 ) => {
@@ -1010,6 +1340,7 @@ export const buildAvatarBodyGeometry = (
   const vertices: Vec2[] = []
   const occlusionVertices: Vec2[] = []
   const cells: BodyCell[] = []
+  const surfaceTriangles: BodySurfaceTriangle[] = []
   const azimuth = lightDirection.azimuth * Math.PI / 180
   const elevation = lightDirection.elevation * Math.PI / 180
   const lightVector = normalize({
@@ -1025,6 +1356,9 @@ export const buildAvatarBodyGeometry = (
   const scaleX = options.scaleX ?? 1
   const scaleY = options.scaleY ?? 1
   const scaleZ = options.scaleZ ?? 1
+  const compositorDensity = clamp(options.compositorDensity ?? 1, .5, 2)
+  const compositorLatitudeSteps = Math.max(3, Math.round(COMPOSITOR_LATITUDE_STEPS * compositorDensity))
+  const compositorLongitudeSteps = Math.max(6, Math.round(COMPOSITOR_LONGITUDE_STEPS * compositorDensity))
   const transformPoint = (point: Vec3) => rotate(rotateLocal({
     x: point.x * scaleX,
     y: point.y * scaleY,
@@ -1035,6 +1369,80 @@ export const buildAvatarBodyGeometry = (
     y: normal.y / scaleY,
     z: normal.z / scaleZ
   }), options), pose)
+
+  const buildCompositorVertex = (longitude: number, latitude: number) => {
+    const point = transformPoint(getSurfacePoint(spec, longitude, latitude, false, options))
+    const normal = transformNormal(getSurfaceNormal(spec, longitude, latitude, false, options))
+    const projectedPoint = project(point)
+    return { depth: point.z, facing: normal.z, x: projectedPoint.x, y: projectedPoint.y }
+  }
+  const clipCompositorTriangle = (
+    vertices: readonly { readonly depth: number; readonly facing: number; readonly x: number; readonly y: number }[]
+  ) => {
+    const clipped: { depth: number; facing: number; x: number; y: number }[] = []
+    const minimumFacing = .015
+    for (let index = 0; index < vertices.length; index += 1) {
+      const previous = vertices[(index + vertices.length - 1) % vertices.length]!
+      const current = vertices[index]!
+      const previousVisible = previous.facing > minimumFacing
+      const currentVisible = current.facing > minimumFacing
+      if (previousVisible !== currentVisible) {
+        const ratio = (minimumFacing - previous.facing) / (current.facing - previous.facing)
+        clipped.push({
+          depth: previous.depth + (current.depth - previous.depth) * ratio,
+          facing: minimumFacing,
+          x: previous.x + (current.x - previous.x) * ratio,
+          y: previous.y + (current.y - previous.y) * ratio
+        })
+      }
+      if (currentVisible) clipped.push(current)
+    }
+    return clipped
+  }
+  const appendCompositorTriangle = (
+    id: string,
+    source: readonly { readonly depth: number; readonly facing: number; readonly x: number; readonly y: number }[]
+  ) => {
+    const clipped = clipCompositorTriangle(source)
+    for (let index = 1; index < clipped.length - 1; index += 1) {
+      const rawVertices = [clipped[0]!, clipped[index]!, clipped[index + 1]!] as const
+      const triangleVertices = rawVertices.map(({ depth, x, y }) => ({ depth, x, y })) as unknown as
+        readonly [BodySurfaceVertex, BodySurfaceVertex, BodySurfaceVertex]
+      const depths = triangleVertices.map(vertex => vertex.depth)
+      const xs = triangleVertices.map(vertex => vertex.x)
+      const ys = triangleVertices.map(vertex => vertex.y)
+      surfaceTriangles.push({
+        bounds: {
+          maxX: Math.max(...xs),
+          maxY: Math.max(...ys),
+          minX: Math.min(...xs),
+          minY: Math.min(...ys)
+        },
+        id: `${id}-${index - 1}`,
+        maxDepth: Math.max(...depths),
+        meanDepth: depths.reduce((total, depth) => total + depth, 0) / depths.length,
+        minDepth: Math.min(...depths),
+        vertices: triangleVertices
+      })
+    }
+  }
+
+  for (let latitudeIndex = 0; latitudeIndex < compositorLatitudeSteps; latitudeIndex += 1) {
+    const latitudeStart = -Math.PI / 2 + latitudeIndex / compositorLatitudeSteps * Math.PI
+    const latitudeEnd = -Math.PI / 2 + (latitudeIndex + 1) / compositorLatitudeSteps * Math.PI
+    for (let longitudeIndex = 0; longitudeIndex < compositorLongitudeSteps; longitudeIndex += 1) {
+      const longitudeStart = -Math.PI + longitudeIndex / compositorLongitudeSteps * Math.PI * 2
+      const longitudeEnd = -Math.PI + (longitudeIndex + 1) / compositorLongitudeSteps * Math.PI * 2
+      const corners = [
+        buildCompositorVertex(longitudeStart, latitudeStart),
+        buildCompositorVertex(longitudeEnd, latitudeStart),
+        buildCompositorVertex(longitudeEnd, latitudeEnd),
+        buildCompositorVertex(longitudeStart, latitudeEnd)
+      ] as const
+      appendCompositorTriangle(`${latitudeIndex}-${longitudeIndex}-a`, [corners[0], corners[1], corners[2]])
+      appendCompositorTriangle(`${latitudeIndex}-${longitudeIndex}-b`, [corners[0], corners[2], corners[3]])
+    }
+  }
 
   for (let latitudeIndex = 0; latitudeIndex <= outlineLatitudeSteps; latitudeIndex += 1) {
     const latitude = -Math.PI / 2 + latitudeIndex / outlineLatitudeSteps * Math.PI
@@ -1125,7 +1533,9 @@ export const buildAvatarBodyGeometry = (
     cells: cells.sort((left, right) => left.depth - right.depth),
     cavityPath,
     occlusionPath: occlusionHull.length === 0 ? undefined : roundedPolygonPath(occlusionHull, 0),
-    outlinePath
+    outlinePoints: hull.map(point => ({ depth: 0, ...point })),
+    outlinePath,
+    surfaceTriangles
   }
 }
 
@@ -1157,17 +1567,18 @@ export const projectDefaultFace = (
     y: normal.y / scaleY,
     z: normal.z / scaleZ
   }), options), pose)
-  const faceNormal = transformFaceNormal({ x: 0, y: 0, z: 1 })
   const projectPart = (
     id: string,
     centerX: number,
     centerY: number,
     boundary: readonly Vec2[]
   ): ProjectedEye | null => {
-    const centerNormal = transformFaceNormal(getFaceNormal(spec, { x: centerX, y: centerY }))
-    if (centerNormal.z <= 0.015) return null
-
-    const projectedBoundary = boundary.map(point => project(transformFacePoint(getFacePoint(spec, point))))
+    const centerNormal = transformFaceNormal(getFaceNormal(spec, { x: centerX, y: centerY }, options))
+    const visibleBoundary = clipPolygonToVisibleHemisphere(
+      boundary.map(point => transformFacePoint(getFacePoint(spec, point, options)))
+    )
+    if (visibleBoundary.length < 3) return null
+    const projectedBoundary = visibleBoundary.map(project)
     return {
       depth: clamp(centerNormal.z, 0, 1),
       id,
@@ -1290,7 +1701,7 @@ export const projectDefaultFace = (
         )
     ),
     nose: projectPart('nose', 0, resolvedFaceStyle.noseY, noseBoundary),
-    visible: faceNormal.z > 0.015
+    visible: eyes.length > 0
   }
 }
 
@@ -1328,7 +1739,7 @@ export const projectAvatarSurfaceDecal = (
     }), options), pose)
   }
   const getLiftedSurfacePoint = (point: Vec2) => {
-    if (decal.side === 'face') return getFacePoint(spec, point)
+    if (decal.side === 'face') return getFacePoint(spec, point, options)
     const surfacePoint = getShapeFacePoint(spec, point, options)
     const surfaceNormal = getShapeFaceNormal(spec, point, options)
     return {
@@ -1365,8 +1776,6 @@ export const projectAvatarSurfaceDecal = (
         false,
         options
       ))
-      if (centerNormal.z <= .015) continue
-
       const samples = Array.from({ length: samplesPerRay }, (_, sampleIndex) => {
         const progress = startProgress +
           sampleIndex / (samplesPerRay - 1) * (endProgress - startProgress)
@@ -1375,7 +1784,7 @@ export const projectAvatarSurfaceDecal = (
           longitude: curvedLongitude(progress)
         }
       })
-      const boundary = [
+      const boundary = clipPolygonToVisibleHemisphere([
         ...samples.map(sample => getSurfacePoint(
           spec,
           sample.longitude - angularHalfWidth,
@@ -1390,9 +1799,11 @@ export const projectAvatarSurfaceDecal = (
           false,
           options
         ))
-      ].map(point => project(transformPoint(point)))
+      ].map(transformPoint))
+      if (boundary.length < 3) continue
+      const projectedBoundary = boundary.map(project)
 
-      paths.push(`M ${boundary.map(point => `${point.x.toFixed(3)} ${point.y.toFixed(3)}`).join(' L ')} Z`)
+      paths.push(`M ${projectedBoundary.map(point => `${point.x.toFixed(3)} ${point.y.toFixed(3)}`).join(' L ')} Z`)
       visibleDepths.push(centerNormal.z)
     }
 
@@ -1408,35 +1819,12 @@ export const projectAvatarSurfaceDecal = (
     }
   }
   const centerNormal = transformNormal(decal.side === 'face'
-    ? getFaceNormal(spec, { x: decal.x, y: decal.y })
+    ? getFaceNormal(spec, { x: decal.x, y: decal.y }, options)
     : getShapeFaceNormal(spec, { x: decal.x, y: decal.y }, options))
-  if (centerNormal.z <= 0.015) return null
-  const boundary = decal.shape === 'ellipse'
-    ? buildEllipseBoundary(decal.x, decal.y, decal.width, decal.height, decal.rotation)
-    : decal.shape === 'face-mask'
-      ? buildFaceMaskBoundary(decal.x, decal.y, decal.width, decal.height, decal.rotation)
-    : decal.shape === 'tapered-band'
-      ? buildTaperedBandBoundary(
-          decal.x,
-          decal.y,
-          decal.width,
-          decal.height,
-          decal.rotation,
-          decal.bend ?? 0
-        )
-    : decal.shape === 'rounded-triangle'
-      ? buildRoundedInvertedTriangleBoundary(
-          decal.x,
-          decal.y,
-          decal.width,
-          decal.height,
-          decal.rotation
-        )
-      : buildRoundedRectangleBoundary(decal.x, decal.y, decal.width, decal.height, decal.rotation, 100)
+  const boundary = buildAvatarSurfaceDecalLocalBoundary(decal) ??
+    buildRoundedRectangleBoundary(decal.x, decal.y, decal.width, decal.height, decal.rotation, 100)
   const transformedBoundary = boundary.map(point => transformPoint(getLiftedSurfacePoint(point)))
-  const visibleBoundary = decal.side === 'face'
-    ? transformedBoundary
-    : clipPolygonToVisibleHemisphere(transformedBoundary)
+  const visibleBoundary = clipPolygonToVisibleHemisphere(transformedBoundary)
   if (visibleBoundary.length < 3) return null
   const projectedBoundary = visibleBoundary.map(project)
   const assetTransform = decal.shape === 'claude-spark'
