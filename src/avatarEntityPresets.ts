@@ -115,6 +115,7 @@ export type AvatarGuineaPigSurfaceMarkingStyle = AvatarAnimalSurfaceMarkingStyle
 export type AvatarGooseSurfaceMarkingStyle = AvatarAnimalSurfaceMarkingStyle & {
   readonly billColor?: string
   readonly nostrilColor?: string
+  readonly seamColor?: string
 }
 export type AvatarHedgehogSurfaceMarkingStyle = AvatarAnimalSurfaceMarkingStyle
 export type AvatarLionSurfaceMarkingStyle = AvatarAnimalSurfaceMarkingStyle
@@ -130,6 +131,7 @@ export type AvatarPenguinSurfaceMarkingStyle = AvatarAnimalSurfaceMarkingStyle &
 export type AvatarParrotSurfaceMarkingStyle = AvatarAnimalSurfaceMarkingStyle & {
   readonly beakColor?: string
   readonly nostrilColor?: string
+  readonly seamColor?: string
 }
 export type AvatarSealSurfaceMarkingStyle = AvatarAnimalSurfaceMarkingStyle
 export type AvatarSquirrelSurfaceMarkingStyle = AvatarAnimalSurfaceMarkingStyle
@@ -139,6 +141,7 @@ export type AvatarOwlSurfaceMarkingStyle = AvatarAnimalSurfaceMarkingStyle & {
   readonly beakColor?: string
   readonly eyeRingColor?: string
   readonly nostrilColor?: string
+  readonly seamColor?: string
   readonly tuftColor?: string
 }
 export type AvatarSheepSurfaceMarkingShape = AvatarAnimalSurfaceMarkingShape
@@ -3223,6 +3226,7 @@ export const createChickSurfaceDecals = (
       CHICK_SURFACE_DECALS.filter(decal => decal.id.includes('cheek')),
       style
     ),
+    ...createBirdMouthColorOverride('chick', 'beak', style.beakColor),
     ...CHICK_SURFACE_DECALS.filter(decal => decal.id === 'chick-beak-seam').map(decal => ({
       ...decal,
       ...(seamColor == null ? {} : { color: seamColor })
@@ -3231,7 +3235,6 @@ export const createChickSurfaceDecals = (
       ...decal,
       ...(nostrilColor == null ? {} : { color: nostrilColor })
     })),
-    ...createBirdMouthColorOverride('chick', 'beak', style.beakColor),
     ...(combColor == null ? [] : createChickCombSurfaceDecals(combColor))
   ]
 }
@@ -3250,7 +3253,7 @@ export const getDuckHeadScale = duckPartScaleControls.getHeadScale
 
 export const getDuckBillStyle = (parts: readonly AvatarEntityPart[]): AvatarDuckBillStyle => {
   const bill = parts.find(part => part.id === 'bill')
-  return bill != null && bill.scaleX / bill.scaleY >= 2.25 ? 'broad' : 'flat'
+  return bill != null && (bill.scaleZ ?? 0) / bill.scaleX >= .74 ? 'broad' : 'flat'
 }
 
 const DUCK_BILL_GEOMETRY: Readonly<Record<AvatarDuckBillStyle, AvatarBirdMouthGeometry>> = {
@@ -3294,6 +3297,7 @@ export const createDuckSurfaceDecals = (
       DUCK_SURFACE_DECALS.filter(decal => decal.id.includes('cheek')),
       style
     ),
+    ...createBirdMouthColorOverride('duck', 'bill', style.billColor),
     ...DUCK_SURFACE_DECALS.filter(decal => decal.id === 'duck-bill-seam').map(decal => ({
       ...decal,
       ...(seamColor == null ? {} : { color: seamColor })
@@ -3301,8 +3305,7 @@ export const createDuckSurfaceDecals = (
     ...DUCK_SURFACE_DECALS.filter(decal => decal.id.includes('nostril')).map(decal => ({
       ...decal,
       ...(nostrilColor == null ? {} : { color: nostrilColor })
-    })),
-    ...createBirdMouthColorOverride('duck', 'bill', style.billColor)
+    }))
   ]
 }
 
@@ -3360,6 +3363,7 @@ export const createPenguinSurfaceDecals = (
   const seamColor = validAvatarHexColor(style.seamColor)
   return [
     ...createAnimalSurfaceDecals(PENGUIN_SURFACE_DECALS[0]!, style),
+    ...createBirdMouthColorOverride('penguin', 'beak', style.beakColor),
     ...PENGUIN_SURFACE_DECALS.filter(decal => decal.id === 'penguin-beak-seam').map(decal => ({
       ...decal,
       ...(seamColor == null ? {} : { color: seamColor })
@@ -3367,8 +3371,7 @@ export const createPenguinSurfaceDecals = (
     ...PENGUIN_SURFACE_DECALS.filter(decal => decal.id.includes('nostril')).map(decal => ({
       ...decal,
       ...(nostrilColor == null ? {} : { color: nostrilColor })
-    })),
-    ...createBirdMouthColorOverride('penguin', 'beak', style.beakColor)
+    }))
   ]
 }
 
@@ -3394,14 +3397,17 @@ export const applyOwlHeadScale = owlPartScaleControls.applyHeadScale
 export const getOwlHeadScale = owlPartScaleControls.getHeadScale
 
 export const getOwlBeakStyle = (parts: readonly AvatarEntityPart[]): AvatarOwlBeakStyle => {
-  const upper = parts.find(part => part.id === 'beak-upper')
-  return upper != null && (upper.scaleZ ?? 0) / upper.scaleX > 1.45 ? 'hooked' : 'short'
+  return parts.find(part => part.id === 'beak')?.shape === 'cone' ? 'hooked' : 'short'
+}
+
+const OWL_BEAK_GEOMETRY: Readonly<Record<AvatarOwlBeakStyle, AvatarBirdMouthGeometry>> = {
+  hooked: { rotationX: -18, roundness: 54, scaleX: .18, scaleY: .19, scaleZ: .29, shape: 'cone' },
+  short: { roundness: 100, scaleX: .19, scaleY: .15, scaleZ: .26, shape: 'ellipse' }
 }
 
 export const getOwlBeakSize = (parts: readonly AvatarEntityPart[]): number => {
-  const upper = parts.find(part => part.id === 'beak-upper')
-  const authored = OWL_BEAK_PARTS.find(part => part.id === 'beak-upper')!
-  return upper == null ? 100 : Math.round(upper.scaleX / authored.scaleX * 100)
+  const style = getOwlBeakStyle(parts)
+  return getBirdMouthSize(parts, 'beak', OWL_BEAK_GEOMETRY, style)
 }
 
 const applyOwlBeakGeometry = (
@@ -3409,22 +3415,10 @@ const applyOwlBeakGeometry = (
   style: AvatarOwlBeakStyle,
   size: number
 ): AvatarEntityPart[] => {
-  const factor = Math.min(Math.max(size, OWL_BEAK_SIZE_RANGE.min), OWL_BEAK_SIZE_RANGE.max) / 100
-  const authoredById = new Map(OWL_BEAK_PARTS.map(part => [part.id, part]))
-  return parts.map(part => {
-    const authored = authoredById.get(part.id)
-    if (authored == null) return part
-    const upper = part.id === 'beak-upper'
-    const hooked = style === 'hooked'
-    return {
-      ...part,
-      rotationX: upper ? hooked ? -25 : -13 : hooked ? 24 : 13,
-      roundness: upper ? hooked ? 44 : 68 : hooked ? 58 : 72,
-      scaleX: clampAvatarEntityScale(authored.scaleX * factor),
-      scaleY: clampAvatarEntityScale(authored.scaleY * factor),
-      scaleZ: clampAvatarEntityScale((upper ? hooked ? .29 : .19 : hooked ? .2 : .15) * factor)
-    }
-  })
+  return applyBirdMouthGeometry(
+    parts, 'beak', OWL_HEAD_PART, OWL_BEAK_GEOMETRY,
+    style, size, OWL_BEAK_SIZE_RANGE
+  )
 }
 
 export const applyOwlBeakStyle = (
@@ -3443,24 +3437,22 @@ export const getOwlTuftSize = owlTuftControls.getSize
 export const createOwlSurfaceDecals = (
   style: AvatarOwlSurfaceMarkingStyle = {}
 ): AvatarSurfaceDecal[] => {
-  const validColor = (value: string | undefined) => (
-    typeof value === 'string' && /^#[\da-f]{6}$/i.test(value) ? value : undefined
-  )
-  const beakColor = validColor(style.beakColor)
-  const eyeRingColor = validColor(style.eyeRingColor)
-  const nostrilColor = validColor(style.nostrilColor)
-  const tuftColor = validColor(style.tuftColor)
+  const eyeRingColor = validAvatarHexColor(style.eyeRingColor)
+  const nostrilColor = validAvatarHexColor(style.nostrilColor)
+  const seamColor = validAvatarHexColor(style.seamColor)
+  const tuftColor = validAvatarHexColor(style.tuftColor)
   return [
     ...createAnimalSurfaceDecals(OWL_SURFACE_DECALS[0]!, style),
     ...OWL_SURFACE_DECALS.slice(1, 3).map(decal => ({
       ...decal,
       ...(eyeRingColor == null ? {} : { color: eyeRingColor })
     })),
-    ...OWL_SURFACE_DECALS.slice(3, 5).map(decal => ({
+    ...createBirdMouthColorOverride('owl', 'beak', style.beakColor),
+    ...OWL_SURFACE_DECALS.filter(decal => decal.id === 'owl-beak-seam').map(decal => ({
       ...decal,
-      ...(beakColor == null ? {} : { color: beakColor })
+      ...(seamColor == null ? {} : { color: seamColor })
     })),
-    ...OWL_SURFACE_DECALS.slice(5).map(decal => ({
+    ...OWL_SURFACE_DECALS.filter(decal => decal.id.includes('nostril')).map(decal => ({
       ...decal,
       ...(nostrilColor == null ? {} : { color: nostrilColor })
     })),
@@ -3481,14 +3473,18 @@ export const applyParrotHeadScale = parrotPartScaleControls.applyHeadScale
 export const getParrotHeadScale = parrotPartScaleControls.getHeadScale
 
 export const getParrotBeakStyle = (parts: readonly AvatarEntityPart[]): AvatarParrotBeakStyle => {
-  const upper = parts.find(part => part.id === 'beak-upper')
-  return upper != null && (upper.scaleZ ?? 0) / upper.scaleX > 1.5 ? 'macaw' : 'hooked'
+  const beak = parts.find(part => part.id === 'beak')
+  return beak != null && (beak.scaleZ ?? 0) / beak.scaleX > 1.4 ? 'macaw' : 'hooked'
+}
+
+const PARROT_BEAK_GEOMETRY: Readonly<Record<AvatarParrotBeakStyle, AvatarBirdMouthGeometry>> = {
+  hooked: { rotationX: -22, roundness: 58, scaleX: .25, scaleY: .24, scaleZ: .34, shape: 'cone' },
+  macaw: { rotationX: -25, roundness: 62, scaleX: .27, scaleY: .29, scaleZ: .42, shape: 'cone' }
 }
 
 export const getParrotBeakSize = (parts: readonly AvatarEntityPart[]): number => {
-  const lower = parts.find(part => part.id === 'beak-lower')
-  const authored = PARROT_BEAK_PARTS.find(part => part.id === 'beak-lower')!
-  return lower == null ? 100 : Math.round(lower.scaleX / authored.scaleX * 100)
+  const style = getParrotBeakStyle(parts)
+  return getBirdMouthSize(parts, 'beak', PARROT_BEAK_GEOMETRY, style)
 }
 
 const applyParrotBeakGeometry = (
@@ -3496,22 +3492,10 @@ const applyParrotBeakGeometry = (
   style: AvatarParrotBeakStyle,
   size: number
 ): AvatarEntityPart[] => {
-  const factor = Math.min(Math.max(size, PARROT_BEAK_SIZE_RANGE.min), PARROT_BEAK_SIZE_RANGE.max) / 100
-  const authoredById = new Map(PARROT_BEAK_PARTS.map(part => [part.id, part]))
-  return parts.map(part => {
-    const authored = authoredById.get(part.id)
-    if (authored == null) return part
-    const upper = part.id === 'beak-upper'
-    const macaw = style === 'macaw'
-    return {
-      ...part,
-      rotationX: upper ? macaw ? -31 : -24 : macaw ? 22 : 17,
-      roundness: upper ? macaw ? 58 : 50 : macaw ? 86 : 72,
-      scaleX: clampAvatarEntityScale(authored.scaleX * factor),
-      scaleY: clampAvatarEntityScale((upper ? macaw ? .3 : .24 : macaw ? .18 : .15) * factor),
-      scaleZ: clampAvatarEntityScale((upper ? macaw ? .42 : .32 : macaw ? .28 : .22) * factor)
-    }
-  })
+  return applyBirdMouthGeometry(
+    parts, 'beak', PARROT_PARTS.find(part => part.face)!, PARROT_BEAK_GEOMETRY,
+    style, size, PARROT_BEAK_SIZE_RANGE
+  )
 }
 
 export const applyParrotBeakStyle = (
@@ -3526,18 +3510,16 @@ export const applyParrotBeakSize = (
 export const createParrotSurfaceDecals = (
   style: AvatarParrotSurfaceMarkingStyle = {}
 ): AvatarSurfaceDecal[] => {
-  const validColor = (value: string | undefined) => (
-    typeof value === 'string' && /^#[\da-f]{6}$/i.test(value) ? value : undefined
-  )
-  const beakColor = validColor(style.beakColor)
-  const nostrilColor = validColor(style.nostrilColor)
+  const nostrilColor = validAvatarHexColor(style.nostrilColor)
+  const seamColor = validAvatarHexColor(style.seamColor)
   return [
     ...createAnimalSurfaceDecals(PARROT_SURFACE_DECALS[0]!, style),
-    ...PARROT_SURFACE_DECALS.slice(1, 3).map(decal => ({
+    ...createBirdMouthColorOverride('parrot', 'beak', style.beakColor),
+    ...PARROT_SURFACE_DECALS.filter(decal => decal.id === 'parrot-beak-seam').map(decal => ({
       ...decal,
-      ...(beakColor == null ? {} : { color: beakColor })
+      ...(seamColor == null ? {} : { color: seamColor })
     })),
-    ...PARROT_SURFACE_DECALS.slice(3).map(decal => ({
+    ...PARROT_SURFACE_DECALS.filter(decal => decal.id.includes('nostril')).map(decal => ({
       ...decal,
       ...(nostrilColor == null ? {} : { color: nostrilColor })
     }))
@@ -3557,14 +3539,18 @@ export const applyGooseHeadScale = goosePartScaleControls.applyHeadScale
 export const getGooseHeadScale = goosePartScaleControls.getHeadScale
 
 export const getGooseBillStyle = (parts: readonly AvatarEntityPart[]): AvatarGooseBillStyle => {
-  const upper = parts.find(part => part.id === 'bill-upper')
-  return upper != null && upper.scaleX / upper.scaleY > 2 ? 'broad' : 'short'
+  const bill = parts.find(part => part.id === 'bill')
+  return bill != null && bill.scaleX / bill.scaleY >= 2.15 ? 'broad' : 'short'
+}
+
+const GOOSE_BILL_GEOMETRY: Readonly<Record<AvatarGooseBillStyle, AvatarBirdMouthGeometry>> = {
+  broad: { roundness: 100, scaleX: .33, scaleY: .15, scaleZ: .25, shape: 'ellipse' },
+  short: { roundness: 100, scaleX: .29, scaleY: .14, scaleZ: .23, shape: 'ellipse' }
 }
 
 export const getGooseBillSize = (parts: readonly AvatarEntityPart[]): number => {
-  const upper = parts.find(part => part.id === 'bill-upper')
-  const authored = GOOSE_BILL_PARTS.find(part => part.id === 'bill-upper')!
-  return upper == null ? 100 : Math.round(upper.scaleY / authored.scaleY * 100)
+  const style = getGooseBillStyle(parts)
+  return getBirdMouthSize(parts, 'bill', GOOSE_BILL_GEOMETRY, style)
 }
 
 const applyGooseBillGeometry = (
@@ -3572,20 +3558,10 @@ const applyGooseBillGeometry = (
   style: AvatarGooseBillStyle,
   size: number
 ): AvatarEntityPart[] => {
-  const factor = Math.min(Math.max(size, GOOSE_BILL_SIZE_RANGE.min), GOOSE_BILL_SIZE_RANGE.max) / 100
-  const authoredById = new Map(GOOSE_BILL_PARTS.map(part => [part.id, part]))
-  return parts.map(part => {
-    const authored = authoredById.get(part.id)
-    if (authored == null) return part
-    const broad = style === 'broad'
-    return {
-      ...part,
-      roundness: broad ? 100 : authored.roundness,
-      scaleX: clampAvatarEntityScale(authored.scaleX * factor * (broad ? 1.18 : 1)),
-      scaleY: clampAvatarEntityScale(authored.scaleY * factor),
-      scaleZ: clampAvatarEntityScale((authored.scaleZ ?? authored.scaleX) * factor * (broad ? 1.1 : 1))
-    }
-  })
+  return applyBirdMouthGeometry(
+    parts, 'bill', GOOSE_PARTS.find(part => part.face)!, GOOSE_BILL_GEOMETRY,
+    style, size, GOOSE_BILL_SIZE_RANGE
+  )
 }
 
 export const applyGooseBillStyle = (
@@ -3600,18 +3576,16 @@ export const applyGooseBillSize = (
 export const createGooseSurfaceDecals = (
   style: AvatarGooseSurfaceMarkingStyle = {}
 ): AvatarSurfaceDecal[] => {
-  const validColor = (value: string | undefined) => (
-    typeof value === 'string' && /^#[\da-f]{6}$/i.test(value) ? value : undefined
-  )
-  const billColor = validColor(style.billColor)
-  const nostrilColor = validColor(style.nostrilColor)
+  const nostrilColor = validAvatarHexColor(style.nostrilColor)
+  const seamColor = validAvatarHexColor(style.seamColor)
   return [
     ...createAnimalSurfaceDecals(GOOSE_SURFACE_DECALS[0]!, style),
-    ...GOOSE_SURFACE_DECALS.slice(1, 3).map(decal => ({
+    ...createBirdMouthColorOverride('goose', 'bill', style.billColor),
+    ...GOOSE_SURFACE_DECALS.filter(decal => decal.id === 'goose-bill-seam').map(decal => ({
       ...decal,
-      ...(billColor == null ? {} : { color: billColor })
+      ...(seamColor == null ? {} : { color: seamColor })
     })),
-    ...GOOSE_SURFACE_DECALS.slice(3).map(decal => ({
+    ...GOOSE_SURFACE_DECALS.filter(decal => decal.id.includes('nostril')).map(decal => ({
       ...decal,
       ...(nostrilColor == null ? {} : { color: nostrilColor })
     }))

@@ -413,6 +413,7 @@ export type AvatarGuineaPigSurfaceMarkingStyle = AvatarAnimalSurfaceMarkingStyle
 export type AvatarGooseSurfaceMarkingStyle = AvatarAnimalSurfaceMarkingStyle & {
   readonly billColor?: string
   readonly nostrilColor?: string
+  readonly seamColor?: string
 }
 export type AvatarCapybaraSurfaceMarkingStyle = AvatarAnimalSurfaceMarkingStyle
 export type AvatarChickSurfaceMarkingStyle = AvatarAnimalSurfaceMarkingStyle & {
@@ -443,11 +444,13 @@ export type AvatarOwlSurfaceMarkingStyle = AvatarAnimalSurfaceMarkingStyle & {
   readonly beakColor?: string
   readonly eyeRingColor?: string
   readonly nostrilColor?: string
+  readonly seamColor?: string
   readonly tuftColor?: string
 }
 export type AvatarParrotSurfaceMarkingStyle = AvatarAnimalSurfaceMarkingStyle & {
   readonly beakColor?: string
   readonly nostrilColor?: string
+  readonly seamColor?: string
 }
 export type AvatarDeerSurfaceMarkingStyle = AvatarAnimalSurfaceMarkingStyle
 export type AvatarDuckSurfaceMarkingStyle = AvatarAnimalSurfaceMarkingStyle & {

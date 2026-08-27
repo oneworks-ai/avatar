@@ -168,7 +168,10 @@ const COMPILED_PREVIEW_RASTER_SIZE = 210
 const COMPILED_PRODUCTION_MESH_RESOLUTION = 28
 const COMPILED_PREVIEW_MESH_RESOLUTION = 20
 const COMPILED_INTERACTION_VISIBLE_AREA = 12
-const entityCompiledRenderCache = createAvatarCompiledRenderCache(24)
+// Compiled meshes retain projector-owned depth/contour buffers. Keep only the
+// configurations needed for quick back-and-forth editor changes; preset grids
+// use prebuilt SVG snapshots and do not need to occupy this runtime cache.
+const entityCompiledRenderCache = createAvatarCompiledRenderCache(4)
 
 const clamp = (value: number, min: number, max: number) => Math.min(Math.max(value, min), max)
 

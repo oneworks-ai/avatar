@@ -193,10 +193,13 @@ describe('built-in entity preset scenes', () => {
       const scene = getAvatarEntityPresetScene(preset)!
 
       expect(parts.some(part => /(^|[-_])(ear|wing|body|neck)([-_]|$)/u.test(part.id)), preset).toBe(false)
-      expect(parts.every(part => (
-        part.baseColor === head.baseColor && part.foregroundColor === head.foregroundColor &&
-        part.highlightColor === head.highlightColor && part.shadowColor === head.shadowColor
-      )), `${preset} anatomy must inherit its head material before projected color`).toBe(true)
+      expect(parts.every(part => {
+        const isKeratinMouth = part.id === 'beak' || part.id === 'bill'
+        return isKeratinMouth || (
+          part.baseColor === head.baseColor && part.foregroundColor === head.foregroundColor &&
+          part.highlightColor === head.highlightColor && part.shadowColor === head.shadowColor
+        )
+      }), `${preset} feather anatomy must inherit its head material while its beak or bill keeps keratin material`).toBe(true)
       expect(scene.surfaceDecals.every(decal => (
         decal.targetPartId == null || parts.some(part => part.id === decal.targetPartId)
       )), `${preset} default decals must only target real anatomy`).toBe(true)
@@ -248,21 +251,23 @@ describe('built-in entity preset scenes', () => {
   it('builds a head-only goose with a true projecting bill and surface-only feather and nostril colors', () => {
     const goose = createAvatarEntityParts('goose')
     const head = goose.find(part => part.face)!
-    const bill = goose.filter(part => part.id.startsWith('bill-'))
+    const bill = goose.filter(part => part.id === 'bill')
     const decals = createGooseSurfaceDecals({ billColor: '#df913d', color: '#f7f3e9', nostrilColor: '#5b3b25' })
 
     expect(goose.some(part => /ear|wing|body|neck|crest|tuft/u.test(part.id))).toBe(false)
-    expect(bill.every(part => part.baseColor === head.baseColor && (part.scaleZ ?? 0) >= .27)).toBe(true)
+    expect(bill).toHaveLength(1)
+    expect(bill.every(part => part.baseColor !== head.baseColor && (part.scaleZ ?? 0) >= .2)).toBe(true)
     expect(decals[0]).toMatchObject({ id: 'goose-face-patch', targetPartId: 'primary' })
-    expect(decals.slice(1, 3).map(decal => decal.targetPartId)).toEqual(['bill-upper', 'bill-lower'])
-    expect(decals.slice(3).every(decal => decal.targetPartId === 'bill-upper')).toBe(true)
+    expect(decals.slice(1).every(decal => decal.targetPartId === 'bill')).toBe(true)
+    expect(decals.find(decal => decal.id === 'goose-bill-explicit-color-override'))
+      .toMatchObject({ color: '#df913d' })
 
     expect(getGooseBillStyle(goose)).toBe('short')
     const broad = applyGooseBillSize(applyGooseBillStyle(goose, 'broad'), 121)
     expect(getGooseBillStyle(broad)).toBe('broad')
     expect(getGooseBillSize(broad)).toBe(121)
-    expect(broad.find(part => part.id === 'bill-upper')!.scaleX).toBeGreaterThan(
-      applyGooseBillSize(goose, 121).find(part => part.id === 'bill-upper')!.scaleX
+    expect(broad.find(part => part.id === 'bill')!.scaleX).toBeGreaterThan(
+      applyGooseBillSize(goose, 121).find(part => part.id === 'bill')!.scaleX
     )
     expect(getGooseHeadScale(applyGooseHeadScale(goose, 107, 112))).toEqual({ height: 112, width: 107 })
     expect(getAvatarEntityPresetFaceStyle('goose')).toMatchObject({ eyeShape: 'rounded', noseEnabled: false })
@@ -272,21 +277,23 @@ describe('built-in entity preset scenes', () => {
   it('builds a head-only parrot with a true deep hooked beak and projected facial feather colors', () => {
     const parrot = createAvatarEntityParts('parrot')
     const head = parrot.find(part => part.face)!
-    const beak = parrot.filter(part => part.id.startsWith('beak-'))
+    const beak = parrot.filter(part => part.id === 'beak')
     const decals = createParrotSurfaceDecals({ beakColor: '#e3d4b7', color: '#f2e6ca', nostrilColor: '#554437' })
 
     expect(parrot.some(part => /ear|wing|body|neck|crest|tuft/u.test(part.id))).toBe(false)
-    expect(beak.every(part => part.baseColor === head.baseColor && (part.scaleZ ?? 0) >= .28)).toBe(true)
+    expect(beak).toHaveLength(1)
+    expect(beak.every(part => part.baseColor !== head.baseColor && (part.scaleZ ?? 0) >= .28)).toBe(true)
     expect(decals[0]).toMatchObject({ id: 'parrot-face-patch', targetPartId: 'primary' })
-    expect(decals.slice(1, 3).map(decal => decal.targetPartId)).toEqual(['beak-upper', 'beak-lower'])
-    expect(decals.slice(3).every(decal => decal.targetPartId === 'beak-upper')).toBe(true)
+    expect(decals.slice(1).every(decal => decal.targetPartId === 'beak')).toBe(true)
+    expect(decals.find(decal => decal.id === 'parrot-beak-explicit-color-override'))
+      .toMatchObject({ color: '#e3d4b7' })
 
     expect(getParrotBeakStyle(parrot)).toBe('macaw')
     const hooked = applyParrotBeakSize(applyParrotBeakStyle(parrot, 'hooked'), 117)
     expect(getParrotBeakStyle(hooked)).toBe('hooked')
     expect(getParrotBeakSize(hooked)).toBe(117)
-    expect(hooked.find(part => part.id === 'beak-upper')!.scaleZ).toBeLessThan(
-      applyParrotBeakSize(parrot, 117).find(part => part.id === 'beak-upper')!.scaleZ!
+    expect(hooked.find(part => part.id === 'beak')!.scaleZ).toBeLessThan(
+      applyParrotBeakSize(parrot, 117).find(part => part.id === 'beak')!.scaleZ!
     )
     expect(getParrotHeadScale(applyParrotHeadScale(parrot, 106, 111))).toEqual({ height: 111, width: 106 })
     expect(getAvatarEntityPresetFaceStyle('parrot')).toMatchObject({ eyeShape: 'rounded', noseEnabled: false })
@@ -296,17 +303,19 @@ describe('built-in entity preset scenes', () => {
   it('builds a head-only owl with a hooked beak, optional true feather tufts, and surface-only face rings', () => {
     const owl = createAvatarEntityParts('owl')
     const head = owl.find(part => part.face)!
-    const beak = owl.filter(part => part.id.startsWith('beak-'))
+    const beak = owl.filter(part => part.id === 'beak')
     const decals = createOwlSurfaceDecals({
       beakColor: '#d39b45', color: '#eee0c5', eyeRingColor: '#8c684b',
       nostrilColor: '#5b4026', tuftColor: '#765740'
     })
 
     expect(owl.some(part => /ear|wing|body|neck/u.test(part.id))).toBe(false)
-    expect(beak.every(part => part.baseColor === head.baseColor && (part.scaleZ ?? 0) >= .2)).toBe(true)
+    expect(beak).toHaveLength(1)
+    expect(beak.every(part => part.baseColor !== head.baseColor && (part.scaleZ ?? 0) >= .2)).toBe(true)
     expect(owl.some(part => part.id.startsWith('tuft-'))).toBe(false)
     expect(decals.slice(0, 3).every(decal => decal.targetPartId === 'primary')).toBe(true)
-    expect(decals.filter(decal => decal.id.includes('beak-')).every(decal => decal.targetPartId?.startsWith('beak-'))).toBe(true)
+    expect(decals.filter(decal => decal.id.includes('beak-') || decal.id.includes('nostril')).every(decal => decal.targetPartId === 'beak')).toBe(true)
+    expect(decals.some(decal => decal.id === 'owl-beak-explicit-color-override')).toBe(true)
     expect(decals.filter(decal => decal.id.includes('tuft-')).every(decal => decal.targetPartId?.startsWith('tuft-'))).toBe(true)
 
     expect(getOwlBeakStyle(owl)).toBe('hooked')
@@ -325,22 +334,23 @@ describe('built-in entity preset scenes', () => {
   it('builds a head-only penguin with a true tapered beak and a curved facial feather mask', () => {
     const penguin = createAvatarEntityParts('penguin')
     const head = penguin.find(part => part.face)!
-    const beak = penguin.filter(part => part.id.startsWith('beak-'))
+    const beak = penguin.filter(part => part.id === 'beak')
     const decals = createPenguinSurfaceDecals({ beakColor: '#e69a37', color: '#f2efe6', nostrilColor: '#543722' })
 
     expect(penguin.some(part => /ear|wing|body|neck/u.test(part.id))).toBe(false)
-    expect(beak).toHaveLength(2)
-    expect(beak.every(part => part.baseColor === head.baseColor && (part.scaleZ ?? 0) >= .24)).toBe(true)
+    expect(beak).toHaveLength(1)
+    expect(beak.every(part => part.baseColor !== head.baseColor && (part.scaleZ ?? 0) >= .24)).toBe(true)
     expect(decals[0]).toMatchObject({ id: 'penguin-face-mask', targetPartId: 'primary' })
-    expect(decals.slice(1, 3).map(decal => decal.targetPartId)).toEqual(['beak-upper', 'beak-lower'])
-    expect(decals.slice(3).every(decal => decal.targetPartId === 'beak-upper')).toBe(true)
+    expect(decals.slice(1).every(decal => decal.targetPartId === 'beak')).toBe(true)
+    expect(decals.find(decal => decal.id === 'penguin-beak-explicit-color-override'))
+      .toMatchObject({ color: '#e69a37' })
 
     expect(getPenguinBeakStyle(penguin)).toBe('tapered')
     const short = applyPenguinBeakSize(applyPenguinBeakStyle(penguin, 'short'), 124)
     expect(getPenguinBeakStyle(short)).toBe('short')
     expect(getPenguinBeakSize(short)).toBe(124)
-    expect(short.find(part => part.id === 'beak-upper')!.scaleZ).toBeLessThan(
-      applyPenguinBeakSize(penguin, 124).find(part => part.id === 'beak-upper')!.scaleZ!
+    expect(short.find(part => part.id === 'beak')!.scaleZ).toBeLessThan(
+      applyPenguinBeakSize(penguin, 124).find(part => part.id === 'beak')!.scaleZ!
     )
     expect(getPenguinHeadScale(applyPenguinHeadScale(penguin, 108, 113))).toEqual({ height: 113, width: 108 })
     expect(getAvatarEntityPresetFaceStyle('penguin')).toMatchObject({ eyeShape: 'rounded', noseEnabled: false })
@@ -350,22 +360,23 @@ describe('built-in entity preset scenes', () => {
   it('builds a head-only duck with a truly broad bill and projected feather, bill, and nostril colors', () => {
     const duck = createAvatarEntityParts('duck')
     const head = duck.find(part => part.face)!
-    const bill = duck.filter(part => part.id.startsWith('bill-'))
+    const bill = duck.filter(part => part.id === 'bill')
     const decals = createDuckSurfaceDecals({ billColor: '#de8737', color: '#f7dc72', nostrilColor: '#54351f' })
 
     expect(duck.some(part => /ear|wing|body|neck/u.test(part.id))).toBe(false)
-    expect(bill).toHaveLength(2)
-    expect(bill.every(part => part.baseColor === head.baseColor && (part.scaleZ ?? 0) >= .29)).toBe(true)
+    expect(bill).toHaveLength(1)
+    expect(bill.every(part => part.baseColor !== head.baseColor && (part.scaleZ ?? 0) >= .24)).toBe(true)
     expect(decals.slice(0, 2).every(decal => decal.targetPartId === 'primary')).toBe(true)
-    expect(decals.slice(2, 4).map(decal => decal.targetPartId)).toEqual(['bill-upper', 'bill-lower'])
-    expect(decals.slice(4).every(decal => decal.targetPartId === 'bill-upper')).toBe(true)
+    expect(decals.slice(2).every(decal => decal.targetPartId === 'bill')).toBe(true)
+    expect(decals.find(decal => decal.id === 'duck-bill-explicit-color-override'))
+      .toMatchObject({ color: '#de8737' })
 
-    expect(getDuckBillStyle(duck)).toBe('broad')
-    const flat = applyDuckBillSize(applyDuckBillStyle(duck, 'flat'), 122)
-    expect(getDuckBillStyle(flat)).toBe('flat')
-    expect(getDuckBillSize(flat)).toBe(122)
-    expect(flat.find(part => part.id === 'bill-upper')!.scaleX).toBeLessThan(
-      applyDuckBillSize(duck, 122).find(part => part.id === 'bill-upper')!.scaleX
+    expect(getDuckBillStyle(duck)).toBe('flat')
+    const broad = applyDuckBillSize(applyDuckBillStyle(duck, 'broad'), 122)
+    expect(getDuckBillStyle(broad)).toBe('broad')
+    expect(getDuckBillSize(broad)).toBe(122)
+    expect(broad.find(part => part.id === 'bill')!.scaleX).toBeGreaterThan(
+      applyDuckBillSize(duck, 122).find(part => part.id === 'bill')!.scaleX
     )
     expect(getDuckHeadScale(applyDuckHeadScale(duck, 109, 105))).toEqual({ height: 105, width: 109 })
     expect(getAvatarEntityPresetFaceStyle('duck')).toMatchObject({ eyeShape: 'rounded', noseEnabled: false })
@@ -375,7 +386,7 @@ describe('built-in entity preset scenes', () => {
   it('builds a head-only chick with true beak and crest anatomy while keeping feather colors on surfaces', () => {
     const chick = createAvatarEntityParts('chick')
     const head = chick.find(part => part.face)!
-    const beak = chick.filter(part => part.id.startsWith('beak-'))
+    const beak = chick.filter(part => part.id === 'beak')
     const decals = createChickSurfaceDecals({
       beakColor: '#e89132',
       color: '#f8dc74',
@@ -384,22 +395,23 @@ describe('built-in entity preset scenes', () => {
     })
 
     expect(chick.some(part => /ear|wing|body|neck/u.test(part.id))).toBe(false)
-    expect(beak.map(part => part.id)).toEqual(['beak-upper', 'beak-lower'])
-    expect(beak.every(part => part.baseColor === head.baseColor && (part.scaleZ ?? 0) >= .18)).toBe(true)
+    expect(beak.map(part => part.id)).toEqual(['beak'])
+    expect(beak.every(part => part.baseColor !== head.baseColor && (part.scaleZ ?? 0) >= .18)).toBe(true)
     expect(chick.filter(part => part.id.startsWith('crest-fluff-'))).toHaveLength(3)
     expect(decals.filter(decal => decal.id.includes('cheek')).every(decal => decal.targetPartId === 'primary')).toBe(true)
     expect(decals.filter(decal => decal.id.includes('beak-')).every(decal => (
-      decal.targetPartId === 'beak-upper' || decal.targetPartId === 'beak-lower'
+      decal.targetPartId === 'beak'
     ))).toBe(true)
-    expect(decals.filter(decal => decal.id.includes('nostril')).every(decal => decal.targetPartId === 'beak-upper')).toBe(true)
+    expect(decals.filter(decal => decal.id.includes('nostril')).every(decal => decal.targetPartId === 'beak')).toBe(true)
+    expect(decals.some(decal => decal.id === 'chick-beak-explicit-color-override')).toBe(true)
     expect(decals.filter(decal => decal.id.includes('crest-comb')).every(decal => decal.targetPartId?.startsWith('crest-comb-'))).toBe(true)
 
     expect(getChickBeakStyle(chick)).toBe('short')
     const pointed = applyChickBeakSize(applyChickBeakStyle(chick, 'pointed'), 127)
     expect(getChickBeakStyle(pointed)).toBe('pointed')
     expect(getChickBeakSize(pointed)).toBe(127)
-    expect(pointed.find(part => part.id === 'beak-upper')!.scaleZ).toBeGreaterThan(
-      chick.find(part => part.id === 'beak-upper')!.scaleZ!
+    expect(pointed.find(part => part.id === 'beak')!.scaleZ).toBeGreaterThan(
+      chick.find(part => part.id === 'beak')!.scaleZ!
     )
 
     const noCrest = applyChickCrestStyle(chick, 'none')

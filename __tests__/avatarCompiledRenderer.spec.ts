@@ -921,10 +921,10 @@ describe('production compiled avatar renderer adapter', () => {
       for (const pose of poses) {
         const projection = projectAvatarCompiledScene(mesh, input, {
           faceStyle: resolved.faceStyle,
-          height: 72,
+          height: 96,
           pose,
           surfaceDecals: validDecals,
-          width: 72
+          width: 96
         })
         expect(projection.metrics.nullOwnerPixelCount, `${template.id}:${pose.yaw}:null-owner`).toBe(0)
         const yawDegrees = Math.round(pose.yaw * 180 / Math.PI)

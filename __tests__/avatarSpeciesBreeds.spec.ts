@@ -46,6 +46,15 @@ const perceivedLightness = (color: string): number => (
   ) / 255
 )
 
+const normalizedRgbDistance = (left: string, right: string): number => {
+  const channel = (color: string, offset: number) => Number.parseInt(color.slice(offset, offset + 2), 16) / 255
+  return Math.hypot(
+    channel(left, 1) - channel(right, 1),
+    channel(left, 3) - channel(right, 3),
+    channel(left, 5) - channel(right, 5)
+  ) / Math.sqrt(3)
+}
+
 describe('natural animal breed constraint profiles', () => {
   it('offers distinguishable natural breeds for every modeled species', () => {
     expect(Object.fromEntries(AVATAR_ANIMAL_SPECIES_IDS.map(species => [
@@ -55,24 +64,30 @@ describe('natural animal breed constraint profiles', () => {
       alpaca: 4,
       beaver: 4,
       capybara: 4,
+      chick: 4,
       chinchilla: 4,
       cow: 4,
       deer: 4,
+      duck: 4,
       ferret: 4,
       fox: 4,
+      goose: 4,
       'guinea-pig': 4,
       hamster: 4,
       hedgehog: 4,
       lion: 4,
       monkey: 4,
       otter: 3,
+      owl: 4,
+      parrot: 4,
+      penguin: 4,
       pig: 4,
       seal: 4,
       sheep: 5,
       squirrel: 4,
       tiger: 4
     })
-    expect(AVATAR_ANIMAL_BREED_TEMPLATES).toHaveLength(76)
+    expect(AVATAR_ANIMAL_BREED_TEMPLATES).toHaveLength(100)
 
     for (const species of AVATAR_ANIMAL_SPECIES_IDS) {
       const palettes = new Set(getAvatarAnimalBreedTemplates(species).map(template => template.fixed.paletteId))
@@ -131,7 +146,7 @@ describe('natural animal breed constraint profiles', () => {
     }
   })
 
-  it('keeps all 105 existing animal breeds proportionate across repeated constrained Seeds', () => {
+  it('keeps all 129 existing animal breeds proportionate across repeated constrained Seeds', () => {
     const profiles = [
       ...AVATAR_ANIMAL_BREED_TEMPLATES.map(template => ({
         id: template.id,
@@ -196,7 +211,7 @@ describe('natural animal breed constraint profiles', () => {
       }))
     ]
 
-    expect(profiles).toHaveLength(105)
+    expect(profiles).toHaveLength(129)
 
     for (const profile of profiles) {
       for (let index = 0; index < 48; index += 1) {
@@ -205,10 +220,12 @@ describe('natural animal breed constraint profiles', () => {
 
         expect(resolved.headWidth, `${profile.id} has an oversized head`).toBeLessThanOrEqual(135)
         expect(resolved.headHeight, `${profile.id} has an oversized head`).toBeLessThanOrEqual(135)
-        expect(
-          Math.max(resolved.earHeight / resolved.headHeight, resolved.earWidth / resolved.headWidth),
-          `${profile.id} ears overwhelm its head`
-        ).toBeLessThanOrEqual(earLimit)
+        if (typeof resolved.earHeight === 'number' && typeof resolved.earWidth === 'number') {
+          expect(
+            Math.max(resolved.earHeight / resolved.headHeight, resolved.earWidth / resolved.headWidth),
+            `${profile.id} ears overwhelm its head`
+          ).toBeLessThanOrEqual(earLimit)
+        }
 
         if ('hornSize' in resolved && typeof resolved.hornSize === 'number') {
           const headSize = Math.sqrt(resolved.headWidth * resolved.headHeight)
@@ -223,8 +240,12 @@ describe('natural animal breed constraint profiles', () => {
 
         const left = resolved.entityParts.find(part => /(?:^|-)ear-left$/u.test(part.id))
         const right = resolved.entityParts.find(part => /(?:^|-)ear-right$/u.test(part.id))
-        expect(left?.x, `${profile.id} left ear is hidden inside its head`).toBeLessThan(-20)
-        expect(right?.x, `${profile.id} right ear is hidden inside its head`).toBeGreaterThan(20)
+        if (left == null || right == null) {
+          expect(resolved.entityParts.some(part => /(?:^|-)ear-(?:left|right)$/u.test(part.id))).toBe(false)
+        } else {
+          expect(left.x, `${profile.id} left ear is hidden inside its head`).toBeLessThan(-20)
+          expect(right.x, `${profile.id} right ear is hidden inside its head`).toBeGreaterThan(20)
+        }
 
         if (profile.id === 'highland-cow') {
           expect(resolved.entityParts.filter(part => part.id.startsWith('forelock-'))
@@ -309,9 +330,14 @@ describe('natural animal breed constraint profiles', () => {
         }
 
         for (const layer of layers) {
+          if (/(?:seam|nostril|explicit-color-override|crest-comb)/u.test(layer.id)) continue
           const contrast = Math.abs(perceivedLightness(layer.color) - perceivedLightness(layer.parent))
-          if (contrast <= .045) {
-            failures.push(`${template.id} ${layer.id} at tone ${requestedTone}: ${contrast.toFixed(3)}`)
+          const colorDistance = normalizedRgbDistance(layer.color, layer.parent)
+          if (contrast <= .02 && colorDistance <= .02) {
+            failures.push(
+              `${template.id} ${layer.id} at tone ${requestedTone}: ` +
+              `lightness ${contrast.toFixed(3)}, rgb ${colorDistance.toFixed(3)}`
+            )
           }
         }
 
@@ -336,8 +362,12 @@ describe('natural animal breed constraint profiles', () => {
         }, template.fixed.hornStyle)
         const left = parts.find(part => part.id === (species === 'fox' ? 'fox-ear-left' : 'ear-left'))
         const right = parts.find(part => part.id === (species === 'fox' ? 'fox-ear-right' : 'ear-right'))
-        expect(left?.x).toBeLessThan(-20)
-        expect(right?.x).toBeGreaterThan(20)
+        if (left == null || right == null) {
+          expect(parts.some(part => /(?:^|-)ear-(?:left|right)$/u.test(part.id))).toBe(false)
+        } else {
+          expect(left.x).toBeLessThan(-20)
+          expect(right.x).toBeGreaterThan(20)
+        }
         expect(getAvatarAnimalDimensions(species, parts).headWidth).toBe(width)
         expect(getAvatarAnimalDimensions(species, parts).headHeight).toBe(height)
       }

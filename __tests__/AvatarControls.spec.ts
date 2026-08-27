@@ -865,7 +865,8 @@ describe('AvatarControls natural animal breeds', () => {
       const label = host.querySelector<HTMLElement>('.avatar-controls__animal-head-size .avatar-controls__label')
         ?.textContent?.replace(' head size', '') ?? ''
       expect(host.querySelector<HTMLInputElement>(`[aria-label="${label} head width"]`)?.value).toBe('113')
-      if (species === 'seal') {
+      const hasAuthoredEars = props.entityParts.some(part => /(?:^|-)ear-(?:left|right)$/u.test(part.id))
+      if (species === 'seal' || !hasAuthoredEars) {
         expect(host.querySelector('.avatar-controls__animal-ear-size')).toBeNull()
       } else {
         expect(host.querySelector<HTMLInputElement>(`[aria-label="${label} ear width"]`)?.value).toBe('104')

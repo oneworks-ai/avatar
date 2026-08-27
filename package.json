@@ -17,7 +17,7 @@
     "dev": "vite",
     "preview": "vite preview",
     "smoke:sdk": "node scripts/smoke-sdk-packages.mjs",
-    "test": "vitest run __tests__/*.spec.ts packages/avatar/__tests__/*.spec.ts packages/react/__tests__/*.spec.tsx packages/web/__tests__/*.spec.ts",
+    "test": "node scripts/run-vitest-groups.mjs",
     "typecheck": "tsc -p tsconfig.app-source.json --noEmit --pretty false",
     "typecheck:npm": "tsc -p tsconfig.json --noEmit --pretty false",
     "typecheck:sdk": "pnpm build:sdk && pnpm --filter './packages/*' typecheck"

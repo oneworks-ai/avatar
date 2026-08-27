@@ -26,7 +26,10 @@ const COMPILED_SURFACE_DECAL_MATERIAL_PREFIX = 'surface-decal:'
 const FULL_TARGET_SURFACE_OVERRIDES = new Set([
   'chick:chick-beak-explicit-color-override:beak',
   'duck:duck-bill-explicit-color-override:bill',
-  'penguin:penguin-beak-explicit-color-override:beak'
+  'penguin:penguin-beak-explicit-color-override:beak',
+  'owl:owl-beak-explicit-color-override:beak',
+  'parrot:parrot-beak-explicit-color-override:beak',
+  'goose:goose-bill-explicit-color-override:bill'
 ])
 
 const createCompiledPrimitive = (part: AvatarEntityPart): CompiledAvatarPrimitive => {
@@ -177,6 +180,7 @@ const surfaceMarkingKey = (markings: readonly CompiledAvatarSurfaceMarking[]) =>
 )).join('|')
 
 const projectorCache = new WeakMap<CompiledAvatarMesh, Map<string, OptimizedCompiledAvatarProjector>>()
+const MAX_PROJECTORS_PER_MESH = 2
 
 const getProjector = (
   mesh: CompiledAvatarMesh,
@@ -194,7 +198,10 @@ const getProjector = (
   }
   const key = `${width}:${height}:${centerX}:${centerY}:avatar-pose:${surfaceMarkingKey(markings)}`
   let projector = projectors.get(key)
-  if (projector == null) {
+  if (projector != null) {
+    projectors.delete(key)
+    projectors.set(key, projector)
+  } else {
     projector = createOptimizedCompiledAvatarProjector(mesh, input.primitives, {
       centerX,
       centerY,
@@ -205,6 +212,11 @@ const getProjector = (
       width
     })
     projectors.set(key, projector)
+    while (projectors.size > MAX_PROJECTORS_PER_MESH) {
+      const oldestKey = projectors.keys().next().value
+      if (oldestKey == null) break
+      projectors.delete(oldestKey)
+    }
   }
   return projector
 }
