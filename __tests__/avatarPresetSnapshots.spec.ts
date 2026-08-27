@@ -8,8 +8,10 @@ import {
 } from '../src/avatarBreedTemplates'
 import {
   AVATAR_BREED_PRESET_SNAPSHOT_URLS,
+  AVATAR_PIXEL_STYLE_PRESET_SNAPSHOT_URLS,
   getAvatarBreedPresetSnapshotUrl
 } from '../src/avatarPresetSnapshots'
+import { AVATAR_EFFECT_STYLE_PRESETS } from '../src/avatarEffectStylePresets'
 import { AVATAR_ANIMAL_BREED_TEMPLATES } from '../src/avatarSpeciesBreeds'
 
 describe('prebuilt Avatar preset snapshots', () => {
@@ -29,6 +31,15 @@ describe('prebuilt Avatar preset snapshots', () => {
         key.slice(0, separator),
         key.slice(separator + 2)
       )).toMatch(/\.svg(?:\?|$)/)
+    }
+  })
+
+  it('covers every entity selected for the chunky-pixel sample set', () => {
+    expect(Object.keys(AVATAR_PIXEL_STYLE_PRESET_SNAPSHOT_URLS).sort()).toEqual(
+      [...AVATAR_EFFECT_STYLE_PRESETS['chunky-pixel'].samples].sort()
+    )
+    for (const url of Object.values(AVATAR_PIXEL_STYLE_PRESET_SNAPSHOT_URLS)) {
+      expect(url).toMatch(/\.svg(?:\?|$)/)
     }
   })
 })

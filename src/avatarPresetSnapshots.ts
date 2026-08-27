@@ -9,8 +9,20 @@ const AVATAR_BREED_PRESET_SNAPSHOT_MODULES = import.meta.glob(
   { eager: true, import: 'default', query: '?url' }
 ) as Readonly<Record<string, string>>
 
+const AVATAR_PIXEL_STYLE_PRESET_SNAPSHOT_MODULES = import.meta.glob(
+  './avatarPresetSnapshots/pixel/*.svg',
+  { eager: true, import: 'default', query: '?url' }
+) as Readonly<Record<string, string>>
+
 export const AVATAR_BREED_PRESET_SNAPSHOT_URLS: Readonly<Record<string, string>> = Object.fromEntries(
   Object.entries(AVATAR_BREED_PRESET_SNAPSHOT_MODULES).map(([source, url]) => [
+    source.slice(source.lastIndexOf('/') + 1, -'.svg'.length),
+    url
+  ])
+)
+
+export const AVATAR_PIXEL_STYLE_PRESET_SNAPSHOT_URLS: Readonly<Record<string, string>> = Object.fromEntries(
+  Object.entries(AVATAR_PIXEL_STYLE_PRESET_SNAPSHOT_MODULES).map(([source, url]) => [
     source.slice(source.lastIndexOf('/') + 1, -'.svg'.length),
     url
   ])

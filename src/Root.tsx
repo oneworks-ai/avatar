@@ -114,6 +114,14 @@ const Root = () => {
   return (
     <HomePage
       onCreate={template => openEditor(`?template=${template}`)}
+      onCreateBreed={(entity, breed) => {
+        const params = new URLSearchParams({ entity, breed })
+        openEditor(`?${params.toString()}`)
+      }}
+      onCreateEffectStyle={(entity, effectStyle) => {
+        const params = new URLSearchParams({ effectStyle, template: entity })
+        openEditor(`?${params.toString()}`)
+      }}
       onSurprise={openRandomEditor}
       onPrepareEditor={() => void loadEditor()}
     />

@@ -60,6 +60,41 @@ const renderApp = async () => {
 }
 
 describe('App pixel effect history', () => {
+  it('expands the named chunky-pixel style into concrete URL-backed effect settings', async () => {
+    window.history.replaceState(null, '', '/?template=cat&effectStyle=chunky-pixel')
+    await renderApp()
+    await flushEffects()
+
+    const params = new URLSearchParams(window.location.search)
+    expect(params.get('entity')).toBe('cat')
+    expect(params.get('template')).toBeNull()
+    expect(params.get('effectStyle')).toBeNull()
+    expect(params.get('camera')).toBe('1')
+    expect(params.get('cameraBg')).toBe('#8ea2b8')
+    expect(params.get('cameraFrame')).toBe('rounded')
+    expect(params.get('light')).toBe('1')
+    expect(params.get('shadow')).toBe('1')
+    expect(params.get('outline')).toBe('1')
+    expect(params.get('outlineColor')).toBe('#1b1026')
+    expect(params.get('outlineWidth')).toBe('14')
+    expect(params.get('outlineOpacity')).toBe('96')
+    expect(params.get('pixel')).toBe('1')
+    expect(params.get('pixelSize')).toBe('6')
+    expect(params.get('pixelColors')).toBe('16')
+    expect(params.get('pixelSample')).toBe('slic')
+    expect(params.get('pixelDither')).toBe('none')
+    expect(params.get('avatarShadowColor')).toBe('#7c3140')
+    expect(params.get('avatarShadowDir')).toBe('132')
+    expect(params.get('avatarShadowDist')).toBe('10')
+    expect(params.get('avatarShadowOpacity')).toBe('28')
+    expect(params.get('avatarShadowSoft')).toBe('14')
+    expect(params.get('frameShadow')).toBe('1')
+    expect(params.get('frameShadowDir')).toBe('90')
+    expect(params.get('frameShadowDist')).toBe('12')
+    expect(params.get('frameShadowOpacity')).toBe('20')
+    expect(params.get('frameShadowSoft')).toBe('24')
+  })
+
   it('normalizes fractional pixel sizes from legacy URLs', async () => {
     window.history.replaceState(null, '', '/?pixel=1&pixelSize=6.5')
     await renderApp()
