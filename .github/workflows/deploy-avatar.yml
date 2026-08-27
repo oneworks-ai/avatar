@@ -1,17 +1,14 @@
 name: Deploy Avatar
 
 on:
+  workflow_run:
+    workflows:
+      - Avatar SDK CI
+    types:
+      - completed
+    branches:
+      - main
   workflow_dispatch:
-    inputs:
-      source_ref:
-        default: main
-        description: app repository ref to build.
-        required: false
-        type: string
-      source_sha:
-        description: app repository commit SHA to build. Takes precedence over source_ref.
-        required: false
-        type: string
 
 permissions:
   contents: read
@@ -22,97 +19,74 @@ env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
 
 concurrency:
-  group: deploy-avatar-pages
-  cancel-in-progress: true
+  group: ${{ (github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success') && 'deploy-avatar-pages' || format('deploy-avatar-noop-{0}', github.run_id) }}
+  cancel-in-progress: ${{ github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success' }}
 
 jobs:
   build:
     name: build-avatar-pages
+    if: github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success'
     runs-on: ubuntu-latest
     timeout-minutes: 30
+    outputs:
+      app_sha: ${{ steps.source-lock.outputs.app_sha }}
+      avatar_sha: ${{ steps.source-lock.outputs.avatar_sha }}
 
     steps:
-      - name: Resolve app ref
-        id: app-ref
-        shell: bash
-        env:
-          SOURCE_REF: ${{ inputs.source_ref }}
-          SOURCE_SHA: ${{ inputs.source_sha }}
-        run: |
-          set -euo pipefail
-          if [[ "$GITHUB_REF" != "refs/heads/main" ]]; then
-            echo "Avatar Pages may deploy only from the protected main branch." >&2
-            exit 1
-          fi
-          if [[ -n "$SOURCE_REF" && "$SOURCE_REF" != "main" ]]; then
-            echo "source_ref must be main when provided." >&2
-            exit 1
-          fi
-          if [[ -n "$SOURCE_SHA" && ! "$SOURCE_SHA" =~ ^[0-9a-fA-F]{40}$ ]]; then
-            echo "source_sha must be a 40-character Git commit SHA when provided." >&2
-            exit 1
-          fi
-          ref="${SOURCE_SHA:-main}"
-          printf 'ref=%s\n' "$ref" >> "$GITHUB_OUTPUT"
-
       - name: Checkout avatar repository
         uses: actions/checkout@v4
         with:
-          ref: ${{ github.sha }}
+          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
           fetch-depth: 0
 
-      - name: Checkout app package metadata
+      - name: Checkout shared OneWorks sources
         uses: actions/checkout@v4
         with:
           repository: oneworks-ai/app
-          ref: ${{ steps.app-ref.outputs.ref }}
+          ref: main
           path: app-source
           fetch-depth: 0
           submodules: false
 
-      - name: Verify immutable app and avatar source
+      - name: Verify immutable deployment sources
         id: source-lock
         shell: bash
         env:
-          SOURCE_SHA: ${{ inputs.source_sha }}
+          AVATAR_SHA: ${{ github.event.workflow_run.head_sha || github.sha }}
         run: |
           set -euo pipefail
-          APP_SHA="$(git -C app-source rev-parse HEAD)"
-          if [[ -n "$SOURCE_SHA" && "${APP_SHA,,}" != "${SOURCE_SHA,,}" ]]; then
-            echo "Checked-out app commit does not match source_sha." >&2
+          if [[ "$GITHUB_EVENT_NAME" == "workflow_dispatch" && "$GITHUB_REF" != "refs/heads/main" ]]; then
+            echo "Manual Avatar deployments may run only from protected Avatar main." >&2
             exit 1
           fi
+          if [[ ! "$AVATAR_SHA" =~ ^[0-9a-fA-F]{40}$ ]]; then
+            echo "Avatar deployment source must be a 40-character Git commit SHA." >&2
+            exit 1
+          fi
+          if [[ "$(git rev-parse HEAD)" != "$AVATAR_SHA" ]]; then
+            echo "Avatar checkout did not resolve to the CI-approved source." >&2
+            exit 1
+          fi
+          git fetch --no-tags origin refs/heads/main:refs/remotes/origin/main
+          if ! git merge-base --is-ancestor "$AVATAR_SHA" origin/main; then
+            echo "Avatar deployment source must be reachable from protected Avatar main." >&2
+            exit 1
+          fi
+
+          APP_SHA="$(git -C app-source rev-parse HEAD)"
           git -C app-source fetch --no-tags origin refs/heads/main:refs/remotes/origin/main
           if ! git -C app-source merge-base --is-ancestor "$APP_SHA" origin/main; then
-            echo "App commit must be reachable from protected main." >&2
+            echo "Shared app source must be reachable from protected app main." >&2
             exit 1
           fi
-          mapfile -t avatar_entries < <(git -C app-source ls-tree "$APP_SHA" -- assets/avatar)
-          if [[ "${#avatar_entries[@]}" -ne 1 ]]; then
-            echo "App commit must contain exactly one assets/avatar gitlink." >&2
-            exit 1
-          fi
-          gitlink_pattern=$'^160000[[:space:]]commit[[:space:]]([0-9a-fA-F]{40})\tassets/avatar$'
-          if ! [[ "${avatar_entries[0]}" =~ $gitlink_pattern ]]; then
-            echo "App commit must contain exactly one assets/avatar gitlink." >&2
-            exit 1
-          fi
-          AVATAR_SHA="${BASH_REMATCH[1]}"
-          if ! git merge-base --is-ancestor "$AVATAR_SHA" "$GITHUB_SHA"; then
-            echo "Avatar gitlink must be reachable from protected Avatar main." >&2
-            exit 1
-          fi
-          git checkout --detach "$AVATAR_SHA"
-          if [[ "$(git rev-parse HEAD)" != "$AVATAR_SHA" ]]; then
-            echo "Avatar checkout did not resolve to the app-approved gitlink." >&2
-            exit 1
-          fi
-          if [[ "$(git -C app-source rev-parse HEAD)" != "$APP_SHA" ]]; then
-            echo "Avatar checkout unexpectedly changed the app source checkout." >&2
-            exit 1
-          fi
+
           printf 'app_sha=%s\n' "$APP_SHA" >> "$GITHUB_OUTPUT"
           printf 'avatar_sha=%s\n' "$AVATAR_SHA" >> "$GITHUB_OUTPUT"
+          {
+            printf '### Deployment sources\n\n'
+            printf -- '- Avatar: `%s`\n' "$AVATAR_SHA"
+            printf -- '- App dependencies: `%s`\n' "$APP_SHA"
+          } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Setup pnpm
         uses: pnpm/action-setup@v4
@@ -162,7 +136,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     needs: build
-    if: github.ref == 'refs/heads/main'
+    if: needs.build.result == 'success'
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}

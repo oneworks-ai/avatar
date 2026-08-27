@@ -1,0 +1,61 @@
+{
+  "chunky-pixel": {
+    "label": "Chunky Pixel",
+    "samples": [
+      "cat",
+      "dog",
+      "fox",
+      "owl",
+      "penguin",
+      "sheep",
+      "bear",
+      "rabbit",
+      "capybara",
+      "cow",
+      "tiger",
+      "parrot"
+    ],
+    "cameraBackground": "#8ea2b8",
+    "cameraFrame": "rounded",
+    "cameraMode": true,
+    "showLight": true,
+    "lightAzimuth": -35,
+    "lightElevation": 40,
+    "lightDistance": 0,
+    "showShadow": true,
+    "faceShadowStyle": {
+      "direction": 50,
+      "distance": 4,
+      "opacity": 28,
+      "softness": 0
+    },
+    "showAvatarShadow": true,
+    "avatarShadowStyle": {
+      "color": "#7c3140",
+      "direction": 132,
+      "distance": 10,
+      "opacity": 28,
+      "softness": 14
+    },
+    "showOutline": true,
+    "avatarOutlineStyle": {
+      "color": "#1b1026",
+      "width": 14,
+      "opacity": 96
+    },
+    "pixelEffect": {
+      "enabled": true,
+      "blockSize": 6,
+      "paletteSize": 16,
+      "sampling": "slic",
+      "dithering": "none"
+    },
+    "showFrameShadow": true,
+    "frameShadowStyle": {
+      "direction": 90,
+      "distance": 12,
+      "opacity": 20,
+      "softness": 24
+    }
+  }
+}

@@ -16,6 +16,7 @@
     "build:sdk": "pnpm --filter './packages/*' build",
     "dev": "vite",
     "preview": "vite preview",
+    "snapshots:pixel": "node scripts/generate-avatar-pixel-style-snapshots.mjs",
     "smoke:sdk": "node scripts/smoke-sdk-packages.mjs",
     "test": "node scripts/run-vitest-groups.mjs",
     "typecheck": "tsc -p tsconfig.app-source.json --noEmit --pretty false",

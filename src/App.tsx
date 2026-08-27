@@ -54,6 +54,7 @@ import type {
   AvatarViewState
 } from './InteractiveAvatar'
 import { LanguageSwitcher } from './LanguageSwitcher'
+import { getAvatarEffectStylePreset } from './avatarEffectStylePresets'
 import {
   AVATAR_ANIMATION_PRESETS,
   applyAvatarAnimationTransformAnchor,
@@ -344,6 +345,34 @@ interface AvatarQueryConfig {
   readonly showShadow: boolean
   readonly surfaceDecals: readonly AvatarSurfaceDecal[]
   readonly viewState: AvatarViewState
+}
+
+const applyAvatarEffectStylePreset = (
+  config: AvatarQueryConfig,
+  presetId: string | null
+): AvatarQueryConfig => {
+  const preset = getAvatarEffectStylePreset(presetId)
+  if (preset == null) return config
+
+  return {
+    ...config,
+    avatarOutlineStyle: { ...config.avatarOutlineStyle, ...preset.avatarOutlineStyle },
+    avatarShadowStyle: { ...config.avatarShadowStyle, ...preset.avatarShadowStyle },
+    cameraBackground: preset.cameraBackground,
+    cameraFrame: preset.cameraFrame,
+    cameraMode: preset.cameraMode,
+    faceShadowStyle: { ...config.faceShadowStyle, ...preset.faceShadowStyle },
+    frameShadowStyle: { ...config.frameShadowStyle, ...preset.frameShadowStyle },
+    lightAzimuth: preset.lightAzimuth,
+    lightDistance: preset.lightDistance,
+    lightElevation: preset.lightElevation,
+    pixelEffect: { ...preset.pixelEffect },
+    showAvatarShadow: preset.showAvatarShadow,
+    showFrameShadow: preset.showFrameShadow,
+    showLight: preset.showLight,
+    showOutline: preset.showOutline,
+    showShadow: preset.showShadow
+  }
 }
 
 interface AnimationThumbnailCaptureRequest {
@@ -1555,14 +1584,14 @@ const getInitialQueryConfig = (definition?: AvatarDefinition) => {
       viewState: state.viewState
     }
   }
-  if (!params.has('template')) return config
+  if (!params.has('template')) return applyAvatarEffectStylePreset(config, params.get('effectStyle'))
 
   const preset = parseAvatarEntityPreset(params.get('template'))
   const scene = getAvatarEntityPresetScene(preset)
   const faceStyle = getAvatarEntityPresetFaceStyle(preset)
   if (preset === 'custom' || scene == null || faceStyle == null) return config
 
-  return resolveSeededQueryConfig({
+  return applyAvatarEffectStylePreset(resolveSeededQueryConfig({
     ...config,
     animationOpen: false,
     avatarOutlineStyle: scene.avatarOutlineStyle,
@@ -1638,7 +1667,7 @@ const getInitialQueryConfig = (definition?: AvatarDefinition) => {
     showOutline: scene.showOutline,
     showShadow: scene.showShadow,
     viewState: scene.viewState
-  })
+  }), params.get('effectStyle'))
 }
 
 const downloadBlob = (filename: string, blob: Blob) => {

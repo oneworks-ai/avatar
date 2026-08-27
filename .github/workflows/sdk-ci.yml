@@ -2,6 +2,11 @@ name: Avatar SDK CI
 
 on:
   pull_request:
+  # The protected merge commit is the production deployment source. Keep this
+  # post-merge run: deploy-avatar.yml consumes its successful workflow_run and
+  # exact head SHA even though the pull request already passed these checks.
+  push:
+    branches: [main]
   workflow_dispatch:
 
 permissions:
