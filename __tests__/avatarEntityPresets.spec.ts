@@ -1223,7 +1223,10 @@ describe('built-in entity preset scenes', () => {
       expect(original).toEqual(scene.surfaceDecals)
       expect(original[0]).not.toBe(scene.surfaceDecals[0])
       expect(original[0]).toMatchObject({
-        id: `${preset}-face-mask`, shape: 'face-mask', side: 'face', targetPartId: 'primary'
+        id: `${preset}-face-mask`,
+        shape: preset === 'otter' ? 'ellipse' : 'face-mask',
+        side: 'face',
+        targetPartId: 'primary'
       })
       expect(styled[0]).toMatchObject({
         color: '#f5e7cf', height: 340, opacity: 0, shape: 'rounded-triangle', targetPartId: 'primary',

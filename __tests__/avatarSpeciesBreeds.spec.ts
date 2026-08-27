@@ -682,6 +682,27 @@ describe('natural animal breed constraint profiles', () => {
     }
   })
 
+  it('adapts the river otter look without replacing the three-breed model', () => {
+    const template = getAvatarAnimalBreedTemplate('otter', 'river-otter')!
+    const resolved = resolveAvatarAnimalBreedTemplate(template, 'v1-river-otter-adapted')
+    const palette = resolveAvatarBreedPalette('river-otter', 'v1-river-otter-adapted', template.seedDomain)
+
+    expect(getAvatarAnimalBreedTemplates('otter').map(candidate => candidate.id)).toEqual([
+      'sea-otter', 'river-otter', 'asian-small-clawed-otter'
+    ])
+    expect(template.previewBackground).toBe('#72cbd0')
+    expect(resolved.faceStyle).toMatchObject({
+      eyeShape: 'rounded', gap: 44, leftEyeRotation: 2, mouthEnabled: false,
+      noseHeight: 14, noseShape: 'inverted-triangle', noseWidth: 23, noseY: 29,
+      rightEyeRotation: -2
+    })
+    expect(resolved.entityParts.some(part => part.id === 'muzzle')).toBe(false)
+    expect(resolved.surfaceDecals).toMatchObject([{
+      color: palette.coat?.patch, height: 46, shape: 'ellipse', side: 'face',
+      targetPartId: 'primary', width: 102, x: 0, y: 38
+    }])
+  })
+
   it('keeps every sheep face marking directly on the real head instead of adding a second 3D muzzle', () => {
     const expected = {
       'black-faced-sheep': { color: '#39353a', shape: 'face-mask' },

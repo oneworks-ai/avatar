@@ -379,15 +379,15 @@ const CAPYBARA_FACE_STYLE: AvatarFaceStyle = {
 } as const
 
 const OTTER_MATERIAL = {
-  baseColor: '#815b40',
-  foregroundColor: '#302118',
-  highlightColor: '#aa8362',
-  shadowColor: '#513925'
+  baseColor: '#806149',
+  foregroundColor: '#24150f',
+  highlightColor: '#ad8768',
+  shadowColor: '#453328'
 } as const
 
 const OTTER_MUZZLE_MATERIAL = {
   ...OTTER_MATERIAL,
-  baseColor: '#e5d0ad',
+  baseColor: '#e8d2aa',
   highlightColor: '#fff0d1',
   shadowColor: '#b79c79'
 } as const
@@ -395,17 +395,15 @@ const OTTER_MUZZLE_MATERIAL = {
 const OTTER_FACE_STYLE: AvatarFaceStyle = {
   ...DEFAULT_AVATAR_FACE_STYLE,
   eyeShape: 'rounded',
-  gap: 45,
-  height: 33,
-  leftEyeRotation: -6,
+  gap: 44,
+  leftEyeRotation: 2,
   mouthEnabled: false,
   noseEnabled: true,
-  noseHeight: 12,
-  noseShape: 'ellipse',
-  noseWidth: 19,
-  noseY: 35,
-  rightEyeRotation: 6,
-  width: 20
+  noseHeight: 14,
+  noseShape: 'inverted-triangle',
+  noseWidth: 23,
+  noseY: 29,
+  rightEyeRotation: -2
 } as const
 
 const PIG_MATERIAL = {
@@ -1072,25 +1070,25 @@ const CAPYBARA_PRESET_SCENE = {
 
 const OTTER_FACE_MASK_DECAL: AvatarSurfaceDecal = {
   color: OTTER_MUZZLE_MATERIAL.baseColor,
-  height: 130,
+  height: 46,
   id: 'otter-face-mask',
   label: 'Natural otter face marking',
   opacity: 100,
   rotation: 0,
-  shape: 'face-mask',
+  shape: 'ellipse',
   side: 'face',
   targetPartId: 'primary',
-  width: 160,
+  width: 102,
   x: 0,
-  y: 37
+  y: 38
 }
 
 const OTTER_PRESET_SCENE = {
   ...DEFAULT_PRESET_LIGHTING,
-  avatarOutlineStyle: { color: '#302118', opacity: 86, width: 4 },
-  avatarShadowStyle: { color: '#233e45', direction: 128, distance: 11, opacity: 25, softness: 18 },
+  avatarOutlineStyle: { color: '#24150f', opacity: 88, width: 4 },
+  avatarShadowStyle: { color: '#173d44', direction: 132, distance: 11, opacity: 27, softness: 16 },
   backgroundStyle: 'solid',
-  cameraBackground: '#78a8ad',
+  cameraBackground: '#72cbd0',
   cameraFrame: 'rounded',
   cameraMode: true,
   frameShadowStyle: { direction: 90, distance: 12, opacity: 20, softness: 24 },
@@ -1102,7 +1100,7 @@ const OTTER_PRESET_SCENE = {
   showOutline: true,
   showShadow: false,
   surfaceDecals: [OTTER_FACE_MASK_DECAL],
-  viewState: { pitch: -.19, positionX: 72, positionY: 92, roll: -.14, scale: 1.9, yaw: -.27 }
+  viewState: { pitch: -.06, positionX: -20, positionY: 76, roll: -.06, scale: 1.78, yaw: -.1 }
 } as const satisfies AvatarEntityPresetScene
 
 const PIG_PRESET_SCENE = {

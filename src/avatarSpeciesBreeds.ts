@@ -1041,8 +1041,8 @@ const otterBreeds = [
     surfaceFaceMarkings: { color: '#ddd0be', height: 136, shape: 'face-mask', width: 154, y: 27 }
   }),
   createAnimalBreed('otter', 'river-otter', 'River Otter', {
-    ears: [87, 86], faceStyle: { gap: 45, height: 42, noseWidth: 18 }, follow: ['earWidth', 'headWidth'], head: [112, 95],
-    surfaceFaceMarkings: { color: '#e5d0ad', height: 110, shape: 'ellipse', width: 138, y: 36 }
+    ears: [87, 86], faceStyle: { gap: 44, leftEyeRotation: 2, noseHeight: 14, noseShape: 'inverted-triangle', noseWidth: 23, noseY: 29, rightEyeRotation: -2 }, follow: ['earWidth', 'headWidth'], head: [112, 95], previewBackground: '#72cbd0',
+    surfaceFaceMarkings: { color: '#e8d2aa', height: 46, shape: 'ellipse', width: 102, y: 38 }
   }),
   createAnimalBreed('otter', 'asian-small-clawed-otter', 'Asian Small-clawed Otter', {
     ears: [95, 91], faceStyle: { gap: 42, height: 49, noseWidth: 16 }, follow: ['earHeight', 'headHeight'], head: [101, 103],

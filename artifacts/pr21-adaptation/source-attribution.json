@@ -1,0 +1,20 @@
+{
+  "author": {
+    "email": "exedev@xxwork.exe.xyz",
+    "name": "exe.dev user",
+    "username": "@xxchan"
+  },
+  "coAuthoredBy": "Co-authored-by: exe.dev user <exedev@xxwork.exe.xyz>",
+  "commits": [
+    "d7003970e703a93892050999718cc705fe8bdad4",
+    "e211c42b82c1194eff310c594997763637ae1095",
+    "ce455798b24428fdf6f549c95b60d1e8169b5900",
+    "aba646d56255fa49f8e2b4340efe627c9e141835",
+    "7344d2a6838bea4d4f28d606585b36afe80d51b0",
+    "04693016c1e1bb9b2f592cf857450f8412e8de93"
+  ],
+  "head": "04693016c1e1bb9b2f592cf857450f8412e8de93",
+  "previewSha256": "231faf724c04ec3c6717e95abfbee333b952f18288fd229acb93fd7ed5778f74",
+  "repository": "xxchan/avatar",
+  "sourceRef": "refs/codex-readonly/pr21-head"
+}
