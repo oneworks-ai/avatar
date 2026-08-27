@@ -465,7 +465,7 @@ export type AvatarSheepSurfaceMarkingShape = AvatarAnimalSurfaceMarkingShape
 export type AvatarSheepSurfaceMarkingStyle = AvatarAnimalSurfaceMarkingStyle
 export type AvatarSquirrelSurfaceMarkingStyle = AvatarAnimalSurfaceMarkingStyle
 export type AvatarTigerSurfaceMarkingStyle = AvatarAnimalSurfaceMarkingStyle
-export type AvatarEyeShape = 'ellipse' | 'rounded'
+export type AvatarEyeShape = 'chevron' | 'ellipse' | 'rounded'
 export type AvatarSurfaceDecalSide = 'back' | 'face' | 'front' | 'left' | 'right'
 export type AvatarSurfaceDecalShape =
   | 'claude-spark'
@@ -509,6 +509,7 @@ export interface AvatarFace {
   readonly gap: number
   readonly height: number
   readonly leftEyeHeight?: number
+  readonly leftEyeShape?: AvatarEyeShape
   readonly leftEyeWidth?: number
   readonly leftEyeRotation: number
   readonly mouthCurve: number
@@ -526,6 +527,7 @@ export interface AvatarFace {
   readonly noseY: number
   readonly rotation: number
   readonly rightEyeHeight?: number
+  readonly rightEyeShape?: AvatarEyeShape
   readonly rightEyeWidth?: number
   readonly rightEyeRotation: number
   readonly width: number

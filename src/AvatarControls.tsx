@@ -561,7 +561,8 @@ const ENTITY_PRESET_LABELS: Readonly<
 
 const EYE_SHAPE_OPTIONS: readonly GeometricShapeOption<AvatarEyeShape>[] = [
   { icon: 'rounded', id: 'rounded', label: 'Rounded' },
-  { icon: 'ellipse', id: 'ellipse', label: 'Ellipse' }
+  { icon: 'ellipse', id: 'ellipse', label: 'Ellipse' },
+  { icon: 'inverted-triangle', id: 'chevron', label: 'Chevron' }
 ]
 
 const SURFACE_DECAL_SHAPE_OPTIONS: readonly GeometricShapeOption<AvatarSurfaceDecalShape>[] = [

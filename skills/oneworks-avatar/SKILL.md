@@ -1,6 +1,6 @@
 ---
 name: oneworks-avatar
-description: Create, refine, debug, export, and integrate editable OneWorks 3D geometric avatars. Use for avatars, mascots, bot or agent portraits, multipart 3D characters, OneWorks Avatar share URLs, transparent SVG or PNG, animated GIF, developer handoff, React or JavaScript integration, embed questions, @oneworks/avatar integration, or investigation of pose, projection, depth, camera, export, and animation issues. Do not use for photorealistic portraits or arbitrary raster illustration.
+description: Create, refine, debug, export, and integrate editable OneWorks 3D geometric avatars. Use for avatars, mascots, bot or agent portraits, multipart 3D characters, reference-image model design, cat breeds, character presets, expressive eyes, coat patterns, controlled Seed variation, avatar composition, OneWorks Avatar share URLs, transparent SVG or PNG, animated GIF, developer handoff, React or JavaScript integration, embed questions, @oneworks/avatar integration, or investigation of pose, projection, depth, camera, export, and animation issues. Do not use for photorealistic portraits or arbitrary raster illustration.
 ---
 
 # OneWorks Avatar
@@ -9,7 +9,9 @@ Work with the official OneWorks 3D geometric avatar system. Treat the editor URL
 
 ## Route the task
 
-- For creating, refining, or exporting an avatar, read [references/editor-workflow.md](references/editor-workflow.md). Also read [references/export-verification.md](references/export-verification.md) whenever files are requested.
+- To compose existing avatar types, character profiles, expressions, placement, or animation, read [references/editor-workflow.md](references/editor-workflow.md) and [references/preset-composition.md](references/preset-composition.md). Use this route when available models already support the requested identity, including reference images used only to communicate mood or composition.
+- To design an original editable 3D character from a reference image, sketch, mascot, or new silhouette, read [references/editor-workflow.md](references/editor-workflow.md) and [references/reference-modeling.md](references/reference-modeling.md). Translate distinguishing features into actual supported geometry, materials, and model-bound details.
+- For any requested exported file, also read [references/export-verification.md](references/export-verification.md).
 - For developer integration, read [references/developer-integration.md](references/developer-integration.md). Read it before recommending npm, React, Vue, JavaScript, Web Components, iframe, embed, JSON, or runtime APIs so package and product boundaries stay accurate.
 - For editor implementation or debugging, read [references/3d-debugging.md](references/3d-debugging.md). Also read the workflow or export reference when the bug touches those surfaces.
 - For a request spanning routes, read each applicable reference once and keep one shared source of truth for the scene.
@@ -18,6 +20,8 @@ Work with the official OneWorks 3D geometric avatar system. Treat the editor URL
 
 - Think in three spaces: part-local geometry, whole-entity 3D pose, and 2D camera composition. Fix a problem in the space where it originates.
 - Keep the same scene state across editor preview, share URL, saved preset, animation, SVG, PNG, and GIF. A result that looks similar but comes from a different state is not equivalent.
+- Separate the entity type, an optional constrained character profile, and saved complete looks. Profiles express which identity features stay fixed and which values may vary; the resolved concrete scene remains the rendering source of truth.
+- Treat Seed as deterministic, field-specific authoring. Preserve the character's species, natural palette, camera frame, and manually fixed choices unless a supported applicable field explicitly follows Seed.
 - Preserve true local X/Y/Z transforms, entity yaw/pitch/roll, projection, rotated-depth ordering, surface-projected face geometry, camera crop, lighting, and effects.
 - Use the real editor and export pipeline. Do not rebuild the avatar from DOM fragments, rendered SVG paths, URL tuple internals, or a prompt-generated image.
 - Treat a complete editor-generated URL as an opaque editable source. Do not promote its private query parameters to a public API or hand-author serialized `entityParts` or `animationData`.
@@ -25,7 +29,7 @@ Work with the official OneWorks 3D geometric avatar system. Treat the editor URL
 
 ## Universal workflow
 
-1. Parse the request for subject, personality, palette, 3D shape language, target pose, expression, background, frame, motion, integration target, formats, and sizes.
+1. Parse the request for subject, personality, palette, 3D shape language, target pose, expression, background, frame, motion, identity features that must remain fixed, allowed variation, integration target, formats, and sizes.
 2. If the user supplies a OneWorks Avatar URL, open and reload it before editing. Preserve every unspecified choice.
 3. Inspect concise product context when it materially helps. Ask one compact round of questions only when a missing choice would change the result; otherwise choose sensible defaults and proceed.
 4. Determine the available browser path before promising operated or exported output. Prefer an already-running local editor when the user is reviewing it; otherwise use `https://oneworks.cloud/avatar/`. If no interactive browser is available, explain the limitation instead of fabricating results.

@@ -2,19 +2,6 @@ name: Avatar SDK CI
 
 on:
   pull_request:
-    paths:
-      - .github/workflows/sdk-ci.yml
-      - .github/workflows/npm-publish.yml
-      - AGENTS.md
-      - package.json
-      - pnpm-lock.yaml
-      - pnpm-workspace.yaml
-      - packages/**
-      - scripts/**
-      - src/**
-      - tsconfig*.json
-      - vite.config.ts
-      - vitest.config.ts
   push:
     branches: [main]
   workflow_dispatch:
@@ -25,6 +12,10 @@ permissions:
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: 'true'
 
+concurrency:
+  group: avatar-sdk-ci-${{ github.event_name == 'pull_request' && format('pr-{0}', github.event.pull_request.number) || format('{0}-{1}', github.event_name, github.ref) }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 jobs:
   sdk:
     name: build-test-pack
@@ -34,8 +25,269 @@ jobs:
     steps:
       - name: Checkout Avatar repository
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Classify validation scope
+        id: scope
+        shell: bash
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before || '' }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: |
+          set -euo pipefail
+
+          scope=full
+          if [[ "$EVENT_NAME" != workflow_dispatch ]] &&
+             [[ "$BASE_SHA" =~ ^[[:xdigit:]]{40}$ ]] &&
+             [[ "$HEAD_SHA" =~ ^[[:xdigit:]]{40}$ ]] &&
+             git cat-file -e "$BASE_SHA^{commit}" 2>/dev/null &&
+             git cat-file -e "$HEAD_SHA^{commit}" 2>/dev/null; then
+            mapfile -d '' -t changes < <(git diff --name-status --no-renames -z "$BASE_SHA" "$HEAD_SHA")
+            if (( ${#changes[@]} > 0 && ${#changes[@]} % 2 == 0 )); then
+              scope=documentation
+              documentation_pattern='^(README(\.[[:alnum:]_-]+)?\.md|AGENTS\.md|packages/[[:alnum:]_.-]+/(README(\.[[:alnum:]_-]+)?|AGENTS)\.md|\.github/assets/[[:alnum:]_.-]+\.(png|jpe?g|gif|webp)|docs(/[[:alnum:]_.-]+)+\.(md|png|jpe?g|gif|webp|svg)|skills/[a-z0-9]+(-[a-z0-9]+)*/(SKILL\.md|references/[[:alnum:]_.-]+\.md|agents/openai\.yaml))$'
+
+              for (( index = 0; index < ${#changes[@]}; index += 2 )); do
+                change_status=${changes[index]}
+                changed_path=${changes[index + 1]}
+
+                if [[ ! "$change_status" =~ ^[AM]$ ]] ||
+                   [[ ! "$changed_path" =~ $documentation_pattern ]]; then
+                  scope=full
+                  break
+                fi
+
+                head_entry=$(git ls-tree "$HEAD_SHA" -- "$changed_path")
+                if [[ ! "$head_entry" =~ ^100644[[:space:]]blob[[:space:]][[:xdigit:]]{40}[[:space:]] ]]; then
+                  scope=full
+                  break
+                fi
+
+                if [[ "$change_status" == M ]]; then
+                  base_entry=$(git ls-tree "$BASE_SHA" -- "$changed_path")
+                  if [[ ! "$base_entry" =~ ^100644[[:space:]]blob[[:space:]][[:xdigit:]]{40}[[:space:]] ]]; then
+                    scope=full
+                    break
+                  fi
+                fi
+              done
+            fi
+          fi
+
+          printf 'scope=%s\nbase=%s\nhead=%s\n' "$scope" "$BASE_SHA" "$HEAD_SHA" >> "$GITHUB_OUTPUT"
+          printf 'Validation scope: %s\n' "$scope"
+
+      - name: Validate documentation and skill metadata
+        if: steps.scope.outputs.scope == 'documentation'
+        shell: bash
+        env:
+          BASE_SHA: ${{ steps.scope.outputs.base }}
+          HEAD_SHA: ${{ steps.scope.outputs.head }}
+        run: |
+          set -euo pipefail
+          git diff --check "$BASE_SHA" "$HEAD_SHA"
+
+          python3 - <<'PY'
+          import json
+          import os
+          import pathlib
+          import re
+          import subprocess
+          import xml.etree.ElementTree
+
+          root = pathlib.Path.cwd().resolve()
+          changed = subprocess.check_output(
+              [
+                  "git", "diff", "--name-only", "--no-renames", "-z",
+                  os.environ["BASE_SHA"], os.environ["HEAD_SHA"],
+              ]
+          ).decode().rstrip("\0").split("\0")
+          skill_roots = {
+              root / pathlib.Path(path).parts[0] / pathlib.Path(path).parts[1]
+              for path in changed
+              if pathlib.Path(path).parts[0] == "skills"
+          }
+          markdown_files = {root / path for path in changed if path.endswith(".md")}
+          media_files = {
+              root / path
+              for path in changed
+              if pathlib.Path(path).suffix.lower() in {".gif", ".jpeg", ".jpg", ".png", ".svg", ".webp"}
+          }
+
+          ruby_yaml_parser = r"""
+          require "json"
+          require "yaml"
+
+          source = STDIN.read
+          filename = ENV.fetch("YAML_SOURCE")
+          documents = Psych.parse_stream(source, filename: filename)
+          raise "Expected exactly one YAML document" unless documents.children.length == 1
+
+          validate = lambda do |node|
+            if node.is_a?(Psych::Nodes::Mapping)
+              keys = {}
+              node.children.each_slice(2) do |key, value|
+                raise "YAML mapping keys must be scalar values" unless key.is_a?(Psych::Nodes::Scalar)
+                raise "Duplicate YAML key: #{key.value}" if keys.key?(key.value)
+                keys[key.value] = true
+                validate.call(value)
+              end
+            else
+              Array(node.children).each { |child| validate.call(child) } if node.respond_to?(:children)
+            end
+          end
+          documents.children.each { |document| validate.call(document.root) }
+
+          value = YAML.safe_load(source, permitted_classes: [], permitted_symbols: [], aliases: false)
+          raise "Expected a YAML mapping" unless value.is_a?(Hash)
+          STDOUT.write(JSON.generate(value))
+          """
+
+          def load_yaml(source, path):
+              result = subprocess.run(
+                  ["ruby", "-r", "yaml", "-r", "json", "-e", ruby_yaml_parser],
+                  input=source,
+                  text=True,
+                  capture_output=True,
+                  env={**os.environ, "YAML_SOURCE": str(path.relative_to(root))},
+              )
+              if result.returncode:
+                  raise SystemExit(f"Invalid YAML in {path.relative_to(root)}: {result.stderr.strip()}")
+              return json.loads(result.stdout)
+
+          for media_file in sorted(media_files):
+              if media_file.is_symlink() or not media_file.is_file():
+                  raise SystemExit(f"Documentation media must be a regular file: {media_file.relative_to(root)}")
+
+              data = media_file.read_bytes()
+              if not data or len(data) > 10 * 1024 * 1024:
+                  raise SystemExit(f"Invalid documentation media size: {media_file.relative_to(root)}")
+
+              suffix = media_file.suffix.lower()
+              signatures = {
+                  ".gif": data.startswith((b"GIF87a", b"GIF89a")) and data.endswith(b";"),
+                  ".jpeg": data.startswith(b"\xff\xd8\xff") and data.endswith(b"\xff\xd9"),
+                  ".jpg": data.startswith(b"\xff\xd8\xff") and data.endswith(b"\xff\xd9"),
+                  ".png": data.startswith(b"\x89PNG\r\n\x1a\n"),
+                  ".webp": data.startswith(b"RIFF") and data[8:12] == b"WEBP",
+              }
+              if suffix != ".svg":
+                  if not signatures.get(suffix, False):
+                      raise SystemExit(f"Invalid documentation image: {media_file.relative_to(root)}")
+                  continue
+
+              source = data.decode("utf-8")
+              if re.search(r"<!\s*(?:DOCTYPE|ENTITY)\b|<\?\s*xml-stylesheet\b", source, re.I):
+                  raise SystemExit(f"Unsafe SVG declaration: {media_file.relative_to(root)}")
+              try:
+                  svg = xml.etree.ElementTree.fromstring(source)
+              except xml.etree.ElementTree.ParseError as error:
+                  raise SystemExit(f"Invalid SVG document {media_file.relative_to(root)}: {error}") from error
+              if svg.tag not in {"svg", "{http://www.w3.org/2000/svg}svg"}:
+                  raise SystemExit(f"Invalid SVG root: {media_file.relative_to(root)}")
+              for element in svg.iter():
+                  tag = element.tag.rsplit("}", 1)[-1].lower()
+                  if tag in {"script", "foreignobject", "iframe", "object", "embed", "style"}:
+                      raise SystemExit(f"Active SVG element is not allowed: {media_file.relative_to(root)}")
+                  for attribute, value in element.attrib.items():
+                      attribute = attribute.rsplit("}", 1)[-1].lower()
+                      if attribute.startswith("on") or re.search(
+                          r"(?:javascript\s*:|data\s*:|https?\s*:|//|@import)", value, re.I
+                      ):
+                          raise SystemExit(f"Unsafe SVG attribute is not allowed: {media_file.relative_to(root)}")
+                      if attribute in {"href", "src"} and re.fullmatch(r"#[A-Za-z_][A-Za-z0-9_.:-]*", value) is None:
+                          raise SystemExit(f"External SVG resource is not allowed: {media_file.relative_to(root)}")
+                      for reference in re.findall(r"url\s*\(([^)]*)\)", value, re.I):
+                          if re.fullmatch(r"\s*#[A-Za-z_][A-Za-z0-9_.:-]*\s*", reference) is None:
+                              raise SystemExit(f"External SVG reference is not allowed: {media_file.relative_to(root)}")
+
+          for skill_root in sorted(skill_roots):
+              skill_file = skill_root / "SKILL.md"
+              if skill_file.is_symlink() or not skill_file.is_file():
+                  raise SystemExit(f"Missing regular skill file: {skill_file.relative_to(root)}")
+              content = skill_file.read_text(encoding="utf-8")
+              frontmatter = re.match(r"\A---\r?\n(.*?)\r?\n---(?:\r?\n|\Z)", content, re.S)
+              if frontmatter is None:
+                  raise SystemExit(f"Missing valid YAML frontmatter: {skill_file.relative_to(root)}")
+
+              skill_metadata = load_yaml(frontmatter.group(1), skill_file)
+              name = skill_metadata.get("name")
+              description = skill_metadata.get("description")
+              if not isinstance(name, str) or name != skill_root.name or len(name) > 64:
+                  raise SystemExit(f"Invalid skill name: {skill_file.relative_to(root)}")
+              if not isinstance(description, str) or not description.strip() or len(description) > 1024:
+                  raise SystemExit(f"Invalid skill description: {skill_file.relative_to(root)}")
+
+              metadata_file = skill_root / "agents" / "openai.yaml"
+              if metadata_file.exists():
+                  if metadata_file.is_symlink() or not metadata_file.is_file():
+                      raise SystemExit(f"Skill metadata must be a regular file: {metadata_file.relative_to(root)}")
+                  metadata = load_yaml(metadata_file.read_text(encoding="utf-8"), metadata_file)
+                  interface = metadata.get("interface")
+                  if not isinstance(interface, dict):
+                      raise SystemExit(f"Invalid skill interface: {metadata_file.relative_to(root)}")
+                  short_description = interface.get("short_description")
+                  default_prompt = interface.get("default_prompt")
+                  if not isinstance(short_description, str) or not 25 <= len(short_description) <= 64:
+                      raise SystemExit(f"Invalid skill short description: {metadata_file.relative_to(root)}")
+                  if not isinstance(default_prompt, str) or f"${name}" not in default_prompt:
+                      raise SystemExit(f"Invalid skill default prompt: {metadata_file.relative_to(root)}")
+
+              markdown_files.update(skill_root.rglob("*.md"))
+
+          for markdown_file in sorted(markdown_files):
+              if markdown_file.is_symlink() or not markdown_file.is_file():
+                  raise SystemExit(f"Documentation must be a regular file: {markdown_file.relative_to(root)}")
+
+              markdown = markdown_file.read_text(encoding="utf-8")
+              if not markdown.strip():
+                  raise SystemExit(f"Documentation must not be empty: {markdown_file.relative_to(root)}")
+
+              skill_root = next((path for path in skill_roots if markdown_file.is_relative_to(path)), None)
+              boundary = skill_root if skill_root is not None else root
+              targets = re.findall(r"\[[^\]]*\]\(([^\s)]+)(?:\s+[^)]*)?\)", markdown)
+              targets.extend(re.findall(r"\b(?:href|src)\s*=\s*[\"']([^\"']+)[\"']", markdown, re.I))
+              for source_set in re.findall(r"\bsrcset\s*=\s*[\"']([^\"']+)[\"']", markdown, re.I):
+                  targets.extend(candidate.strip().split()[0] for candidate in source_set.split(",") if candidate.strip())
+              for target in targets:
+                  if target.startswith("#"):
+                      continue
+                  if re.match(r"^(?:https?|mailto|tel):", target, re.I):
+                      continue
+                  if target.startswith("/") or re.match(r"^[a-z][a-z0-9+.-]*:", target, re.I):
+                      raise SystemExit(f"Non-portable documentation link in {markdown_file.relative_to(root)}: {target}")
+
+                  local_target = markdown_file.parent / target.split("#", 1)[0].split("?", 1)[0]
+                  target_path = local_target.resolve()
+                  if not target_path.is_relative_to(boundary) or not target_path.is_file():
+                      raise SystemExit(f"Invalid documentation link in {markdown_file.relative_to(root)}: {target}")
+                  for ancestor in (local_target, *local_target.parents):
+                      if ancestor == boundary:
+                          break
+                      if ancestor.is_symlink():
+                          raise SystemExit(f"Symbolic-link documentation target in {markdown_file.relative_to(root)}: {target}")
+
+          added = subprocess.check_output(
+              ["git", "diff", "--unified=0", os.environ["BASE_SHA"], os.environ["HEAD_SHA"], "--", *changed]
+          ).decode().splitlines()
+          private_pattern = re.compile(
+              r"(?:\b(?:gho|ghp|ghu|ghs|ghr)_[A-Za-z0-9]{20,}|\bgithub_pat_\w{20,}|"
+              r"\bsk-[\w-]{20,}|\bAKIA[0-9A-Z]{16}\b|BEGIN (?:RSA |EC |OPENSSH )?PRIVATE KEY|"
+              r"/(?:Users|home)/(?!<(?:user|username)>/|\{(?:user|username)\}/|"
+              r"\$(?:USER(?:NAME)?|\{USER(?:NAME)?\})/|USER(?:NAME)?/)[^/\s`]+/|"
+              r"\.codex/worktrees/[0-9a-f-]{4,}/|\.oo/worktrees/sessions/[\w-]{4,}/)", re.I
+          )
+          for line in added:
+              if line.startswith("+") and not line.startswith("+++") and private_pattern.search(line):
+                  raise SystemExit("Added documentation contains a secret or private local path")
+
+          print(f"Validated {len(changed)} documentation file(s) across {len(skill_roots)} skill(s).")
+          PY
 
       - name: Checkout shared OneWorks sources
+        if: steps.scope.outputs.scope != 'documentation'
         uses: actions/checkout@v4
         with:
           repository: oneworks-ai/app
@@ -43,33 +295,46 @@ jobs:
           submodules: false
 
       - name: Setup pnpm
+        if: steps.scope.outputs.scope != 'documentation'
         uses: pnpm/action-setup@v4
         with:
           version: 11.7.0
 
       - name: Setup Node.js
+        if: steps.scope.outputs.scope != 'documentation'
         uses: actions/setup-node@v4
         with:
           node-version-file: app-source/.node-version
           registry-url: https://registry.npmjs.org
+          cache: pnpm
+          cache-dependency-path: |
+            pnpm-lock.yaml
+            app-source/pnpm-lock.yaml
 
       - name: Install dependencies
+        if: steps.scope.outputs.scope != 'documentation'
         run: pnpm install --frozen-lockfile
 
       - name: Test editor and runtime contracts
+        if: steps.scope.outputs.scope != 'documentation'
         run: pnpm test
 
       - name: Typecheck app source
+        if: steps.scope.outputs.scope != 'documentation'
         run: pnpm typecheck
 
       - name: Build and typecheck SDK packages
+        if: steps.scope.outputs.scope != 'documentation'
         run: pnpm typecheck:sdk
 
       - name: Build app source
+        if: steps.scope.outputs.scope != 'documentation'
         run: pnpm build:app-source
 
       - name: Test packed packages in a clean consumer
+        if: steps.scope.outputs.scope != 'documentation'
         run: pnpm smoke:sdk
 
       - name: Audit production dependencies
+        if: steps.scope.outputs.scope != 'documentation'
         run: pnpm audit --prod --audit-level high

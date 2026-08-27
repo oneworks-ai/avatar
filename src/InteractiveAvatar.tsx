@@ -927,6 +927,8 @@ const useAnimatedFaceStyle = (target: AvatarFaceStyle, transitionsEnabled: boole
         },
         eyeRoundness: interpolate(from.eyeRoundness, target.eyeRoundness, easedProgress),
         eyeShape: target.eyeShape,
+        leftEyeShape: resolvedTarget.leftEyeShape,
+        rightEyeShape: resolvedTarget.rightEyeShape,
         gap: interpolate(from.gap, target.gap, easedProgress),
         height: interpolate(from.height, target.height, easedProgress),
         leftEyeHeight: interpolate(
@@ -982,6 +984,8 @@ const useAnimatedFaceStyle = (target: AvatarFaceStyle, transitionsEnabled: boole
     target.height,
     target.leftEyeHeight,
     target.leftEyeWidth,
+    target.leftEyeShape,
+    target.rightEyeShape,
     target.leftEyeRotation,
     target.mouthCurve,
     target.mouthEnabled,

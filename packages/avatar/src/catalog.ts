@@ -900,7 +900,7 @@ export const AVATAR_PALETTES: readonly AvatarPalette[] = [
 
 export const DEFAULT_AVATAR_GLYPH_EXPRESSION = '0w0'
 
-const AVATAR_EYE_GLYPHS = new Set(Array.from('0OoQqPpUuVvXx^~=*@-_'))
+const AVATAR_EYE_GLYPHS = new Set(Array.from('0OoQqPpUuVvXx^~=*@-_><'))
 const AVATAR_MOUTH_GLYPHS = new Set(Array.from('wWvVuUxXqQaAmMnN.-_^~=+*'))
 
 export const getAvatarPalette = (paletteId: string): AvatarPalette => (

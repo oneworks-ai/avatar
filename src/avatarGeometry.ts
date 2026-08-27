@@ -66,7 +66,7 @@ export interface AvatarFaceShadowStyle {
   readonly softness: number
 }
 
-export type AvatarEyeShape = 'ellipse' | 'rounded'
+export type AvatarEyeShape = 'chevron' | 'ellipse' | 'rounded'
 export type AvatarMouthShape = 'curve' | 'ellipse' | 'rounded' | 'rounded-triangle'
 export type AvatarNoseShape = 'ellipse' | 'inverted-triangle' | 'rounded'
 
@@ -78,6 +78,7 @@ export interface AvatarFaceStyle {
   readonly height: number
   readonly leftEyeHeight?: number
   readonly leftEyeWidth?: number
+  readonly leftEyeShape?: AvatarEyeShape
   readonly leftEyeRotation: number
   readonly mouthCurve: number
   readonly mouthEnabled: boolean
@@ -95,6 +96,7 @@ export interface AvatarFaceStyle {
   readonly rotation: number
   readonly rightEyeHeight?: number
   readonly rightEyeWidth?: number
+  readonly rightEyeShape?: AvatarEyeShape
   readonly rightEyeRotation: number
   readonly width: number
 }
@@ -737,6 +739,66 @@ const buildEllipseBoundary = (
       rotationDegrees
     )
   })
+}
+
+/* 尖角眼型（wink 用）：direction 1 = '>'（尖端朝右），-1 = '<'。
+ * 生成等宽圆头描边的轮廓多边形：像用圆笔沿 V 形折线画出来的 '>'，
+ * 笔画粗细处处一致，两端为半圆帽，外尖角为圆弧过渡。 */
+const buildChevronBoundary = (
+  centerX: number,
+  centerY: number,
+  width: number,
+  height: number,
+  rotationDegrees: number,
+  direction: 1 | -1 = 1
+): Vec2[] => {
+  const strokeRadius = Math.max(Math.min(width, height) * 0.16, 1.5)
+  /* 折线端点向内收缩 strokeRadius，描边后整体恰好落在 width×height 盒内 */
+  const halfWidth = Math.max(width / 2 - strokeRadius, strokeRadius)
+  const halfHeight = Math.max(height / 2 - strokeRadius, strokeRadius)
+  const a = { x: -halfWidth, y: -halfHeight }          // 上端点
+  const b = { x: halfWidth, y: 0 }                     // 尖端
+  const c = { x: -halfWidth, y: halfHeight }           // 下端点
+  const len1 = Math.hypot(b.x - a.x, b.y - a.y)
+  const d1 = { x: (b.x - a.x) / len1, y: (b.y - a.y) / len1 }
+  const len2 = Math.hypot(c.x - b.x, c.y - b.y)
+  const d2 = { x: (c.x - b.x) / len2, y: (c.y - b.y) / len2 }
+  /* 行进方向右侧法线 = 折角外凸侧 */
+  const rn1 = { x: d1.y, y: -d1.x }
+  const rn2 = { x: d2.y, y: -d2.x }
+  const points: Vec2[] = []
+  /* 直线段与圆弧都要细分后再投影到曲面，避免出现脱离球面的直弦 */
+  const lineTo = (to: Vec2) => {
+    const from = points.at(-1)!
+    for (let i = 1; i <= FACE_EDGE_STEPS; i++) {
+      const progress = i / FACE_EDGE_STEPS
+      points.push({ x: interpolate(from.x, to.x, progress), y: interpolate(from.y, to.y, progress) })
+    }
+  }
+  const arc = (center: Vec2, fromAngle: number, toAngle: number, segments: number) => {
+    for (let i = 1; i <= segments; i++) {
+      const angle = fromAngle + (toAngle - fromAngle) * i / segments
+      points.push({ x: center.x + Math.cos(angle) * strokeRadius, y: center.y + Math.sin(angle) * strokeRadius })
+    }
+  }
+  const angleOf = (v: Vec2) => Math.atan2(v.y, v.x)
+  /* 外侧：上臂外沿 → 尖端圆角 → 下臂外沿 */
+  points.push({ x: a.x + rn1.x * strokeRadius, y: a.y + rn1.y * strokeRadius })
+  lineTo({ x: b.x + rn1.x * strokeRadius, y: b.y + rn1.y * strokeRadius })
+  arc(b, angleOf(rn1), angleOf(rn2), 10)
+  lineTo({ x: c.x + rn2.x * strokeRadius, y: c.y + rn2.y * strokeRadius })
+  /* 下端点半圆帽（向臂外侧鼓出） */
+  arc(c, angleOf(rn2), angleOf(rn2) + Math.PI, 12)
+  /* 内侧：两条内沿直线交点作为内折角，保证内外笔画等宽 */
+  const innerStart = { x: a.x - rn1.x * strokeRadius, y: a.y - rn1.y * strokeRadius }
+  const innerApexT = (0 - innerStart.y) / d1.y
+  lineTo({ x: innerStart.x + d1.x * innerApexT, y: 0 })
+  lineTo(innerStart)
+  /* 上端点半圆帽 */
+  arc(a, angleOf(rn1) + Math.PI, angleOf(rn1) + Math.PI * 2, 12)
+  return points
+    .map(point => ({ x: centerX + point.x * direction, y: centerY + point.y }))
+    .map(point => rotateFacePoint(point, centerX, centerY, rotationDegrees))
 }
 
 const buildRoundedInvertedTriangleBoundary = (
@@ -1537,16 +1599,22 @@ export const projectDefaultFace = (
     const eyeRotation = resolvedFaceStyle.rotation + (index === 0
       ? resolvedFaceStyle.leftEyeRotation
       : resolvedFaceStyle.rightEyeRotation)
-    const boundary = resolvedFaceStyle.eyeShape === 'ellipse'
-      ? buildEllipseBoundary(centerX, eyeCenterY, eyeWidth, eyeHeight, eyeRotation)
-      : buildRoundedRectangleBoundary(
-        centerX,
-        eyeCenterY,
-        eyeWidth,
-        eyeHeight,
-        eyeRotation,
-        resolvedFaceStyle.eyeRoundness
-      )
+    const eyeShape = index === 0
+      ? resolvedFaceStyle.leftEyeShape ?? resolvedFaceStyle.eyeShape
+      : resolvedFaceStyle.rightEyeShape ?? resolvedFaceStyle.eyeShape
+    const boundary = eyeShape === 'chevron'
+      /* 尖端朝向脸中心：左眼 '>'，右眼 '<' */
+      ? buildChevronBoundary(centerX, eyeCenterY, eyeWidth, eyeHeight, eyeRotation, index === 0 ? 1 : -1)
+      : eyeShape === 'ellipse'
+        ? buildEllipseBoundary(centerX, eyeCenterY, eyeWidth, eyeHeight, eyeRotation)
+        : buildRoundedRectangleBoundary(
+          centerX,
+          eyeCenterY,
+          eyeWidth,
+          eyeHeight,
+          eyeRotation,
+          resolvedFaceStyle.eyeRoundness
+        )
     const eye = projectPart(`eye-${index}`, centerX, eyeCenterY, boundary)
     if (eye != null && resolvedFaceStyle.eyeHighlight.enabled) {
       const rawHighlightCenter = {
