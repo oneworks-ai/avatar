@@ -245,7 +245,7 @@ describe('OneWorks Avatar React rendering', () => {
     expect(onEntityPartSelect).not.toHaveBeenCalled()
   })
 
-  it('uses one local visibility mask for body, curved markings, face features, grid, and selection', () => {
+  it('uses one shared owner partition for body, curved markings, face features, grid, and selection', () => {
     const definition = createDefaultAvatarDefinition()
     const scene = definition.scene
     const parts = createAvatarEntityParts('cow')
@@ -278,14 +278,16 @@ describe('OneWorks Avatar React rendering', () => {
 
     const preset = host.querySelector('[data-avatar-entity-preset="cow"]')!
     const primary = preset.querySelector('[data-avatar-entity-part="primary"]')!
-    const primaryMask = primary.getAttribute('mask')
+    const primarySurfaceLayer = primary.querySelector('[data-avatar-compiled-surface-layer="primary"]')!
+    const primaryClip = primarySurfaceLayer.getAttribute('clip-path')
     const faceLayer = preset.querySelector('[data-avatar-face-surface-layer="primary"]')!
     const faceMask = preset.querySelector('[data-avatar-surface-decal="cow-face-mask"]')!
     const selection = preset.querySelector<SVGGElement>('[data-avatar-entity-selection="primary"]')
     const grid = preset.querySelector<SVGGElement>('[data-avatar-entity-grid="primary"]')
     const undercoat = preset.querySelector<SVGGElement>('[data-avatar-entity-undercoat]')
 
-    expect(primaryMask).toContain('-entity-visibility-')
+    expect(primaryClip).toContain('-compiled-owner-')
+    expect(preset.getAttribute('data-avatar-fragment-composition')).toBe('compiled-owner-partition')
     expect(preset.matches('[data-avatar-entity-fragment-root]')).toBe(true)
     expect(preset.querySelector('[data-avatar-entity-part-hit]')).toBeNull()
     expect(faceLayer.closest('[data-avatar-entity-part]')).toBe(primary)
@@ -293,23 +295,15 @@ describe('OneWorks Avatar React rendering', () => {
     expect(preset.querySelectorAll('[data-avatar-face-surface-layer]')).toHaveLength(1)
     expect(preset.querySelectorAll('[data-avatar-surface-decal="cow-face-mask"]')).toHaveLength(1)
     expect(preset.querySelectorAll('[data-avatar-entity-part]')).toHaveLength(parts.length)
-    expect(preset.querySelector(`[mask="${primaryMask}"]`)).not.toBeNull()
+    expect(preset.querySelector(`[clip-path="${primaryClip}"]`)).not.toBeNull()
     expect(selection?.getAttribute('mask')).toBeNull()
     expect(selection?.querySelector('path')?.getAttribute('d')).toBeTruthy()
     expect(grid?.getAttribute('mask')).toBeNull()
-    expect(grid?.getAttribute('clip-path')).toContain('-entity-interaction-')
-    expect(undercoat).not.toBeNull()
-    expect(undercoat?.getAttribute('pointer-events')).toBe('none')
-    expect(undercoat?.closest('[mask]')).toBeNull()
-    expect(undercoat?.children).toHaveLength(parts.length)
-    expect(undercoat?.querySelectorAll('[stroke]')).toHaveLength(0)
-    const occlusionOverdraw = preset.querySelectorAll('[data-avatar-fragment-occlusion-overdraw]')
-    expect(occlusionOverdraw.length).toBeGreaterThan(0)
-    expect([...occlusionOverdraw].every(path => (
-      path.getAttribute('fill') === 'black'
-      && path.getAttribute('stroke') === 'white'
-      && Number(path.getAttribute('stroke-width')) <= 2
-    ))).toBe(true)
+    expect(selection?.getAttribute('clip-path')).toBe(primaryClip)
+    expect(grid?.getAttribute('clip-path')).toBe(primaryClip)
+    expect(undercoat).toBeNull()
+    expect(preset.querySelectorAll('[data-avatar-fragment-occlusion-overdraw]')).toHaveLength(0)
+    expect(preset.querySelector('[data-avatar-compiled-base="primary"]')).not.toBeNull()
     expect(preset.querySelectorAll('g[filter*="-entity-outline"]')).toHaveLength(1)
   })
 
@@ -373,7 +367,8 @@ describe('OneWorks Avatar React rendering', () => {
     expect(overlays().interactionRatio).toBeGreaterThan(0)
 
     render(-3.5904)
-    expect(overlays()).toMatchObject({ grid: null, interactionArea: 0, selection: null, visibleArea: 0 })
+    expect(overlays()).toMatchObject({ grid: null, interactionArea: 0, selection: null })
+    expect(overlays().visibleArea).toBeGreaterThan(0)
 
     render(-Math.PI)
     expect(overlays()).toMatchObject({ grid: null, interactionArea: 0, selection: null, visibleArea: 0 })
@@ -566,10 +561,10 @@ describe('OneWorks Avatar React rendering', () => {
     expect(preset.querySelector('[data-avatar-surface-decal="owl-facial-disc"]')).not.toBeNull()
     expect(preset.querySelector('[data-avatar-face-surface-layer="primary"]')).not.toBeNull()
     expect(preset.querySelectorAll('[data-avatar-face-feature]').length).toBeGreaterThan(0)
-    expect(Number(preset.getAttribute('data-avatar-fragment-intersections'))).toBeGreaterThan(0)
+    expect(preset.getAttribute('data-avatar-fragment-composition')).toBe('compiled-owner-partition')
+    expect(Number(preset.getAttribute('data-avatar-fragment-null-owner-pixels'))).toBe(0)
     expect(preset.querySelectorAll('[data-avatar-entity-part="primary"]')).toHaveLength(1)
-    expect(preset.querySelectorAll('[data-avatar-entity-part="beak-upper"]')).toHaveLength(1)
-    expect(preset.querySelectorAll('[data-avatar-entity-part="beak-lower"]')).toHaveLength(1)
+    expect(preset.querySelectorAll('[data-avatar-entity-part="beak"]')).toHaveLength(1)
   })
 
   it('hides rear-facing face features and face-side markings without removing real anatomy', () => {
@@ -815,7 +810,7 @@ describe('OneWorks Avatar React rendering', () => {
 
     renderFox(createAvatarEntityParts('fox'))
     const originalCheek = host.querySelector('[data-avatar-surface-decal="fox-cheek-left"]')?.getAttribute('d')
-    const originalEar = host.querySelector('[data-avatar-entity-part="fox-ear-left"] g')?.getAttribute('transform')
+    const originalEar = host.querySelector('[data-avatar-entity-part="fox-ear-left"] g[transform]')?.getAttribute('transform')
 
     const arctic = applyFoxHeadTaper(
       applyFoxHeadScale(
@@ -842,7 +837,7 @@ describe('OneWorks Avatar React rendering', () => {
     expect(cheek?.getAttribute('fill')).toBe('#ffffff')
     expect(cheek?.getAttribute('d')).not.toBe(originalCheek)
     expect(innerEar?.getAttribute('fill')).toBe('#f2d3d0')
-    expect(host.querySelector('[data-avatar-entity-part="fox-ear-left"] g')?.getAttribute('transform'))
+    expect(host.querySelector('[data-avatar-entity-part="fox-ear-left"] g[transform]')?.getAttribute('transform'))
       .not.toBe(originalEar)
 
     const fennec = applyFoxHeadScale(
@@ -894,18 +889,22 @@ describe('OneWorks Avatar React rendering', () => {
       for (const identifier of animal.identifiers) {
         const part = host.querySelector(`[data-avatar-entity-part="${identifier}"]`)
         expect(part, `${animal.preset} must render its real ${identifier} geometry`).not.toBeNull()
-        expect(part?.querySelector('g')?.getAttribute('transform')).toContain('translate(')
+        expect(part?.querySelector('g[transform]')?.getAttribute('transform')).toContain('translate(')
       }
 
       if (animal.preset === 'pig') {
         const snout = host.querySelector('[data-avatar-entity-part="snout"]')!
         for (const identifier of ['nostril-left', 'nostril-right']) {
           const nostril = host.querySelector(`[data-avatar-entity-part="${identifier}"]`)!
+          expect(Number(snout.getAttribute('data-avatar-fragment-visible-area'))).toBeGreaterThan(0)
           expect(
-            Number(snout.getAttribute('data-avatar-fragment-patches')) +
-            Number(nostril.getAttribute('data-avatar-fragment-patches')),
-            `pig ${identifier} and snout must resolve their overlap from local surface depth`
+            Number(nostril.getAttribute('data-avatar-fragment-visible-area')),
+            `pig ${identifier} must retain a visible region in the shared local-depth owner partition`
           ).toBeGreaterThan(0)
+          expect(
+            nostril.querySelector(`[data-avatar-compiled-surface-layer="${identifier}"]`)
+              ?.getAttribute('clip-path')
+          ).toContain('-compiled-owner-')
         }
       }
     }
@@ -946,13 +945,13 @@ describe('OneWorks Avatar React rendering', () => {
       for (const identifier of animal.identifiers) {
         const part = host.querySelector(`[data-avatar-entity-part="${identifier}"]`)
         expect(part, `${animal.preset} must project its genuine ${identifier} anatomy`).not.toBeNull()
-        expect(part?.querySelector('g')?.getAttribute('transform')).toContain('translate(')
+        expect(part?.querySelector('g[transform]')?.getAttribute('transform')).toContain('translate(')
       }
 
       const feature = animal.identifiers[0]
-      const before = host.querySelector(`[data-avatar-entity-part="${feature}"] g`)?.getAttribute('transform')
+      const before = host.querySelector(`[data-avatar-entity-part="${feature}"] g[transform]`)?.getAttribute('transform')
       render(.94)
-      const after = host.querySelector(`[data-avatar-entity-part="${feature}"] g`)?.getAttribute('transform')
+      const after = host.querySelector(`[data-avatar-entity-part="${feature}"] g[transform]`)?.getAttribute('transform')
       expect(after, `${animal.preset} ${feature} must rotate with the real head`).not.toBe(before)
     }
   })
@@ -1014,7 +1013,9 @@ describe('OneWorks Avatar React rendering', () => {
 
       expect(initial, `${preset} mask must be projected inside its real head part`).not.toBeNull()
       expect(initial?.getAttribute('fill')).toBe(color)
-      expect(initial?.parentElement?.getAttribute('clip-path')).toContain(`-entity-${preset}-`)
+      expect(initial?.getAttribute('data-avatar-surface-decal-renderer')).toBe('compiled')
+      expect(initial?.closest('[data-avatar-compiled-surface-layer]')?.getAttribute('clip-path'))
+        .toContain('-compiled-owner-')
       expect(host.querySelector('[data-avatar-entity-part="muzzle"]')).toBeNull()
       expect(face.eyeShape).toBe('rounded')
       expect(host.querySelector('[data-visible-marks]')?.getAttribute('data-visible-marks')).toBe('3')
@@ -1093,7 +1094,9 @@ describe('OneWorks Avatar React rendering', () => {
         expect(initial, `${preset}/${target.id} fur must be projected onto its actual 3D anatomy`)
           .not.toBeNull()
         expect(initial?.getAttribute('fill')).toBe(color)
-        expect(initial?.parentElement?.getAttribute('clip-path')).toContain(`-entity-${preset}-`)
+        expect(initial?.getAttribute('data-avatar-surface-decal-renderer')).toBe('compiled')
+        expect(initial?.closest('[data-avatar-compiled-surface-layer]')?.getAttribute('clip-path'))
+          .toContain('-compiled-owner-')
         expect(color).not.toBe(head.baseColor)
 
         const originalPath = initial?.getAttribute('d')
@@ -1279,9 +1282,11 @@ describe('OneWorks Avatar React rendering', () => {
       )
     ).toEqual(expect.arrayContaining(parts.map(part => part.id)))
     expect(host.querySelectorAll('[data-avatar-entity-part]')).toHaveLength(parts.length)
-    expect(host.querySelector('[data-avatar-surface-decal="blush-left"]')).not.toBeNull()
-    expect(host.querySelector('[data-avatar-surface-decal="blush-left"]')?.parentElement?.getAttribute('clip-path'))
-      .toContain('-entity-custom-')
+    const blush = host.querySelector('[data-avatar-surface-decal="blush-left"]')
+    expect(blush).not.toBeNull()
+    expect(blush?.getAttribute('data-avatar-surface-decal-renderer')).toBe('compiled')
+    expect(blush?.closest('[data-avatar-compiled-surface-layer]')?.getAttribute('clip-path'))
+      .toContain('-compiled-owner-')
     expect(host.querySelectorAll('[data-avatar-eye-highlight]')).toHaveLength(2)
     expect(host.querySelector('[data-avatar-eye-highlight]')?.getAttribute('clip-path')).toContain('highlight-clip')
   })
@@ -1306,7 +1311,9 @@ describe('OneWorks Avatar React rendering', () => {
 
     const decal = host.querySelector('[data-avatar-surface-decal="large"]')!
     const cavity = host.querySelector(`[data-avatar-entity-cavity="${target.id}"]`)!
-    expect(decal.parentElement?.getAttribute('clip-path')).toContain('-entity-custom-')
+    expect(decal.getAttribute('data-avatar-surface-decal-renderer')).toBe('compiled')
+    expect(decal.closest('[data-avatar-compiled-surface-layer]')?.getAttribute('clip-path'))
+      .toContain('-compiled-owner-')
     expect(decal.compareDocumentPosition(cavity) & Node.DOCUMENT_POSITION_FOLLOWING).not.toBe(0)
   })
 

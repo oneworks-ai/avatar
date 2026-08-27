@@ -9,7 +9,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { AvatarControls } from '../src/AvatarControls'
 import { resolveAvatarBreedPalette } from '../src/avatarBreedTone'
-import { createAvatarEntityParts } from '../src/avatarEntityPresets'
+import { AVATAR_BUILT_IN_ENTITY_PRESETS, createAvatarEntityParts } from '../src/avatarEntityPresets'
 import { DEFAULT_AVATAR_FACE_SHADOW_STYLE, DEFAULT_AVATAR_FACE_STYLE } from '../src/avatarGeometry'
 import { AvatarLocaleProvider } from '../src/avatarLocale'
 import { AVATAR_ANIMAL_SPECIES_IDS } from '../src/avatarSeed'
@@ -30,6 +30,7 @@ afterEach(() => {
   act(() => root.unmount())
   host.remove()
   vi.restoreAllMocks()
+  vi.unstubAllGlobals()
 })
 
 const createProps = (): ComponentProps<typeof AvatarControls> => ({
@@ -205,6 +206,89 @@ describe('AvatarControls Seed authoring', () => {
     expect(more?.querySelector('svg')).not.toBeNull()
   })
 
+  it('opens the avatar template browser before cold previews finish and reuses ready previews', () => {
+    const idleCallbacks: Array<() => void> = []
+    const frameCallbacks: FrameRequestCallback[] = []
+    vi.stubGlobal('requestIdleCallback', vi.fn((callback: () => void) => {
+      idleCallbacks.push(callback)
+      return idleCallbacks.length
+    }))
+    vi.stubGlobal('requestAnimationFrame', vi.fn((callback: FrameRequestCallback) => {
+      frameCallbacks.push(callback)
+      return frameCallbacks.length
+    }))
+    vi.stubGlobal('cancelAnimationFrame', vi.fn())
+    const props = { ...createProps(), lightAzimuth: 13.37, lightElevation: 22.41 }
+    act(() => root.render(createElement(
+      AvatarLocaleProvider,
+      { initialLocale: 'en', persist: false },
+      createElement(AvatarControls, props)
+    )))
+    act(() => frameCallbacks.splice(0).forEach(callback => callback(0)))
+
+    const avatarTypes = host.querySelector<HTMLElement>('[aria-label="Avatar type"]')
+    act(() => avatarTypes?.querySelector<HTMLButtonElement>('[aria-label="More presets"]')?.click())
+    const browser = host.querySelector<HTMLElement>('[aria-label="Avatar templates"]')
+    const beforeReady = browser?.querySelectorAll('[data-preview-ready="true"]').length ?? 0
+    const beforePending = browser?.querySelectorAll('[data-preview-ready="false"]').length ?? 0
+    expect(browser).not.toBeNull()
+    expect(beforeReady).toBeGreaterThan(0)
+    expect(beforePending).toBeGreaterThan(0)
+    expect(idleCallbacks).toHaveLength(1)
+    const reusedStatic = browser?.querySelectorAll('[data-preview-static="true"]') ?? []
+    expect(reusedStatic.length).toBeGreaterThan(0)
+    expect([...reusedStatic].every(preview => preview.querySelector('img') != null)).toBe(true)
+
+    act(() => idleCallbacks.shift()?.())
+    expect(browser?.querySelectorAll('[data-preview-ready="true"]')).toHaveLength(beforeReady + 1)
+    expect(browser?.querySelectorAll('[data-preview-ready="false"]')).toHaveLength(beforePending - 1)
+    act(() => frameCallbacks.splice(0).forEach(callback => callback(16)))
+    expect(browser?.querySelectorAll('[data-preview-static="true"]')).toHaveLength(reusedStatic.length + 1)
+  })
+
+  it('opens built-in avatar templates from prebuilt SVG snapshots without modeling them first', () => {
+    const props = createProps()
+    act(() => root.render(createElement(
+      AvatarLocaleProvider,
+      { initialLocale: 'en', persist: false },
+      createElement(AvatarControls, props)
+    )))
+
+    const avatarTypes = host.querySelector<HTMLElement>('[aria-label="Avatar type"]')
+    act(() => avatarTypes?.querySelector<HTMLButtonElement>('[aria-label="More presets"]')?.click())
+    const browser = host.querySelector<HTMLElement>('[aria-label="Avatar templates"]')
+    const previews = browser?.querySelectorAll('[data-preview-source="prebuilt"]') ?? []
+
+    expect(previews).toHaveLength(AVATAR_BUILT_IN_ENTITY_PRESETS.length)
+    expect(browser?.querySelectorAll('[data-preview-ready="false"]')).toHaveLength(0)
+    expect(browser?.querySelectorAll('[data-preview-ready="true"] > svg')).toHaveLength(0)
+    expect([...previews].every(preview => preview.querySelector('img') != null)).toBe(true)
+  })
+
+  it('opens every species type from prebuilt SVG snapshots without modeling it first', () => {
+    const owlTemplates = getAvatarAnimalBreedTemplates('owl')
+    const props = {
+      ...createProps(),
+      animalBreedTemplateId: owlTemplates[0]!.id,
+      entityParts: resolveAvatarAnimalBreedTemplate(owlTemplates[0]!, 'v1-preview').entityParts,
+      entityPreset: 'owl' as const,
+      onAnimalBreedTemplateChange: vi.fn(),
+      selectedPalette: getAvatarPalette(owlTemplates[0]!.fixed.paletteId)
+    }
+    act(() => root.render(createElement(
+      AvatarLocaleProvider,
+      { initialLocale: 'en', persist: false },
+      createElement(AvatarControls, props)
+    )))
+
+    const types = host.querySelector<HTMLElement>('[aria-label="Owl types"]')
+    const previews = types?.querySelectorAll('[data-preview-source="prebuilt"]') ?? []
+    expect(previews).toHaveLength(owlTemplates.length)
+    expect(types?.querySelectorAll('[data-preview-ready="false"]')).toHaveLength(0)
+    expect(types?.querySelectorAll('svg.avatar-controls__entity-preset-icon')).toHaveLength(0)
+    expect([...previews].every(preview => preview.querySelector('img') != null)).toBe(true)
+  })
+
   it('marks selecting a complete face preset as a replace operation', () => {
     const props = createProps()
     act(() => root.render(createElement(AvatarLocaleProvider, { initialLocale: 'en', persist: false }, createElement(AvatarControls, props))))
@@ -308,6 +392,7 @@ describe('AvatarControls Seed authoring', () => {
   it('keeps locally saved presets separate from built-in avatar templates', () => {
     const props = {
       ...createProps(),
+      lightAzimuth: -34,
       savedPresets: [{
         createdAt: 1_700_000_000_000,
         id: 'saved-one',
@@ -340,7 +425,8 @@ describe('AvatarControls Seed authoring', () => {
     const props = {
       ...createProps(),
       entityParts: createAvatarEntityParts('cat'),
-      entityPreset: 'cat' as const
+      entityPreset: 'cat' as const,
+      lightAzimuth: -34
     }
     act(() => root.render(createElement(
       AvatarLocaleProvider,
@@ -358,7 +444,7 @@ describe('AvatarControls Seed authoring', () => {
     const cat = avatarType?.querySelector<HTMLButtonElement>('[data-entity-preset="cat"]')
     expect(siamese?.classList.contains('avatar-controls__saved-preset')).toBe(true)
     expect(siamese?.querySelector('svg')?.getAttribute('viewBox')).toBe(cat?.querySelector('svg')?.getAttribute('viewBox'))
-    expect(siamese?.querySelector('span')).toBeNull()
+    expect(siamese?.textContent).toBe('')
     const cow = catTypes?.querySelector<HTMLButtonElement>('[data-cat-breed="cow-cat"]')
     const black = catTypes?.querySelector<HTMLButtonElement>('[data-cat-breed="black-cat"]')
     expect(cow?.querySelector('svg')).not.toBeNull()
@@ -395,7 +481,8 @@ describe('AvatarControls Seed authoring', () => {
     const props = {
       ...createProps(),
       entityParts: createAvatarEntityParts('dog'),
-      entityPreset: 'dog' as const
+      entityPreset: 'dog' as const,
+      lightAzimuth: -34
     }
     act(() => root.render(createElement(
       AvatarLocaleProvider,
@@ -438,6 +525,7 @@ describe('AvatarControls Seed authoring', () => {
       ...createProps(),
       entityParts: createAvatarEntityParts('rabbit'),
       entityPreset: 'rabbit' as const,
+      lightAzimuth: -34,
       rabbitEarHeight: 126,
       rabbitEarWidth: 118,
       rabbitHeadHeight: 104,
@@ -507,7 +595,8 @@ describe('AvatarControls Seed authoring', () => {
       bearHeadHeight: 112,
       bearHeadWidth: 118,
       entityParts: createAvatarEntityParts('bear'),
-      entityPreset: 'bear' as const
+      entityPreset: 'bear' as const,
+      lightAzimuth: -34
     }
     act(() => root.render(createElement(
       AvatarLocaleProvider,
@@ -691,6 +780,7 @@ describe('AvatarControls natural animal breeds', () => {
         animalHeadWidth: 113,
         entityParts: resolveAvatarAnimalBreedTemplate(templates[0]!, 'v1-preview').entityParts,
         entityPreset: species,
+        lightAzimuth: -34,
         onAnimalBreedTemplateChange: onBreed,
         onAnimalEarWidthChange: vi.fn(),
         onAnimalHeadWidthChange: vi.fn(),
@@ -834,6 +924,7 @@ describe('AvatarControls natural animal breeds', () => {
       animalBreedTemplateId: id,
       entityParts: resolveAvatarAnimalBreedTemplate(template, seed!).entityParts,
       entityPreset: species,
+      lightAzimuth: -34,
       seed: seed!,
       selectedPalette: palette
     }

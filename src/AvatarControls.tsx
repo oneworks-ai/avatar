@@ -23,7 +23,7 @@ import type {
   AvatarPixelEffect,
   AvatarPixelSampling
 } from '@oneworks/avatar'
-import { useEffect, useId, useRef, useState } from 'react'
+import { memo, useEffect, useId, useRef, useState } from 'react'
 import type { CSSProperties, KeyboardEvent, PointerEvent, ReactNode } from 'react'
 
 import { AVATAR_BODY_SHAPES, EntityPresetPreview } from './InteractiveAvatar'
@@ -52,6 +52,11 @@ import type {
   AvatarNoseShape
 } from './avatarGeometry'
 import { useAvatarLocale } from './avatarLocale'
+import {
+  AVATAR_ENTITY_PRESET_SNAPSHOT_URLS,
+  DEFAULT_AVATAR_PREVIEW_LIGHT,
+  getAvatarBreedPresetSnapshotUrl
+} from './avatarPresetSnapshots'
 import {
   AVATAR_BEAR_BREED_TEMPLATES,
   AVATAR_CAT_BREED_TEMPLATES,
@@ -137,6 +142,197 @@ interface GeometricShapeOption<T extends string> {
   readonly id: T
   readonly label: string
 }
+
+interface AvatarPreviewScheduler {
+  cacheSnapshot: (key: string, svg: string) => string
+  enqueue: (key: string, activate: () => void) => () => void
+  getSnapshot: (key: string) => string | null
+  isReady: (key: string) => boolean
+  markReady: (key: string) => void
+}
+
+type AvatarPreviewIdleWindow = Window & typeof globalThis & {
+  cancelIdleCallback?: (handle: number) => void
+  requestIdleCallback?: (callback: () => void, options?: { timeout: number }) => number
+}
+
+const AVATAR_PREVIEW_SNAPSHOT_LIMIT = 96
+const avatarPreviewSnapshotCache = new Map<string, string>()
+
+const getAvatarPreviewSnapshot = (key: string) => {
+  const snapshot = avatarPreviewSnapshotCache.get(key)
+  if (snapshot == null) return null
+  avatarPreviewSnapshotCache.delete(key)
+  avatarPreviewSnapshotCache.set(key, snapshot)
+  return snapshot
+}
+
+const cacheAvatarPreviewSnapshot = (key: string, svg: string) => {
+  const namespacedSvg = svg.includes('xmlns=')
+    ? svg
+    : svg.replace('<svg ', '<svg xmlns="http://www.w3.org/2000/svg" ')
+  const snapshot = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(namespacedSvg)}`
+  avatarPreviewSnapshotCache.delete(key)
+  avatarPreviewSnapshotCache.set(key, snapshot)
+  while (avatarPreviewSnapshotCache.size > AVATAR_PREVIEW_SNAPSHOT_LIMIT) {
+    avatarPreviewSnapshotCache.delete(avatarPreviewSnapshotCache.keys().next().value!)
+  }
+  return snapshot
+}
+
+const createAvatarPreviewScheduler = (): AvatarPreviewScheduler => {
+  const readyKeys = new Set<string>()
+  const queuedKeys: string[] = []
+  const subscribers = new Map<string, Set<() => void>>()
+  let idleHandle: number | null = null
+  let frameHandle: number | null = null
+
+  const activateNext = () => {
+    idleHandle = null
+    let key = queuedKeys.shift()
+    while (key != null && subscribers.get(key)?.size === 0) key = queuedKeys.shift()
+    if (key == null) return
+    readyKeys.add(key)
+    const listeners = subscribers.get(key)
+    subscribers.delete(key)
+    listeners?.forEach(listener => listener())
+    const idleWindow = window as AvatarPreviewIdleWindow
+    if (idleWindow.requestIdleCallback == null) {
+      scheduleNext()
+      return
+    }
+    frameHandle = window.requestAnimationFrame(() => {
+      frameHandle = null
+      scheduleNext()
+    })
+  }
+
+  const scheduleNext = () => {
+    if (idleHandle != null || frameHandle != null || queuedKeys.length === 0) return
+    const idleWindow = window as AvatarPreviewIdleWindow
+    if (idleWindow.requestIdleCallback == null) {
+      // Capability fallback: environments without an idle scheduler keep the
+      // previous eager behavior rather than leaving blank previews behind.
+      activateNext()
+      return
+    }
+    idleHandle = idleWindow.requestIdleCallback(activateNext, { timeout: 120 })
+  }
+
+  const markReady = (key: string) => {
+    if (readyKeys.has(key)) return
+    readyKeys.add(key)
+    const listeners = subscribers.get(key)
+    subscribers.delete(key)
+    listeners?.forEach(listener => listener())
+  }
+
+  return {
+    cacheSnapshot: cacheAvatarPreviewSnapshot,
+    enqueue: (key, activate) => {
+      if (readyKeys.has(key) || getAvatarPreviewSnapshot(key) != null) {
+        activate()
+        return () => undefined
+      }
+      let listeners = subscribers.get(key)
+      if (listeners == null) {
+        listeners = new Set()
+        subscribers.set(key, listeners)
+        queuedKeys.push(key)
+      }
+      listeners.add(activate)
+      scheduleNext()
+      return () => listeners?.delete(activate)
+    },
+    getSnapshot: getAvatarPreviewSnapshot,
+    isReady: key => readyKeys.has(key) || getAvatarPreviewSnapshot(key) != null,
+    markReady
+  }
+}
+
+const DeferredEntityPresetPreview = memo(function DeferredEntityPresetPreview({
+  eager,
+  previewKey,
+  renderPreview,
+  scheduler,
+  staticSnapshot
+}: {
+  readonly eager: boolean
+  readonly previewKey: string
+  readonly renderPreview: () => ReactNode
+  readonly scheduler: AvatarPreviewScheduler
+  readonly staticSnapshot?: string | null
+}) {
+  const containerRef = useRef<HTMLSpanElement>(null)
+  const [visible, setVisible] = useState(eager || typeof IntersectionObserver === 'undefined')
+  const [readyKey, setReadyKey] = useState<string | null>(() => (
+    eager || staticSnapshot != null || scheduler.isReady(previewKey) ? previewKey : null
+  ))
+  const [, setSnapshotKey] = useState<string | null>(() => (
+    scheduler.getSnapshot(previewKey) == null ? null : previewKey
+  ))
+  const runtimeSnapshot = scheduler.getSnapshot(previewKey)
+  const snapshot = staticSnapshot ?? runtimeSnapshot
+  const ready = eager || snapshot != null || readyKey === previewKey || scheduler.isReady(previewKey)
+
+  useEffect(() => {
+    if (eager || typeof IntersectionObserver === 'undefined') {
+      setVisible(true)
+      return
+    }
+    const element = containerRef.current
+    if (element == null) return
+    const observer = new IntersectionObserver(entries => {
+      if (entries.some(entry => entry.isIntersecting)) setVisible(true)
+    }, { rootMargin: '96px' })
+    observer.observe(element)
+    return () => observer.disconnect()
+  }, [eager, previewKey])
+
+  useEffect(() => {
+    if (eager) {
+      scheduler.markReady(previewKey)
+      setReadyKey(previewKey)
+      return
+    }
+    if (!visible || ready) return
+    return scheduler.enqueue(previewKey, () => setReadyKey(previewKey))
+  }, [eager, previewKey, ready, scheduler, visible])
+
+  useEffect(() => {
+    if (!ready || snapshot != null) return
+    const frame = window.requestAnimationFrame(() => {
+      const svg = containerRef.current?.querySelector(':scope > svg')
+      if (svg == null) return
+      scheduler.cacheSnapshot(previewKey, svg.outerHTML)
+      setSnapshotKey(previewKey)
+    })
+    return () => window.cancelAnimationFrame(frame)
+  }, [previewKey, ready, scheduler, snapshot])
+
+  return (
+    <span
+      ref={containerRef}
+      className={`avatar-controls__deferred-entity-preview${ready ? '' : ' avatar-controls__deferred-entity-preview--pending'}`}
+      data-preview-key={previewKey}
+      data-preview-ready={ready ? 'true' : 'false'}
+      data-preview-static={snapshot == null ? 'false' : 'true'}
+      data-preview-source={staticSnapshot != null
+        ? 'prebuilt'
+        : runtimeSnapshot != null ? 'runtime-cache' : ready ? 'live' : 'pending'}
+      aria-hidden='true'
+    >
+      {snapshot == null
+        ? ready ? renderPreview() : null
+        : <img className='avatar-controls__entity-preset-icon' alt='' decoding='async' src={snapshot} />}
+    </span>
+  )
+}, (previous, next) => (
+  previous.eager === next.eager &&
+  previous.previewKey === next.previewKey &&
+  previous.scheduler === next.scheduler &&
+  previous.staticSnapshot === next.staticSnapshot
+))
 
 interface AvatarControlsProps {
   readonly activeTab: AvatarControlTab
@@ -933,6 +1129,9 @@ export function AvatarControls({
   const paletteConfirmActionRef = useRef<HTMLButtonElement>(null)
   const presetSearchRef = useRef<HTMLInputElement>(null)
   const resizeStartRef = useRef<{ pointerX: number; width: number } | null>(null)
+  const previewSchedulerRef = useRef<AvatarPreviewScheduler | null>(null)
+  if (previewSchedulerRef.current == null) previewSchedulerRef.current = createAvatarPreviewScheduler()
+  const previewScheduler = previewSchedulerRef.current
   const lastCameraColorRef = useRef(
     cameraBackground === 'transparent' ? DEFAULT_CAMERA_BACKGROUND_COLOR : cameraBackground
   )
@@ -1023,90 +1222,193 @@ export function AvatarControls({
     if (presetBrowser != null) presetSearchRef.current?.focus()
   }, [presetBrowser])
 
-  const renderEntityPresetPreview = (preset: Exclude<AvatarEntityPreset, 'custom'>) => (
-    <EntityPresetPreview
-      preset={preset}
-      lightDirection={{ azimuth: lightAzimuth, elevation: lightElevation }}
+  useEffect(() => {
+    if (lightAzimuth !== DEFAULT_AVATAR_PREVIEW_LIGHT.azimuth ||
+      lightElevation !== DEFAULT_AVATAR_PREVIEW_LIGHT.elevation) return
+    const preload = () => Object.values(AVATAR_ENTITY_PRESET_SNAPSHOT_URLS).forEach(source => {
+      const image = new Image()
+      image.decoding = 'async'
+      image.src = source
+    })
+    const idleWindow = window as AvatarPreviewIdleWindow
+    if (idleWindow.requestIdleCallback == null) {
+      const frame = window.requestAnimationFrame(preload)
+      return () => window.cancelAnimationFrame(frame)
+    }
+    const idle = idleWindow.requestIdleCallback(preload, { timeout: 600 })
+    return () => idleWindow.cancelIdleCallback?.(idle)
+  }, [lightAzimuth, lightElevation])
+
+  const renderEntityPresetPreview = (
+    preset: Exclude<AvatarEntityPreset, 'custom'>,
+    eager = false
+  ) => {
+    const staticSnapshot = lightAzimuth === DEFAULT_AVATAR_PREVIEW_LIGHT.azimuth &&
+      lightElevation === DEFAULT_AVATAR_PREVIEW_LIGHT.elevation
+      ? AVATAR_ENTITY_PRESET_SNAPSHOT_URLS[preset]
+      : null
+    return <DeferredEntityPresetPreview
+      eager={eager}
+      previewKey={`entity:${preset}:light:${lightAzimuth}:${lightElevation}`}
+      scheduler={previewScheduler}
+      staticSnapshot={staticSnapshot}
+      renderPreview={() => (
+        <EntityPresetPreview
+          preset={preset}
+          lightDirection={{ azimuth: lightAzimuth, elevation: lightElevation }}
+        />
+      )}
     />
+  }
+
+  const getStaticBreedPreview = (species: string, breed: string) => (
+    lightAzimuth === DEFAULT_AVATAR_PREVIEW_LIGHT.azimuth &&
+      lightElevation === DEFAULT_AVATAR_PREVIEW_LIGHT.elevation
+      ? getAvatarBreedPresetSnapshotUrl(species, breed)
+      : null
   )
 
-  const renderCatBreedPreview = (template: (typeof AVATAR_CAT_BREED_TEMPLATES)[number]) => {
-    const resolved = resolveAvatarCatBreedTemplate(template, seed)
-    const decals = resolveAvatarCoatPatternDecals({
-      entityParts: resolved.entityParts,
-      entityPreset: 'cat',
-      ...{ palette: resolveAvatarBreedPaletteFromEntityParts(getAvatarPalette(resolved.paletteId), resolved.entityParts) },
-      paletteId: resolved.paletteId,
-      pattern: resolved.coatPattern
-    })
+  const renderCatBreedPreview = (
+    template: (typeof AVATAR_CAT_BREED_TEMPLATES)[number],
+    eager = false
+  ) => {
+    const staticSnapshot = getStaticBreedPreview('cat', template.id)
     return (
-      <EntityPresetPreview
-        entityParts={resolved.entityParts}
-        lightDirection={{ azimuth: lightAzimuth, elevation: lightElevation }}
-        preset='cat'
-        previewBackground={template.previewBackground}
-        surfaceDecals={decals}
+      <DeferredEntityPresetPreview
+        eager={eager}
+        previewKey={staticSnapshot == null
+          ? `breed:cat:${template.id}:seed:${seed}:light:${lightAzimuth}:${lightElevation}`
+          : `breed:cat:${template.id}:prebuilt`}
+        scheduler={previewScheduler}
+        staticSnapshot={staticSnapshot}
+        renderPreview={() => {
+          const resolved = resolveAvatarCatBreedTemplate(template, seed)
+          const decals = resolveAvatarCoatPatternDecals({
+            entityParts: resolved.entityParts,
+            entityPreset: 'cat',
+            ...{ palette: resolveAvatarBreedPaletteFromEntityParts(getAvatarPalette(resolved.paletteId), resolved.entityParts) },
+            paletteId: resolved.paletteId,
+            pattern: resolved.coatPattern
+          })
+          return (
+            <EntityPresetPreview
+              entityParts={resolved.entityParts}
+              lightDirection={{ azimuth: lightAzimuth, elevation: lightElevation }}
+              preset='cat'
+              previewBackground={template.previewBackground}
+              surfaceDecals={decals}
+            />
+          )
+        }}
       />
     )
   }
 
-  const renderDogBreedPreview = (template: (typeof AVATAR_DOG_BREED_TEMPLATES)[number]) => {
-    const resolved = resolveAvatarDogBreedTemplate(template, seed)
-    const decals = resolveAvatarCoatPatternDecals({
-      entityParts: resolved.entityParts,
-      entityPreset: 'dog',
-      ...{ palette: resolveAvatarBreedPaletteFromEntityParts(getAvatarPalette(resolved.paletteId), resolved.entityParts) },
-      paletteId: resolved.paletteId,
-      pattern: resolved.coatPattern
-    })
+  const renderDogBreedPreview = (
+    template: (typeof AVATAR_DOG_BREED_TEMPLATES)[number],
+    eager = false
+  ) => {
+    const staticSnapshot = getStaticBreedPreview('dog', template.id)
     return (
-      <EntityPresetPreview
-        entityParts={resolved.entityParts}
-        lightDirection={{ azimuth: lightAzimuth, elevation: lightElevation }}
-        preset='dog'
-        previewBackground={template.previewBackground}
-        surfaceDecals={decals}
+      <DeferredEntityPresetPreview
+        eager={eager}
+        previewKey={staticSnapshot == null
+          ? `breed:dog:${template.id}:seed:${seed}:light:${lightAzimuth}:${lightElevation}`
+          : `breed:dog:${template.id}:prebuilt`}
+        scheduler={previewScheduler}
+        staticSnapshot={staticSnapshot}
+        renderPreview={() => {
+          const resolved = resolveAvatarDogBreedTemplate(template, seed)
+          const decals = resolveAvatarCoatPatternDecals({
+            entityParts: resolved.entityParts,
+            entityPreset: 'dog',
+            ...{ palette: resolveAvatarBreedPaletteFromEntityParts(getAvatarPalette(resolved.paletteId), resolved.entityParts) },
+            paletteId: resolved.paletteId,
+            pattern: resolved.coatPattern
+          })
+          return (
+            <EntityPresetPreview
+              entityParts={resolved.entityParts}
+              lightDirection={{ azimuth: lightAzimuth, elevation: lightElevation }}
+              preset='dog'
+              previewBackground={template.previewBackground}
+              surfaceDecals={decals}
+            />
+          )
+        }}
       />
     )
   }
 
-  const renderRabbitBreedPreview = (template: (typeof AVATAR_RABBIT_BREED_TEMPLATES)[number]) => {
-    const resolved = resolveAvatarRabbitBreedTemplate(template, seed)
-    const decals = resolveAvatarCoatPatternDecals({
-      entityParts: resolved.entityParts,
-      entityPreset: 'rabbit',
-      ...{ palette: resolveAvatarBreedPaletteFromEntityParts(getAvatarPalette(resolved.paletteId), resolved.entityParts) },
-      paletteId: resolved.paletteId,
-      pattern: resolved.coatPattern
-    })
+  const renderRabbitBreedPreview = (
+    template: (typeof AVATAR_RABBIT_BREED_TEMPLATES)[number],
+    eager = false
+  ) => {
+    const staticSnapshot = getStaticBreedPreview('rabbit', template.id)
     return (
-      <EntityPresetPreview
-        entityParts={resolved.entityParts}
-        lightDirection={{ azimuth: lightAzimuth, elevation: lightElevation }}
-        preset='rabbit'
-        previewBackground={template.previewBackground}
-        surfaceDecals={decals}
+      <DeferredEntityPresetPreview
+        eager={eager}
+        previewKey={staticSnapshot == null
+          ? `breed:rabbit:${template.id}:seed:${seed}:light:${lightAzimuth}:${lightElevation}`
+          : `breed:rabbit:${template.id}:prebuilt`}
+        scheduler={previewScheduler}
+        staticSnapshot={staticSnapshot}
+        renderPreview={() => {
+          const resolved = resolveAvatarRabbitBreedTemplate(template, seed)
+          const decals = resolveAvatarCoatPatternDecals({
+            entityParts: resolved.entityParts,
+            entityPreset: 'rabbit',
+            ...{ palette: resolveAvatarBreedPaletteFromEntityParts(getAvatarPalette(resolved.paletteId), resolved.entityParts) },
+            paletteId: resolved.paletteId,
+            pattern: resolved.coatPattern
+          })
+          return (
+            <EntityPresetPreview
+              entityParts={resolved.entityParts}
+              lightDirection={{ azimuth: lightAzimuth, elevation: lightElevation }}
+              preset='rabbit'
+              previewBackground={template.previewBackground}
+              surfaceDecals={decals}
+            />
+          )
+        }}
       />
     )
   }
 
-  const renderBearBreedPreview = (template: (typeof AVATAR_BEAR_BREED_TEMPLATES)[number]) => {
-    const resolved = resolveAvatarBearBreedTemplate(template, seed)
-    const decals = resolveAvatarCoatPatternDecals({
-      entityParts: resolved.entityParts,
-      entityPreset: 'bear',
-      ...{ palette: resolveAvatarBreedPaletteFromEntityParts(getAvatarPalette(resolved.paletteId), resolved.entityParts) },
-      paletteId: resolved.paletteId,
-      pattern: resolved.coatPattern
-    })
+  const renderBearBreedPreview = (
+    template: (typeof AVATAR_BEAR_BREED_TEMPLATES)[number],
+    eager = false
+  ) => {
+    const staticSnapshot = getStaticBreedPreview('bear', template.id)
     return (
-      <EntityPresetPreview
-        entityParts={resolved.entityParts}
-        faceStyle={resolved.faceStyle}
-        lightDirection={{ azimuth: lightAzimuth, elevation: lightElevation }}
-        preset='bear'
-        previewBackground={template.previewBackground}
-        surfaceDecals={decals}
+      <DeferredEntityPresetPreview
+        eager={eager}
+        previewKey={staticSnapshot == null
+          ? `breed:bear:${template.id}:seed:${seed}:light:${lightAzimuth}:${lightElevation}`
+          : `breed:bear:${template.id}:prebuilt`}
+        scheduler={previewScheduler}
+        staticSnapshot={staticSnapshot}
+        renderPreview={() => {
+          const resolved = resolveAvatarBearBreedTemplate(template, seed)
+          const decals = resolveAvatarCoatPatternDecals({
+            entityParts: resolved.entityParts,
+            entityPreset: 'bear',
+            ...{ palette: resolveAvatarBreedPaletteFromEntityParts(getAvatarPalette(resolved.paletteId), resolved.entityParts) },
+            paletteId: resolved.paletteId,
+            pattern: resolved.coatPattern
+          })
+          return (
+            <EntityPresetPreview
+              entityParts={resolved.entityParts}
+              faceStyle={resolved.faceStyle}
+              lightDirection={{ azimuth: lightAzimuth, elevation: lightElevation }}
+              preset='bear'
+              previewBackground={template.previewBackground}
+              surfaceDecals={decals}
+            />
+          )
+        }}
       />
     )
   }
@@ -1117,27 +1419,39 @@ export function AvatarControls({
     ? null
     : getAvatarAnimalBreedTemplate(animalSpecies, animalBreedTemplateId)
 
-  const renderAnimalBreedPreview = (template: AvatarAnimalBreedTemplate) => {
-    const resolved = resolveAvatarAnimalBreedTemplate(template, seed)
-    const decals = [
-      ...resolveAvatarCoatPatternDecals({
-        entityParts: resolved.entityParts,
-        entityPreset: template.species,
-        ...{ palette: resolveAvatarBreedPaletteFromEntityParts(getAvatarPalette(resolved.paletteId), resolved.entityParts) },
-        paletteId: resolved.paletteId,
-        pattern: resolved.coatPattern
-      }),
-      ...(resolved.surfaceDecals ?? [])
-    ]
-
+  const renderAnimalBreedPreview = (template: AvatarAnimalBreedTemplate, eager = false) => {
+    const staticSnapshot = getStaticBreedPreview(template.species, template.id)
     return (
-      <EntityPresetPreview
-        entityParts={resolved.entityParts}
-        faceStyle={resolved.faceStyle}
-        lightDirection={{ azimuth: lightAzimuth, elevation: lightElevation }}
-        preset={template.species}
-        previewBackground={template.previewBackground}
-        surfaceDecals={decals}
+      <DeferredEntityPresetPreview
+        eager={eager}
+        previewKey={staticSnapshot == null
+          ? `breed:${template.species}:${template.id}:seed:${seed}:light:${lightAzimuth}:${lightElevation}`
+          : `breed:${template.species}:${template.id}:prebuilt`}
+        scheduler={previewScheduler}
+        staticSnapshot={staticSnapshot}
+        renderPreview={() => {
+          const resolved = resolveAvatarAnimalBreedTemplate(template, seed)
+          const decals = [
+            ...resolveAvatarCoatPatternDecals({
+              entityParts: resolved.entityParts,
+              entityPreset: template.species,
+              ...{ palette: resolveAvatarBreedPaletteFromEntityParts(getAvatarPalette(resolved.paletteId), resolved.entityParts) },
+              paletteId: resolved.paletteId,
+              pattern: resolved.coatPattern
+            }),
+            ...(resolved.surfaceDecals ?? [])
+          ]
+          return (
+            <EntityPresetPreview
+              entityParts={resolved.entityParts}
+              faceStyle={resolved.faceStyle}
+              lightDirection={{ azimuth: lightAzimuth, elevation: lightElevation }}
+              preset={template.species}
+              previewBackground={template.previewBackground}
+              surfaceDecals={decals}
+            />
+          )
+        }}
       />
     )
   }
@@ -1232,7 +1546,7 @@ export function AvatarControls({
     </button>
   )
 
-  const renderSavedPresetItem = (item: AvatarSavedPresetItem) => {
+  const renderSavedPresetItem = (item: AvatarSavedPresetItem, eagerPreview = false) => {
     if (item.kind === 'entity') {
       return (
         <button
@@ -1244,7 +1558,7 @@ export function AvatarControls({
           data-entity-preset={item.preset}
           onClick={() => selectSavedPreset(item)}
         >
-          {renderEntityPresetPreview(item.preset)}
+          {renderEntityPresetPreview(item.preset, eagerPreview)}
         </button>
       )
     }
@@ -1458,7 +1772,7 @@ export function AvatarControls({
               <section className='avatar-controls__field-group' aria-label={t('Avatar type')}>
                 {renderSeedFieldHeader('build', 'Avatar type', AVATAR_SEED_FIELD.entityPreset)}
                 <div className='avatar-controls__saved-preset-list'>
-                  {compactEntityPresetItems.map(renderSavedPresetItem)}
+                  {compactEntityPresetItems.map(item => renderSavedPresetItem(item, true))}
                   {entityPresetItems.length > compactPresetCapacity
                     ? renderMorePresetButton('entities')
                     : null}
@@ -1628,7 +1942,7 @@ export function AvatarControls({
                       {t('Saved looks')}
                     </span>
                     <div className='avatar-controls__saved-preset-list'>
-                      {compactSavedPresetItems.map(renderSavedPresetItem)}
+                      {compactSavedPresetItems.map(item => renderSavedPresetItem(item))}
                       {savedPresetItems.length > compactPresetCapacity
                         ? renderMorePresetButton('saved')
                         : null}
@@ -3475,8 +3789,8 @@ export function AvatarControls({
                     {presetBrowser === 'faces'
                       ? searchedFacePresets.map(renderFacePresetButton)
                       : presetBrowser === 'entities'
-                        ? searchedEntityPresetItems.map(renderSavedPresetItem)
-                        : searchedSavedPresetItems.map(renderSavedPresetItem)}
+                        ? searchedEntityPresetItems.map(item => renderSavedPresetItem(item, false))
+                        : searchedSavedPresetItems.map(item => renderSavedPresetItem(item))}
                   </div>
                 )}
             </section>

@@ -39,7 +39,12 @@ import type {
   ProjectedFace
 } from './avatarGeometry'
 import type { AvatarSurfaceDecal } from './avatarSurfaceDecals'
-import { buildAvatarFragmentRenderGraph, resolveFrontmostPartAtPoint } from './avatarFragmentRenderGraph'
+import {
+  createAvatarCompiledGeometryInput,
+  createAvatarCompiledRenderCache,
+  getAvatarCompiledSurfaceDecalMaterialId,
+  projectAvatarCompiledScene
+} from './avatarCompiledRenderer'
 
 export { AVATAR_BODY_SHAPES }
 export type { AvatarBodyShape }
@@ -121,7 +126,7 @@ interface AvatarPosition {
 }
 
 interface ProjectedSurfaceDecal extends AvatarSurfaceDecal {
-  readonly path: string
+  readonly path?: string
   readonly transform?: string
 }
 
@@ -139,12 +144,31 @@ interface DragOrigin extends AvatarPose {
 }
 
 const VIEW_SIZE = 420
+const EMPTY_BODY_GEOMETRY: BodyGeometry = {
+  cells: [],
+  outlinePath: '',
+  outlinePoints: [],
+  surfaceTriangles: []
+}
+const EMPTY_PROJECTED_FACE: ProjectedFace = {
+  eyeHighlights: [],
+  eyes: [],
+  mouth: null,
+  nose: null,
+  visible: false
+}
 const ROTATION_PER_PIXEL = Math.PI / 280
 const KEY_ROTATION = Math.PI / 12
 const KEY_POSITION_MOVE = 8
 const WHEEL_SCALE_SPEED = 0.0015
 const FACE_STYLE_ANIMATION_MS = 180
 const ENTITY_SELECTION_DRAG_THRESHOLD = 4
+const COMPILED_INTERACTIVE_RASTER_SIZE = 420
+const COMPILED_PREVIEW_RASTER_SIZE = 210
+const COMPILED_PRODUCTION_MESH_RESOLUTION = 28
+const COMPILED_PREVIEW_MESH_RESOLUTION = 20
+const COMPILED_INTERACTION_VISIBLE_AREA = 12
+const entityCompiledRenderCache = createAvatarCompiledRenderCache(24)
 
 const clamp = (value: number, min: number, max: number) => Math.min(Math.max(value, min), max)
 
@@ -303,7 +327,6 @@ function EntityPresetBody({
   avatarOutlineStyle,
   face,
   faceStyle,
-  fragmentGeometries,
   geometries,
   idPrefix,
   interactive,
@@ -313,6 +336,7 @@ function EntityPresetBody({
   partHitResolverRef,
   parts,
   pose,
+  preview = false,
   preset,
   renderSurfaceCells,
   selectedPartId,
@@ -326,7 +350,6 @@ function EntityPresetBody({
   readonly avatarOutlineStyle?: AvatarOutlineStyle
   readonly face: ProjectedFace
   readonly faceStyle: AvatarFaceStyle
-  readonly fragmentGeometries?: Readonly<Record<string, BodyGeometry>>
   readonly geometries: Readonly<Record<string, BodyGeometry>>
   readonly idPrefix: string
   readonly interactive: boolean
@@ -336,6 +359,7 @@ function EntityPresetBody({
   readonly partHitResolverRef?: { current: ((x: number, y: number) => string | null) | null }
   readonly parts: readonly AvatarEntityPart[]
   readonly pose: AvatarPose
+  readonly preview?: boolean
   readonly preset: AvatarEntityPreset
   readonly renderSurfaceCells: boolean
   readonly selectedPartId?: string | null
@@ -350,83 +374,115 @@ function EntityPresetBody({
   const sinYaw = Math.sin(pose.yaw)
   const cosPitch = Math.cos(pose.pitch)
   const sinPitch = Math.sin(pose.pitch)
-  const projectedPartSurfaces = useMemo(() => parts.map((part, index) => {
+  const projectedParts = useMemo(() => parts.map((part, index) => {
     const yawX = part.x * cosYaw + part.z * sinYaw
     const yawZ = -part.x * sinYaw + part.z * cosYaw
     return {
       ...part,
-      anchorDepth: -part.y * sinPitch + yawZ * cosPitch,
-      geometry: (fragmentGeometries ?? geometries)[part.id],
       index,
       projectedX: yawX,
-      projectedY: part.y * cosPitch + yawZ * sinPitch,
-      occludedByFaceHint: part.occludedByFace
+      projectedY: part.y * cosPitch + yawZ * sinPitch
     }
-  }), [cosPitch, cosYaw, fragmentGeometries, geometries, parts, sinPitch, sinYaw])
-  const fragmentGraphBuildCountRef = useRef(0)
-  const fragmentDragBuildSamplesRef = useRef<number[]>([])
-  const fragmentReleaseBuildMsRef = useRef(0)
-  const fragmentSettleBuildMsRef = useRef(0)
-  const fragmentPreviousBuildWasDraggingRef = useRef(false)
-  const fragmentPreviousInteractiveQualityRef = useRef(false)
-  const fragmentGraphBuild = useMemo(() => {
+  }), [cosPitch, cosYaw, parts, sinPitch, sinYaw])
+  const rasterSize = preview
+    ? COMPILED_PREVIEW_RASTER_SIZE
+    : COMPILED_INTERACTIVE_RASTER_SIZE
+  const compiledInput = useMemo(() => createAvatarCompiledGeometryInput(
+    preset,
+    parts,
+    preview ? COMPILED_PREVIEW_MESH_RESOLUTION : COMPILED_PRODUCTION_MESH_RESOLUTION
+  ), [parts, preset, preview])
+  const compiledMesh = useMemo(
+    () => entityCompiledRenderCache.get(compiledInput),
+    [compiledInput]
+  )
+  const projectionBuildCountRef = useRef(0)
+  const projectionDragSamplesRef = useRef<number[]>([])
+  const projectionReleaseMsRef = useRef(0)
+  const projectionSettleMsRef = useRef(0)
+  const previousBuildWasDraggingRef = useRef(false)
+  const previousInteractiveQualityRef = useRef(false)
+  const projectionBuild = useMemo(() => {
     const startedAt = performance.now()
-    const graph = buildAvatarFragmentRenderGraph(projectedPartSurfaces, {
-      quality: interactiveQuality ? 'interactive' : 'full'
+    const projection = projectAvatarCompiledScene(compiledMesh, compiledInput, {
+      centerX: rasterSize / 2,
+      centerY: rasterSize * 202 / VIEW_SIZE,
+      faceStyle,
+      height: rasterSize,
+      pose: { pitch: pose.pitch, roll: 0, yaw: pose.yaw },
+      surfaceDecals,
+      width: rasterSize
     })
     const duration = performance.now() - startedAt
-    fragmentGraphBuildCountRef.current += 1
+    const ownerAreas = new Uint32Array(parts.length)
+    for (const owner of projection.ownerPrimitiveIndexes) {
+      if (owner >= 0 && owner < ownerAreas.length) ownerAreas[owner]! += 1
+    }
+    projectionBuildCountRef.current += 1
     if (isDragging) {
-      if (!fragmentPreviousBuildWasDraggingRef.current) fragmentDragBuildSamplesRef.current = []
-      fragmentDragBuildSamplesRef.current.push(duration)
-      if (fragmentDragBuildSamplesRef.current.length > 512) fragmentDragBuildSamplesRef.current.shift()
-    } else if (fragmentPreviousBuildWasDraggingRef.current) {
-      fragmentReleaseBuildMsRef.current = duration
+      if (!previousBuildWasDraggingRef.current) projectionDragSamplesRef.current = []
+      projectionDragSamplesRef.current.push(duration)
+      if (projectionDragSamplesRef.current.length > 512) projectionDragSamplesRef.current.shift()
+    } else if (previousBuildWasDraggingRef.current) {
+      projectionReleaseMsRef.current = duration
     }
-    if (!interactiveQuality && fragmentPreviousInteractiveQualityRef.current) {
-      fragmentSettleBuildMsRef.current = duration
+    if (!interactiveQuality && previousInteractiveQualityRef.current) {
+      projectionSettleMsRef.current = duration
     }
-    fragmentPreviousBuildWasDraggingRef.current = isDragging
-    fragmentPreviousInteractiveQualityRef.current = interactiveQuality
-    return { duration, graph }
-  }, [interactiveQuality, isDragging, projectedPartSurfaces])
-  const fragmentGraph = fragmentGraphBuild.graph
-  const fragmentDragBuildSamples = fragmentDragBuildSamplesRef.current
-  const fragmentDragBuildMean = fragmentDragBuildSamples.length === 0
+    previousBuildWasDraggingRef.current = isDragging
+    previousInteractiveQualityRef.current = interactiveQuality
+    return { duration, ownerAreas, projection }
+  }, [
+    compiledInput,
+    compiledMesh,
+    faceStyle,
+    interactiveQuality,
+    isDragging,
+    parts.length,
+    pose.pitch,
+    pose.yaw,
+    rasterSize,
+    surfaceDecals
+  ])
+  const projection = projectionBuild.projection
+  const projectionDragSamples = projectionDragSamplesRef.current
+  const projectionDragMean = projectionDragSamples.length === 0
     ? 0
-    : fragmentDragBuildSamples.reduce((total, sample) => total + sample, 0) / fragmentDragBuildSamples.length
+    : projectionDragSamples.reduce((total, sample) => total + sample, 0) / projectionDragSamples.length
+  const rasterToStageScale = VIEW_SIZE / rasterSize
   if (partHitResolverRef != null) {
-    partHitResolverRef.current = (x, y) => resolveFrontmostPartAtPoint(fragmentGraph, x, y)?.partId ?? null
+    partHitResolverRef.current = (x, y) => {
+      return projection.resolveFrontmostPrimitiveId(
+        x / rasterToStageScale,
+        y / rasterToStageScale
+      )
+    }
   }
-  const projectedPartById = new Map(projectedPartSurfaces.map(part => [part.id, part]))
-  const projectedParts = fragmentGraph.nodes.map(node => ({
-    ...projectedPartById.get(node.partId)!,
-    depth: node.depth,
-    fragmentNode: node
-  }))
   const outlineWidth = avatarOutlineStyle?.width ?? 0
   const outlineEnabled = showOutline && avatarOutlineStyle != null && outlineWidth > 0
   const facePart = projectedParts.find(part => part.face) ?? projectedParts.at(-1)
   const selectedPart = projectedParts.find(part => part.id === selectedPartId)
-  // Keep the authored selection while it rotates behind the head, but only draw
-  // interaction overlays when the same fragment ownership graph used for paint
-  // and hit-testing still assigns a visible region to the selected anatomy.
-  const selectedPartIsVisible = selectedPart != null && selectedPart.fragmentNode.interactionVisibleArea > 0
+  const selectedOverlay = selectedPart == null
+    ? null
+    : projection.getSelectionOverlay(selectedPart.id)
+  const stageVisibleArea = (part: (typeof projectedParts)[number]) => (
+    (projectionBuild.ownerAreas[part.index] ?? 0) * rasterToStageScale ** 2
+  )
+  const interactionVisibleArea = (part: (typeof projectedParts)[number]) => {
+    const visibleArea = stageVisibleArea(part)
+    return visibleArea >= COMPILED_INTERACTION_VISIBLE_AREA ? visibleArea : 0
+  }
+  const selectedPartVisibleArea = selectedOverlay == null
+    ? 0
+    : selectedOverlay.visiblePixelCount * rasterToStageScale ** 2 >= COMPILED_INTERACTION_VISIBLE_AREA
+      ? selectedOverlay.visiblePixelCount * rasterToStageScale ** 2
+      : 0
+  const selectedPartIsVisible = selectedPart != null && selectedPartVisibleArea > 0
   const partTransform = (part: (typeof projectedParts)[number]) => (
     `translate(${part.projectedX} ${part.projectedY})`
   )
-  const visibilityMaskId = (part: (typeof projectedParts)[number]) => (
-    `${idPrefix}-entity-visibility-${part.index}`
-  )
-  const visibilityMask = (part: (typeof projectedParts)[number]) => (
-    part.fragmentNode.occlusionPath == null ? undefined : `url(#${visibilityMaskId(part)})`
-  )
-  const interactionClipId = (part: (typeof projectedParts)[number]) => (
-    `${idPrefix}-entity-interaction-${part.index}`
-  )
-  const sharedPaintClipId = (part: (typeof projectedParts)[number]) => (
-    `${idPrefix}-entity-shared-paint-${part.index}`
-  )
+  const ownerClipId = (part: (typeof projectedParts)[number]) => `${idPrefix}-compiled-owner-${part.index}`
+  const ownerPath = (part: (typeof projectedParts)[number]) => projection.ownerPaths[part.id] ?? ''
   const shadowDirection = shadowStyle.direction * Math.PI / 180
   const faceShadowTransform = (depth: number) => {
     const distance = shadowStyle.distance * depth
@@ -506,22 +562,32 @@ function EntityPresetBody({
     <g
       data-avatar-entity-fragment-root='true'
       data-avatar-entity-preset={preset}
-      data-avatar-fragment-build-count={fragmentGraphBuildCountRef.current}
-      data-avatar-fragment-build-ms={fragmentGraphBuild.duration.toFixed(3)}
-      data-avatar-fragment-drag-build-max-ms={Math.max(0, ...fragmentDragBuildSamples).toFixed(3)}
-      data-avatar-fragment-drag-build-mean-ms={fragmentDragBuildMean.toFixed(3)}
-      data-avatar-fragment-drag-build-p95-ms={percentile(fragmentDragBuildSamples, .95).toFixed(3)}
-      data-avatar-fragment-drag-build-samples={fragmentDragBuildSamples.length}
+      data-avatar-fragment-composition='compiled-owner-partition'
+      data-avatar-fragment-build-count={projectionBuildCountRef.current}
+      data-avatar-fragment-build-ms={projectionBuild.duration.toFixed(3)}
+      data-avatar-fragment-compile-count={entityCompiledRenderCache.compileCount}
+      data-avatar-fragment-compile-ms={compiledMesh.compileMs.toFixed(3)}
+      data-avatar-fragment-drag-build-max-ms={Math.max(0, ...projectionDragSamples).toFixed(3)}
+      data-avatar-fragment-drag-build-mean-ms={projectionDragMean.toFixed(3)}
+      data-avatar-fragment-drag-build-p95-ms={percentile(projectionDragSamples, .95).toFixed(3)}
+      data-avatar-fragment-drag-build-samples={projectionDragSamples.length}
       data-avatar-fragment-quality={interactiveQuality ? 'interactive' : 'full'}
-      data-avatar-fragment-revision={fragmentGraph.cacheKey}
-      data-avatar-fragment-release-build-ms={fragmentReleaseBuildMsRef.current.toFixed(3)}
-      data-avatar-fragment-settle-build-ms={fragmentSettleBuildMsRef.current.toFixed(3)}
-      data-avatar-fragment-intersections={fragmentGraph.metrics.intersectingPartCount}
-      data-avatar-fragment-path-characters={fragmentGraph.metrics.occlusionPathCharacterCount}
-      data-avatar-fragment-patches={fragmentGraph.metrics.occlusionPatchCount}
-      data-avatar-fragment-raster-error={fragmentGraph.metrics.rasterizationErrorRatio.toFixed(6)}
-      data-avatar-fragment-raster-measured={fragmentGraph.metrics.rasterizationMeasured}
-      data-avatar-fragment-segments={fragmentGraph.metrics.occlusionSegmentCount}
+      data-avatar-fragment-raster-size={rasterSize}
+      data-avatar-fragment-revision={`${compiledMesh.compileKey}:${rasterSize}:${pose.yaw.toFixed(6)}:${pose.pitch.toFixed(6)}`}
+      data-avatar-fragment-release-build-ms={projectionReleaseMsRef.current.toFixed(3)}
+      data-avatar-fragment-settle-build-ms={projectionSettleMsRef.current.toFixed(3)}
+      data-avatar-fragment-path-characters={projection.metrics.pathCharacterCount}
+      data-avatar-fragment-path-serialization-ms={projection.metrics.pathSerializationMs.toFixed(3)}
+      data-avatar-fragment-candidate-tests={projection.metrics.candidateTestsAfter}
+      data-avatar-fragment-contour-ms={projection.metrics.contourMs.toFixed(3)}
+      data-avatar-fragment-curve-segments={projection.metrics.contourCurveSegmentCount}
+      data-avatar-fragment-contour-segments={projection.metrics.contourSegmentCount}
+      data-avatar-fragment-depth-owner-ms={projection.metrics.depthOwnerMs.toFixed(3)}
+      data-avatar-fragment-line-segments={projection.metrics.contourLineSegmentCount}
+      data-avatar-fragment-max-curve-error={projection.metrics.contourMaxCurveError.toFixed(3)}
+      data-avatar-fragment-shared-curve-reuse={projection.metrics.contourSharedCurveReuseCount}
+      data-avatar-fragment-null-owner-pixels={projection.metrics.nullOwnerPixelCount}
+      data-avatar-fragment-transform-ms={projection.metrics.transformMs.toFixed(3)}
     >
       <defs>
         <filter id={`${idPrefix}-entity-face-shadow`} x='-50%' y='-50%' width='200%' height='200%'>
@@ -540,53 +606,15 @@ function EntityPresetBody({
             </filter>
           )
           : null}
-        {projectedParts.filter(part => part.fragmentNode.occlusionPath != null).map(part => (
-            <mask
-              key={`visibility-mask-${part.id}`}
-              id={visibilityMaskId(part)}
-              x={-VIEW_SIZE}
-              y={-VIEW_SIZE}
-              width={VIEW_SIZE * 3}
-              height={VIEW_SIZE * 3}
-              maskUnits='userSpaceOnUse'
-            >
-              <rect x={-VIEW_SIZE} y={-VIEW_SIZE} width={VIEW_SIZE * 3} height={VIEW_SIZE * 3} fill='white' />
-              <path
-                data-avatar-fragment-occlusion-overdraw={part.id}
-                d={part.fragmentNode.occlusionPath}
-                fill='black'
-                {...(fragmentGraph.compositionMode === 'shared-pair'
-                  ? {}
-                  : {
-                      stroke: 'white',
-                      strokeLinejoin: 'round' as const,
-                      strokeWidth: Math.min(2, Math.max(.8, part.fragmentNode.boundaryCellDiagonal * .45))
-                    })}
-              />
-            </mask>
-        ))}
-        {projectedParts.filter(part => part.fragmentNode.sharedPaintPath != null).map(part => (
+        {projectedParts.filter(part => ownerPath(part) !== '').map(part => (
           <clipPath
-            key={`shared-paint-clip-${fragmentGraph.cacheKey}-${part.id}`}
-            id={sharedPaintClipId(part)}
+            key={`compiled-owner-${compiledMesh.compileKey}-${rasterSize}-${part.id}`}
+            id={ownerClipId(part)}
             clipPathUnits='userSpaceOnUse'
           >
             <path
-              data-avatar-fragment-shared-paint={part.id}
-              d={part.fragmentNode.sharedPaintPath}
-            />
-          </clipPath>
-        ))}
-        {projectedParts.filter(part => part.fragmentNode.interactionVisiblePath != null).map(part => (
-          <clipPath
-            key={`interaction-clip-${fragmentGraph.cacheKey}-${part.id}`}
-            id={interactionClipId(part)}
-            clipPathUnits='userSpaceOnUse'
-          >
-            <path
-              d={part.fragmentNode.interactionVisiblePath}
-              clipRule='evenodd'
-              fillRule='evenodd'
+              d={ownerPath(part)}
+              transform={`scale(${rasterToStageScale})`}
             />
           </clipPath>
         ))}
@@ -597,70 +625,97 @@ function EntityPresetBody({
         ))}
       </defs>
       <g filter={outlineEnabled ? `url(#${idPrefix}-entity-outline)` : undefined}>
-        {fragmentGraph.compositionMode === 'shared-pair'
-          ? null
-          : (
-            <g data-avatar-entity-undercoat pointerEvents='none'>
-              {projectedParts.map(part => (
-                <g key={`undercoat-${part.id}`} transform={partTransform(part)}>
-                  <path
-                    d={geometries[part.id].outlinePath}
-                    fill={part.baseColor}
-                  />
-                </g>
-              ))}
-            </g>
-          )}
         {projectedParts.map(part => (
           <g
             key={part.id}
             data-avatar-entity-part={part.id}
-            data-avatar-fragment-intersects={part.fragmentNode.intersects}
-            data-avatar-fragment-patches={part.fragmentNode.occlusionPatchCount}
-            data-avatar-fragment-interaction-area={String(part.fragmentNode.interactionVisibleArea)}
-            data-avatar-fragment-interaction-ratio={String(part.fragmentNode.interactionVisibleRatio)}
-            data-avatar-fragment-projected-area={String(part.fragmentNode.projectedAreaEstimate)}
-            data-avatar-fragment-visible-area={String(part.fragmentNode.visibleAreaEstimate)}
-            mask={part.fragmentNode.sharedPaintPath == null ? visibilityMask(part) : undefined}
+            data-avatar-fragment-interaction-area={String(interactionVisibleArea(part))}
+            data-avatar-fragment-interaction-ratio={interactionVisibleArea(part) > 0 ? '1' : '0'}
+            data-avatar-fragment-raw-visible-area={String(stageVisibleArea(part))}
+            data-avatar-fragment-visible-area={String(stageVisibleArea(part))}
             pointerEvents={interactive ? 'none' : undefined}
           >
-            <g clipPath={part.fragmentNode.sharedPaintPath == null
-              ? undefined
-              : `url(#${sharedPaintClipId(part)})`}
-            >
-              <g transform={partTransform(part)}>
-                <EntityPrimitive
-                  clipId={`${idPrefix}-entity-${preset}-${part.index}`}
-                  geometry={geometries[part.id]}
-                  part={part}
-                  showLight={showLight && renderSurfaceCells && (part.face || part.scaleX * part.scaleY >= .075)}
-                  lightDistance={lightDistance}
-                />
-                <g clipPath={`url(#${idPrefix}-entity-${preset}-${part.index})`}>
-                  {surfaceDecals.filter(decal => decal.targetPartId === part.id).map(decal => (
-                    <path
-                      key={decal.id}
-                      data-avatar-surface-decal={decal.id}
-                      d={decal.path}
-                      fill={decal.color}
-                      fillOpacity={decal.opacity / 100}
-                      transform={decal.transform}
-                    />
-                  ))}
-                  {renderFaceSurfaceLayer(part)}
+            {ownerPath(part) === ''
+              ? <g data-avatar-compiled-hidden-part={part.id} transform={partTransform(part)} />
+              : (
+                <>
+                <g data-avatar-compiled-base-layer={part.id}>
+                  <path
+                    data-avatar-compiled-base={part.id}
+                    d={ownerPath(part)}
+                    fill={part.baseColor}
+                    transform={`scale(${rasterToStageScale})`}
+                  />
                 </g>
-                {geometries[part.id].cavityPath == null
-                  ? null
-                  : (
-                    <path
-                      data-avatar-entity-cavity={part.id}
-                      d={geometries[part.id].cavityPath}
-                      fill={part.shadowColor}
-                      fillOpacity='.9'
-                    />
-                  )}
-              </g>
-            </g>
+                <g
+                  data-avatar-compiled-surface-layer={part.id}
+                  clipPath={`url(#${ownerClipId(part)})`}
+                >
+                  <g transform={partTransform(part)}>
+                    {geometries[part.id] == null
+                      ? null
+                      : (
+                        <EntityPrimitive
+                          clipId={`${idPrefix}-entity-${preset}-${part.index}`}
+                          geometry={geometries[part.id]}
+                          part={part}
+                          showBase={false}
+                          showLight={showLight && renderSurfaceCells && (part.face || part.scaleX * part.scaleY >= .075)}
+                          lightDistance={lightDistance}
+                        />
+                      )}
+                    {surfaceDecals.filter(decal => decal.targetPartId === part.id).map(decal => {
+                      const materialId = getAvatarCompiledSurfaceDecalMaterialId(preset, decal)
+                      const path = materialId == null ? '' : projection.materialPaths[materialId] ?? ''
+                      return path === ''
+                        ? null
+                        : (
+                          <path
+                            key={`compiled-${decal.id}`}
+                            data-avatar-compiled-surface-marking={decal.id}
+                            data-avatar-surface-decal={decal.id}
+                            data-avatar-surface-decal-renderer='compiled'
+                            d={path}
+                            fill={decal.color}
+                            fillOpacity={decal.opacity / 100}
+                            transform={`translate(${-part.projectedX} ${-part.projectedY}) scale(${rasterToStageScale})`}
+                          />
+                        )
+                    })}
+                    <g clipPath={geometries[part.id] == null
+                      ? undefined
+                      : `url(#${idPrefix}-entity-${preset}-${part.index})`}>
+                      {surfaceDecals.filter(decal => (
+                        decal.targetPartId === part.id &&
+                        getAvatarCompiledSurfaceDecalMaterialId(preset, decal) == null &&
+                        decal.path != null
+                      )).map(decal => (
+                        <path
+                          key={decal.id}
+                          data-avatar-surface-decal={decal.id}
+                          data-avatar-surface-decal-renderer='legacy'
+                          d={decal.path}
+                          fill={decal.color}
+                          fillOpacity={decal.opacity / 100}
+                          transform={decal.transform}
+                        />
+                      ))}
+                      {renderFaceSurfaceLayer(part)}
+                    </g>
+                    {geometries[part.id]?.cavityPath == null
+                      ? null
+                      : (
+                        <path
+                          data-avatar-entity-cavity={part.id}
+                          d={geometries[part.id]!.cavityPath}
+                          fill={part.shadowColor}
+                          fillOpacity='.9'
+                        />
+                      )}
+                  </g>
+                </g>
+                </>
+              )}
           </g>
         ))}
       </g>
@@ -669,41 +724,43 @@ function EntityPresetBody({
           <g
             key={`grid-${part.index}`}
             data-avatar-entity-grid={part.id}
-            clipPath={`url(#${interactionClipId(part)})`}
+            clipPath={`url(#${ownerClipId(part)})`}
             pointerEvents='none'
           >
-            <g transform={partTransform(part)}>
-              {geometries[part.id].cells.map(cell => (
-                <polygon
-                  key={cell.id}
-                  points={cell.points}
-                  fill='none'
-                  stroke='#fff'
-                  strokeOpacity='.09'
-                  strokeWidth='.55'
-                />
-              ))}
-            </g>
+            <path
+              data-avatar-compiled-selection-grid={part.id}
+              d={selectedOverlay?.gridPath ?? ''}
+              fill='none'
+              stroke='#fff'
+              strokeLinecap='round'
+              strokeOpacity='.16'
+              strokeWidth='.65'
+              transform={`scale(${rasterToStageScale})`}
+            />
           </g>
         ))
         : null}
       {interactive && selectedPartIsVisible
         ? (
           <g
-            key={`selection-${fragmentGraph.cacheKey}-${selectedPart.id}`}
+            key={`selection-${compiledMesh.compileKey}-${rasterSize}-${pose.yaw}-${pose.pitch}-${selectedPart.id}`}
             data-avatar-entity-selection={selectedPart.id}
-            data-avatar-fragment-interaction-area={String(selectedPart.fragmentNode.interactionVisibleArea)}
-            data-avatar-fragment-interaction-ratio={String(selectedPart.fragmentNode.interactionVisibleRatio)}
+            data-avatar-fragment-interaction-area={String(selectedPartVisibleArea)}
+            data-avatar-selection-raw-visible-pixels={String(selectedOverlay?.rawVisiblePixelCount ?? 0)}
+            data-avatar-selection-visible-ratio={String(selectedOverlay?.visibleRatio ?? 0)}
+            data-avatar-selection-grid-segments={String(selectedOverlay?.gridSegmentCount ?? 0)}
+            clipPath={`url(#${ownerClipId(selectedPart)})`}
             pointerEvents='none'
           >
             <path
-              d={selectedPart.fragmentNode.interactionVisiblePath}
+              data-avatar-compiled-selection-contour={selectedPart.id}
+              d={selectedOverlay?.contourPath ?? ''}
               fill='none'
-              fillRule='evenodd'
               stroke='var(--primary-color)'
               strokeDasharray='5 4'
               strokeLinejoin='round'
               strokeWidth={2}
+              transform={`scale(${rasterToStageScale})`}
             />
           </g>
         )
@@ -748,6 +805,10 @@ export const EntityPresetPreview = memo(function EntityPresetPreview({
         ? parts.find(part => part.face)
         : parts.find(part => part.id === decal.targetPartId)
       if (targetPart == null) return []
+      const resolvedDecal = { ...decal, targetPartId: targetPart.id }
+      if (getAvatarCompiledSurfaceDecalMaterialId(preset, resolvedDecal) != null) {
+        return [resolvedDecal]
+      }
       const projected = projectAvatarSurfaceDecal(
         pose,
         targetPart.shape,
@@ -755,9 +816,8 @@ export const EntityPresetPreview = memo(function EntityPresetPreview({
         getEntityFaceGeometryOptions(targetPart, preset)
       )
       return projected == null ? [] : [{
-        ...decal,
+        ...resolvedDecal,
         path: projected.path,
-        targetPartId: targetPart.id,
         ...(projected.transform == null ? {} : { transform: projected.transform })
       }]
     }), [parts, pose, preset, providedSurfaceDecals, scene])
@@ -816,6 +876,7 @@ export const EntityPresetPreview = memo(function EntityPresetPreview({
           lightDistance={0}
           parts={parts}
           pose={pose}
+          preview
           preset={preset}
           renderSurfaceCells={false}
           shadowStyle={DEFAULT_AVATAR_FACE_SHADOW_STYLE}
@@ -1052,23 +1113,27 @@ function InteractiveAvatarComponent({
   const renderedGridDensity = gridInteractiveQuality
     ? Math.min(resolvedGridDensity, 24)
     : resolvedGridDensity
-  const bodyGeometryOptions = useMemo<AvatarBodyGeometryOptions>(
-    () => ({ bottomTaper }),
-    [bottomTaper]
-  )
-  const bodyGeometry = useMemo(
-    () => buildAvatarBodyGeometry(bodyShape, pose, lightDirection, renderedGridDensity, bodyGeometryOptions),
-    [bodyGeometryOptions, bodyShape, lightDirection, pose, renderedGridDensity]
-  )
-  const face = useMemo(
-    () => projectDefaultFace(pose, bodyShape, animatedFaceStyle, bodyGeometryOptions),
-    [animatedFaceStyle, bodyGeometryOptions, bodyShape, pose]
-  )
   const sourceEntityParts = useMemo(
     () => entityParts.length > 0 ? entityParts : createAvatarEntityParts(entityPreset),
     [entityParts, entityPreset]
   )
   const usesEntityParts = sourceEntityParts.length > 0
+  const bodyGeometryOptions = useMemo<AvatarBodyGeometryOptions>(
+    () => ({ bottomTaper }),
+    [bottomTaper]
+  )
+  const bodyGeometry = useMemo(
+    () => usesEntityParts
+      ? EMPTY_BODY_GEOMETRY
+      : buildAvatarBodyGeometry(bodyShape, pose, lightDirection, renderedGridDensity, bodyGeometryOptions),
+    [bodyGeometryOptions, bodyShape, lightDirection, pose, renderedGridDensity, usesEntityParts]
+  )
+  const face = useMemo(
+    () => usesEntityParts
+      ? EMPTY_PROJECTED_FACE
+      : projectDefaultFace(pose, bodyShape, animatedFaceStyle, bodyGeometryOptions),
+    [animatedFaceStyle, bodyGeometryOptions, bodyShape, pose, usesEntityParts]
+  )
   const resolvedEntityParts = useMemo(
     () =>
       sourceEntityParts.map(part => ({
@@ -1079,15 +1144,18 @@ function InteractiveAvatarComponent({
       })),
     [colorGrade, sourceEntityParts]
   )
+  const requiresEntityGeometry = showLight || sourceEntityParts.some(part => part.hollow === true)
   const entityGeometryBuild = useMemo(() => {
     const startedAt = performance.now()
-    const geometries = buildEntityPartGeometries(
-      sourceEntityParts,
-      pose,
-      lightDirection,
-      renderedGridDensity,
-      renderingInteractively ? .5 : 1
-    )
+    const geometries = requiresEntityGeometry
+      ? buildEntityPartGeometries(
+          sourceEntityParts,
+          pose,
+          lightDirection,
+          renderedGridDensity,
+          renderingInteractively ? .5 : 1
+        )
+      : {}
     const duration = performance.now() - startedAt
     if (dragging) {
       if (!entityGeometryPreviousBuildWasDraggingRef.current) entityGeometryDragBuildSamplesRef.current = []
@@ -1112,19 +1180,11 @@ function InteractiveAvatarComponent({
     lightDirection,
     pose,
     renderedGridDensity,
+    requiresEntityGeometry,
     renderingInteractively,
     sourceEntityParts
   ])
   const entityGeometries = entityGeometryBuild.geometries
-  // Two intersecting surfaces use a shared ownership partition. Keep that
-  // structural mesh identical while dragging and at rest; interactive quality
-  // may simplify lighting and boundary output, but must not change topology.
-  const entityFragmentGeometries = useMemo(
-    () => sourceEntityParts.length === 2
-      ? buildEntityPartGeometries(sourceEntityParts, pose, lightDirection, renderedGridDensity, 1)
-      : entityGeometries,
-    [entityGeometries, lightDirection, pose, renderedGridDensity, sourceEntityParts]
-  )
   const entityFacePart = sourceEntityParts.find(part => part.face)
   const entityFace = useMemo(
     () =>
@@ -1136,8 +1196,9 @@ function InteractiveAvatarComponent({
       ),
     [animatedFaceStyle, entityFacePart, entityPreset, pose]
   )
+  const visibleFace = usesEntityParts ? entityFace : face
   const projectedSurfaceDecals = useMemo<ProjectedSurfaceDecal[]>(() =>
-    surfaceDecals.flatMap(decal => {
+    surfaceDecals.flatMap((decal): ProjectedSurfaceDecal[] => {
       if (!usesEntityParts) {
         if (decal.targetPartId != null) return []
         const projected = projectAvatarSurfaceDecal(pose, bodyShape, decal, bodyGeometryOptions)
@@ -1151,6 +1212,10 @@ function InteractiveAvatarComponent({
         ? entityFacePart
         : sourceEntityParts.find(part => part.id === decal.targetPartId)
       if (targetPart == null) return []
+      const resolvedDecal = { ...decal, targetPartId: targetPart.id }
+      if (getAvatarCompiledSurfaceDecalMaterialId(entityPreset, resolvedDecal) != null) {
+        return [resolvedDecal]
+      }
       const projected = projectAvatarSurfaceDecal(
         pose,
         targetPart.shape,
@@ -1158,9 +1223,8 @@ function InteractiveAvatarComponent({
         getEntityFaceGeometryOptions(targetPart, entityPreset)
       )
       return projected == null ? [] : [{
-        ...decal,
+        ...resolvedDecal,
         path: projected.path,
-        targetPartId: targetPart.id,
         ...(projected.transform == null ? {} : { transform: projected.transform })
       }]
     }), [bodyGeometryOptions, bodyShape, entityFacePart, entityPreset, pose, sourceEntityParts, surfaceDecals, usesEntityParts])
@@ -1673,8 +1737,9 @@ function InteractiveAvatarComponent({
       data-position-y={position.y}
       data-pixel-ready={pixelEffect?.enabled === true && pixelReady}
       data-roll={avatarRoll}
-      data-visible-marks={face.eyes.length + (face.nose != null && animatedFaceStyle.noseEnabled ? 1 : 0) +
-        (face.mouth != null && animatedFaceStyle.mouthEnabled ? 1 : 0)}
+      data-visible-marks={visibleFace.eyes.length +
+        (visibleFace.nose != null && animatedFaceStyle.noseEnabled ? 1 : 0) +
+        (visibleFace.mouth != null && animatedFaceStyle.mouthEnabled ? 1 : 0)}
       data-yaw={pose.yaw}
     >
       <svg
@@ -1866,7 +1931,6 @@ function InteractiveAvatarComponent({
                 avatarOutlineStyle={avatarOutlineStyle}
                 face={entityFace}
                 faceStyle={animatedFaceStyle}
-                fragmentGeometries={entityFragmentGeometries}
                 geometries={entityGeometries}
                 idPrefix={id}
                 interactive={interactive}

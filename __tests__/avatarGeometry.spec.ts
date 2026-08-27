@@ -4,6 +4,9 @@ import {
   AVATAR_GRID_DENSITY,
   DEFAULT_AVATAR_FACE_STYLE,
   buildAvatarBodyGeometry,
+  buildAvatarSurfaceDecalLocalBoundaries,
+  getAvatarBodyCompilerShapeSpec,
+  mapAvatarPrimitiveLocalPointToAuthoredSurface,
   projectAvatarSurfaceDecal,
   projectDefaultFace,
   resolveAvatarSurfaceShadeOpacity
@@ -22,6 +25,44 @@ import {
 
 const POSE = { pitch: -.35, yaw: .4 }
 const LIGHT = { azimuth: -92, elevation: 64 }
+
+it('maps rotated half-cone and side surfaces back to the authored decal chart', () => {
+  const roundness = 42
+  const exponent = 1 + (.56 - 1) * roundness / 100
+  const ring = .5 ** exponent
+  const authoredX = .2
+  const cutAngle = Math.PI / 3
+  const longitude = cutAngle + Math.asin(authoredX / ring)
+  const halfCone = mapAvatarPrimitiveLocalPointToAuthoredSurface(
+    'half-cone',
+    { x: ring * Math.sin(longitude), y: 0, z: ring * Math.cos(longitude) },
+    'front',
+    { cutAngle: 60, roundness }
+  )
+  expect(halfCone.x).toBeCloseTo(authoredX, 6)
+  expect(halfCone.y).toBe(0)
+  expect(halfCone.frontDepth).toBeGreaterThan(0)
+
+  const sideFacingHalfCone = mapAvatarPrimitiveLocalPointToAuthoredSurface(
+    'half-cone',
+    { x: ring, y: 0, z: 0 },
+    'front',
+    { cutAngle: 90, roundness }
+  )
+  expect(sideFacingHalfCone.x).toBeCloseTo(0, 6)
+  expect(sideFacingHalfCone.frontDepth).toBeCloseTo(ring, 6)
+
+  const spec = getAvatarBodyCompilerShapeSpec('ellipse')
+  const sideX = .25
+  const sideZ = .8
+  const left = mapAvatarPrimitiveLocalPointToAuthoredSurface('ellipse', {
+    x: -sideZ * spec.radiusZ / spec.radiusX,
+    y: -.15,
+    z: sideX * spec.radiusX / spec.radiusZ
+  }, 'left')
+  expect(left).toMatchObject({ x: expect.closeTo(sideX, 6), y: -.15 })
+  expect(left.frontDepth).toBeCloseTo(sideZ, 6)
+})
 
 const projectedPathExtent = (path: string) => {
   const values = Array.from(path.matchAll(/-?\d+(?:\.\d+)?/g), match => Number(match[0]))
@@ -439,5 +480,65 @@ describe('avatar face-anchored surface decals', () => {
     expect(taperedDecal?.path).toBe(taperedFace.mouth?.path)
     expect(taperedDecal?.path).not.toBe(originalDecal?.path)
     expect(taperedDecal?.path).not.toContain('NaN')
+  })
+
+  it('splits full-crown radial markings at the object-space horizon', () => {
+    const boundaries = buildAvatarSurfaceDecalLocalBoundaries({
+      color: '#d9b985',
+      height: 64,
+      id: 'crown-pleats',
+      label: 'Crown pleats',
+      opacity: 62,
+      rotation: 0,
+      shape: 'radial-pleats',
+      side: 'front',
+      targetPartId: 'crown',
+      width: 5,
+      x: -42,
+      y: 0
+    }, 'sphere')
+    const front = boundaries.filter(boundary => boundary[0]?.surfaceSide === 'front')
+    const back = boundaries.filter(boundary => boundary[0]?.surfaceSide === 'back')
+
+    expect(front.length).toBeGreaterThan(5)
+    expect(back.length).toBeGreaterThan(5)
+    for (const boundary of boundaries) {
+      expect(new Set(boundary.map(point => point.surfaceSide))).toHaveLength(1)
+      expect(boundary.length).toBeGreaterThanOrEqual(3)
+    }
+
+    const legacyNonFrontSide = buildAvatarSurfaceDecalLocalBoundaries({
+      color: '#d9b985',
+      height: 64,
+      id: 'legacy-side-crown-pleats',
+      label: 'Legacy side crown pleats',
+      opacity: 62,
+      rotation: 0,
+      shape: 'radial-pleats',
+      side: 'left',
+      targetPartId: 'crown',
+      width: 5,
+      x: -42,
+      y: 0
+    }, 'sphere')
+    expect(legacyNonFrontSide).toEqual(boundaries)
+
+    const rotatedHalfCone = buildAvatarSurfaceDecalLocalBoundaries({
+      color: '#d9b985',
+      height: 64,
+      id: 'rotated-half-cone-pleats',
+      label: 'Rotated half-cone pleats',
+      opacity: 62,
+      rotation: 0,
+      shape: 'radial-pleats',
+      side: 'front',
+      targetPartId: 'crown',
+      width: 5,
+      x: -42,
+      y: 0
+    }, 'half-cone', { cutAngle: 90, roundness: 42 })
+    expect(rotatedHalfCone).not.toHaveLength(0)
+    expect(rotatedHalfCone.every(boundary => boundary[0]?.surfaceSide === 'front')).toBe(true)
+    expect(rotatedHalfCone.flat().every(point => Math.abs(point.x) <= 139.001)).toBe(true)
   })
 })

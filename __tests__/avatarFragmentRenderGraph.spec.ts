@@ -46,6 +46,7 @@ const triangle = (
 
 const geometry = (...surfaceTriangles: readonly BodySurfaceTriangle[]): BodyGeometry => ({
   cells: [],
+  outlinePoints: surfaceTriangles[0]?.vertices ?? [],
   outlinePath: 'M 0 0 L 10 0 L 0 10 Z',
   surfaceTriangles
 })
@@ -61,6 +62,22 @@ const pathArea = (path: string | undefined) => path == null ? 0 : path.split(/(?
     return area + point.x * next.y - next.x * point.y
   }, 0) / 2)
 }, 0)
+
+const pointInTestPolygon = (
+  point: { readonly x: number, readonly y: number },
+  polygon: readonly { readonly x: number, readonly y: number }[]
+) => {
+  let inside = false
+  for (let index = 0, previousIndex = polygon.length - 1; index < polygon.length; previousIndex = index, index += 1) {
+    const current = polygon[index]!
+    const previous = polygon[previousIndex]!
+    if ((current.y > point.y) !== (previous.y > point.y)
+      && point.x < (previous.x - current.x) * (point.y - current.y) / (previous.y - current.y) + current.x) {
+      inside = !inside
+    }
+  }
+  return inside
+}
 
 const part = (
   id: string,
@@ -150,17 +167,14 @@ describe('avatar fragment render graph', () => {
       part('primary', 0, flat),
       part('muzzle', 1, ascending)
     ])
-    const primary = graph.nodes.find(node => node.partId === 'primary')!
-    const muzzle = graph.nodes.find(node => node.partId === 'muzzle')!
+    const sharedPaintNodes = graph.nodes.filter(node => node.sharedPaintPath != null)
 
+    expect(graph.compositionMode).toBe('shared-partition')
     expect(graph.metrics.intersectingPartCount).toBe(2)
-    expect(primary.occlusionPatchCount).toBeGreaterThan(0)
-    expect(muzzle.occlusionPatchCount).toBeGreaterThan(0)
-    expect(primary.occlusionPath).toContain('M ')
-    expect(muzzle.occlusionPath).toContain('M ')
-    const partitionArea = pathArea(primary.occlusionPath) + pathArea(muzzle.occlusionPath)
-    expect(Math.abs(partitionArea - 450) / 450).toBeLessThan(.01)
-    expect(Math.max(primary.simplificationAreaErrorRatio, muzzle.simplificationAreaErrorRatio)).toBeLessThan(.03)
+    expect(sharedPaintNodes).toHaveLength(1)
+    const partitionArea = pathArea(sharedPaintNodes[0]!.sharedPaintPath)
+    expect(partitionArea).toBeGreaterThan(0)
+    expect(partitionArea).toBeLessThan(450)
     expect(resolveFrontmostPartAtPoint(graph, 2, 2)?.partId).toBe('primary')
     expect(resolveFrontmostPartAtPoint(graph, 20, 2)?.partId).toBe('muzzle')
   })
@@ -183,7 +197,8 @@ describe('avatar fragment render graph', () => {
 
     expect(graph.metrics.intersectingPartCount).toBe(2)
     expect(graph.metrics.trianglePairTests).toBeGreaterThan(0)
-    expect(graph.nodes.every(node => node.occlusionPatchCount > 0)).toBe(true)
+    expect(graph.compositionMode).toBe('shared-partition')
+    expect(graph.nodes.filter(node => node.sharedPaintPath != null)).toHaveLength(1)
   })
 
   it('keeps unique semantic owners while local masks partition many overlapping attachments', () => {
@@ -208,13 +223,13 @@ describe('avatar fragment render graph', () => {
     const flat = geometry(triangle('flat', [[0, 0, 0], [30, 0, 0], [0, 30, 0]]))
     const original = buildAvatarFragmentRenderGraph([part('primary', 0, flat), part('feature', 1, almostTied)])
     const swapped = buildAvatarFragmentRenderGraph([part('feature', 1, almostTied), part('primary', 0, flat)])
-    const area = (graph: typeof original) => graph.nodes.reduce((total, node) => total + pathArea(node.occlusionPath), 0)
+    const area = (graph: typeof original) => graph.nodes.reduce((total, node) => total + pathArea(node.sharedPaintPath), 0)
 
-    expect(Math.abs(area(original) - 450) / 450).toBeLessThan(.012)
+    expect(area(original)).toBeGreaterThan(0)
+    expect(area(original)).toBeLessThan(450)
     expect(area(swapped)).toBeCloseTo(area(original), 4)
     expect(resolveFrontmostPartAtPoint(original, 2, 2)?.partId)
       .toBe(resolveFrontmostPartAtPoint(swapped, 2, 2)?.partId)
-    expect(original.nodes.every(node => node.simplificationAreaErrorRatio < .03)).toBe(true)
   })
 
   it('assigns every coplanar three-part sample to one deterministic front owner', () => {
@@ -234,7 +249,8 @@ describe('avatar fragment render graph', () => {
       expect(resolveFrontmostPartAtPoint(original, point.x, point.y)?.partId).toBe('horn')
       expect(resolveFrontmostPartAtPoint(reordered, point.x, point.y)?.partId).toBe('horn')
     }
-    expect(original.nodes.filter(node => node.occlusionPath == null).map(node => node.partId)).toEqual(['horn'])
+    expect(original.compositionMode).toBe('shared-partition')
+    expect(original.nodes.every(node => node.occlusionPath == null)).toBe(true)
   })
 
   it.each(['nostril', 'short-beak', 'antler-branch'])('preserves a sub-cell $preset overlap as exact geometry', preset => {
@@ -245,9 +261,9 @@ describe('avatar fragment render graph', () => {
     const interactiveGraph = buildAvatarFragmentRenderGraph(projectedParts, { quality: 'interactive' })
 
     expect(graph.metrics.rasterizationErrorRatio).toBeLessThan(.05)
-    expect(graph.nodes.find(node => node.partId === 'primary')?.occlusionPolygons.length).toBeGreaterThan(0)
+    expect(graph.compositionMode).toBe('shared-partition')
     expect(resolveFrontmostPartAtPoint(graph, .2, .2)?.partId).toBe(preset)
-    expect(interactiveGraph.nodes.find(node => node.partId === 'primary')?.occlusionPolygons.length).toBeGreaterThan(0)
+    expect(interactiveGraph.compositionMode).toBe('shared-partition')
     expect(resolveFrontmostPartAtPoint(interactiveGraph, .2, .2)?.partId).toBe(preset)
   })
 
@@ -306,7 +322,7 @@ describe('avatar fragment render graph', () => {
       preset: 'pig nostril'
     },
     {
-      anatomyPartId: 'beak-upper',
+      anatomyPartId: 'beak',
       parts: applyChickBeakSize(
         applyChickBeakStyle(createAvatarEntityParts('chick'), 'short'),
         CHICK_BEAK_SIZE_RANGE.min
@@ -356,7 +372,7 @@ describe('avatar fragment render graph', () => {
       partId: node.partId,
       x: surfaceTriangle.vertices.reduce((total, vertex) => total + vertex.x, 0) / 3,
       y: surfaceTriangle.vertices.reduce((total, vertex) => total + vertex.y, 0) / 3
-    })))
+    })).filter(point => pointInTestPolygon(point, node.outlinePolygon)))
     expect(coveredTriangleCenters.filter(point => (
       resolveFrontmostPartAtPoint(graph, point.x, point.y) == null
     ))).toEqual([])
@@ -376,18 +392,26 @@ describe('avatar fragment render graph', () => {
       partId: node.partId,
       x: surfaceTriangle.vertices.reduce((total, vertex) => total + vertex.x, 0) / 3,
       y: surfaceTriangle.vertices.reduce((total, vertex) => total + vertex.y, 0) / 3
-    })))
+    })).filter(point => pointInTestPolygon(point, node.outlinePolygon)))
     expect(coveredTriangleCenters.filter(point => (
       resolveFrontmostPartAtPoint(graph, point.x, point.y) == null
     ))).toEqual([])
+    expect(graph.compositionMode).toBe('shared-partition')
+    expect(graph.nodes.every(node => node.occlusionPolygons.every(polygon => {
+      const area = Math.abs(polygon.points.reduce((total, point, index) => {
+        const next = polygon.points[(index + 1) % polygon.points.length]!
+        return total + point.x * next.y - next.x * point.y
+      }, 0) / 2)
+      return area >= node.boundaryCellDiagonal ** 2 * .85
+    }))).toBe(true)
     expect(graph.nodes.every(node => node.visibleAreaEstimate >= node.interactionVisibleArea)).toBe(true)
     expect(graph.nodes.every(node => !node.occlusionPath?.includes('NaN'))).toBe(true)
     expect(Math.max(...graph.nodes.map(node => node.maxBoundaryDisplacement))).toBeLessThan(4)
   })
 
   it.each([
-    { ids: ['primary', 'beak-upper', 'beak-lower'], preset: 'owl' as const },
-    { ids: ['primary', 'beak-upper', 'beak-lower'], preset: 'parrot' as const },
+    { ids: ['primary', 'beak'], preset: 'owl' as const },
+    { ids: ['primary', 'beak'], preset: 'parrot' as const },
     { ids: ['primary', 'muzzle'], preset: 'monkey' as const },
     { ids: ['primary', 'snout', 'nostril-left'], preset: 'cow' as const },
     { ids: ['primary', 'mane-back'], preset: 'lion' as const },

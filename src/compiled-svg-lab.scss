@@ -1,0 +1,70 @@
+:root {
+  color: #171513;
+  font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  background: #f3efe8;
+  font-synthesis: none;
+}
+
+* { box-sizing: border-box; }
+body { margin: 0; min-width: 320px; }
+button, input { font: inherit; }
+button {
+  border: 1px solid #c9c1b6;
+  border-radius: 999px;
+  padding: .65rem 1rem;
+  color: inherit;
+  background: #fffdf8;
+  cursor: pointer;
+}
+button[aria-pressed='true'] { border-color: #171513; color: #fff; background: #171513; }
+
+.compiled-svg-lab { min-height: 100vh; padding: 28px; }
+.compiled-svg-lab__header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 24px;
+  max-width: 1120px;
+  margin: 0 auto 24px;
+}
+.compiled-svg-lab__header h1 { max-width: 720px; margin: 4px 0 8px; font-size: clamp(2rem, 4vw, 3.8rem); line-height: .98; letter-spacing: -.055em; }
+.compiled-svg-lab__header p { margin: 0; color: #6a6259; }
+.compiled-svg-lab__eyebrow { color: #b6492f !important; font-size: .75rem; font-weight: 800; letter-spacing: .12em; text-transform: uppercase; }
+.compiled-svg-lab__workspace { display: grid; grid-template-columns: minmax(420px, 1fr) 340px; gap: 24px; max-width: 1120px; margin: 0 auto; }
+.compiled-svg-lab__stage-column,
+.compiled-svg-lab__panel { border: 1px solid #d7d0c5; border-radius: 28px; background: rgba(255, 253, 248, .92); box-shadow: 0 18px 60px rgba(73, 58, 39, .09); }
+.compiled-svg-lab__stage-column { display: flex; flex-direction: column; align-items: center; padding: 22px; }
+.compiled-svg-lab__fixture-switch { display: flex; gap: 8px; align-self: stretch; margin-bottom: 18px; }
+.compiled-svg-lab__stage { width: min(100%, 620px); height: auto; border-radius: 24px; cursor: grab; touch-action: none; user-select: none; }
+.compiled-svg-lab__stage:active { cursor: grabbing; }
+.compiled-svg-lab__hint { margin: 16px 0 0; color: #756d63; font-size: .8rem; }
+.compiled-svg-lab__panel { padding: 6px 22px; }
+.compiled-svg-lab__panel section { padding: 18px 0; border-bottom: 1px solid #e5ded4; }
+.compiled-svg-lab__panel section:last-child { border-bottom: 0; }
+.compiled-svg-lab__panel h2 { margin: 0 0 14px; font-size: .85rem; letter-spacing: .08em; text-transform: uppercase; }
+.compiled-svg-lab__panel label { display: grid; gap: 7px; margin-top: 13px; color: #5f574f; font-size: .82rem; }
+.compiled-svg-lab__panel label span { display: flex; justify-content: space-between; }
+.compiled-svg-lab__panel output { color: #171513; font-variant-numeric: tabular-nums; }
+.compiled-svg-lab__panel input[type='range'] { width: 100%; accent-color: #b6492f; }
+.compiled-svg-lab__color { grid-template-columns: 1fr auto; align-items: center; }
+.compiled-svg-lab__color input { width: 38px; height: 28px; padding: 0; border: 0; background: none; }
+.compiled-svg-lab__metrics { margin: 0; }
+.compiled-svg-lab__metrics div { display: grid; grid-template-columns: 1fr auto; gap: 12px; padding: 5px 0; }
+.compiled-svg-lab__metrics dt { color: #6a6259; }
+.compiled-svg-lab__metrics dd { margin: 0; font-variant-numeric: tabular-nums; }
+
+.compiled-svg-lab--capture { width: 420px; min-height: 420px; padding: 0; background: #ff00ff; }
+.compiled-svg-lab--capture .compiled-svg-lab__header,
+.compiled-svg-lab--capture .compiled-svg-lab__fixture-switch,
+.compiled-svg-lab--capture .compiled-svg-lab__hint,
+.compiled-svg-lab--capture .compiled-svg-lab__panel { display: none; }
+.compiled-svg-lab--capture .compiled-svg-lab__workspace { display: block; width: 420px; margin: 0; }
+.compiled-svg-lab--capture .compiled-svg-lab__stage-column { display: block; width: 420px; padding: 0; border: 0; border-radius: 0; box-shadow: none; }
+.compiled-svg-lab--capture .compiled-svg-lab__stage { display: block; width: 420px; height: 420px; border-radius: 0; }
+
+@media (max-width: 860px) {
+  .compiled-svg-lab { padding: 18px; }
+  .compiled-svg-lab__header { align-items: stretch; flex-direction: column; }
+  .compiled-svg-lab__workspace { grid-template-columns: 1fr; }
+  .compiled-svg-lab__panel { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0 24px; }
+}

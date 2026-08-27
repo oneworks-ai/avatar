@@ -10,6 +10,10 @@ const OCCLUSION_GRID_MIN_DIMENSION = 12
 const OCCLUSION_LOCAL_REFINEMENT_DIMENSION = 16
 const OCCLUSION_BOUNDARY_SNAP_RATIO = .8
 const OCCLUSION_BOUNDARY_SIMPLIFY_RATIO = .18
+// A disconnected subtractive mask smaller than one compositor sample cannot
+// express stable ownership. It shows up as a hard sliver while the real narrow
+// anatomy is still painted and hit-tested from its complete surface geometry.
+const OCCLUSION_MIN_COMPONENT_CELL_AREA_RATIO = .85
 const OCCLUSION_MAX_SEGMENTS_PER_PART = 240
 const OCCLUSION_MAX_SEGMENTS_PER_GRAPH = 3_000
 // Interaction overlays need a stronger contract than paint masks. A tiny
@@ -117,7 +121,7 @@ export interface AvatarFragmentRenderNode {
 
 export interface AvatarFragmentRenderGraph {
   readonly cacheKey: string
-  readonly compositionMode: 'independent-masks' | 'shared-pair'
+  readonly compositionMode: 'independent-masks' | 'shared-partition'
   readonly sharedPairBasePartId?: string
   readonly metrics: {
     readonly intersectingPartCount: number
@@ -806,10 +810,17 @@ const traceOcclusionGrid = (
     )
   )))
   let tolerance = cellDiagonal * OCCLUSION_BOUNDARY_SIMPLIFY_RATIO
-  let simplified = worldLoops.map(loop => simplifyClosedPath(loop, tolerance)).filter(loop => loop.length >= 3)
+  const simplifyLoops = () => worldLoops.map(loop => {
+    const candidate = simplifyClosedPath(loop, tolerance)
+    // A narrow but valid owner island must not disappear merely because the
+    // simplifier collapsed it below a polygon. Keep its unsimplified shared
+    // boundary; segment fuses below still bound the whole graph.
+    return candidate.length >= 3 ? candidate : loop
+  })
+  let simplified = simplifyLoops()
   while (simplified.reduce((total, loop) => total + loop.length, 0) > maxSegments) {
     tolerance *= 1.45
-    simplified = worldLoops.map(loop => simplifyClosedPath(loop, tolerance)).filter(loop => loop.length >= 3)
+    simplified = simplifyLoops()
     if (tolerance > Math.max(cellWidth * grid.columns, cellHeight * grid.rows)) break
   }
   const maxBoundaryDisplacement = worldLoops.reduce((maxLoopDistance, loop, loopIndex) => {
@@ -967,6 +978,28 @@ export const buildAvatarFragmentRenderGraph = (
       triangles
     }
   })
+  // SVG still needs a deterministic painter's order, but that order is only a
+  // stable traversal order. Local surface depth remains the source of truth.
+  // For every overlap pixel we mask only a later-painted surface when the true
+  // owner has already been painted. The opposite side is left intact and will
+  // naturally cover earlier paint. This assigns every shared boundary to one
+  // subtractive mask instead of eroding both neighbours independently.
+  const surfaceDrawOrder = surfaces.map((_, index) => index).sort((leftIndex, rightIndex) => {
+    const left = surfaces[leftIndex]!
+    const right = surfaces[rightIndex]!
+    return left.depth - right.depth
+      || left.part.index - right.part.index
+      || left.part.id.localeCompare(right.part.id)
+  })
+  const surfaceDrawRanks = new Int16Array(surfaces.length)
+  surfaceDrawOrder.forEach((surfaceIndex, rank) => {
+    surfaceDrawRanks[surfaceIndex] = rank
+  })
+  const shouldMaskSurface = (surfaceIndex: number, frontSurfaceIndex: number) => (
+    frontSurfaceIndex >= 0
+    && frontSurfaceIndex !== surfaceIndex
+    && surfaceDrawRanks[frontSurfaceIndex]! < surfaceDrawRanks[surfaceIndex]!
+  )
   const allTriangles = surfaces.flatMap(surface => surface.triangles)
   const globalBounds = allTriangles.length === 0
     ? { maxX: 1, maxY: 1, minX: -1, minY: -1 }
@@ -1017,18 +1050,23 @@ export const buildAvatarFragmentRenderGraph = (
     }
     return depths
   })
-  if (surfaces.length === 2) {
-    const sharedBoundaryForLeft = buildSharedDepthEqualitySegments(
-      gridTemplate,
-      surfaceDepthGrids[0]!,
-      surfaceDepthGrids[1]!,
-      1
-    )
-    depthBoundaries.get(surfaces[0]!.part.id)!.push(...sharedBoundaryForLeft)
-    depthBoundaries.get(surfaces[1]!.part.id)!.push(...sharedBoundaryForLeft.map(segment => ({
-      ...segment,
-      ownerIndex: 0
-    })))
+  for (let leftIndex = 0; leftIndex < surfaces.length; leftIndex += 1) {
+    for (let rightIndex = leftIndex + 1; rightIndex < surfaces.length; rightIndex += 1) {
+      const left = surfaces[leftIndex]!
+      const right = surfaces[rightIndex]!
+      if (!boundsOverlap(left.bounds, right.bounds) || !depthRangesOverlap(left, right)) continue
+      const sharedBoundaryForLeft = buildSharedDepthEqualitySegments(
+        gridTemplate,
+        surfaceDepthGrids[leftIndex]!,
+        surfaceDepthGrids[rightIndex]!,
+        rightIndex
+      )
+      depthBoundaries.get(left.part.id)!.push(...sharedBoundaryForLeft)
+      depthBoundaries.get(right.part.id)!.push(...sharedBoundaryForLeft.map(segment => ({
+        ...segment,
+        ownerIndex: leftIndex
+      })))
+    }
   }
   const cellCoverCounts = new Uint16Array(gridTemplate.cells.length)
   const cellCoverSurfaceIndexes: Array<readonly number[] | undefined> = new Array(gridTemplate.cells.length)
@@ -1082,7 +1120,7 @@ export const buildAvatarFragmentRenderGraph = (
         const rightIndex = coveringSurfaceIndexes[right]!
         sharedCellCounts[leftIndex * surfaces.length + rightIndex] += 1
       }
-      if (leftIndex !== frontSurfaceIndex) {
+      if (shouldMaskSurface(leftIndex, frontSurfaceIndex)) {
         const grid = occlusionGrids.get(surfaces[leftIndex]!.part.id)!
         grid.cells[cellIndex] = 1
         grid.owners[cellIndex] = frontSurfaceIndex
@@ -1161,7 +1199,7 @@ export const buildAvatarFragmentRenderGraph = (
         ))
         const localCellIndex = localRow * OCCLUSION_LOCAL_REFINEMENT_DIMENSION + localColumn
         for (const candidate of localSurfaces) {
-          if (candidate.surfaceIndex !== front.surfaceIndex) {
+          if (shouldMaskSurface(candidate.surfaceIndex, front.surfaceIndex)) {
             const grid = localGrids.get(candidate.surfaceIndex)!
             grid.cells[localCellIndex] = 1
             grid.owners[localCellIndex] = front.surfaceIndex
@@ -1264,8 +1302,10 @@ export const buildAvatarFragmentRenderGraph = (
               occlusionGrids.get(right.part.id)!.cells[singleSharedCellIndex] = 0
             }
           }
-          exactOcclusionPolygons.get(left.part.id)!.push(...leftFallbacks)
-          exactOcclusionPolygons.get(right.part.id)!.push(...rightFallbacks)
+          const maskedLeftFallbacks = shouldMaskSurface(leftIndex, rightIndex) ? leftFallbacks : []
+          const maskedRightFallbacks = shouldMaskSurface(rightIndex, leftIndex) ? rightFallbacks : []
+          exactOcclusionPolygons.get(left.part.id)!.push(...maskedLeftFallbacks)
+          exactOcclusionPolygons.get(right.part.id)!.push(...maskedRightFallbacks)
           exactFallbackArea = [...leftFallbacks, ...rightFallbacks]
             .reduce((total, points) => total + polygonArea(points), 0)
         }
@@ -1305,15 +1345,20 @@ export const buildAvatarFragmentRenderGraph = (
     const sharedPairContourPoints = sharedPairDrawOrder == null
       ? null
       : surface.part.id === sharedPairTopPartId ? traced.polygons : []
+    const minimumComponentArea = traced.cellDiagonal ** 2 * OCCLUSION_MIN_COMPONENT_CELL_AREA_RATIO
+    const sourceContourPoints = (sharedPairContourPoints ?? [...traced.polygons, ...exactPolygons])
+      .filter(points => sharedPairDrawOrder != null || polygonArea(points) >= minimumComponentArea)
     const contourPoints = limitPolygonSegments(
-      sharedPairContourPoints ?? [...traced.polygons, ...exactPolygons],
+      sourceContourPoints,
       maxSegmentsPerPart,
       traced.cellDiagonal * OCCLUSION_BOUNDARY_SIMPLIFY_RATIO
     )
     const occlusionPolygons = contourPoints.map(points => ({ points }))
     const occlusionPath = contourPoints.map(polygonPath).join(' ')
-    const sourceArea = traced.sourceArea
-      + exactPolygons.reduce((total, points) => total + polygonArea(points), 0)
+    const sourceArea = Math.abs(sourceContourPoints.reduce(
+      (total, points) => total + signedPolygonArea(points),
+      0
+    ))
     const contourArea = Math.abs(contourPoints.reduce((total, points) => total + signedPolygonArea(points), 0))
     const simplificationAreaErrorRatio = sourceArea <= AREA_EPSILON
       ? 0
@@ -1435,7 +1480,9 @@ export const buildAvatarFragmentRenderGraph = (
   const occlusionSegmentCount = nodes.reduce((total, node) => total + node.occlusionSegmentCount, 0)
   const graph = {
     cacheKey,
-    compositionMode: sharedPairDrawOrder == null ? 'independent-masks' as const : 'shared-pair' as const,
+    compositionMode: intersectingPartIds.size < 2
+      ? 'independent-masks' as const
+      : 'shared-partition' as const,
     metrics: {
       intersectingPartCount: intersectingPartIds.size,
       rasterizationErrorRatio: rasterizationExactArea <= AREA_EPSILON
