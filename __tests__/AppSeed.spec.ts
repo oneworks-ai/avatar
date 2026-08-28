@@ -2756,3 +2756,291 @@ describe('App Seed authoring', () => {
     expect(restored.get('seedFields')).toContain(AVATAR_SEED_FIELD.palette)
   })
 })
+
+describe('App animation stage controls', () => {
+  const prepareAlertTimeline = () => {
+    window.history.replaceState(null, '', '/?entity=bear&animationPanel=1&seed=v1-stage-controls')
+    window.localStorage.setItem('oneworks-avatar-animation-timeline-v1', JSON.stringify({
+      durationMs: 6000,
+      tracks: [{
+        clips: [{
+          durationMs: 4600,
+          instanceId: 'alert-clip',
+          playbackRate: 1,
+          source: {
+            fallback: 'skip',
+            presetId: 'bear-alert-morph',
+            presetVersion: 1,
+            type: 'preset'
+          },
+          sourceOffsetMs: 0,
+          startMs: 0,
+          weight: 1
+        }],
+        trackId: 'alert-track',
+        weight: 1
+      }],
+      version: 1
+    }))
+  }
+
+  const selectAlertKeyframe = async () => {
+    const keyframe = host.querySelector<HTMLButtonElement>('[aria-label="Edit keyframe 7 of Bear · Exclamation"]')
+    expect(keyframe).not.toBeNull()
+    act(() => keyframe?.click())
+    await flushEffects()
+    const preview = host.querySelector<HTMLElement>('.avatar-app__preview-art--hero')
+    expect(preview?.getAttribute('data-avatar-animation-morphs')).not.toBeNull()
+    return preview
+  }
+
+  it('upgrades legacy generated loop defaults without overwriting later trims', async () => {
+    window.history.replaceState(null, '', '/?entity=bear&animationPanel=1&seed=v1-burst-duration-migration')
+    window.localStorage.setItem('oneworks-avatar-animation-timeline-v1', JSON.stringify({
+      durationMs: 30000,
+      tracks: [
+        {
+          clips: [{
+            durationMs: 3100,
+            instanceId: 'legacy-burst-clip',
+            playbackRate: 1,
+            source: {
+              fallback: 'skip',
+              presetId: 'bear-burst-morph',
+              presetVersion: 1,
+              type: 'preset'
+            },
+            sourceOffsetMs: 0,
+            startMs: 0,
+            weight: 1
+          }],
+          trackId: 'legacy-burst-track',
+          weight: 1
+        },
+        {
+          clips: [{
+            durationMs: 5000,
+            instanceId: 'trimmed-burst-clip',
+            playbackRate: 1,
+            source: {
+              fallback: 'skip',
+              presetId: 'bear-burst-morph',
+              presetVersion: 1,
+              type: 'preset'
+            },
+            sourceOffsetMs: 0,
+            startMs: 24000,
+            weight: 1
+          }],
+          trackId: 'trimmed-burst-track',
+          weight: 1
+        },
+        {
+          clips: [{
+            durationMs: 14100,
+            instanceId: 'legacy-alert-default-clip',
+            playbackRate: 1,
+            source: {
+              fallback: 'skip',
+              presetId: 'bear-alert-morph',
+              presetVersion: 1,
+              type: 'preset'
+            },
+            sourceOffsetMs: 0,
+            startMs: 0,
+            weight: 1
+          }],
+          trackId: 'legacy-alert-default-track',
+          weight: 1
+        },
+        {
+          clips: [{
+            durationMs: 21900,
+            instanceId: 'legacy-idle-default-clip',
+            playbackRate: 1,
+            source: {
+              fallback: 'skip',
+              presetId: 'idle',
+              presetVersion: 1,
+              type: 'preset'
+            },
+            sourceOffsetMs: 0,
+            startMs: 0,
+            weight: 1
+          }],
+          trackId: 'legacy-idle-default-track',
+          weight: 1
+        }
+      ],
+      version: 1
+    }))
+
+    await renderApp()
+
+    const persisted = JSON.parse(
+      window.localStorage.getItem('oneworks-avatar-animation-timeline-v1') ?? 'null'
+    )
+    expect(persisted.tracks[0].clips[0].durationMs).toBe(3200)
+    expect(persisted.tracks[1].clips[0].durationMs).toBe(5000)
+    expect(persisted.tracks[2].clips[0].durationMs).toBe(3200)
+    expect(persisted.tracks[3].clips[0].durationMs).toBe(3200)
+  })
+
+  it('keeps the evaluated timeline frame when switching the stage drag mode', async () => {
+    prepareAlertTimeline()
+    await renderApp()
+    const preview = await selectAlertKeyframe()
+    const morphs = preview?.getAttribute('data-avatar-animation-morphs')
+    const playhead = host.querySelector('.avatar-animation-panel__playhead')?.getAttribute('style')
+
+    act(() => host.querySelector<HTMLButtonElement>('[aria-label="Move with primary drag"]')?.click())
+    await flushEffects()
+
+    expect(preview?.getAttribute('data-avatar-animation-morphs')).toBe(morphs)
+    expect(host.querySelector('.avatar-animation-panel__playhead')?.getAttribute('style')).toBe(playhead)
+    expect(host.querySelector('[aria-label="Move with primary drag"]')?.getAttribute('aria-pressed')).toBe('true')
+  })
+
+  it('starts orientation changes from the visible animated view without clearing the frame', async () => {
+    prepareAlertTimeline()
+    await renderApp()
+    const preview = await selectAlertKeyframe()
+    const morphs = preview?.getAttribute('data-avatar-animation-morphs')
+    const playhead = host.querySelector('.avatar-animation-panel__playhead')?.getAttribute('style')
+    const orientation = host.querySelector<HTMLButtonElement>('.avatar-orientation-control__orbit')
+    const beforeLabel = orientation?.getAttribute('aria-label')
+
+    act(() => orientation?.dispatchEvent(new KeyboardEvent('keydown', {
+      bubbles: true,
+      key: 'ArrowRight'
+    })))
+    await flushEffects()
+
+    expect(preview?.getAttribute('data-avatar-animation-morphs')).toBe(morphs)
+    expect(host.querySelector('.avatar-animation-panel__playhead')?.getAttribute('style')).toBe(playhead)
+    expect(orientation?.getAttribute('aria-label')).not.toBe(beforeLabel)
+  })
+
+  it('undoes and redoes timeline commands without falling back to URL history', async () => {
+    prepareAlertTimeline()
+    await renderApp()
+    const clip = host.querySelector<HTMLElement>('.avatar-animation-panel__clip')
+    expect(clip).not.toBeNull()
+    act(() => clip?.click())
+    await flushEffects()
+
+    const playbackRate = Array.from(host.querySelectorAll<HTMLLabelElement>('.avatar-animation-sidebar__field'))
+      .find(label => label.textContent?.includes('播放速度'))
+      ?.querySelector<HTMLInputElement>('input[type="number"]')
+    expect(playbackRate?.value).toBe('1')
+    act(() => {
+      const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')?.set
+      setter?.call(playbackRate, '1.5')
+      playbackRate?.dispatchEvent(new Event('input', { bubbles: true }))
+    })
+    await flushEffects()
+    expect(playbackRate?.value).toBe('1.5')
+
+    act(() => window.dispatchEvent(new KeyboardEvent('keydown', {
+      bubbles: true,
+      ctrlKey: true,
+      key: 'z'
+    })))
+    await flushEffects()
+    expect(Array.from(host.querySelectorAll<HTMLLabelElement>('.avatar-animation-sidebar__field'))
+      .find(label => label.textContent?.includes('播放速度'))
+      ?.querySelector<HTMLInputElement>('input[type="number"]')?.value).toBe('1')
+
+    act(() => window.dispatchEvent(new KeyboardEvent('keydown', {
+      bubbles: true,
+      ctrlKey: true,
+      key: 'y'
+    })))
+    await flushEffects()
+    expect(Array.from(host.querySelectorAll<HTMLLabelElement>('.avatar-animation-sidebar__field'))
+      .find(label => label.textContent?.includes('播放速度'))
+      ?.querySelector<HTMLInputElement>('input[type="number"]')?.value).toBe('1.5')
+
+    const deleteClip = Array.from(host.querySelectorAll<HTMLButtonElement>('button'))
+      .find(button => button.textContent?.includes('删除片段'))
+    act(() => deleteClip?.click())
+    await flushEffects()
+    expect(host.querySelectorAll('.avatar-animation-panel__clip')).toHaveLength(0)
+
+    act(() => window.dispatchEvent(new KeyboardEvent('keydown', {
+      bubbles: true,
+      ctrlKey: true,
+      key: 'z'
+    })))
+    await flushEffects()
+    expect(host.querySelectorAll('.avatar-animation-panel__clip')).toHaveLength(1)
+    expect(host.querySelector('[aria-label="Animation clip inspector"]')).not.toBeNull()
+
+    act(() => window.dispatchEvent(new KeyboardEvent('keydown', {
+      bubbles: true,
+      ctrlKey: true,
+      key: 'z',
+      shiftKey: true
+    })))
+    await flushEffects()
+    expect(host.querySelectorAll('.avatar-animation-panel__clip')).toHaveLength(0)
+  })
+
+  it('persists Timeline edits and restores them after the App remounts', async () => {
+    prepareAlertTimeline()
+    const initialTimeline = JSON.parse(
+      window.localStorage.getItem('oneworks-avatar-animation-timeline-v1') ?? 'null'
+    )
+    initialTimeline.tracks[0].clips[0].frameSequence = {
+      firstFrameIndex: 1,
+      lastFrameIndex: 5,
+      loop: { endFrameIndex: 4, iterations: 3, startFrameIndex: 2 }
+    }
+    window.localStorage.setItem('oneworks-avatar-animation-timeline-v1', JSON.stringify(initialTimeline))
+    await renderApp()
+    act(() => host.querySelector<HTMLElement>('.avatar-animation-panel__clip')?.click())
+    await flushEffects()
+
+    const findPlaybackRate = () => Array.from(
+      host.querySelectorAll<HTMLLabelElement>('.avatar-animation-sidebar__field')
+    ).find(label => label.textContent?.includes('播放速度'))
+      ?.querySelector<HTMLInputElement>('input[type="number"]')
+    const playbackRate = findPlaybackRate()
+    act(() => {
+      const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')?.set
+      setter?.call(playbackRate, '1.75')
+      playbackRate?.dispatchEvent(new Event('input', { bubbles: true }))
+    })
+    await flushEffects()
+
+    const loopIterations = host.querySelector<HTMLSelectElement>('select[aria-label="循环遍数"]')
+    expect(host.querySelector<HTMLSelectElement>('select[aria-label="序列起始帧"]')?.value).toBe('1')
+    expect(host.querySelector<HTMLSelectElement>('select[aria-label="序列结束帧"]')?.value).toBe('5')
+    expect(loopIterations?.value).toBe('3')
+    act(() => {
+      if (loopIterations == null) return
+      loopIterations.value = 'infinite'
+      loopIterations.dispatchEvent(new Event('change', { bubbles: true }))
+    })
+    await flushEffects()
+
+    const persisted = JSON.parse(
+      window.localStorage.getItem('oneworks-avatar-animation-timeline-v1') ?? 'null'
+    )
+    expect(persisted.tracks[0].clips[0].playbackRate).toBe(1.75)
+    expect(persisted.tracks[0].clips[0].frameSequence).toEqual({
+      firstFrameIndex: 1,
+      lastFrameIndex: 5,
+      loop: { endFrameIndex: 4, iterations: 'infinite', startFrameIndex: 2 }
+    })
+
+    act(() => root.unmount())
+    root = createRoot(host)
+    await renderApp()
+    act(() => host.querySelector<HTMLElement>('.avatar-animation-panel__clip')?.click())
+    await flushEffects()
+
+    expect(findPlaybackRate()?.value).toBe('1.75')
+    expect(host.querySelector<HTMLSelectElement>('select[aria-label="循环遍数"]')?.value).toBe('infinite')
+  })
+})

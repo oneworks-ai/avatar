@@ -63,6 +63,27 @@ afterEach(() => {
 })
 
 describe('InteractiveAvatar pixel scheduling', () => {
+  it('does not enqueue disabled pixel state updates during continuous animation renders', async () => {
+    const base = createDefaultAvatarDefinition()
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => undefined)
+
+    for (let frame = 0; frame < 80; frame += 1) {
+      act(() => root.render(createElement(Avatar, {
+        definition: {
+          ...base,
+          scene: {
+            ...base.scene,
+            view: { ...base.scene.view, yaw: frame / 1_000 }
+          }
+        }
+      })))
+    }
+    await flushFrame()
+
+    expect(consoleError.mock.calls.flat().join(' ')).not.toContain('Maximum update depth exceeded')
+    expect(host.querySelector('.interactive-avatar')?.getAttribute('data-pixel-ready')).toBe('false')
+  })
+
   it('coalesces rapid updates and reveals the SVG immediately when disabled', async () => {
     const base = createDefaultAvatarDefinition()
     const pixelated = {

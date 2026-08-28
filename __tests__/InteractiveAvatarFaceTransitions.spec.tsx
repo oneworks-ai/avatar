@@ -79,6 +79,16 @@ afterEach(() => {
 })
 
 describe('InteractiveAvatar face transitions', () => {
+  it('uses the supplied animation frame directly without passive state-update churn', () => {
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => undefined)
+    for (let frame = 0; frame < 80; frame += 1) {
+      renderAvatar(20 + frame / 10, 36 - frame / 20, false)
+    }
+
+    expect(frames.size).toBe(0)
+    expect(consoleError.mock.calls.flat().join(' ')).not.toContain('Maximum update depth exceeded')
+  })
+
   it('restarts and lands the eye paths when independent eye widths change', () => {
     renderAvatar(20, 36)
     advanceFrame(180)

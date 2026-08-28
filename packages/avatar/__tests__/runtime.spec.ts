@@ -20,6 +20,8 @@ import {
   parseAvatarDefinition,
   resolveAvatarAnimationClip,
   resolveAvatarAnimationFrame,
+  resolveAvatarAnimationParameterValues,
+  resolveAvatarAnimationTracks,
   resolveAvatarCoatPatternDecals,
   resolveAvatarPaletteFromEntityParts,
   resolveAvatarSeededInteger,
@@ -1421,6 +1423,187 @@ describe('OneWorks Avatar public runtime contract', () => {
     })
   })
 
+  it('interpolates semantic part TRS without admitting material or topology mutations', () => {
+    const base = createDefaultAvatarDefinition()
+    const primary = {
+      baseColor: '#b77a4c',
+      face: true,
+      foregroundColor: '#39251b',
+      highlightColor: '#dda77a',
+      id: 'primary',
+      label: 'Head',
+      scaleX: .72,
+      scaleY: .76,
+      shadowColor: '#744931',
+      shape: 'ellipse' as const,
+      x: 0,
+      y: 12,
+      z: 0
+    }
+    const definition = {
+      ...base,
+      scene: { ...base.scene, entity: { parts: [primary], preset: 'custom' as const } }
+    }
+    const alertStem = {
+      ...primary,
+      face: false,
+      id: 'alert-stem',
+      label: 'Alert droplet',
+      scaleX: .11,
+      scaleY: .32,
+      scaleZ: .15,
+      shape: 'teardrop' as const,
+      x: 0,
+      y: -30,
+      z: 0
+    }
+    const clip: AvatarAnimationClip = {
+      anchor: 'absolute',
+      durationMs: 1000,
+      keyframes: [
+        {
+          atMs: 0,
+          patch: {
+            auxiliaryParts: [{
+              composition: 'independent-depth',
+              opacity: 0,
+              part: alertStem,
+              transform: { rotationZ: -10, scaleX: .01, scaleY: .01, scaleZ: .02, x: 0, y: 0, z: 0 }
+            }],
+            partShapeMorphs: {
+              'alert-stem': { fromShape: 'sphere', progress: 0, toShape: 'teardrop' },
+              primary: { fromShape: 'ellipse', progress: 0, toShape: 'sphere' }
+            },
+            auxiliaryShapes: [{
+              color: '#39251b',
+              height: 0,
+              id: 'alert-glyph',
+              kind: 'exclamation',
+              opacity: 0,
+              rotation: -10,
+              roundness: 100,
+              width: 0,
+              x: 0,
+              y: 0
+            }]
+          }
+        },
+        {
+          atMs: 1000,
+          easing: 'linear',
+          patch: {
+            auxiliaryParts: [{
+              composition: 'independent-depth',
+              opacity: 100,
+              part: alertStem,
+              transform: { rotationZ: 0, scaleX: .11, scaleY: .32, scaleZ: .2, x: 0, y: -30, z: 0 }
+            }],
+            partShapeMorphs: {
+              'alert-stem': { fromShape: 'sphere', progress: 1, toShape: 'teardrop' },
+              primary: { fromShape: 'ellipse', progress: 1, toShape: 'sphere' }
+            },
+            auxiliaryShapes: [{
+              color: '#39251b',
+              height: 120,
+              id: 'alert-glyph',
+              kind: 'exclamation',
+              opacity: 100,
+              rotation: 0,
+              roundness: 100,
+              width: 24,
+              x: 70,
+              y: -12
+            }],
+            partTransforms: {
+              primary: {
+                rotationZ: 20,
+                scaleX: primary.scaleX * .5,
+                scaleY: primary.scaleY * 1.4,
+                scaleZ: .2,
+                x: primary.x + 40,
+                y: primary.y - 20,
+                z: primary.z
+              }
+            }
+          }
+        }
+      ],
+      playback: 'once'
+    }
+
+    expect(parseAvatarAnimationClip(clip)).toEqual(clip)
+    expect(parseAvatarAnimationClip({
+      ...clip,
+      keyframes: [{
+        atMs: 0,
+        patch: { partTransforms: { primary: { scaleX: .02, scaleY: .02 } } }
+      }]
+    }).keyframes[0]?.patch.partTransforms?.primary).toEqual({ scaleX: .02, scaleY: .02 })
+    const middle = resolveAvatarAnimationFrame(definition, clip, 500)
+    const resolvedPrimary = middle.scene.entity.parts.find(part => part.id === 'primary')!
+    expect(resolvedPrimary.x).toBeCloseTo(primary.x + 20)
+    expect(resolvedPrimary.y).toBeCloseTo(primary.y - 10)
+    expect(middle.partTransforms?.primary?.x).toBeCloseTo(primary.x + 20)
+    expect(middle.auxiliaryParts?.[0]).toMatchObject({
+      composition: 'independent-depth',
+      opacity: 50,
+      part: { id: 'alert-stem', shape: 'teardrop' },
+      transform: { rotationZ: -5, scaleY: .165, x: 0, y: -15, z: 0 }
+    })
+    expect(middle.auxiliaryParts?.[0]?.transform?.scaleX).toBeCloseTo(.06)
+    expect(middle.auxiliaryParts?.[0]?.transform?.scaleZ).toBeCloseTo(.11)
+    expect(middle.partTransforms?.primary?.scaleZ).toBeCloseTo(.46)
+    expect(middle.partShapeMorphs).toEqual({
+      'alert-stem': { fromShape: 'sphere', progress: .5, toShape: 'teardrop' },
+      primary: { fromShape: 'ellipse', progress: .5, toShape: 'sphere' }
+    })
+    expect(middle.auxiliaryShapes?.[0]).toMatchObject({
+      height: 60,
+      id: 'alert-glyph',
+      kind: 'exclamation',
+      opacity: 50,
+      rotation: -5,
+      width: 12,
+      x: 35,
+      y: -6
+    })
+    expect(resolvedPrimary).toMatchObject({
+      baseColor: primary.baseColor,
+      face: primary.face,
+      foregroundColor: primary.foregroundColor,
+      highlightColor: primary.highlightColor,
+      id: primary.id,
+      shape: primary.shape
+    })
+    expect(() => parseAvatarAnimationClip({
+      ...clip,
+      keyframes: [{
+        atMs: 0,
+        patch: { partTransforms: { primary: { baseColor: '#000000' } } }
+      }]
+    })).toThrow(TypeError)
+    expect(() => parseAvatarAnimationClip({
+      ...clip,
+      keyframes: [{
+        atMs: 0,
+        patch: {
+          auxiliaryShapes: [{
+            color: '#39251b',
+            height: 120,
+            id: 'alert-glyph',
+            kind: 'orb',
+            opacity: 100,
+            rotation: 0,
+            roundness: 100,
+            width: 24,
+            x: 70,
+            y: -12
+          }]
+        }
+      }]
+    })).toThrow(TypeError)
+  })
+
   it('anchors each sparse view dimension at its first authored keyframe', () => {
     const source = createDefaultAvatarDefinition()
     const definition = {
@@ -1477,8 +1660,287 @@ describe('OneWorks Avatar public runtime contract', () => {
     expect(resolveAvatarAnimationFrame(definition, clip, 250).scene.view.pitch).toBeCloseTo(.3)
     expect(resolveAvatarAnimationFrame(definition, clip, 500).scene.view.pitch).toBeCloseTo(.6)
     const looping = { ...clip, playback: 'loop' as const }
-    expect(resolveAvatarAnimationFrame(definition, looping, 750).scene.view.pitch).toBeCloseTo(.3)
-    expect(resolveAvatarAnimationFrame(definition, looping, 1000).scene.view.pitch).toBe(0)
+    expect(resolveAvatarAnimationFrame(definition, looping, 750).scene.view.pitch).toBeCloseTo(.6)
+    expect(resolveAvatarAnimationFrame(definition, looping, 1000).scene.view.pitch).toBeCloseTo(.6)
+
+    const releasing: AvatarAnimationClip = {
+      ...looping,
+      keyframes: [
+        { atMs: 0, patch: {} },
+        { atMs: 500, easing: 'linear', patch: { view: { pitch: .6 } } },
+        { atMs: 900, easing: 'linear', patch: { release: ['view:pitch'] } }
+      ]
+    }
+    expect(resolveAvatarAnimationFrame(definition, releasing, 700).scene.view.pitch).toBeCloseTo(.3)
+    expect(resolveAvatarAnimationFrame(definition, releasing, 900).scene.view.pitch).toBe(0)
+    expect(resolveAvatarAnimationFrame(definition, releasing, 1000).scene.view.pitch).toBe(0)
+  })
+
+  it('composes ordered sparse animation tracks without resetting lower-layer clocks', () => {
+    const base = createDefaultAvatarDefinition()
+    const head = {
+      baseColor: '#b77a4c', face: true, foregroundColor: '#39251b', highlightColor: '#dda77a',
+      id: 'primary', label: 'Head', scaleX: .72, scaleY: .76, shadowColor: '#744931',
+      shape: 'ellipse' as const, x: 0, y: 12, z: 0
+    }
+    const definition = {
+      ...base,
+      scene: { ...base.scene, entity: { parts: [head], preset: 'custom' as const } }
+    }
+    const loop = (
+      patch: AvatarAnimationClip['keyframes'][number]['patch'],
+      claims: readonly string[]
+    ): AvatarAnimationClip => ({
+      anchor: 'absolute',
+      durationMs: 1000,
+      keyframes: [
+        { atMs: 0, patch },
+        { atMs: 1000, easing: 'linear', patch }
+      ],
+      playback: 'loop',
+      resourceClaims: claims
+    })
+    const breathing = loop(
+      { partTransforms: { [head.id]: { scaleY: head.scaleY * .9 } } },
+      [`part:${head.id}.transform.scaleY`]
+    )
+    const nodding = loop({ view: { pitch: .3 } }, ['view:pitch'])
+    const blinking = loop({ face: { height: 8 } }, ['face:leftEye.height', 'face:rightEye.height'])
+    const shocked = loop({ face: { height: 96 } }, ['face:leftEye.height', 'face:rightEye.height'])
+
+    const baseTracks = [
+      { clip: breathing, elapsedMs: 420, trackId: 'idle' },
+      { clip: nodding, elapsedMs: 610, trackId: 'nod' },
+      { clip: blinking, elapsedMs: 250, trackId: 'blink' }
+    ]
+    const layered = resolveAvatarAnimationTracks(definition, baseTracks)
+    expect(layered.scene.entity.parts.find(part => part.id === head.id)?.scaleY).toBe(head.scaleY * .9)
+    expect(layered.scene.view.pitch).toBe(.3)
+    expect(layered.scene.face.leftEyeHeight).toBe(8)
+    expect(layered.scene.face.rightEyeHeight).toBe(8)
+
+    const overridden = resolveAvatarAnimationTracks(definition, [
+      ...baseTracks,
+      { clip: shocked, elapsedMs: 700, trackId: 'shocked' }
+    ])
+    expect(overridden.scene.face.leftEyeHeight).toBe(96)
+    expect(overridden.scene.view.pitch).toBe(.3)
+    expect(overridden.scene.entity.parts.find(part => part.id === head.id)?.scaleY).toBe(head.scaleY * .9)
+
+    const revealed = resolveAvatarAnimationTracks(definition, baseTracks)
+    expect(revealed.scene.face.leftEyeHeight).toBe(8)
+    expect(revealed.scene.view.pitch).toBe(.3)
+  })
+
+  it('releases one upper resource smoothly to the lower track current value', () => {
+    const definition = createDefaultAvatarDefinition()
+    const lower: AvatarAnimationClip = {
+      anchor: 'absolute', durationMs: 1000, playback: 'loop', resourceClaims: ['view:pitch'],
+      keyframes: [
+        { atMs: 0, patch: { view: { pitch: .4 } } },
+        { atMs: 1000, patch: { view: { pitch: .4 } } }
+      ]
+    }
+    const upper: AvatarAnimationClip = {
+      anchor: 'absolute', durationMs: 1000, playback: 'once', resourceClaims: ['view:pitch'],
+      keyframes: [
+        { atMs: 0, patch: { view: { pitch: .8 } } },
+        { atMs: 1000, easing: 'linear', patch: { release: ['view:pitch'] } }
+      ]
+    }
+    const at = (elapsedMs: number) => resolveAvatarAnimationTracks(definition, [
+      { clip: lower, elapsedMs: 777, trackId: 'lower' },
+      { clip: upper, elapsedMs, trackId: 'upper' }
+    ]).scene.view.pitch
+
+    expect(at(0)).toBe(.8)
+    expect(at(500)).toBeCloseTo(.6)
+    expect(at(999)).toBeCloseTo(.4004, 3)
+    expect(at(1000)).toBe(.4)
+  })
+
+  it('namespaces weighted auxiliary parts and keeps the source clip immutable', () => {
+    const definition = createDefaultAvatarDefinition()
+    const primary = definition.scene.entity.parts.find(part => part.face)!
+    const orb = { ...primary, face: false, id: 'notification-orb', label: 'Notification orb', shape: 'sphere' as const }
+    const clip: AvatarAnimationClip = {
+      anchor: 'absolute',
+      durationMs: 1000,
+      keyframes: [
+        { atMs: 0, patch: { auxiliaryParts: [{ opacity: 100, part: orb }] } },
+        { atMs: 1000, patch: { auxiliaryParts: [{ opacity: 100, part: orb }] } }
+      ],
+      parameters: [{
+        binding: { partId: 'notification-orb', type: 'auxiliary-part-material' },
+        default: '#3b82f6', id: 'orbColor', label: 'Orb color', type: 'color'
+      }],
+      playback: 'loop',
+      resourceClaims: ['aux:notification-orb']
+    }
+    const before = JSON.stringify(clip)
+    const defaultFrame = resolveAvatarAnimationTracks(definition, [{
+      clip, elapsedMs: 200, trackId: 'notification', weight: .5
+    }])
+    expect(defaultFrame.auxiliaryParts?.[0]).toMatchObject({
+      opacity: 50,
+      part: { baseColor: '#3b82f6', id: 'notification/notification-orb' }
+    })
+    expect(defaultFrame.writes).toEqual(['aux:notification/notification-orb'])
+    expect(defaultFrame.trackWrites).toEqual({ notification: ['aux:notification/notification-orb'] })
+    expect(defaultFrame.trackResourceWeights).toEqual({
+      notification: { 'aux:notification/notification-orb': .5 }
+    })
+    const custom = resolveAvatarAnimationTracks(definition, [{
+      clip,
+      elapsedMs: 200,
+      parameterValues: { orbColor: '#ff3366' },
+      trackId: 'notice-2'
+    }])
+    expect(custom.auxiliaryParts?.[0]?.part).toMatchObject({
+      baseColor: '#ff3366',
+      id: 'notice-2/notification-orb'
+    })
+    expect(JSON.stringify(clip)).toBe(before)
+    expect(resolveAvatarAnimationTracks(definition, [{
+      clip, elapsedMs: 200, muted: true, trackId: 'notification'
+    }]).auxiliaryParts).toBeUndefined()
+    expect(() => resolveAvatarAnimationParameterValues(clip, { orbColor: 'red' })).toThrow()
+  })
+
+  it('keeps auxiliary resource namespaces unambiguous for arbitrary valid track and part ids', () => {
+    const definition = createDefaultAvatarDefinition()
+    const createAuxClip = (partId: string): AvatarAnimationClip => ({
+      anchor: 'absolute',
+      durationMs: 1100,
+      keyframes: [0, 1000].map(atMs => ({
+        atMs,
+        patch: {
+          auxiliaryParts: [{
+            opacity: 100,
+            part: {
+              baseColor: '#3b82f6', face: false, foregroundColor: '#173f99',
+              highlightColor: '#8bb6ff', id: partId, label: partId, scaleX: .2,
+              scaleY: .2, scaleZ: .2, shadowColor: '#2457b8', shape: 'sphere' as const,
+              x: 0, y: 0, z: 0
+            }
+          }]
+        }
+      })),
+      playback: 'loop'
+    })
+    expect(parseAvatarAnimationClip(createAuxClip('b/c'))).toEqual(createAuxClip('b/c'))
+    const frame = resolveAvatarAnimationTracks(definition, [
+      { clip: createAuxClip('c'), elapsedMs: 100, trackId: 'a/b' },
+      { clip: createAuxClip('b/c'), elapsedMs: 100, trackId: 'a' }
+    ])
+
+    expect(frame.auxiliaryParts?.map(item => item.part.id)).toEqual(['a%2Fb/c', 'a/b%2Fc'])
+    expect(new Set(frame.auxiliaryParts?.map(item => item.part.id)).size).toBe(2)
+    expect(frame.trackWrites).toEqual({
+      a: ['aux:a/b%2Fc'],
+      'a/b': ['aux:a%2Fb/c']
+    })
+    expect(frame.writes).toEqual(['aux:a%2Fb/c', 'aux:a/b%2Fc'])
+
+    const prototypeNamed = resolveAvatarAnimationTracks(definition, [{
+      clip: createAuxClip('notification-orb'), elapsedMs: 100, trackId: '__proto__'
+    }])
+    expect(prototypeNamed.auxiliaryParts?.[0]?.part.id).toBe('__proto__/notification-orb')
+    expect(Object.hasOwn(prototypeNamed.trackWrites!, '__proto__')).toBe(true)
+    expect(prototypeNamed.trackWrites?.__proto__).toEqual(['aux:__proto__/notification-orb'])
+    expect(Object.hasOwn(prototypeNamed.trackResourceWeights!, '__proto__')).toBe(true)
+    expect(prototypeNamed.trackResourceWeights?.__proto__).toEqual({
+      'aux:__proto__/notification-orb': 1
+    })
+  })
+
+  it('applies solo filtering and rejects invalid animation track stacks', () => {
+    const definition = createDefaultAvatarDefinition()
+    const clip = (yaw: number): AvatarAnimationClip => ({
+      anchor: 'absolute', durationMs: 1000, playback: 'loop', resourceClaims: ['view:yaw'],
+      keyframes: [
+        { atMs: 0, patch: { view: { yaw } } },
+        { atMs: 1000, patch: { view: { yaw } } }
+      ]
+    })
+    const solo = resolveAvatarAnimationTracks(definition, [
+      { clip: clip(.1), elapsedMs: 0, trackId: 'bottom' },
+      { clip: clip(.2), elapsedMs: 0, solo: true, trackId: 'solo-low' },
+      { clip: clip(.3), elapsedMs: 0, muted: true, solo: true, trackId: 'solo-muted' },
+      { clip: clip(.4), elapsedMs: 0, solo: true, trackId: 'solo-high' }
+    ])
+    expect(solo.scene.view.yaw).toBe(.4)
+    expect(() => resolveAvatarAnimationTracks(definition, [
+      { clip: clip(.1), elapsedMs: 0, trackId: 'duplicate' },
+      { clip: clip(.2), elapsedMs: 0, trackId: 'duplicate' }
+    ])).toThrow()
+    expect(() => resolveAvatarAnimationTracks(definition, [
+      { clip: clip(.1), elapsedMs: 0, trackId: 'bad', weight: Number.NaN }
+    ])).toThrow()
+    expect(() => resolveAvatarAnimationTracks(definition, [
+      { clip: clip(.1), elapsedMs: 0, speed: Number.NaN, trackId: 'bad' }
+    ])).toThrow()
+    expect(() => resolveAvatarAnimationTracks(definition, Array.from({ length: 17 }, (_, index) => ({
+      clip: clip(index / 100), elapsedMs: 0, trackId: `track-${index}`
+    })))).toThrow(/at most 16 animation tracks/)
+  })
+
+  it('rejects resolved sparse writes outside the clip declared claim ceiling', () => {
+    const definition = createDefaultAvatarDefinition()
+    const clip: AvatarAnimationClip = {
+      anchor: 'absolute',
+      durationMs: 1000,
+      keyframes: [
+        { atMs: 0, patch: { face: { height: 12 }, view: { yaw: .2 } } },
+        { atMs: 1000, patch: { face: { height: 12 }, view: { yaw: .2 } } }
+      ],
+      playback: 'loop',
+      resourceClaims: ['view:yaw']
+    }
+
+    expect(() => resolveAvatarAnimationTracks(definition, [
+      { clip, elapsedMs: 250, trackId: 'under-declared' }
+    ])).toThrow(/face:leftEye\.height, face:rightEye\.height/)
+  })
+
+  it('keeps one-track weight-one output equivalent at exact numeric and color endpoints', () => {
+    const definition = createDefaultAvatarDefinition()
+    const clip: AvatarAnimationClip = {
+      anchor: 'absolute', durationMs: 1000, playback: 'once',
+      keyframes: [
+        { atMs: 0, patch: { colorGrade: { brightness: .75 }, view: { yaw: -.2 } } },
+        { atMs: 1000, patch: { colorGrade: { brightness: 1.25 }, view: { yaw: .4 } } }
+      ]
+    }
+    for (const elapsedMs of [0, 500, 1000]) {
+      const single = resolveAvatarAnimationFrame(definition, clip, elapsedMs)
+      const stacked = resolveAvatarAnimationTracks(definition, [{ clip, elapsedMs, trackId: 'legacy' }])
+      expect(stacked.scene).toEqual(single.scene)
+      expect(stacked.partTransforms).toEqual(single.partTransforms)
+    }
+  })
+
+  it('canonicalizes shared eye aliases before per-eye overrides regardless of object insertion order', () => {
+    const definition = createDefaultAvatarDefinition()
+    const clip = (face: AvatarAnimationClip['keyframes'][number]['patch']['face']): AvatarAnimationClip => ({
+      anchor: 'absolute',
+      durationMs: 100,
+      keyframes: [{ atMs: 0, patch: { face } }],
+      playback: 'once'
+    })
+    const commonFirst = clip({ height: 10, leftEyeHeight: 26, width: 12, rightEyeWidth: 34 })
+    const overrideFirst = clip(Object.fromEntries([
+      ['rightEyeWidth', 34], ['width', 12], ['leftEyeHeight', 26], ['height', 10]
+    ]))
+
+    expect(resolveAvatarAnimationFrame(definition, overrideFirst, 0).scene.face)
+      .toEqual(resolveAvatarAnimationFrame(definition, commonFirst, 0).scene.face)
+    expect(resolveAvatarAnimationFrame(definition, commonFirst, 0).scene.face).toMatchObject({
+      leftEyeHeight: 26,
+      leftEyeWidth: 12,
+      rightEyeHeight: 10,
+      rightEyeWidth: 34
+    })
   })
 
   it('rejects timeline segments the editor cannot represent losslessly', () => {

@@ -15,28 +15,28 @@ export default defineConfig({
   base: process.env.ONEWORKS_AVATAR_BASE ?? '/',
   plugins: [react()],
   root: fileURLToPath(new URL('.', import.meta.url)),
-  resolve: appSourcePath == null
-    ? undefined
-    : {
-      alias: [
-        {
-          find: /^@oneworks\/avatar-react$/,
-          replacement: path.resolve('packages/react/src/index.tsx')
-        },
-        {
-          find: /^@oneworks\/avatar-react\/style\.css$/,
-          replacement: path.resolve('packages/react/src/style.scss')
-        },
-        {
-          find: /^@oneworks\/avatar$/,
-          replacement: path.resolve('packages/avatar/src/index.ts')
-        },
-        {
+  resolve: {
+    alias: [
+      {
+        find: /^@oneworks\/avatar-react$/,
+        replacement: path.resolve('packages/react/src/index.tsx')
+      },
+      {
+        find: /^@oneworks\/avatar-react\/style\.css$/,
+        replacement: path.resolve('packages/react/src/style.scss')
+      },
+      {
+        find: /^@oneworks\/avatar$/,
+        replacement: path.resolve('packages/avatar/src/index.ts')
+      },
+      ...(appSourcePath == null
+        ? []
+        : [{
           find: '@oneworks/route-layout/design-tokens.css',
           replacement: path.join(appSourcePath, 'packages/route-layout/src/design-tokens.css')
-        }
-      ]
-    },
+        }])
+    ]
+  },
   server: {
     host: '127.0.0.1'
   },

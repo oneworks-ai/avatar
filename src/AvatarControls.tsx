@@ -95,7 +95,7 @@ import {
 import type { AvatarSurfaceDecal, AvatarSurfaceDecalShape } from './avatarSurfaceDecals'
 import type { SavedAvatarPreset } from './savedAvatarPresets'
 
-export type AvatarControlTab = 'body' | 'build' | 'effects' | 'style'
+export type AvatarControlTab = 'animation' | 'body' | 'build' | 'effects' | 'style'
 export type AvatarCameraFrame = 'circle' | 'rounded' | 'square'
 type AvatarFacePart = 'eyes' | 'mouth' | 'nose'
 type AvatarPresetBrowser = 'entities' | 'faces' | 'saved'
@@ -336,6 +336,7 @@ const DeferredEntityPresetPreview = memo(function DeferredEntityPresetPreview({
 
 interface AvatarControlsProps {
   readonly activeTab: AvatarControlTab
+  readonly animationContent?: ReactNode
   readonly animalBreedTemplateId?: string | null
   readonly animalEarHeight?: number
   readonly animalEarWidth?: number
@@ -477,7 +478,8 @@ const CONTROL_TABS: readonly { id: AvatarControlTab; label: string }[] = [
   { id: 'build', label: 'Build' },
   { id: 'body', label: 'Body' },
   { id: 'style', label: 'Style' },
-  { id: 'effects', label: 'Effects' }
+  { id: 'effects', label: 'Effects' },
+  { id: 'animation', label: 'Animation' }
 ]
 
 const COAT_PATTERN_ALGORITHMS: readonly { id: AvatarCoatPatternAlgorithm; label: string }[] = [
@@ -664,6 +666,14 @@ function ControlIcon({ name }: { readonly name: ControlIconName }) {
         : null}
       {name === 'effects'
         ? <path d='m10 2 1.3 4.2L15.5 7.5l-4.2 1.3L10 13l-1.3-4.2-4.2-1.3 4.2-1.3L10 2Zm5.2 10 .7 2.1 2.1.7-2.1.7-.7 2.1-.7-2.1-2.1-.7 2.1-.7.7-2.1Z' />
+        : null}
+      {name === 'animation'
+        ? (
+          <>
+            <rect x='2.8' y='4' width='14.4' height='12' rx='2' />
+            <path d='m8 7 5 3-5 3Z' />
+          </>
+        )
         : null}
       {name === 'eyes'
         ? (
@@ -992,6 +1002,7 @@ function NumberField({ ariaLabel, label, onChange, suffix = '', value }: {
 
 export function AvatarControls({
   activeTab,
+  animationContent,
   animalBreedTemplateId = null,
   animalEarHeight = 100,
   animalEarWidth = 100,
@@ -1693,6 +1704,7 @@ export function AvatarControls({
         role='tabpanel'
         aria-labelledby={`avatar-controls-tab-${activeTab}`}
       >
+        {activeTab === 'animation' ? animationContent : null}
         {activeTab === 'build'
           ? (
             <>

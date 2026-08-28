@@ -17,6 +17,8 @@ import type {
   AvatarEditorHandle,
   AvatarHandle,
   AvatarPlayOptions,
+  AvatarTrackInput,
+  AvatarTrackUpdate,
   AvatarTheme
 } from '@oneworks/avatar-react'
 
@@ -28,7 +30,13 @@ export type {
   AvatarAnimationRef,
   AvatarDefinition
 } from '@oneworks/avatar'
-export type { AvatarCaptureOptions, AvatarPlayOptions, AvatarTheme } from '@oneworks/avatar-react'
+export type {
+  AvatarCaptureOptions,
+  AvatarPlayOptions,
+  AvatarTheme,
+  AvatarTrackInput,
+  AvatarTrackUpdate
+} from '@oneworks/avatar-react'
 
 export interface AvatarMountOptions {
   readonly animation?: AvatarAnimationClip | AvatarAnimationRef | null
@@ -113,24 +121,30 @@ export const createAvatar = (
       root.unmount()
     },
     getDefinition: () => handle?.getDefinition() ?? options.definition ?? createDefaultAvatarDefinition(),
-    pause: () => requireHandle().pause(),
+    pause: trackId => requireHandle().pause(trackId),
     play: async (animation, playOptions) => {
       await ready
       return requireHandle().play(animation, playOptions)
     },
     ready,
-    resume: () => requireHandle().resume(),
-    seek: timeMs => requireHandle().seek(timeMs),
+    removeTrack: trackId => requireHandle().removeTrack(trackId),
+    resume: trackId => requireHandle().resume(trackId),
+    seek: (timeMs, trackId) => requireHandle().seek(timeMs, trackId),
     setDefinition: definition => {
       options = { ...options, definition }
       if (handle == null) render()
       else handle.setDefinition(definition)
     },
+    setTracks: async tracks => {
+      await ready
+      return requireHandle().setTracks(tracks)
+    },
     stop: stopOptions => requireHandle().stop(stopOptions),
     update: nextOptions => {
       options = { ...options, ...nextOptions }
       render()
-    }
+    },
+    updateTrack: (trackId, update) => requireHandle().updateTrack(trackId, update)
   }
 }
 

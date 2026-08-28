@@ -4,7 +4,7 @@
   display: flex;
   height: 100vh;
   flex-direction: column;
-  padding: 16px;
+  padding: var(--avatar-shell-padding, 16px);
   border-left: 1px solid var(--border-color);
   background: color-mix(in srgb, var(--bg-color) 70%, transparent);
   box-shadow: inset 1px 0 0 color-mix(in srgb, white 22%, transparent);
@@ -21,7 +21,7 @@
     flex: 0 0 auto;
     min-width: 0;
     align-items: center;
-    gap: 8px;
+    gap: var(--avatar-shell-gap, 8px);
   }
 
   &__collapse {
@@ -55,14 +55,23 @@
   &__header-actions {
     display: flex;
     flex: 0 0 auto;
-    gap: 6px;
+    gap: 0;
+    padding: 3px;
+    overflow: visible;
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    background: var(--bg-color);
 
     .avatar-app__github-link,
     .avatar-app__camera-toggle,
     .avatar-app__language-toggle,
+    .avatar-app__save-preset,
     .avatar-app__theme-toggle {
       width: 42px;
-      height: 42px;
+      height: 34px;
+      border: 0;
+      border-radius: 7px;
+      background: transparent;
     }
   }
 
@@ -107,7 +116,7 @@
   &__tabs {
     display: grid;
     min-width: 0;
-    grid-template-columns: repeat(4, minmax(0, 1fr));
+    grid-template-columns: repeat(5, minmax(0, 1fr));
     flex: 1 1 auto;
     overflow: hidden;
     border: 1px solid var(--border-color);
@@ -160,6 +169,11 @@
     overflow-x: hidden;
     overflow-y: auto;
     overscroll-behavior-y: contain;
+  }
+
+  #avatar-controls-panel-animation {
+    padding-top: 0;
+    overflow-y: hidden;
   }
 
   &__field-group,

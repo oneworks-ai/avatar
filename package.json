@@ -10,9 +10,11 @@
     "url": "https://github.com/oneworks-ai/avatar.git"
   },
   "scripts": {
+    "animation-covers:check": "node scripts/generate-avatar-animation-preset-covers.mjs --check",
+    "animation-covers:generate": "node scripts/generate-avatar-animation-preset-covers.mjs",
     "build": "pnpm build:app-source",
-    "build:app-source": "tsc -p tsconfig.app-source.json --noEmit --pretty false && vite build",
-    "build:npm": "tsc -p tsconfig.json --noEmit --pretty false && vite build",
+    "build:app-source": "pnpm animation-covers:check && tsc -p tsconfig.app-source.json --noEmit --pretty false && vite build",
+    "build:npm": "pnpm animation-covers:check && tsc -p tsconfig.json --noEmit --pretty false && vite build",
     "build:sdk": "pnpm --filter './packages/*' build",
     "dev": "vite",
     "preview": "vite preview",
@@ -24,6 +26,7 @@
     "typecheck:sdk": "pnpm build:sdk && pnpm --filter './packages/*' typecheck"
   },
   "dependencies": {
+    "@material-symbols/svg-400": "0.44.8",
     "@oneworks/avatar": "link:packages/avatar",
     "@oneworks/route-layout": "beta",
     "gifenc": "^1.0.3"

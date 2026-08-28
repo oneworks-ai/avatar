@@ -62,20 +62,29 @@ export class OneWorksAvatarElement extends HTMLElementBase {
   capture(options: Parameters<AvatarMount['capture']>[0]) {
     return this.#requireMount().capture(options)
   }
-  pause() {
-    this.#requireMount().pause()
+  pause(trackId?: string) {
+    this.#requireMount().pause(trackId)
   }
   play(animation: AvatarAnimationClip | AvatarAnimationRef, options?: Parameters<AvatarMount['play']>[1]) {
     return this.#requireMount().play(animation, options)
   }
-  resume() {
-    this.#requireMount().resume()
+  removeTrack(trackId: string) {
+    this.#requireMount().removeTrack(trackId)
   }
-  seek(timeMs: number) {
-    this.#requireMount().seek(timeMs)
+  resume(trackId?: string) {
+    this.#requireMount().resume(trackId)
+  }
+  seek(timeMs: number, trackId?: string) {
+    this.#requireMount().seek(timeMs, trackId)
+  }
+  setTracks(tracks: Parameters<AvatarMount['setTracks']>[0]) {
+    return this.#requireMount().setTracks(tracks)
   }
   stop(options?: Parameters<AvatarMount['stop']>[0]) {
     this.#requireMount().stop(options)
+  }
+  updateTrack(trackId: string, update: Parameters<AvatarMount['updateTrack']>[1]) {
+    this.#requireMount().updateTrack(trackId, update)
   }
 
   #options(): AvatarMountOptions {

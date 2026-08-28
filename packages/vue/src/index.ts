@@ -17,6 +17,8 @@ import type {
   AvatarMount,
   AvatarMountOptions,
   AvatarPlayOptions,
+  AvatarTrackInput,
+  AvatarTrackUpdate,
   AvatarTheme
 } from '@oneworks/avatar-web'
 
@@ -29,6 +31,8 @@ export type {
   AvatarCaptureOptions,
   AvatarDefinition,
   AvatarPlayOptions,
+  AvatarTrackInput,
+  AvatarTrackUpdate,
   AvatarTheme
 } from '@oneworks/avatar-web'
 
@@ -37,15 +41,18 @@ type AvatarAnimation = AvatarAnimationClip | AvatarAnimationRef | null
 export interface OneWorksAvatarHandle {
   capture(options: AvatarCaptureOptions): ReturnType<AvatarMount['capture']>
   getDefinition(): AvatarDefinition
-  pause(): void
+  pause(trackId?: string): void
   play(
     animation: Exclude<AvatarAnimation, null>,
     options?: AvatarPlayOptions
   ): ReturnType<AvatarMount['play']>
-  resume(): void
-  seek(timeMs: number): void
+  removeTrack(trackId: string): void
+  resume(trackId?: string): void
+  seek(timeMs: number, trackId?: string): void
   setDefinition(definition: AvatarDefinition): void
-  stop(options?: { readonly reset?: boolean }): void
+  setTracks(tracks: readonly AvatarTrackInput[]): ReturnType<AvatarMount['setTracks']>
+  stop(options?: { readonly reset?: boolean; readonly trackId?: string }): void
+  updateTrack(trackId: string, update: AvatarTrackUpdate): void
 }
 
 export interface OneWorksAvatarEditorHandle {
@@ -118,14 +125,17 @@ const oneWorksAvatarComponent = defineComponent({
     expose({
       capture: (captureOptions: AvatarCaptureOptions) => mount!.capture(captureOptions),
       getDefinition: () => mount!.getDefinition(),
-      pause: () => mount!.pause(),
+      pause: (trackId?: string) => mount!.pause(trackId),
       play: (animation: Exclude<AvatarAnimation, null>, playOptions?: AvatarPlayOptions) => (
         mount!.play(animation, playOptions)
       ),
-      resume: () => mount!.resume(),
-      seek: (timeMs: number) => mount!.seek(timeMs),
+      removeTrack: (trackId: string) => mount!.removeTrack(trackId),
+      resume: (trackId?: string) => mount!.resume(trackId),
+      seek: (timeMs: number, trackId?: string) => mount!.seek(timeMs, trackId),
       setDefinition: (definition: AvatarDefinition) => mount!.setDefinition(definition),
-      stop: (options?: { readonly reset?: boolean }) => mount!.stop(options)
+      setTracks: (tracks: readonly AvatarTrackInput[]) => mount!.setTracks(tracks),
+      stop: (options?: { readonly reset?: boolean; readonly trackId?: string }) => mount!.stop(options),
+      updateTrack: (trackId: string, update: AvatarTrackUpdate) => mount!.updateTrack(trackId, update)
     })
 
     return () => h('div', { ...attrs, ref: host })
