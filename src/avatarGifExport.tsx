@@ -4,6 +4,16 @@ import { GIFEncoder, applyPalette, quantize } from 'gifenc'
 import { flushSync } from 'react-dom'
 import { createRoot } from 'react-dom/client'
 
+import {
+  getAvatarAnimationTimelineContentEndMs,
+  resolveAvatarAnimationTimelineFrame
+} from '@oneworks/avatar'
+import type {
+  AvatarAnimationTimeline,
+  AvatarAnimationTimelinePresetResolver,
+  AvatarDefinition
+} from '@oneworks/avatar'
+
 import { InteractiveAvatar } from './InteractiveAvatar'
 import type { AvatarViewState, InteractiveAvatarProps } from './InteractiveAvatar'
 import {
@@ -57,6 +67,53 @@ export interface AvatarGifExportOptions extends AvatarCaptureOptions {
 export interface AvatarGifSample {
   readonly delayMs: number
   readonly keyframe: AvatarAnimationKeyframe
+}
+
+export const createAvatarGifSampleTimeline = (
+  durationMs: number,
+  framesPerSecond = GIF_FRAMES_PER_SECOND,
+  maxFrames = MAX_GIF_FRAMES
+) => {
+  const resolvedDurationMs = Math.max(durationMs, 1)
+  const targetFrameDurationMs = 1000 / Math.max(framesPerSecond, 1)
+  const segmentCount = Math.min(
+    Math.max(Math.round(maxFrames), 2) - 1,
+    Math.max(1, Math.ceil(resolvedDurationMs / targetFrameDurationMs))
+  )
+  return {
+    frameDurationMs: resolvedDurationMs / segmentCount,
+    times: Array.from({ length: segmentCount + 1 }, (_, index) => (
+      resolvedDurationMs * index / segmentCount
+    ))
+  }
+}
+
+export const createAvatarTimelineGifKeyframes = (
+  definition: AvatarDefinition,
+  timeline: AvatarAnimationTimeline,
+  resolvePreset?: AvatarAnimationTimelinePresetResolver
+): readonly AvatarAnimationKeyframe[] => {
+  const durationMs = getAvatarAnimationTimelineContentEndMs(timeline)
+  if (durationMs <= 0 || timeline.tracks.every(track => track.clips.length === 0)) return []
+  const { frameDurationMs, times } = createAvatarGifSampleTimeline(durationMs)
+  return times.map(timeMs => {
+    const sampleTimeMs = Math.min(timeMs, Math.max(0, durationMs - .001))
+    const frame = resolveAvatarAnimationTimelineFrame(definition, timeline, sampleTimeMs, resolvePreset)
+    return {
+      ...(frame.auxiliaryParts == null ? {} : { auxiliaryParts: frame.auxiliaryParts }),
+      ...(frame.auxiliaryShapes == null ? {} : { auxiliaryShapes: frame.auxiliaryShapes }),
+      colorGrade: frame.scene.effects.colorGrade,
+      durationMs: frameDurationMs,
+      easing: 'linear',
+      faceStyle: frame.scene.face,
+      ...(frame.partShapeMorphs == null ? {} : { partShapeMorphs: frame.partShapeMorphs }),
+      ...(frame.partTransforms == null ? {} : { partTransforms: frame.partTransforms }),
+      pitch: frame.scene.view.pitch,
+      positionX: frame.scene.view.positionX,
+      positionY: frame.scene.view.positionY,
+      yaw: frame.scene.view.yaw
+    }
+  })
 }
 
 const clampStartFrameIndex = (index: number, length: number) => {
@@ -228,12 +285,16 @@ export const createAvatarGif = async (options: AvatarGifExportOptions) => {
         root.render(
           <InteractiveAvatar
             {...options.renderProps}
+            auxiliaryParts={sample.keyframe.auxiliaryParts}
+            auxiliaryShapes={sample.keyframe.auxiliaryShapes}
             colorGrade={sample.keyframe.colorGrade}
             faceStyleTransitionsEnabled={false}
             faceStyle={sample.keyframe.faceStyle}
             interactive={false}
             interactionMode='rotate'
             onViewStateChange={() => undefined}
+            partShapeMorphs={sample.keyframe.partShapeMorphs}
+            partTransforms={sample.keyframe.partTransforms}
             viewState={viewState}
           />
         )

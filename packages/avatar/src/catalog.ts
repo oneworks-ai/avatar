@@ -793,9 +793,6 @@ export const AVATAR_PALETTES: readonly AvatarPalette[] = [
   naturalAnimalPalette({ id: 'canada-goose', name: 'Canada Goose', tone: '#383834', highlight: '#65645e', shadow: '#1d1d1a', foreground: '#f2ece0', mark: '#e3ded2', marking: 'mask', patch: '#f2ece0' }),
   naturalAnimalPalette({ id: 'snow-goose', name: 'Snow Goose', tone: '#e9e6dd', highlight: '#fffdf6', shadow: '#bbb7ad', foreground: '#3b3030', mark: '#d2cec5', marking: 'muzzle', patch: '#fff8ec' }),
   naturalAnimalPalette({ id: 'white-gosling', name: 'White Gosling', tone: '#e8d9aa', highlight: '#fff1c8', shadow: '#b8a36f', foreground: '#473421', mark: '#cfb679', marking: 'muzzle', patch: '#fff3cf' }),
-  naturalAnimalPalette({ id: 'silkie-chick', name: 'Silkie Chick', tone: '#e5e2d7', highlight: '#fffdf4', shadow: '#b9b3a7', foreground: '#3c3430', mark: '#bdb8ad', marking: 'muzzle', patch: '#fff8e9' }),
-  naturalAnimalPalette({ id: 'barred-rock-chick', name: 'Barred Rock Chick', tone: '#65666b', highlight: '#95979d', shadow: '#3d3e43', foreground: '#f2d78c', mark: '#303238', marking: 'muzzle', patch: '#d6d4cc' }),
-  naturalAnimalPalette({ id: 'buff-orpington-chick', name: 'Buff Orpington Chick', tone: '#d9a65e', highlight: '#f4cc8a', shadow: '#9d713a', foreground: '#412a18', mark: '#a66f36', marking: 'muzzle', patch: '#f5d8a6' }),
   {
     id: 'red-fox',
     name: 'Red Fox',

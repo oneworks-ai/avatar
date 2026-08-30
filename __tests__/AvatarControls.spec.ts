@@ -52,6 +52,7 @@ const createProps = (): ComponentProps<typeof AvatarControls> => ({
   catEarWidth: 100,
   coatPattern: DEFAULT_AVATAR_COAT_PATTERN,
   controlsWidth: 420,
+  entityGroups: [],
   entityParts: [],
   entityPreset: 'custom',
   dogBreedTemplateId: null,
@@ -73,6 +74,7 @@ const createProps = (): ComponentProps<typeof AvatarControls> => ({
   lightAzimuth: -35,
   lightDistance: 0,
   lightElevation: 40,
+  leftControlsWidth: 300,
   onAddSurfaceDecal: vi.fn(),
   onAvatarOutlineStyleChange: vi.fn(),
   onAvatarShadowStyleChange: vi.fn(),
@@ -101,10 +103,18 @@ const createProps = (): ComponentProps<typeof AvatarControls> => ({
   onRabbitHeadWidthChange: vi.fn(),
   onCoatPatternChange: vi.fn(),
   onConvertCoatPatternToDecals: vi.fn(),
-  onCollapse: vi.fn(),
+  onCollapseLeft: vi.fn(),
+  onCollapseRight: vi.fn(),
   onControlsWidthChange: vi.fn(),
+  onLeftControlsWidthChange: vi.fn(),
   onDeleteSurfaceDecal: vi.fn(),
   onEntityPartChange: vi.fn(),
+  onEntityPartAdd: vi.fn(),
+  onEntityPartDelete: vi.fn(),
+  onEntityGroupAdd: vi.fn(),
+  onEntityGroupChange: vi.fn(),
+  onEntityGroupDelete: vi.fn(),
+  onSelectEntityPart: vi.fn(),
   onEntityPresetChange: vi.fn(),
   onFaceShadowStyleChange: vi.fn(),
   onFaceStyleChange: vi.fn(),
@@ -152,7 +162,154 @@ const createProps = (): ComponentProps<typeof AvatarControls> => ({
   visiblePalettes: [getAvatarPalette('white')]
 })
 
+const openBuildAdvanced = () => {
+  const openDetail = host.querySelector<HTMLElement>('#avatar-controls-build-detail-parameters')
+  if (openDetail != null) return openDetail
+  const trigger = host.querySelector<HTMLButtonElement>(
+    '[aria-controls="avatar-controls-build-detail-parameters"]'
+  )
+  act(() => trigger?.click())
+  return host.querySelector<HTMLElement>('#avatar-controls-build-detail-parameters')
+}
+
+const openSeedDetail = () => {
+  const openDetail = host.querySelector<HTMLElement>('#avatar-controls-build-detail-seed')
+  if (openDetail != null) return openDetail
+  const trigger = host.querySelector<HTMLButtonElement>(
+    '[aria-controls="avatar-controls-build-detail-seed"]'
+  )
+  act(() => trigger?.click())
+  return host.querySelector<HTMLElement>('#avatar-controls-build-detail-seed')
+}
+
+const openCoatPatternDetail = () => {
+  const openDetail = host.querySelector<HTMLElement>('#avatar-controls-build-detail-coat-pattern')
+  if (openDetail != null) return openDetail
+  const trigger = host.querySelector<HTMLButtonElement>(
+    '[aria-controls="avatar-controls-build-detail-coat-pattern"]'
+  )
+  act(() => trigger?.click())
+  return host.querySelector<HTMLElement>('#avatar-controls-build-detail-coat-pattern')
+}
+
+const openFaceDetail = () => {
+  const openDetail = host.querySelector<HTMLElement>('#avatar-controls-build-detail-face')
+  if (openDetail != null) return openDetail
+  const trigger = host.querySelector<HTMLButtonElement>(
+    '[aria-controls="avatar-controls-build-detail-face"]'
+  )
+  act(() => trigger?.click())
+  return host.querySelector<HTMLElement>('#avatar-controls-build-detail-face')
+}
+
+const openEffectsDetail = (page: 'avatar-outline' | 'avatar-shadow' | 'face-shadow' | 'frame-shadow' | 'light' | 'pixel') => {
+  const id = `avatar-controls-effects-detail-${page}`
+  const openDetail = host.querySelector<HTMLElement>(`#${id}`)
+  if (openDetail != null) return openDetail
+  const trigger = host.querySelector<HTMLButtonElement>(`[aria-controls="${id}"]`)
+  act(() => trigger?.click())
+  return host.querySelector<HTMLElement>(`#${id}`)
+}
+
 describe('AvatarControls Seed authoring', () => {
+  it('separates resource selection from detail settings', () => {
+    const props = { ...createProps(), activeTab: 'style' as const }
+    act(() => root.render(createElement(
+      AvatarLocaleProvider,
+      { initialLocale: 'en', persist: false },
+      createElement(AvatarControls, props)
+    )))
+
+    const resourceTabs = host.querySelector('[role="tablist"][aria-label="Avatar resources"]') as HTMLElement
+    const detailTabs = host.querySelector('[role="tablist"][aria-label="Avatar details"]') as HTMLElement
+    const leftTabs = resourceTabs.querySelectorAll<HTMLButtonElement>('[role="tab"]')
+    const rightTabs = detailTabs.querySelectorAll<HTMLButtonElement>('[role="tab"]')
+    expect([...leftTabs].map(tab => tab.getAttribute('aria-label'))).toEqual([
+      'Build', 'Animation', 'Body'
+    ])
+    expect([...rightTabs].map(tab => tab.getAttribute('aria-label'))).toEqual([
+      'Body', 'Style', 'Effects', 'Animation'
+    ])
+    expect(resourceTabs.style.getPropertyValue('--avatar-control-tab-count')).toBe('3')
+    expect(detailTabs.style.getPropertyValue('--avatar-control-tab-count')).toBe('4')
+    expect(rightTabs[1]?.getAttribute('aria-selected')).toBe('true')
+    expect(host.querySelector('[role="tab"][aria-label="Surface decals"]')).toBeNull()
+    expect(host.querySelector('#avatar-controls-right-panel-style [aria-label="Surface decals"]')).not.toBeNull()
+    act(() => leftTabs[1]?.click())
+    expect(leftTabs[1]?.getAttribute('aria-selected')).toBe('true')
+    act(() => rightTabs[2]?.click())
+    expect(props.onTabChange).toHaveBeenCalledWith('effects')
+    expect(leftTabs[1]?.getAttribute('aria-selected')).toBe('true')
+
+    act(() => root.render(createElement(
+      AvatarLocaleProvider,
+      { initialLocale: 'en', persist: false },
+      createElement(AvatarControls, { ...props, activeTab: 'animation' })
+    )))
+    expect(leftTabs[1]?.getAttribute('aria-selected')).toBe('true')
+    expect(rightTabs[3]?.getAttribute('aria-selected')).toBe('true')
+  })
+
+  it('uses a shape node tree on the left and edits the selected leaf on the right', () => {
+    const props = {
+      ...createProps(),
+      activeTab: 'body' as const,
+      entityParts: createAvatarEntityParts('fox'),
+      entityPreset: 'fox' as const
+    }
+    act(() => root.render(createElement(
+      AvatarLocaleProvider,
+      { initialLocale: 'en', persist: false },
+      createElement(AvatarControls, props)
+    )))
+
+    const tree = host.querySelector<HTMLElement>('[role="tree"][aria-label="Shape node tree"]')
+    const leaf = tree?.querySelector<HTMLButtonElement>('.avatar-controls__node-tree-row--part [role="treeitem"]')
+    expect(tree).not.toBeNull()
+    expect(tree?.querySelector('.avatar-controls__node-tree-row--root')?.getAttribute('data-selected')).toBe('true')
+    expect(host.querySelector('#avatar-controls-left-panel-body .avatar-controls__parameter-controls')).toBeNull()
+
+    act(() => leaf?.click())
+    expect(props.onSelectEntityPart).toHaveBeenCalled()
+    expect(host.querySelector('#avatar-controls-right-panel-body [aria-label="Shape name"]')).not.toBeNull()
+    expect(host.querySelector('#avatar-controls-right-panel-body [aria-label="Shape type"]')).not.toBeNull()
+
+    act(() => tree?.dispatchEvent(new MouseEvent('contextmenu', {
+      bubbles: true,
+      clientX: 80,
+      clientY: 120
+    })))
+    const newShape = document.querySelector<HTMLButtonElement>('[role="menuitem"]')
+    expect(newShape?.textContent).toBe('New shape')
+    act(() => newShape?.click())
+    expect(props.onEntityPartAdd).toHaveBeenCalledWith(expect.objectContaining({ shape: 'sphere' }))
+  })
+
+  it('keeps each sidebar collapse and resize control independent', () => {
+    const props = createProps()
+    act(() => root.render(createElement(
+      AvatarLocaleProvider,
+      { initialLocale: 'en', persist: false },
+      createElement(AvatarControls, props)
+    )))
+
+    const leftCollapse = host.querySelector<HTMLButtonElement>('[aria-label="Hide resources sidebar"]')
+    const rightCollapse = host.querySelector<HTMLButtonElement>('[aria-label="Hide controls sidebar"]')
+    act(() => leftCollapse?.click())
+    expect(props.onCollapseLeft).toHaveBeenCalledTimes(1)
+    expect(props.onCollapseRight).not.toHaveBeenCalled()
+    act(() => rightCollapse?.click())
+    expect(props.onCollapseRight).toHaveBeenCalledTimes(1)
+
+    const leftResize = host.querySelector<HTMLElement>('[aria-label="Resize avatar resources"]')
+    const rightResize = host.querySelector<HTMLElement>('[aria-label="Resize avatar controls"]')
+    act(() => leftResize?.dispatchEvent(new KeyboardEvent('keydown', { bubbles: true, key: 'ArrowRight' })))
+    expect(props.onLeftControlsWidthChange).toHaveBeenCalledWith(316)
+    expect(props.onControlsWidthChange).not.toHaveBeenCalled()
+    act(() => rightResize?.dispatchEvent(new KeyboardEvent('keydown', { bubbles: true, key: 'ArrowLeft' })))
+    expect(props.onControlsWidthChange).toHaveBeenCalledWith(436)
+  })
+
   it('exposes reusable bottom taper for standalone ellipses and ellipse entity parts only', () => {
     const customProps = { ...createProps(), activeTab: 'body' as const, bodyShape: 'ellipse' as const, bodyBottomTaper: 43 }
     act(() => root.render(createElement(
@@ -206,7 +363,7 @@ describe('AvatarControls Seed authoring', () => {
     expect(more?.querySelector('svg')).not.toBeNull()
   })
 
-  it('opens the avatar template browser before cold previews finish and reuses ready previews', () => {
+  it('opens the avatar template detail page before cold previews finish and reuses ready previews', () => {
     const idleCallbacks: Array<() => void> = []
     const frameCallbacks: FrameRequestCallback[] = []
     vi.stubGlobal('requestIdleCallback', vi.fn((callback: () => void) => {
@@ -232,6 +389,8 @@ describe('AvatarControls Seed authoring', () => {
     const beforeReady = browser?.querySelectorAll('[data-preview-ready="true"]').length ?? 0
     const beforePending = browser?.querySelectorAll('[data-preview-ready="false"]').length ?? 0
     expect(browser).not.toBeNull()
+    expect(host.querySelector('[role="dialog"]')).toBeNull()
+    expect(host.querySelector('#avatar-controls-build-detail-presets')).not.toBeNull()
     expect(beforeReady).toBeGreaterThan(0)
     expect(beforePending).toBeGreaterThan(0)
     expect(idleCallbacks).toHaveLength(1)
@@ -290,8 +449,10 @@ describe('AvatarControls Seed authoring', () => {
   })
 
   it('marks selecting a complete face preset as a replace operation', () => {
-    const props = createProps()
+    const props = { ...createProps(), activeTab: 'build' as const }
     act(() => root.render(createElement(AvatarLocaleProvider, { initialLocale: 'en', persist: false }, createElement(AvatarControls, props))))
+    act(() => host.querySelector<HTMLElement>('[aria-label="Face presets"]')
+      ?.querySelector<HTMLButtonElement>('[aria-label="More presets"]')?.click())
     act(() => Array.from(host.querySelectorAll<HTMLButtonElement>('button')).find(button => button.getAttribute('aria-label') === 'Sleepy')?.click())
     expect(props.onFaceStyleChange).toHaveBeenCalledWith(expect.objectContaining({ height: 30 }), 'replace')
   })
@@ -305,6 +466,19 @@ describe('AvatarControls Seed authoring', () => {
       surfaceDecals: []
     }
     act(() => root.render(createElement(AvatarLocaleProvider, { initialLocale: 'en', persist: false }, createElement(AvatarControls, props))))
+    expect(host.querySelector('#avatar-controls-left-panel-build .avatar-controls__coat-content')).toBeNull()
+    expect(host.querySelector('#avatar-controls-left-panel-build .avatar-controls__coat-pattern-entry')).not.toBeNull()
+    const coatPatternToggle = host.querySelector<HTMLButtonElement>('.avatar-controls__coat-pattern-toggle')
+    expect(coatPatternToggle?.getAttribute('role')).toBe('switch')
+    expect(coatPatternToggle?.getAttribute('aria-checked')).toBe('true')
+    expect(coatPatternToggle?.textContent).toContain('Random')
+    const firstBuildControl = host.querySelector('#avatar-controls-left-panel-build')?.firstElementChild
+    expect(firstBuildControl?.classList.contains('avatar-controls__coat-pattern-entry')).toBe(true)
+    const advanced = openCoatPatternDetail()
+    expect(advanced).not.toBeNull()
+    expect(advanced?.getAttribute('role')).not.toBe('dialog')
+    expect(document.querySelector('#avatar-controls-build-advanced')).toBeNull()
+    expect(advanced?.querySelector('.avatar-controls__coat-content')).not.toBeNull()
     const algorithms = host.querySelectorAll<HTMLButtonElement>('[aria-label="Pattern algorithm"] [role="radio"]')
     expect(algorithms).toHaveLength(5)
     expect([...algorithms].every(button => button.querySelector('svg') != null)).toBe(true)
@@ -328,7 +502,7 @@ describe('AvatarControls Seed authoring', () => {
     expect(props.onConvertCoatPatternToDecals).toHaveBeenCalledOnce()
   })
 
-  it('keeps Seed settings collapsed until the accessible disclosure is opened', () => {
+  it('moves Seed editing out of the overview and into the sidebar detail page', () => {
     const props = createProps()
     act(() => {
       root.render(createElement(
@@ -351,12 +525,19 @@ describe('AvatarControls Seed authoring', () => {
     expect(host.textContent).not.toContain('Saved presets')
     expect(host.textContent).toContain('Avatar type')
 
+    act(() => faceSeed?.click())
+    expect(props.onSeedFieldToggle).toHaveBeenCalledWith('scene.face.preset', true)
     act(() => disclosure?.click())
-    expect(disclosure?.getAttribute('aria-expanded')).toBe('true')
+    const detail = host.querySelector<HTMLElement>('#avatar-controls-build-detail-seed')
+    expect(detail).not.toBeNull()
+    expect(host.querySelector('[aria-label="Avatar type"]')).toBeNull()
+    expect(detail?.textContent).toContain('Seeded fields: 0')
+    expect(detail?.textContent).toContain('Only linked fields change when the Seed changes.')
+    expect(detail?.querySelector('[aria-label="View composition"]')).toBeNull()
     const input = host.querySelector<HTMLInputElement>('[aria-label="Current Seed"]')
     const randomize = host.querySelector<HTMLButtonElement>('[aria-label="Generate random Seed"]')
     expect(input?.value).toBe('v1-test')
-    expect(input?.closest('.avatar-controls__seed-input')?.id).toBe(disclosure?.getAttribute('aria-controls'))
+    expect(input?.closest('#avatar-controls-build-detail-seed')).toBe(detail)
 
     act(() => {
       const valueSetter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')?.set
@@ -369,10 +550,92 @@ describe('AvatarControls Seed authoring', () => {
     act(() => input?.blur())
     expect(props.onSeedChange).toHaveBeenCalledWith('v1-next')
 
-    act(() => faceSeed?.click())
-    expect(props.onSeedFieldToggle).toHaveBeenCalledWith('scene.face.preset', true)
     act(() => randomize?.click())
     expect(props.onRandomSeed).toHaveBeenCalledOnce()
+  })
+
+  it('opens Seed settings as an in-sidebar detail page and returns to the overview', () => {
+    const props = createProps()
+    act(() => root.render(createElement(
+      AvatarLocaleProvider,
+      { initialLocale: 'en', persist: false },
+      createElement(AvatarControls, props)
+    )))
+
+    const detail = openSeedDetail()
+    expect(detail).not.toBeNull()
+    expect(detail?.closest('#avatar-controls-left-panel-build')).not.toBeNull()
+    expect(document.querySelector('[role="dialog"]')).toBeNull()
+    expect(detail?.textContent).toContain('Seed')
+    expect(detail?.textContent).toContain('Advanced options')
+    expect(detail?.querySelector('[aria-label="Current Seed"]')).not.toBeNull()
+    expect(detail?.querySelector('[aria-label="Generate random Seed"]')).not.toBeNull()
+    expect(detail?.querySelector('[aria-label="View composition"]')).toBeNull()
+    expect(host.querySelector('[aria-label="Avatar type"]')).toBeNull()
+
+    act(() => detail?.querySelector<HTMLButtonElement>('[aria-label="Back to Build overview"]')?.click())
+    expect(host.querySelector('#avatar-controls-build-detail-seed')).toBeNull()
+    expect(host.querySelector('[aria-label="Avatar type"]')).not.toBeNull()
+  })
+
+  it('opens Face settings as an in-sidebar detail page and restores the Build overview', () => {
+    const props = createProps()
+    act(() => root.render(createElement(
+      AvatarLocaleProvider,
+      { initialLocale: 'en', persist: false },
+      createElement(AvatarControls, props)
+    )))
+
+    const detail = openFaceDetail()
+    expect(detail).not.toBeNull()
+    expect(detail?.closest('#avatar-controls-left-panel-build')).not.toBeNull()
+    expect(document.querySelector('[role="dialog"]')).toBeNull()
+    expect(detail?.textContent).toContain('Face')
+    expect(detail?.textContent).toContain('Advanced options')
+    expect(detail?.querySelector('[role="tablist"][aria-label="Face parts"]')).not.toBeNull()
+    expect(detail?.querySelector('[aria-label="Eye shape"]')).not.toBeNull()
+    expect(host.querySelector('[aria-label="Avatar type"]')).toBeNull()
+
+    act(() => detail?.querySelector<HTMLButtonElement>('[aria-label="Back to Build overview"]')?.click())
+    expect(host.querySelector('#avatar-controls-build-detail-face')).toBeNull()
+    expect(host.querySelector('[aria-label="Avatar type"]')).not.toBeNull()
+    expect(host.querySelector('[aria-label="Face presets"]')).not.toBeNull()
+  })
+
+  it('keeps Style libraries compact and moves complete configuration into sidebar detail pages', () => {
+    const entityParts = createAvatarEntityParts('bear')
+    const props = {
+      ...createProps(),
+      activeTab: 'style' as const,
+      entityParts,
+      entityPreset: 'bear' as const,
+      selectedEntityPartId: null
+    }
+    act(() => root.render(createElement(
+      AvatarLocaleProvider,
+      { initialLocale: 'en', persist: false },
+      createElement(AvatarControls, props)
+    )))
+
+    const paletteOverview = host.querySelector<HTMLElement>('#avatar-controls-right-panel-style [aria-label="Palette"]')
+    expect(paletteOverview?.querySelector('.avatar-controls__swatches--compact')).not.toBeNull()
+    expect(paletteOverview?.querySelectorAll('.avatar-controls__swatch').length).toBeGreaterThan(0)
+    expect(host.querySelector('#avatar-controls-right-panel-style [aria-label="Background"]')).toBeNull()
+
+    act(() => paletteOverview?.querySelector<HTMLButtonElement>('.avatar-controls__style-more')?.click())
+    const paletteDetail = host.querySelector<HTMLElement>('#avatar-controls-style-detail-palette')
+    expect(paletteDetail).not.toBeNull()
+    expect(host.querySelector('[role="dialog"]')).toBeNull()
+    expect(paletteDetail?.querySelector('[aria-label="Part material"]')).not.toBeNull()
+    expect(paletteDetail?.querySelector('[aria-label="Palette presets"]')).not.toBeNull()
+    expect(paletteDetail?.querySelector('[aria-label="Background"]')).not.toBeNull()
+
+    act(() => paletteDetail?.querySelector<HTMLButtonElement>('[aria-label="Back to Style overview"]')?.click())
+    const cameraOverview = host.querySelector<HTMLElement>('#avatar-controls-right-panel-style [aria-label="Camera background"]')
+    act(() => cameraOverview?.querySelector<HTMLButtonElement>('.avatar-controls__style-more')?.click())
+    const cameraDetail = host.querySelector<HTMLElement>('#avatar-controls-style-detail-camera-background')
+    expect(cameraDetail?.querySelector('[aria-label="Camera background color"]')).not.toBeNull()
+    expect(cameraDetail?.querySelectorAll('[aria-label="Camera background presets"] button').length).toBeGreaterThan(5)
   })
 
   it('exposes one Seed toggle for the horizontal position', () => {
@@ -382,6 +645,7 @@ describe('AvatarControls Seed authoring', () => {
       { initialLocale: 'en', persist: false },
       createElement(AvatarControls, props)
     )))
+    expect(openBuildAdvanced()).not.toBeNull()
 
     const pose = host.querySelector<HTMLButtonElement>('[aria-label="Follow Seed: View composition"]')
     expect(pose).not.toBeNull()
@@ -415,10 +679,13 @@ describe('AvatarControls Seed authoring', () => {
     expect(savedSection?.querySelector('[data-entity-preset]')).toBeNull()
     expect(savedSection?.querySelector('img')).not.toBeNull()
     expect(templateSection?.querySelector('[data-entity-preset="cat"]')).not.toBeNull()
-    const fox = templateSection?.querySelector<HTMLButtonElement>('[data-entity-preset="fox"]')
+    expect(templateSection?.querySelectorAll('[data-entity-preset]')).toHaveLength(4)
+    act(() => templateSection?.querySelector<HTMLButtonElement>('[aria-label="More presets"]')?.click())
+    const browser = host.querySelector<HTMLElement>('[aria-label="Avatar templates"]')
+    const fox = browser?.querySelector<HTMLButtonElement>('[data-entity-preset="fox"]')
     expect(fox?.getAttribute('aria-label')).toBe('Fox')
     expect(fox?.querySelector('[data-avatar-surface-decal="fox-cheek-left"]')).not.toBeNull()
-    expect(templateSection?.querySelector('img')).toBeNull()
+    expect(browser?.querySelectorAll('[data-entity-preset]')).toHaveLength(AVATAR_BUILT_IN_ENTITY_PRESETS.length)
   })
 
   it('keeps cat types as a peer library and applies a selected constraint profile', () => {
@@ -439,14 +706,17 @@ describe('AvatarControls Seed authoring', () => {
     expect(avatarType).not.toBeNull()
     expect(catTypes).not.toBeNull()
     expect(avatarType?.contains(catTypes ?? null)).toBe(false)
-    expect(catTypes?.querySelectorAll('[data-cat-breed]')).toHaveLength(6)
-    const siamese = catTypes?.querySelector<HTMLButtonElement>('[data-cat-breed="siamese"]')
+    expect(catTypes?.querySelectorAll('[data-cat-breed]')).toHaveLength(4)
+    act(() => catTypes?.querySelector<HTMLButtonElement>('[aria-label="More presets"]')?.click())
+    const catBrowser = host.querySelector<HTMLElement>('#avatar-controls-build-detail-presets .avatar-controls__preset-browser-grid')
+    expect(catBrowser?.querySelectorAll('[data-cat-breed]')).toHaveLength(6)
+    const siamese = catBrowser?.querySelector<HTMLButtonElement>('[data-cat-breed="siamese"]')
     const cat = avatarType?.querySelector<HTMLButtonElement>('[data-entity-preset="cat"]')
     expect(siamese?.classList.contains('avatar-controls__saved-preset')).toBe(true)
     expect(siamese?.querySelector('svg')?.getAttribute('viewBox')).toBe(cat?.querySelector('svg')?.getAttribute('viewBox'))
     expect(siamese?.textContent).toBe('')
-    const cow = catTypes?.querySelector<HTMLButtonElement>('[data-cat-breed="cow-cat"]')
-    const black = catTypes?.querySelector<HTMLButtonElement>('[data-cat-breed="black-cat"]')
+    const cow = catBrowser?.querySelector<HTMLButtonElement>('[data-cat-breed="cow-cat"]')
+    const black = catBrowser?.querySelector<HTMLButtonElement>('[data-cat-breed="black-cat"]')
     expect(cow?.querySelector('svg')).not.toBeNull()
     expect(cow?.textContent).toBe('')
     expect(cow?.getAttribute('aria-label')).toBe('Cow Cat')
@@ -467,7 +737,7 @@ describe('AvatarControls Seed authoring', () => {
   })
 
   it('does not expose a Seed toggle for the manually controlled camera frame', () => {
-    const props = { ...createProps(), activeTab: 'style' as const, selectedEntityPartId: null }
+    const props = { ...createProps(), activeTab: 'effects' as const, selectedEntityPartId: null }
     act(() => root.render(createElement(
       AvatarLocaleProvider,
       { initialLocale: 'en', persist: false },
@@ -495,13 +765,16 @@ describe('AvatarControls Seed authoring', () => {
     expect(avatarType).not.toBeNull()
     expect(dogTypes).not.toBeNull()
     expect(avatarType?.contains(dogTypes ?? null)).toBe(false)
-    expect(dogTypes?.querySelectorAll('[data-dog-breed]')).toHaveLength(6)
+    expect(dogTypes?.querySelectorAll('[data-dog-breed]')).toHaveLength(4)
     expect(host.querySelector('[aria-label="Cat types"]')).toBeNull()
-    const shiba = dogTypes?.querySelector<HTMLButtonElement>('[data-dog-breed="shiba-inu"]')
-    const dalmatian = dogTypes?.querySelector<HTMLButtonElement>('[data-dog-breed="dalmatian"]')
+    act(() => dogTypes?.querySelector<HTMLButtonElement>('[aria-label="More presets"]')?.click())
+    const dogBrowser = host.querySelector<HTMLElement>('#avatar-controls-build-detail-presets .avatar-controls__preset-browser-grid')
+    expect(dogBrowser?.querySelectorAll('[data-dog-breed]')).toHaveLength(6)
+    const shiba = dogBrowser?.querySelector<HTMLButtonElement>('[data-dog-breed="shiba-inu"]')
+    const dalmatian = dogBrowser?.querySelector<HTMLButtonElement>('[data-dog-breed="dalmatian"]')
     const dog = avatarType?.querySelector<HTMLButtonElement>('[data-entity-preset="dog"]')
     expect(shiba?.classList.contains('avatar-controls__saved-preset')).toBe(true)
-    expect(shiba?.querySelector('svg')?.getAttribute('viewBox')).toBe(dog?.querySelector('svg')?.getAttribute('viewBox'))
+    expect(shiba?.querySelector('svg')?.getAttribute('viewBox')).toBe('0 0 420 420')
     expect(shiba?.textContent).toBe('')
     expect(shiba?.getAttribute('aria-label')).toBe('Shiba Inu')
     expect(shiba?.getAttribute('title')).toBe('Shiba Inu')
@@ -538,8 +811,11 @@ describe('AvatarControls Seed authoring', () => {
     )))
 
     const rabbitTypes = host.querySelector<HTMLElement>('[aria-label="Rabbit types"]')
-    const hollandLop = rabbitTypes?.querySelector<HTMLButtonElement>('[data-rabbit-breed="holland-lop"]')
-    expect(rabbitTypes?.querySelectorAll('[data-rabbit-breed]')).toHaveLength(6)
+    expect(rabbitTypes?.querySelectorAll('[data-rabbit-breed]')).toHaveLength(4)
+    act(() => rabbitTypes?.querySelector<HTMLButtonElement>('[aria-label="More presets"]')?.click())
+    const rabbitBrowser = host.querySelector<HTMLElement>('#avatar-controls-build-detail-presets .avatar-controls__preset-browser-grid')
+    const hollandLop = rabbitBrowser?.querySelector<HTMLButtonElement>('[data-rabbit-breed="holland-lop"]')
+    expect(rabbitBrowser?.querySelectorAll('[data-rabbit-breed]')).toHaveLength(6)
     expect(host.querySelector('[aria-label="Dog types"]')).toBeNull()
     expect(hollandLop?.textContent).toBe('')
     expect(hollandLop?.getAttribute('aria-label')).toBe('Holland Lop')
@@ -554,6 +830,7 @@ describe('AvatarControls Seed authoring', () => {
     )))
     act(() => host.querySelector<HTMLButtonElement>('[data-rabbit-breed="holland-lop"]')?.click())
     expect(props.onRabbitBreedTemplateChange).toHaveBeenLastCalledWith(null)
+    expect(openBuildAdvanced()).not.toBeNull()
 
     const earWidth = host.querySelector<HTMLInputElement>('[aria-label="Rabbit ear width"]')
     const headWidth = host.querySelector<HTMLInputElement>('[aria-label="Rabbit head width"]')
@@ -565,7 +842,7 @@ describe('AvatarControls Seed authoring', () => {
     expect(headWidth?.max).toBe('132')
     expect(host.querySelector('[aria-label="Follow Seed: Ear width"]')).not.toBeNull()
     expect(host.querySelector('[aria-label="Follow Seed: Head width"]')).not.toBeNull()
-    expect(host.querySelector('[aria-label="Coat pattern"]')).not.toBeNull()
+    expect(host.querySelector('#avatar-controls-build-detail-coat-pattern')).toBeNull()
 
     act(() => host.querySelector<HTMLButtonElement>('[aria-label="Follow Seed: Head width"]')?.click())
     expect(props.onSeedFieldToggle).toHaveBeenCalledWith('scene.entity.rabbitHeadWidth', true)
@@ -605,12 +882,15 @@ describe('AvatarControls Seed authoring', () => {
     )))
 
     const bearTypes = host.querySelector<HTMLElement>('[aria-label="Bear types"]')
-    const panda = bearTypes?.querySelector<HTMLButtonElement>('[data-bear-breed="giant-panda"]')
-    expect(bearTypes?.querySelectorAll('[data-bear-breed]')).toHaveLength(11)
+    expect(bearTypes?.querySelectorAll('[data-bear-breed]')).toHaveLength(4)
+    act(() => bearTypes?.querySelector<HTMLButtonElement>('[aria-label="More presets"]')?.click())
+    const bearBrowser = host.querySelector<HTMLElement>('[aria-label="Bear types"]')
+    const panda = bearBrowser?.querySelector<HTMLButtonElement>('[data-bear-breed="giant-panda"]')
+    expect(bearBrowser?.querySelectorAll('[data-bear-breed]')).toHaveLength(11)
     expect(panda?.textContent).toBe('')
     expect(panda?.getAttribute('aria-label')).toBe('Giant Panda')
     expect(panda?.querySelector('svg')).not.toBeNull()
-    expect(bearTypes?.querySelector('[data-bear-breed="spectacled-bear"] path[fill="#241711"]'))
+    expect(bearBrowser?.querySelector('[data-bear-breed="spectacled-bear"] path[fill="#241711"]'))
       .not.toBeNull()
     expect(host.querySelector('[aria-label="Coat pattern"]')).toBeNull()
 
@@ -624,6 +904,7 @@ describe('AvatarControls Seed authoring', () => {
     expect(host.querySelector('[aria-label="Coat pattern"]')).not.toBeNull()
     act(() => host.querySelector<HTMLButtonElement>('[data-bear-breed="giant-panda"]')?.click())
     expect(props.onBearBreedTemplateChange).toHaveBeenLastCalledWith(null)
+    expect(openBuildAdvanced()).not.toBeNull()
 
     const earWidth = host.querySelector<HTMLInputElement>('[aria-label="Bear ear width"]')
     const headWidth = host.querySelector<HTMLInputElement>('[aria-label="Bear head width"]')
@@ -666,6 +947,7 @@ describe('AvatarControls Seed authoring', () => {
       { initialLocale: 'en', persist: false },
       createElement(AvatarControls, props)
     )))
+    expect(openBuildAdvanced()).not.toBeNull()
 
     const width = host.querySelector<HTMLInputElement>('[aria-label="Cat ear width"]')
     const height = host.querySelector<HTMLInputElement>('[aria-label="Cat ear height"]')
@@ -698,6 +980,7 @@ describe('AvatarControls Seed authoring', () => {
       { initialLocale: 'en', persist: false },
       createElement(AvatarControls, props)
     )))
+    expect(openBuildAdvanced()).not.toBeNull()
 
     const width = host.querySelector<HTMLInputElement>('[aria-label="Dog ear width"]')
     const height = host.querySelector<HTMLInputElement>('[aria-label="Dog ear height"]')
@@ -731,6 +1014,7 @@ describe('AvatarControls Seed authoring', () => {
       { initialLocale: 'en', persist: false },
       createElement(AvatarControls, props)
     )))
+    expect(openBuildAdvanced()).not.toBeNull()
 
     const width = host.querySelector<HTMLInputElement>('[aria-label="Dog head width"]')
     const height = host.querySelector<HTMLInputElement>('[aria-label="Dog head height"]')
@@ -792,7 +1076,13 @@ describe('AvatarControls natural animal breeds', () => {
         createElement(AvatarControls, props)
       )))
 
-      const buttons = host.querySelectorAll<HTMLButtonElement>('[data-animal-breed]')
+      const inlineButtons = host.querySelectorAll<HTMLButtonElement>('[data-animal-breed]')
+      const inlineMore = [...host.querySelectorAll<HTMLElement>('.avatar-controls__field-group')]
+        .find(section => section.querySelector('[data-animal-breed]') != null)
+        ?.querySelector<HTMLButtonElement>('[aria-label="More presets"]')
+      if (inlineMore != null) act(() => inlineMore.click())
+      const browser = host.querySelector<HTMLElement>('#avatar-controls-build-detail-presets .avatar-controls__preset-browser-grid')
+      const buttons = browser?.querySelectorAll<HTMLButtonElement>('[data-animal-breed]') ?? inlineButtons
       expect(buttons).toHaveLength(templates.length)
       expect([...buttons].every(button => button.querySelector(
         `svg.avatar-controls__entity-preset-icon [data-avatar-entity-preset="${species}"] [data-avatar-entity-part]`
@@ -862,6 +1152,9 @@ describe('AvatarControls natural animal breeds', () => {
           '[data-avatar-entity-part="muzzle"]'
         ) == null)).toBe(true)
       }
+      act(() => buttons[1]?.click())
+      expect(onBreed).toHaveBeenCalledWith(templates[1]!.id)
+      expect(openBuildAdvanced()).not.toBeNull()
       const label = host.querySelector<HTMLElement>('.avatar-controls__animal-head-size .avatar-controls__label')
         ?.textContent?.replace(' head size', '') ?? ''
       expect(host.querySelector<HTMLInputElement>(`[aria-label="${label} head width"]`)?.value).toBe('113')
@@ -871,8 +1164,6 @@ describe('AvatarControls natural animal breeds', () => {
       } else {
         expect(host.querySelector<HTMLInputElement>(`[aria-label="${label} ear width"]`)?.value).toBe('104')
       }
-      act(() => buttons[1]?.click())
-      expect(onBreed).toHaveBeenCalledWith(templates[1]!.id)
     }
   )
 
@@ -904,6 +1195,7 @@ describe('AvatarControls natural animal breeds', () => {
         { initialLocale: 'en', persist: false },
         createElement(AvatarControls, props)
       )))
+      expect(openBuildAdvanced()).not.toBeNull()
       expect(host.querySelector(`[aria-label="${label}"]`) != null).toBe(present)
     }
   })
@@ -946,8 +1238,8 @@ describe('AvatarControls natural animal breeds', () => {
 })
 
 describe('AvatarControls surface decals', () => {
-  it('keeps row selection and deletion as independent actions', () => {
-    const props = createProps()
+  it('opens each decal in a secondary settings page and deletes it there', () => {
+    const props = { ...createProps(), activeTab: 'style' as const }
     act(() => {
       root.render(createElement(
         AvatarLocaleProvider,
@@ -957,22 +1249,30 @@ describe('AvatarControls surface decals', () => {
     })
 
     const options = host.querySelectorAll<HTMLButtonElement>('[role="option"]')
-    const deleteButtons = host.querySelectorAll<HTMLButtonElement>('.avatar-controls__decal-remove')
+    const addButton = host.querySelector<HTMLButtonElement>('button[aria-label="Add decal"]')
     expect(options).toHaveLength(2)
-    expect(deleteButtons).toHaveLength(2)
-    expect(deleteButtons[0]?.getAttribute('aria-label')).toBe('Delete decal: Left blush')
-
-    act(() => deleteButtons[0]?.click())
-    expect(props.onDeleteSurfaceDecal).toHaveBeenCalledWith('left')
-    expect(props.onSelectSurfaceDecal).not.toHaveBeenCalled()
+    expect(addButton?.textContent?.trim()).toBe('')
+    expect(addButton?.querySelector('svg')).not.toBeNull()
+    expect(host.querySelector(
+      '[aria-label="Surface decals"] .avatar-controls__field-header .avatar-controls__label .avatar-controls__icon'
+    )).not.toBeNull()
+    expect(host.querySelector('.avatar-controls__decal-editor')).toBeNull()
+    expect(host.querySelector('.avatar-controls__decal-remove')).toBeNull()
 
     act(() => options[1]?.click())
     expect(props.onSelectSurfaceDecal).toHaveBeenCalledWith('right')
+    expect(host.querySelector('.avatar-controls__decal-editor')).not.toBeNull()
+    expect(host.querySelector('.avatar-controls__style-detail strong')?.textContent).toBe('Right blush')
+
+    act(() => host.querySelector<HTMLButtonElement>('.avatar-controls__danger-action')?.click())
+    expect(props.onDeleteSurfaceDecal).toHaveBeenCalledWith('right')
+    expect(host.querySelector('.avatar-controls__decal-editor')).toBeNull()
   })
 
   it('offers the smooth face mask as an icon-backed decal shape', () => {
     const props = {
       ...createProps(),
+      activeTab: 'style' as const,
       surfaceDecals: [{
         ...createAvatarSurfaceDecal('left', null),
         label: 'Face mask',
@@ -987,6 +1287,8 @@ describe('AvatarControls surface decals', () => {
       ))
     })
 
+    act(() => host.querySelector<HTMLButtonElement>('[role="option"]')?.click())
+
     const faceMask = [...host.querySelectorAll<HTMLButtonElement>('[aria-label="Surface decal shape"] [role="radio"]')]
       .find(button => button.textContent === 'Face mask')
     expect(faceMask?.getAttribute('aria-checked')).toBe('true')
@@ -995,6 +1297,41 @@ describe('AvatarControls surface decals', () => {
 })
 
 describe('AvatarControls pixel style', () => {
+  it('opens effect settings as an in-sidebar detail page and restores the overview', () => {
+    const props = {
+      ...createProps(),
+      activeTab: 'effects' as const,
+      showOutline: true
+    }
+    act(() => {
+      root.render(createElement(
+        AvatarLocaleProvider,
+        { initialLocale: 'en', persist: false },
+        createElement(AvatarControls, props)
+      ))
+    })
+
+    expect(host.querySelector('[aria-label="Camera frame shape"]')).not.toBeNull()
+    expect(host.querySelector('[aria-label="Avatar outline width"]')).toBeNull()
+    expect(host.querySelectorAll('[aria-controls^="avatar-controls-effects-detail-"]')).toHaveLength(6)
+    expect(host.querySelectorAll('#avatar-controls-right-panel-effects [role="switch"]')).toHaveLength(6)
+
+    const pixelToggle = host.querySelector<HTMLButtonElement>('[role="switch"][aria-label="Pixel style"]')
+    act(() => pixelToggle?.click())
+    expect(props.onPixelEffectChange).toHaveBeenCalledWith({ enabled: true })
+    expect(host.querySelector('#avatar-controls-effects-detail-pixel')).toBeNull()
+
+    const detail = openEffectsDetail('avatar-outline')
+    expect(detail).not.toBeNull()
+    expect(host.querySelector('[aria-label="Camera frame shape"]')).toBeNull()
+    expect(detail?.querySelector('[role="switch"][aria-label="Avatar outline"]')).not.toBeNull()
+    expect(detail?.querySelector('[aria-label="Avatar outline width"]')).not.toBeNull()
+
+    act(() => detail?.querySelector<HTMLButtonElement>('[aria-label="Back to Effects overview"]')?.click())
+    expect(host.querySelector('#avatar-controls-effects-detail-avatar-outline')).toBeNull()
+    expect(host.querySelector('[aria-label="Camera frame shape"]')).not.toBeNull()
+  })
+
   it('exposes grain, sampling, palette, and dithering controls when enabled', () => {
     const props = {
       ...createProps(),
@@ -1008,6 +1345,8 @@ describe('AvatarControls pixel style', () => {
         createElement(AvatarControls, props)
       ))
     })
+
+    openEffectsDetail('pixel')
 
     const sampling = host.querySelector('[aria-label="Pixel sampling"]')
     const palette = host.querySelector('[aria-label="Pixel color count"]')

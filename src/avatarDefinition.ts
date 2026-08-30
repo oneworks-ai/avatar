@@ -5,7 +5,8 @@ import {
   anchorAvatarAnimationClip,
   applyAvatarScenePatch,
   mergeAvatarAnimationLibraries,
-  parseAvatarAnimationClip
+  parseAvatarAnimationClip,
+  resolveAvatarAnimationFrame
 } from '@oneworks/avatar'
 import type {
   AvatarAnimationClip,
@@ -134,10 +135,14 @@ export const savedAvatarAnimationToClip = (animation: SavedAvatarAnimation): Ava
       atMs,
       easing: keyframe.easing,
       patch: {
+        ...(keyframe.auxiliaryParts == null ? {} : { auxiliaryParts: keyframe.auxiliaryParts }),
+        ...(keyframe.auxiliaryShapes == null ? {} : { auxiliaryShapes: keyframe.auxiliaryShapes }),
         ...(keyframe.colorGrade == null ? {} : { colorGrade: keyframe.colorGrade }),
         face: Object.fromEntries(
           Object.entries(keyframe.faceStyle).filter(([, value]) => value !== undefined)
         ) as NonNullable<AvatarScenePatch['face']>,
+        ...(keyframe.partShapeMorphs == null ? {} : { partShapeMorphs: keyframe.partShapeMorphs }),
+        ...(keyframe.partTransforms == null ? {} : { partTransforms: keyframe.partTransforms }),
         view: {
           pitch: keyframe.pitch,
           positionX: keyframe.positionX,
@@ -451,8 +456,15 @@ export const avatarAnimationClipToSavedAnimation = (
   const timeline = resolvedClip.playback === 'once' && last != null && last.atMs < resolvedClip.durationMs
     ? [...withBase, { atMs: resolvedClip.durationMs, easing: last.easing, patch: last.patch }]
     : withBase
+  const definition: AvatarDefinition = {
+    scene,
+    schema: AVATAR_DEFINITION_SCHEMA,
+    version: AVATAR_DEFINITION_VERSION
+  }
   const keyframes: AvatarAnimationKeyframe[] = timeline.map((frame, index) => {
-    const resolved = applyAvatarScenePatch(scene, frame.patch)
+    // Resolve through the core sparse runtime so authored values hold across
+    // omitted keyframes and explicit releases hand control back deterministically.
+    const resolved = resolveAvatarAnimationFrame(definition, resolvedClip, frame.atMs)
     const previous = timeline[index - 1]
     const durationMs = index === 0
       ? resolvedClip.playback === 'loop'
@@ -460,14 +472,18 @@ export const avatarAnimationClipToSavedAnimation = (
         : 100
       : Math.max(frame.atMs - (previous?.atMs ?? 0), 100)
     return {
-      colorGrade: resolved.effects.colorGrade as AvatarColorGrade,
+      ...(resolved.auxiliaryParts == null ? {} : { auxiliaryParts: resolved.auxiliaryParts }),
+      ...(resolved.auxiliaryShapes == null ? {} : { auxiliaryShapes: resolved.auxiliaryShapes }),
+      colorGrade: resolved.scene.effects.colorGrade as AvatarColorGrade,
       durationMs,
       easing: frame.easing ?? 'linear',
-      faceStyle: resolved.face as AvatarFaceStyle,
-      pitch: resolved.view.pitch,
-      positionX: resolved.view.positionX,
-      positionY: resolved.view.positionY,
-      yaw: resolved.view.yaw
+      faceStyle: resolved.scene.face as AvatarFaceStyle,
+      ...(resolved.partShapeMorphs == null ? {} : { partShapeMorphs: resolved.partShapeMorphs }),
+      ...(resolved.partTransforms == null ? {} : { partTransforms: resolved.partTransforms }),
+      pitch: resolved.scene.view.pitch,
+      positionX: resolved.scene.view.positionX,
+      positionY: resolved.scene.view.positionY,
+      yaw: resolved.scene.view.yaw
     }
   })
   return {

@@ -1,0 +1,1207 @@
+{
+  "entries": [
+    {
+      "asset": "idle.svg",
+      "assetHash": "21a31c749d67fe05dae746a3908e1295d637bf03349a23296cbbde3e020bba52",
+      "frames": [
+        {
+          "asset": "idle.frame-0.svg",
+          "assetHash": "4e8906f271800062c281dc48ea055a62f3f3b9109a4d1cbcb914da47b2c3d95e",
+          "progress": 0
+        },
+        {
+          "asset": "idle.frame-1.svg",
+          "assetHash": "56d22765b6ee66f6a5aa111982cfe78ff1069d539279d39e8a59b08cd20bf81a",
+          "progress": 0.125
+        },
+        {
+          "asset": "idle.frame-2.svg",
+          "assetHash": "6d403cc061a24398a0b4fe1e987bca04197555ec078f294257e9482bb0277419",
+          "progress": 0.25
+        },
+        {
+          "asset": "idle.frame-3.svg",
+          "assetHash": "ade52d3b0d68d2e20e6ba2282307f9b72f24e2d261cf3a139c3a9cec5d64e405",
+          "progress": 0.375
+        },
+        {
+          "asset": "idle.frame-4.svg",
+          "assetHash": "8c0c45e56d47ca2f5bb2d2c63cba319cf9cda01013ea0b0e56603204a60c6f9e",
+          "progress": 0.5
+        },
+        {
+          "asset": "idle.frame-5.svg",
+          "assetHash": "faff67dbf9ebcaf89c6667033efb924376ae17338af4a93ddb73c994eeec879c",
+          "progress": 0.625
+        },
+        {
+          "asset": "idle.frame-6.svg",
+          "assetHash": "861f66f8eb7c02d4cae26667f3d61685108254bb6a69807d448f9fa774d763a3",
+          "progress": 0.75
+        },
+        {
+          "asset": "idle.frame-7.svg",
+          "assetHash": "4ec68884edc7a9b33c0db47542e2512f4c14da9d81f0af8364fd1ccf373a3da0",
+          "progress": 0.875
+        },
+        {
+          "asset": "idle.frame-8.svg",
+          "assetHash": "4e8906f271800062c281dc48ea055a62f3f3b9109a4d1cbcb914da47b2c3d95e",
+          "progress": 1
+        }
+      ],
+      "presetId": "idle",
+      "progress": 0.42,
+      "sourceFingerprint": "97077c372f7e9056d730fb079873a3ee41b3ba23056c7219805f94cb1bd398b0"
+    },
+    {
+      "asset": "blink.svg",
+      "assetHash": "c28e1affb86371cebc330ba34ebe935b39056bf2cdc571297b67368dce4307ae",
+      "frames": [
+        {
+          "asset": "blink.frame-0.svg",
+          "assetHash": "4e8906f271800062c281dc48ea055a62f3f3b9109a4d1cbcb914da47b2c3d95e",
+          "progress": 0
+        },
+        {
+          "asset": "blink.frame-1.svg",
+          "assetHash": "ebf230fec04b4041bdab27928da4a8e7103b2c52d73978603c6a95e49320f3b3",
+          "progress": 0.2
+        },
+        {
+          "asset": "blink.frame-2.svg",
+          "assetHash": "b883a0fbd385e4ebafabd63d567ffd20916617096cc03c7ec7967960d6e646f5",
+          "progress": 0.4
+        },
+        {
+          "asset": "blink.frame-3.svg",
+          "assetHash": "b883a0fbd385e4ebafabd63d567ffd20916617096cc03c7ec7967960d6e646f5",
+          "progress": 0.6
+        },
+        {
+          "asset": "blink.frame-4.svg",
+          "assetHash": "ebf230fec04b4041bdab27928da4a8e7103b2c52d73978603c6a95e49320f3b3",
+          "progress": 0.8
+        },
+        {
+          "asset": "blink.frame-5.svg",
+          "assetHash": "4e8906f271800062c281dc48ea055a62f3f3b9109a4d1cbcb914da47b2c3d95e",
+          "progress": 1
+        }
+      ],
+      "presetId": "blink",
+      "progress": 0.5,
+      "sourceFingerprint": "774351832ce22829f8a055eccc40b4077ef5530f970ebe72baf26a3eea0b6e28"
+    },
+    {
+      "asset": "wink.svg",
+      "assetHash": "48b39353791e3f0b8e9d4fc279aa7085bd0f88d1cc54c2dcee434da5c1a20a41",
+      "frames": [
+        {
+          "asset": "wink.frame-0.svg",
+          "assetHash": "4e8906f271800062c281dc48ea055a62f3f3b9109a4d1cbcb914da47b2c3d95e",
+          "progress": 0
+        },
+        {
+          "asset": "wink.frame-1.svg",
+          "assetHash": "fa265f5e7e9773ada78278de1c6347c4469c5ab8494b8c9a74f40a47b9317b39",
+          "progress": 0.2
+        },
+        {
+          "asset": "wink.frame-2.svg",
+          "assetHash": "48b39353791e3f0b8e9d4fc279aa7085bd0f88d1cc54c2dcee434da5c1a20a41",
+          "progress": 0.4
+        },
+        {
+          "asset": "wink.frame-3.svg",
+          "assetHash": "48b39353791e3f0b8e9d4fc279aa7085bd0f88d1cc54c2dcee434da5c1a20a41",
+          "progress": 0.6
+        },
+        {
+          "asset": "wink.frame-4.svg",
+          "assetHash": "fa265f5e7e9773ada78278de1c6347c4469c5ab8494b8c9a74f40a47b9317b39",
+          "progress": 0.8
+        },
+        {
+          "asset": "wink.frame-5.svg",
+          "assetHash": "4e8906f271800062c281dc48ea055a62f3f3b9109a4d1cbcb914da47b2c3d95e",
+          "progress": 1
+        }
+      ],
+      "presetId": "wink",
+      "progress": 0.5,
+      "sourceFingerprint": "94abcc44066f076c0b1059853e495d577ef6c4acf6767ce6335ee718c30638fb"
+    },
+    {
+      "asset": "listening.svg",
+      "assetHash": "5ab7ca0f9d9be4c0ced9ccc1a75e47b74c4d72395281a652283fab1ddd04e185",
+      "frames": [
+        {
+          "asset": "listening.frame-0.svg",
+          "assetHash": "4e8906f271800062c281dc48ea055a62f3f3b9109a4d1cbcb914da47b2c3d95e",
+          "progress": 0
+        },
+        {
+          "asset": "listening.frame-1.svg",
+          "assetHash": "7f8454ac48fbe22db56b42661e98a86c151913e60f816166e996252627353ca3",
+          "progress": 0.2
+        },
+        {
+          "asset": "listening.frame-2.svg",
+          "assetHash": "b5eb341efa6ee0f37a7b6af79507fc16a4b9989f646e002dfd30ad12a16da069",
+          "progress": 0.4
+        },
+        {
+          "asset": "listening.frame-3.svg",
+          "assetHash": "fa78426a9328556d276225ecfcdd11fd935d9e255b220b2be98cce3c6423abc3",
+          "progress": 0.6
+        },
+        {
+          "asset": "listening.frame-4.svg",
+          "assetHash": "7bed7bc04ed9171911e314b9ac2931e8143edfa0daffa3fe03cfde0474062b52",
+          "progress": 0.8
+        },
+        {
+          "asset": "listening.frame-5.svg",
+          "assetHash": "4e8906f271800062c281dc48ea055a62f3f3b9109a4d1cbcb914da47b2c3d95e",
+          "progress": 1
+        }
+      ],
+      "presetId": "listening",
+      "progress": 0.22,
+      "sourceFingerprint": "a25301a15a1f48bd462635d83f228118260cc69077a5726ea10bd1ec0bcdf98a"
+    },
+    {
+      "asset": "nod.svg",
+      "assetHash": "cd34355a185d18b105402eface7291a5734174af05bd6c6ac6540540e8c7e70a",
+      "frames": [
+        {
+          "asset": "nod.frame-0.svg",
+          "assetHash": "4e8906f271800062c281dc48ea055a62f3f3b9109a4d1cbcb914da47b2c3d95e",
+          "progress": 0
+        },
+        {
+          "asset": "nod.frame-1.svg",
+          "assetHash": "d288fefab375681f97280a404bb7b9b4726cfebd0b7cd66b83497ce47e55459f",
+          "progress": 0.16666666666666666
+        },
+        {
+          "asset": "nod.frame-2.svg",
+          "assetHash": "c495adce704386df93c3c7943dec9207f7cf628bca063a98e29741ee0a83fac8",
+          "progress": 0.3333333333333333
+        },
+        {
+          "asset": "nod.frame-3.svg",
+          "assetHash": "cc8cbe372121488e2393a562a2031d43c8dddcd9cad07b82baa3f523f1ec41b0",
+          "progress": 0.5
+        },
+        {
+          "asset": "nod.frame-4.svg",
+          "assetHash": "48ebff3fd68f57baa3f68b05af67089a47f4ac8264515ad5af549a7285c51cd6",
+          "progress": 0.6666666666666666
+        },
+        {
+          "asset": "nod.frame-5.svg",
+          "assetHash": "c6e452137f1035af1b2e7fe1425a4cbb027e1a7e20711bd4e7c5d6bbe8838ca7",
+          "progress": 0.8333333333333334
+        },
+        {
+          "asset": "nod.frame-6.svg",
+          "assetHash": "4e8906f271800062c281dc48ea055a62f3f3b9109a4d1cbcb914da47b2c3d95e",
+          "progress": 1
+        }
+      ],
+      "presetId": "nod",
+      "progress": 0.34,
+      "sourceFingerprint": "a27bfeb35c45a472b31e8bfce6cc44ba485e771c551e0e7c2523fe3b906b4a71"
+    },
+    {
+      "asset": "thinking.svg",
+      "assetHash": "5ba733256a130a385746bf4463ef292cc8fc4c98a73f9f3357ceb0e9a7b92dd2",
+      "frames": [
+        {
+          "asset": "thinking.frame-0.svg",
+          "assetHash": "4e8906f271800062c281dc48ea055a62f3f3b9109a4d1cbcb914da47b2c3d95e",
+          "progress": 0
+        },
+        {
+          "asset": "thinking.frame-1.svg",
+          "assetHash": "482186be821f9e7c5f5168aba7bd84c4bdd2b8cba554a448eb3d99b0ba166e54",
+          "progress": 0.2
+        },
+        {
+          "asset": "thinking.frame-2.svg",
+          "assetHash": "257affba832c49f6979ae8cbb03268406c98b37c41ff2fef0b3652a43b5a9f37",
+          "progress": 0.4
+        },
+        {
+          "asset": "thinking.frame-3.svg",
+          "assetHash": "3a1aa6f9448381ce6ca0a86809cde6d9083a9ec2aedb320c44d568bac730915a",
+          "progress": 0.6
+        },
+        {
+          "asset": "thinking.frame-4.svg",
+          "assetHash": "ab30df1bb571c3d5f6ec9dc357e4662e3142b4afbe46b309c1ef29f8626bb844",
+          "progress": 0.8
+        },
+        {
+          "asset": "thinking.frame-5.svg",
+          "assetHash": "4e8906f271800062c281dc48ea055a62f3f3b9109a4d1cbcb914da47b2c3d95e",
+          "progress": 1
+        }
+      ],
+      "presetId": "thinking",
+      "progress": 0.48,
+      "sourceFingerprint": "506352ac49339e53f59413a563d8db7676462eb681f3c8c557d5e7a89774e11c"
+    },
+    {
+      "asset": "searching.svg",
+      "assetHash": "123499c28fc526b9ccf89e9ffcee5d238b67e79f01a9010014221bc76aa479f2",
+      "frames": [
+        {
+          "asset": "searching.frame-0.svg",
+          "assetHash": "4e8906f271800062c281dc48ea055a62f3f3b9109a4d1cbcb914da47b2c3d95e",
+          "progress": 0
+        },
+        {
+          "asset": "searching.frame-1.svg",
+          "assetHash": "bfd3acdc433719892f9841690d44c4396c36851c33b0e69b4c0ce191bb0c87d0",
+          "progress": 0.16666666666666666
+        },
+        {
+          "asset": "searching.frame-2.svg",
+          "assetHash": "efac5d0e1ae95bf6ebee2c2c65a8d252776421de7504cea0c68ee21f3e7705f0",
+          "progress": 0.3333333333333333
+        },
+        {
+          "asset": "searching.frame-3.svg",
+          "assetHash": "884779309b7b2fe161c82ea509e0eeebb673288685b56b0c550607c04453c3c9",
+          "progress": 0.5
+        },
+        {
+          "asset": "searching.frame-4.svg",
+          "assetHash": "1297287606db382f9abdd06b0fa264e324a83556131f7c964532ee8e70622ee5",
+          "progress": 0.6666666666666666
+        },
+        {
+          "asset": "searching.frame-5.svg",
+          "assetHash": "b11a83c2deebd3625d0d4c930861b027eeb2778c61404ae7cdc4e7e8e06e27f9",
+          "progress": 0.8333333333333334
+        },
+        {
+          "asset": "searching.frame-6.svg",
+          "assetHash": "4e8906f271800062c281dc48ea055a62f3f3b9109a4d1cbcb914da47b2c3d95e",
+          "progress": 1
+        }
+      ],
+      "presetId": "searching",
+      "progress": 0.34,
+      "sourceFingerprint": "4598e4625b50f18a972e16df4ea8f6d4c7f213ae92480385d2550a1d5e85f65f"
+    },
+    {
+      "asset": "working.svg",
+      "assetHash": "cd29441ca619ac6f8613a2bd99bf07011e56352d606b2cd29e5ebd201428f35b",
+      "frames": [
+        {
+          "asset": "working.frame-0.svg",
+          "assetHash": "4e8906f271800062c281dc48ea055a62f3f3b9109a4d1cbcb914da47b2c3d95e",
+          "progress": 0
+        },
+        {
+          "asset": "working.frame-1.svg",
+          "assetHash": "422451abe31f7e3768ef4ec19a1c4f3e0184da39646e8ab26af53ea13389aac8",
+          "progress": 0.16666666666666666
+        },
+        {
+          "asset": "working.frame-2.svg",
+          "assetHash": "997937765c13d71ec49edf0ac9ce360649dcab4eacc2120915f795436671352b",
+          "progress": 0.3333333333333333
+        },
+        {
+          "asset": "working.frame-3.svg",
+          "assetHash": "69d43285c5ee92552b97566cf2af09f7e970906f47aa06c1afb37525e59ddeab",
+          "progress": 0.5
+        },
+        {
+          "asset": "working.frame-4.svg",
+          "assetHash": "6c30c8bc357ed4b2e760c12e1a35e58ea30905126f8eb96cbeddd83b257d868d",
+          "progress": 0.6666666666666666
+        },
+        {
+          "asset": "working.frame-5.svg",
+          "assetHash": "1fcf0d9d6819854ddf302e5f1613dd1c8dc3c3d7c167508bbc90345e277d385a",
+          "progress": 0.8333333333333334
+        },
+        {
+          "asset": "working.frame-6.svg",
+          "assetHash": "4e8906f271800062c281dc48ea055a62f3f3b9109a4d1cbcb914da47b2c3d95e",
+          "progress": 1
+        }
+      ],
+      "presetId": "working",
+      "progress": 0.42,
+      "sourceFingerprint": "cc9895f5a84c95d61fe153c7dedbc8cf58738694b87e46f1e91e8b215456b8af"
+    },
+    {
+      "asset": "happy.svg",
+      "assetHash": "aad323a5bf8ddb2995c17eb4937d8aaad9de88366133c1e0269ce9bcd29d208f",
+      "frames": [
+        {
+          "asset": "happy.frame-0.svg",
+          "assetHash": "4e8906f271800062c281dc48ea055a62f3f3b9109a4d1cbcb914da47b2c3d95e",
+          "progress": 0
+        },
+        {
+          "asset": "happy.frame-1.svg",
+          "assetHash": "cc707106b0bf05fc83fb4cf3cd54c1749a6c14a74e30959fc41c92ce2a8fb31d",
+          "progress": 0.16666666666666666
+        },
+        {
+          "asset": "happy.frame-2.svg",
+          "assetHash": "9c88b0a0d41c82662ca2c7dca9847a557d79de0ed147b486fc983b91c23a219a",
+          "progress": 0.3333333333333333
+        },
+        {
+          "asset": "happy.frame-3.svg",
+          "assetHash": "3513598598d6659358e873f1fe17460d90786404844433c9e623e5e4cf0f7ce6",
+          "progress": 0.5
+        },
+        {
+          "asset": "happy.frame-4.svg",
+          "assetHash": "fd9b3c1c97f50d43e7790426e1cb1fc686e9699247608e9c29d7004e08282d80",
+          "progress": 0.6666666666666666
+        },
+        {
+          "asset": "happy.frame-5.svg",
+          "assetHash": "103b9345025a8d274a276d910c865a45d40b17b2f03249fe21f98c3485597b41",
+          "progress": 0.8333333333333334
+        },
+        {
+          "asset": "happy.frame-6.svg",
+          "assetHash": "4e8906f271800062c281dc48ea055a62f3f3b9109a4d1cbcb914da47b2c3d95e",
+          "progress": 1
+        }
+      ],
+      "presetId": "happy",
+      "progress": 0.58,
+      "sourceFingerprint": "7dfb5b2e5751c770d99468a437618f1f1a14051c79c6faea15ea3ce416d94d7f"
+    },
+    {
+      "asset": "curious.svg",
+      "assetHash": "848c8a255471fbd20dd3359c8d6bc569a005afe7e5eb8036d3a582a68d110f96",
+      "frames": [
+        {
+          "asset": "curious.frame-0.svg",
+          "assetHash": "4e8906f271800062c281dc48ea055a62f3f3b9109a4d1cbcb914da47b2c3d95e",
+          "progress": 0
+        },
+        {
+          "asset": "curious.frame-1.svg",
+          "assetHash": "76d7ab101050cfbb365f89bef2ad46dec385c3d525495d5308b329db4b884e8b",
+          "progress": 0.3333333333333333
+        },
+        {
+          "asset": "curious.frame-2.svg",
+          "assetHash": "a171d719072322b1b655e8e6537debc591183eaab3a9366ced75beca3e034a77",
+          "progress": 0.6666666666666666
+        },
+        {
+          "asset": "curious.frame-3.svg",
+          "assetHash": "4e8906f271800062c281dc48ea055a62f3f3b9109a4d1cbcb914da47b2c3d95e",
+          "progress": 1
+        }
+      ],
+      "presetId": "curious",
+      "progress": 0.24,
+      "sourceFingerprint": "cd0142238c8f2dff920475a1c5f5fbb6ae9b2e3889ba3087fc3111d859df2db3"
+    },
+    {
+      "asset": "surprised.svg",
+      "assetHash": "a7c3989cfdf5748e5b1c1b206c1126e47d7b06f7a44b87d8202fbb509308d424",
+      "frames": [
+        {
+          "asset": "surprised.frame-0.svg",
+          "assetHash": "4e8906f271800062c281dc48ea055a62f3f3b9109a4d1cbcb914da47b2c3d95e",
+          "progress": 0
+        },
+        {
+          "asset": "surprised.frame-1.svg",
+          "assetHash": "6e9b191cfb78889f148992efe5042fa0febe22dabce21172b626f216ee0bd327",
+          "progress": 0.2
+        },
+        {
+          "asset": "surprised.frame-2.svg",
+          "assetHash": "f42d97b8a28177446a82a7c48ec05d53c8014450376363c164a4e71626cd7afc",
+          "progress": 0.4
+        },
+        {
+          "asset": "surprised.frame-3.svg",
+          "assetHash": "83244762e1a81404ee2bc082e7db17ffd068f0e011fd956405c5839b4c729268",
+          "progress": 0.6
+        },
+        {
+          "asset": "surprised.frame-4.svg",
+          "assetHash": "1148b548e044b657a3cec9adeaf3f26b4287de23cc8d63f797d68f3d10835b92",
+          "progress": 0.8
+        },
+        {
+          "asset": "surprised.frame-5.svg",
+          "assetHash": "4e8906f271800062c281dc48ea055a62f3f3b9109a4d1cbcb914da47b2c3d95e",
+          "progress": 1
+        }
+      ],
+      "presetId": "surprised",
+      "progress": 0.31,
+      "sourceFingerprint": "7efb3aa651d644a9783a4eed044ce4714c51065ce6c8e50fe5cf2ca9ea1e779d"
+    },
+    {
+      "asset": "bored.svg",
+      "assetHash": "112775fffb0998fc684e8bb20a9800ebef6f29db8a2015732f611b1fad06cd12",
+      "frames": [
+        {
+          "asset": "bored.frame-0.svg",
+          "assetHash": "4e8906f271800062c281dc48ea055a62f3f3b9109a4d1cbcb914da47b2c3d95e",
+          "progress": 0
+        },
+        {
+          "asset": "bored.frame-1.svg",
+          "assetHash": "534e9ebfcb5e35c1ad51bab044b37d71b0739c266d847026666e206c25fbaea6",
+          "progress": 0.3333333333333333
+        },
+        {
+          "asset": "bored.frame-2.svg",
+          "assetHash": "708ab599d281f40f98efc0ed90ce944fd7be7cf0af3afc03dbd9b62bbfac5313",
+          "progress": 0.6666666666666666
+        },
+        {
+          "asset": "bored.frame-3.svg",
+          "assetHash": "4e8906f271800062c281dc48ea055a62f3f3b9109a4d1cbcb914da47b2c3d95e",
+          "progress": 1
+        }
+      ],
+      "presetId": "bored",
+      "progress": 0.72,
+      "sourceFingerprint": "cdf8401ddb80c6d8d21f7b681caa6660f93a595bd6c1f1b0acb6dd0d3f69c273"
+    },
+    {
+      "asset": "sad.svg",
+      "assetHash": "865faab267a4420fcee9c0baadba898103f89d146c9a20bd2720d610b5edca58",
+      "frames": [
+        {
+          "asset": "sad.frame-0.svg",
+          "assetHash": "4e8906f271800062c281dc48ea055a62f3f3b9109a4d1cbcb914da47b2c3d95e",
+          "progress": 0
+        },
+        {
+          "asset": "sad.frame-1.svg",
+          "assetHash": "db03d5f2fd906316232ff4b3d44c582801131fe9375cd3eb06164b24ed546d21",
+          "progress": 0.2
+        },
+        {
+          "asset": "sad.frame-2.svg",
+          "assetHash": "82e1275131345de53618e2dbfb7d71559538ab8fff40af8faa0109a9f2261c0d",
+          "progress": 0.4
+        },
+        {
+          "asset": "sad.frame-3.svg",
+          "assetHash": "cf39a49efe31d126a074a9978c85e928fdaeb92ce1344df711a9206632ffddc8",
+          "progress": 0.6
+        },
+        {
+          "asset": "sad.frame-4.svg",
+          "assetHash": "c4bcda8bf2a761d11485a951319eb28f5aca3dbbbe4bf1b8540ec31a5eedc021",
+          "progress": 0.8
+        },
+        {
+          "asset": "sad.frame-5.svg",
+          "assetHash": "4e8906f271800062c281dc48ea055a62f3f3b9109a4d1cbcb914da47b2c3d95e",
+          "progress": 1
+        }
+      ],
+      "presetId": "sad",
+      "progress": 0.48,
+      "sourceFingerprint": "d74ec43f28beae5f9e6f992bcc0ce38b11efda1206ff14c639c44ebd1a626a98"
+    },
+    {
+      "asset": "angry.svg",
+      "assetHash": "a3ae9e99f0c536d9a06b33fb701f43c71093d4df843180c3915c41f8038050b3",
+      "frames": [
+        {
+          "asset": "angry.frame-0.svg",
+          "assetHash": "4e8906f271800062c281dc48ea055a62f3f3b9109a4d1cbcb914da47b2c3d95e",
+          "progress": 0
+        },
+        {
+          "asset": "angry.frame-1.svg",
+          "assetHash": "c9ce8941579030e72c957039522163619425b9f5fcca8513252a9fe47e91d9b0",
+          "progress": 0.16666666666666666
+        },
+        {
+          "asset": "angry.frame-2.svg",
+          "assetHash": "c1f07ba61e8d15c71e65022e2a22d2e7a5e5ecbd62e9ef59718a3b7cb67ad253",
+          "progress": 0.3333333333333333
+        },
+        {
+          "asset": "angry.frame-3.svg",
+          "assetHash": "6c4ecfe005395ff840143e5b14efc276a01a8d5c3c81edb0f8f2eca24ba259c6",
+          "progress": 0.5
+        },
+        {
+          "asset": "angry.frame-4.svg",
+          "assetHash": "a50700783bfee27d27f72dc01e0dcac384c0798b6ca9f0ad245fc75887c32864",
+          "progress": 0.6666666666666666
+        },
+        {
+          "asset": "angry.frame-5.svg",
+          "assetHash": "31c6ecbffa9527c38cc8dad0b604c106784f5b42532ecbd14262b94988576a15",
+          "progress": 0.8333333333333334
+        },
+        {
+          "asset": "angry.frame-6.svg",
+          "assetHash": "4e8906f271800062c281dc48ea055a62f3f3b9109a4d1cbcb914da47b2c3d95e",
+          "progress": 1
+        }
+      ],
+      "presetId": "angry",
+      "progress": 0.49,
+      "sourceFingerprint": "84a7de90e3560fff3ce848b2bb8037fcfc53664db6aa1f7c740c4bead31c8e94"
+    },
+    {
+      "asset": "shocked.svg",
+      "assetHash": "07259e64ecc4bfa8894ddd5240702c1ffe2e3a1974e599f51d21ed5eb80c7da9",
+      "frames": [
+        {
+          "asset": "shocked.frame-0.svg",
+          "assetHash": "4e8906f271800062c281dc48ea055a62f3f3b9109a4d1cbcb914da47b2c3d95e",
+          "progress": 0
+        },
+        {
+          "asset": "shocked.frame-1.svg",
+          "assetHash": "e136c382bfb491d9e6fe7b620804b03ce4942b84199f3a04613d4cb2d788c113",
+          "progress": 0.16666666666666666
+        },
+        {
+          "asset": "shocked.frame-2.svg",
+          "assetHash": "38c0ff89509949e602acfe2f41348b6d65d7697a4e0a7a478c983941dd17a83f",
+          "progress": 0.3333333333333333
+        },
+        {
+          "asset": "shocked.frame-3.svg",
+          "assetHash": "f46c5b35587c9f02341d9134b3824771fb448d585988c5d71edcc5f28ec5655e",
+          "progress": 0.5
+        },
+        {
+          "asset": "shocked.frame-4.svg",
+          "assetHash": "afbc53b9faa463b56056e1b73420a898004190156842f3319008b728c2c0beca",
+          "progress": 0.6666666666666666
+        },
+        {
+          "asset": "shocked.frame-5.svg",
+          "assetHash": "952bf81c5877c7b5e85dab655314c65f91d19c63da789a37585773ebd95f9f99",
+          "progress": 0.8333333333333334
+        },
+        {
+          "asset": "shocked.frame-6.svg",
+          "assetHash": "4e8906f271800062c281dc48ea055a62f3f3b9109a4d1cbcb914da47b2c3d95e",
+          "progress": 1
+        }
+      ],
+      "presetId": "shocked",
+      "progress": 0.42,
+      "sourceFingerprint": "501676e235a4a509dca7afe6a3484bc4aa9bd33427c3ad34dfb6d33efe4c43e8"
+    },
+    {
+      "asset": "petrified.svg",
+      "assetHash": "efbdba9942cf94823f89e5e6f573446824cea0d851c3ad279514239b00ed8d10",
+      "frames": [
+        {
+          "asset": "petrified.frame-0.svg",
+          "assetHash": "4e8906f271800062c281dc48ea055a62f3f3b9109a4d1cbcb914da47b2c3d95e",
+          "progress": 0
+        },
+        {
+          "asset": "petrified.frame-1.svg",
+          "assetHash": "2c1d13263b11b14f190972065281db149dc45cf0d1fb0f7fda3b144417724097",
+          "progress": 0.2
+        },
+        {
+          "asset": "petrified.frame-2.svg",
+          "assetHash": "4b3cc31181f7022f98802a0276e9be06f27cd2f4ee78465f318d0868e58682b5",
+          "progress": 0.4
+        },
+        {
+          "asset": "petrified.frame-3.svg",
+          "assetHash": "8cb8c236a7a26cde7286ef3572e66ee5a9acf555e4403e02916c9c3ce9936f15",
+          "progress": 0.6
+        },
+        {
+          "asset": "petrified.frame-4.svg",
+          "assetHash": "ce3c958bbf42dbe110c001759256270d2909ae62660dbd68cccfa2ea680936b7",
+          "progress": 0.8
+        },
+        {
+          "asset": "petrified.frame-5.svg",
+          "assetHash": "4e8906f271800062c281dc48ea055a62f3f3b9109a4d1cbcb914da47b2c3d95e",
+          "progress": 1
+        }
+      ],
+      "presetId": "petrified",
+      "progress": 0.72,
+      "sourceFingerprint": "655d3d81ce80c407f34c7c7407aa717c82a4c323685af49f6a5bdc42cd6a5d3e"
+    },
+    {
+      "asset": "laughing.svg",
+      "assetHash": "8baee6d76bf2e134c19ab34ba1b786a4ad231cd9a12752914e08ad5936bf4431",
+      "frames": [
+        {
+          "asset": "laughing.frame-0.svg",
+          "assetHash": "4e8906f271800062c281dc48ea055a62f3f3b9109a4d1cbcb914da47b2c3d95e",
+          "progress": 0
+        },
+        {
+          "asset": "laughing.frame-1.svg",
+          "assetHash": "8345e57bda9bc6eb10fb1d0631302e612def5dbe8ad4abcc81c22db314436518",
+          "progress": 0.14285714285714285
+        },
+        {
+          "asset": "laughing.frame-2.svg",
+          "assetHash": "ab543ca8fa3e8cc686ecf92d8b343851a3f12b6babe502d300414706a214343d",
+          "progress": 0.2857142857142857
+        },
+        {
+          "asset": "laughing.frame-3.svg",
+          "assetHash": "c63742a711bce2091a558f6e65dae0154c4db2e6fd7e6f18fb04905a16dadcd6",
+          "progress": 0.42857142857142855
+        },
+        {
+          "asset": "laughing.frame-4.svg",
+          "assetHash": "1e58698925a2876c1c13a8862bb7de58bce3e43983a21f05c1b96d6f38dfe872",
+          "progress": 0.5714285714285714
+        },
+        {
+          "asset": "laughing.frame-5.svg",
+          "assetHash": "6f92ffbdcb0e0f2cfec601da54802e4b140cdee682a17937b9cd41e44f2afce9",
+          "progress": 0.7142857142857143
+        },
+        {
+          "asset": "laughing.frame-6.svg",
+          "assetHash": "0213dc9ff2a6e8107ebe39a120c7d8ddaab63f4af5521b09851b987c4144005a",
+          "progress": 0.8571428571428571
+        },
+        {
+          "asset": "laughing.frame-7.svg",
+          "assetHash": "4e8906f271800062c281dc48ea055a62f3f3b9109a4d1cbcb914da47b2c3d95e",
+          "progress": 1
+        }
+      ],
+      "presetId": "laughing",
+      "progress": 0.43,
+      "sourceFingerprint": "ac1022da17967326188f32483a575ff0e3e3a8c6328296970009268ac630e9ae"
+    },
+    {
+      "asset": "playful.svg",
+      "assetHash": "1742758f8ad64da609a64e2339c6a8410c42ea4b90b92ab18cc049412e2fc79b",
+      "frames": [
+        {
+          "asset": "playful.frame-0.svg",
+          "assetHash": "4e8906f271800062c281dc48ea055a62f3f3b9109a4d1cbcb914da47b2c3d95e",
+          "progress": 0
+        },
+        {
+          "asset": "playful.frame-1.svg",
+          "assetHash": "3135d417e9f5642f5acf896f4189c94560cc5c9963dd1aee76a59653882fdcd2",
+          "progress": 0.25
+        },
+        {
+          "asset": "playful.frame-2.svg",
+          "assetHash": "059e6c71cb94b1eb84456146a51cfea3d789ae7b75e1ffab3334773f67c56814",
+          "progress": 0.5
+        },
+        {
+          "asset": "playful.frame-3.svg",
+          "assetHash": "087cc0667ce80632f0e9d8052c534e1fcdd81749132a7d1d481928b009f8f39f",
+          "progress": 0.75
+        },
+        {
+          "asset": "playful.frame-4.svg",
+          "assetHash": "4e8906f271800062c281dc48ea055a62f3f3b9109a4d1cbcb914da47b2c3d95e",
+          "progress": 1
+        }
+      ],
+      "presetId": "playful",
+      "progress": 0.48,
+      "sourceFingerprint": "4af681e699c86dbd2677b0bb710e77d140ebbda31ee8ada07de312025b959a7f"
+    },
+    {
+      "asset": "excited.svg",
+      "assetHash": "bb74cb2ccbc66f8cb43f386b7632aab2f5fac8f09814356f10f204fe0346f448",
+      "frames": [
+        {
+          "asset": "excited.frame-0.svg",
+          "assetHash": "4e8906f271800062c281dc48ea055a62f3f3b9109a4d1cbcb914da47b2c3d95e",
+          "progress": 0
+        },
+        {
+          "asset": "excited.frame-1.svg",
+          "assetHash": "10454d206fb1c13a5e5990727a10c4b65e57d0dbfcb37295650da5a4815ad042",
+          "progress": 0.14285714285714285
+        },
+        {
+          "asset": "excited.frame-2.svg",
+          "assetHash": "ca0c84d0cf5781f45836b1f2bb330ac4aa3e94b7d1c529e5dddadd4d6d95b248",
+          "progress": 0.2857142857142857
+        },
+        {
+          "asset": "excited.frame-3.svg",
+          "assetHash": "aef0ff27ac299f2ed5576f49f4d74d6739a02aed7af61b5a9c72e5a2492684cb",
+          "progress": 0.42857142857142855
+        },
+        {
+          "asset": "excited.frame-4.svg",
+          "assetHash": "62d12e4e49eee3bf2a1b71d928910af1729d60e6dff4e17202903623727d9ef0",
+          "progress": 0.5714285714285714
+        },
+        {
+          "asset": "excited.frame-5.svg",
+          "assetHash": "863ca59fb5b5e71332932527b9bf6fa4e00f9c3debcf7218a11be3200cee481d",
+          "progress": 0.7142857142857143
+        },
+        {
+          "asset": "excited.frame-6.svg",
+          "assetHash": "40942b48f66f03cb778e1c555dc7373a49cdffe7ca423a281c19e1f047eaae1b",
+          "progress": 0.8571428571428571
+        },
+        {
+          "asset": "excited.frame-7.svg",
+          "assetHash": "4e8906f271800062c281dc48ea055a62f3f3b9109a4d1cbcb914da47b2c3d95e",
+          "progress": 1
+        }
+      ],
+      "presetId": "excited",
+      "progress": 0.39,
+      "sourceFingerprint": "52b36845b91119e34f3121463af3e4cce888a4a30f5175d479ed3c96f20fe3f9"
+    },
+    {
+      "asset": "celebrate.svg",
+      "assetHash": "ab1c4990f6fd39d0cc0b46ebd3706f0eaf8d74d99c3bcecc60b5211f6418f7d9",
+      "frames": [
+        {
+          "asset": "celebrate.frame-0.svg",
+          "assetHash": "4e8906f271800062c281dc48ea055a62f3f3b9109a4d1cbcb914da47b2c3d95e",
+          "progress": 0
+        },
+        {
+          "asset": "celebrate.frame-1.svg",
+          "assetHash": "e11d0f23a91658a214e010f5a644097cf3013e99bcd10c251ca55e54f3a28659",
+          "progress": 0.125
+        },
+        {
+          "asset": "celebrate.frame-2.svg",
+          "assetHash": "0dbf55dee1872b84854858eb62fcaa2e3092a407b793da23d17ea397af5391bd",
+          "progress": 0.25
+        },
+        {
+          "asset": "celebrate.frame-3.svg",
+          "assetHash": "33c0a8d17fe83e706d629a6879403180f944fbebe03849c15f6f58a31aeb5e26",
+          "progress": 0.375
+        },
+        {
+          "asset": "celebrate.frame-4.svg",
+          "assetHash": "946be2a65987f79056c4f0ab2c25c4532899cc816de6200d8b0e0efe8beeac55",
+          "progress": 0.5
+        },
+        {
+          "asset": "celebrate.frame-5.svg",
+          "assetHash": "32d663cda1d7a8896cee227558cbb9ebdc1f4964f0248cf54a5cb7550b27d625",
+          "progress": 0.625
+        },
+        {
+          "asset": "celebrate.frame-6.svg",
+          "assetHash": "350934f85f1d425b2070b9619026aaa07fec68b9ab6126214acbeb314b30cd7b",
+          "progress": 0.75
+        },
+        {
+          "asset": "celebrate.frame-7.svg",
+          "assetHash": "34bd5acc86b8d7a77d113593de3f67f485f1f99337dece281aa972f49411b3c8",
+          "progress": 0.875
+        },
+        {
+          "asset": "celebrate.frame-8.svg",
+          "assetHash": "4e8906f271800062c281dc48ea055a62f3f3b9109a4d1cbcb914da47b2c3d95e",
+          "progress": 1
+        }
+      ],
+      "presetId": "celebrate",
+      "progress": 0.38,
+      "sourceFingerprint": "64aa6696447ee79713ca7222ad701acb42679c495664903d619f942f39dc76ab"
+    },
+    {
+      "asset": "bear-alert-morph.svg",
+      "assetHash": "6a0750d7576966118cf65b8d1e5ce3d56983f9f2feb684f64a56b6a20b1597a0",
+      "frames": [
+        {
+          "asset": "bear-alert-morph.frame-0.svg",
+          "assetHash": "27ad8ca0e6cfaf61a4e303cb8a7869989d97e3ca0b4aedc6c13d7f4892052c57",
+          "progress": 0
+        },
+        {
+          "asset": "bear-alert-morph.frame-1.svg",
+          "assetHash": "8be80d9dd0f0c062f0e86dfef60371f1ef3659b0b08b7ee899e14c5df01cb0f2",
+          "progress": 0.07142857142857142
+        },
+        {
+          "asset": "bear-alert-morph.frame-2.svg",
+          "assetHash": "dd0ddc96385e39c3ee08da333103a87509b9a09fe44b30caa2e26acdbd04970d",
+          "progress": 0.14285714285714285
+        },
+        {
+          "asset": "bear-alert-morph.frame-3.svg",
+          "assetHash": "3034f159199576740c7f5eb5a7a561c7bbccc7740e06f59e67339739f78c1994",
+          "progress": 0.21428571428571427
+        },
+        {
+          "asset": "bear-alert-morph.frame-4.svg",
+          "assetHash": "6a1f88620f7522752f8e82389b810837887a50360c29f58c3344a58bafb0cbe4",
+          "progress": 0.2857142857142857
+        },
+        {
+          "asset": "bear-alert-morph.frame-5.svg",
+          "assetHash": "54d99eeeb499e0a588a0ad7681237a51712709306ee90c6bbfef9afe1f661769",
+          "progress": 0.35714285714285715
+        },
+        {
+          "asset": "bear-alert-morph.frame-6.svg",
+          "assetHash": "5cbb3cfb51bfe3806d798ac34e688e3c9887aa488813c1a88caf59732fefb858",
+          "progress": 0.42857142857142855
+        },
+        {
+          "asset": "bear-alert-morph.frame-7.svg",
+          "assetHash": "003cd7e06e36643689df7a7810bc5aeaa966a9196f65f157c84340765595b179",
+          "progress": 0.5
+        },
+        {
+          "asset": "bear-alert-morph.frame-8.svg",
+          "assetHash": "22374722c3c528e67bc779275ef1932045983489b085f67e6a647928b0b2256c",
+          "progress": 0.5714285714285714
+        },
+        {
+          "asset": "bear-alert-morph.frame-9.svg",
+          "assetHash": "10df9f4224457a167a9e6fc3c148566af87609a75849064ff9a5fd2971b8f0bb",
+          "progress": 0.6428571428571429
+        },
+        {
+          "asset": "bear-alert-morph.frame-10.svg",
+          "assetHash": "91b083bbe4672bb161e9e1834ca97a57c2bb6b9d41e8689b3ce70f578eb00595",
+          "progress": 0.7142857142857143
+        },
+        {
+          "asset": "bear-alert-morph.frame-11.svg",
+          "assetHash": "cf702d659903680ac09f3f7fd7b778f0c640d19add188a187f7f6edcd859d1bf",
+          "progress": 0.7857142857142857
+        },
+        {
+          "asset": "bear-alert-morph.frame-12.svg",
+          "assetHash": "4dbc07ff7bbe8afb1c2f2e110b69d31e703c01dc0dc0fb93fc17fb8058d9e75d",
+          "progress": 0.8571428571428571
+        },
+        {
+          "asset": "bear-alert-morph.frame-13.svg",
+          "assetHash": "475e535e1039a76ae47b61943029452e0241ece3f3d26231415dccc3e3c10157",
+          "progress": 0.9285714285714286
+        },
+        {
+          "asset": "bear-alert-morph.frame-14.svg",
+          "assetHash": "b40dac0754120bd2b42b484f5c2c981414315826038f50b23839fa6edce7cc42",
+          "progress": 1
+        }
+      ],
+      "presetId": "bear-alert-morph",
+      "progress": 0.54,
+      "sourceFingerprint": "e5ba19b262b4a4c29233999c4cfac23f33d8055c769b17eeb0cc253506f58000"
+    },
+    {
+      "asset": "bear-loading-morph.svg",
+      "assetHash": "c2acf89996fd1c49ea4f8e3b9a61de8b1d79b9b2c076ba306f7c37b01ffb3d36",
+      "frames": [
+        {
+          "asset": "bear-loading-morph.frame-0.svg",
+          "assetHash": "f8e750e0a40de6b29f72a4c6d68cb0c7ff7fd55d2d5eeb7555721f358b9981fc",
+          "progress": 0
+        },
+        {
+          "asset": "bear-loading-morph.frame-1.svg",
+          "assetHash": "2fa093a5c3e8caab41c8ea5439b1cc8eca4e5953024161148d1252c1d2cce9ca",
+          "progress": 0.06666666666666667
+        },
+        {
+          "asset": "bear-loading-morph.frame-2.svg",
+          "assetHash": "50ce4fc78c45c976314d3a27ab0ce23d48db9a7ff666a3e8a2f33fb08f8f2a10",
+          "progress": 0.13333333333333333
+        },
+        {
+          "asset": "bear-loading-morph.frame-3.svg",
+          "assetHash": "b09904672fe4dc2c247be381d6f7c1a8fc8c531c5e6073f74614885bd72f4e5a",
+          "progress": 0.2
+        },
+        {
+          "asset": "bear-loading-morph.frame-4.svg",
+          "assetHash": "7125af1c3a8b97af14a2a02a35cf2eb6b8f2556c45e41e7601bf8f3347ca8855",
+          "progress": 0.26666666666666666
+        },
+        {
+          "asset": "bear-loading-morph.frame-5.svg",
+          "assetHash": "4ef36ca2953b0a1fbddd835e1b637d25d0e8f04911f10dbfda2443ce4f93ca04",
+          "progress": 0.3333333333333333
+        },
+        {
+          "asset": "bear-loading-morph.frame-6.svg",
+          "assetHash": "eccb1ce856c1e758220b04e2aa31d52c958ba381eb30533ff98eeac3c46c35a9",
+          "progress": 0.4
+        },
+        {
+          "asset": "bear-loading-morph.frame-7.svg",
+          "assetHash": "ef3688dec3dc3e5a78993f685651707f6249312a3a87c5c99cd539e50dc94dd0",
+          "progress": 0.4666666666666667
+        },
+        {
+          "asset": "bear-loading-morph.frame-8.svg",
+          "assetHash": "ae0e64736ed6566bb66c5ae3f9e6a9ec2477911e982c3b4ed0aff47a443e909b",
+          "progress": 0.5333333333333333
+        },
+        {
+          "asset": "bear-loading-morph.frame-9.svg",
+          "assetHash": "5d3e3a6d04672c05579175f1c0a03f31939e9f3fb2b064f605d22594d8d59976",
+          "progress": 0.6
+        },
+        {
+          "asset": "bear-loading-morph.frame-10.svg",
+          "assetHash": "3197f5bc5459a98faaa34a390d102fa070241cd56062157e41be77ce4fe6f120",
+          "progress": 0.6666666666666666
+        },
+        {
+          "asset": "bear-loading-morph.frame-11.svg",
+          "assetHash": "070a5c36bf19575da4b8cb308cc425e099cfb8d9f6153235827d8e83d330b900",
+          "progress": 0.7333333333333333
+        },
+        {
+          "asset": "bear-loading-morph.frame-12.svg",
+          "assetHash": "3ee2a0262cc9de7641a477cc1c77a6cca28a191460d82ea7cdf04ed13ae33ca3",
+          "progress": 0.8
+        },
+        {
+          "asset": "bear-loading-morph.frame-13.svg",
+          "assetHash": "d89e42db3c453c91c666026bc7578e1476ae85411eff679626df1d7cdcc2600f",
+          "progress": 0.8666666666666667
+        },
+        {
+          "asset": "bear-loading-morph.frame-14.svg",
+          "assetHash": "becdbf71a57afb717768fa1ca4c80327159b22fa10bc72a5a1a1e0455fbcab39",
+          "progress": 0.9333333333333333
+        },
+        {
+          "asset": "bear-loading-morph.frame-15.svg",
+          "assetHash": "f8e750e0a40de6b29f72a4c6d68cb0c7ff7fd55d2d5eeb7555721f358b9981fc",
+          "progress": 1
+        }
+      ],
+      "presetId": "bear-loading-morph",
+      "progress": 0.32,
+      "sourceFingerprint": "09c222f31e937363363a9d04f012fab4f8727ea31c14da09e8d49d9443a43973"
+    },
+    {
+      "asset": "bear-notification-morph.svg",
+      "assetHash": "a1bd00337acbab299433a5fd7d045b88418799ec276f0faa4792783fa5a8c233",
+      "frames": [
+        {
+          "asset": "bear-notification-morph.frame-0.svg",
+          "assetHash": "6493be1c474b9f9f04c5849337923d944d0a89ec7b6cd869e8c390ac00ea7df2",
+          "progress": 0
+        },
+        {
+          "asset": "bear-notification-morph.frame-1.svg",
+          "assetHash": "f9656bc87b54da6b66c99280b6b1192d281794a8944c413fdd802b8999614202",
+          "progress": 0.14285714285714285
+        },
+        {
+          "asset": "bear-notification-morph.frame-2.svg",
+          "assetHash": "e6b8098f50aa395981bc9804c3ae14872d6587836ec4b02838cf3322d9edb24a",
+          "progress": 0.2857142857142857
+        },
+        {
+          "asset": "bear-notification-morph.frame-3.svg",
+          "assetHash": "abbb464381459a111b4ba1816ba0844472e24b6ffb6f273f55d5a315b8a4a69f",
+          "progress": 0.42857142857142855
+        },
+        {
+          "asset": "bear-notification-morph.frame-4.svg",
+          "assetHash": "4bea9ecdabd613b2eb02b903b17ec5daf3fd186154c1a101562ead8c7db8dc57",
+          "progress": 0.5714285714285714
+        },
+        {
+          "asset": "bear-notification-morph.frame-5.svg",
+          "assetHash": "304340985d7f0f3422d78870602f05bb97019988c38367745634d3ef91135a3e",
+          "progress": 0.7142857142857143
+        },
+        {
+          "asset": "bear-notification-morph.frame-6.svg",
+          "assetHash": "1e9aa017c46a1ccd6baac216ad267e175c8692d3d4f6ba2531f13717875d5bf8",
+          "progress": 0.8571428571428571
+        },
+        {
+          "asset": "bear-notification-morph.frame-7.svg",
+          "assetHash": "6493be1c474b9f9f04c5849337923d944d0a89ec7b6cd869e8c390ac00ea7df2",
+          "progress": 1
+        }
+      ],
+      "presetId": "bear-notification-morph",
+      "progress": 0.42,
+      "sourceFingerprint": "aedb4cdb3a43249a2ec7437c53306ab5ca819ee99cfad334f1c547c678dd3015"
+    },
+    {
+      "asset": "bear-sleep-morph.svg",
+      "assetHash": "16035d433ad06789f65898e3b45a1e7c6692c70a5dcba3df36d257b72cefd511",
+      "frames": [
+        {
+          "asset": "bear-sleep-morph.frame-0.svg",
+          "assetHash": "2e7ef1614cca904f3840febbb091da0c20e84a64e2f5db9daa45e8fc3135df30",
+          "progress": 0
+        },
+        {
+          "asset": "bear-sleep-morph.frame-1.svg",
+          "assetHash": "893d54ac04e1a709a68168592a73d4d2a1d0c2f747724108b19139fbbd272a0d",
+          "progress": 0.1111111111111111
+        },
+        {
+          "asset": "bear-sleep-morph.frame-2.svg",
+          "assetHash": "5d03474d7815f9870b6d8cc09bfb1bff725108df1eb54ab5f7bd0cb86a3c8e67",
+          "progress": 0.2222222222222222
+        },
+        {
+          "asset": "bear-sleep-morph.frame-3.svg",
+          "assetHash": "914e8031218e71104c246c72e5cbd0f8e82b234db0b5adc1afbbe59b96b82696",
+          "progress": 0.3333333333333333
+        },
+        {
+          "asset": "bear-sleep-morph.frame-4.svg",
+          "assetHash": "7bf961df8ddccd6e33430769034764656ea507c2258ecaed33236b2101c7a3c5",
+          "progress": 0.4444444444444444
+        },
+        {
+          "asset": "bear-sleep-morph.frame-5.svg",
+          "assetHash": "7fc3c944550cb2488491d8c07fee39a087f25fbfa4299317107c6020aac1588f",
+          "progress": 0.5555555555555556
+        },
+        {
+          "asset": "bear-sleep-morph.frame-6.svg",
+          "assetHash": "4808111446e2fe4ea836cf5429446c4f0fcd5812bfccad3dc65e8716764292cf",
+          "progress": 0.6666666666666666
+        },
+        {
+          "asset": "bear-sleep-morph.frame-7.svg",
+          "assetHash": "7f5621de9bdeb337f2faaf1b3c1cbe4103232bc4ba499046cec21da7cb3d132e",
+          "progress": 0.7777777777777778
+        },
+        {
+          "asset": "bear-sleep-morph.frame-8.svg",
+          "assetHash": "2180d3d388c600ede0f1a3a94e92158840a9231c62b7200b65799900eefe41c8",
+          "progress": 0.8888888888888888
+        },
+        {
+          "asset": "bear-sleep-morph.frame-9.svg",
+          "assetHash": "2e7ef1614cca904f3840febbb091da0c20e84a64e2f5db9daa45e8fc3135df30",
+          "progress": 1
+        }
+      ],
+      "presetId": "bear-sleep-morph",
+      "progress": 0.55,
+      "sourceFingerprint": "05cd3eb283ce7ae33c44f00e9c3c3df47d3b81d38dfdfe8980d50bc1d413a859"
+    },
+    {
+      "asset": "bear-burst-morph.svg",
+      "assetHash": "8860306a7d9214ab5b01801ece9c33759136d1db40bab6e4a2abd147cac9aa1a",
+      "frames": [
+        {
+          "asset": "bear-burst-morph.frame-0.svg",
+          "assetHash": "416674ca103bfd0ee73600cf5812b6d3a47bd683c89998d7028161b9c02ff992",
+          "progress": 0
+        },
+        {
+          "asset": "bear-burst-morph.frame-1.svg",
+          "assetHash": "a44f39280d668a563c23c5506b555a4ab20e5814ed458372b0d524d11a2fd9cc",
+          "progress": 0.07142857142857142
+        },
+        {
+          "asset": "bear-burst-morph.frame-2.svg",
+          "assetHash": "aee9e1a6c099fc92dff70143fbc7e8363b25530796959c0bddcba0875f3c7906",
+          "progress": 0.14285714285714285
+        },
+        {
+          "asset": "bear-burst-morph.frame-3.svg",
+          "assetHash": "b783c73e0b4039eea6c101e7ccd09ffb1bfd1b68194b46e31f612c4ac92fd835",
+          "progress": 0.21428571428571427
+        },
+        {
+          "asset": "bear-burst-morph.frame-4.svg",
+          "assetHash": "308ab2c87eead3391f7b6f5135f954bd29c3e9867457571b6d1433d1e00266c7",
+          "progress": 0.2857142857142857
+        },
+        {
+          "asset": "bear-burst-morph.frame-5.svg",
+          "assetHash": "9806521384852a15b596f8de54b4a5d610967fbb24052c4387ea1088ad6da251",
+          "progress": 0.35714285714285715
+        },
+        {
+          "asset": "bear-burst-morph.frame-6.svg",
+          "assetHash": "8071e150d3cce2cb5106f6e53c8483fbaf3d2fe357f513c4eecd6bad94a42b3d",
+          "progress": 0.42857142857142855
+        },
+        {
+          "asset": "bear-burst-morph.frame-7.svg",
+          "assetHash": "203b91e564d8a6572c4b63d559560ea6a843e2001b0fc684299502c26063547f",
+          "progress": 0.5
+        },
+        {
+          "asset": "bear-burst-morph.frame-8.svg",
+          "assetHash": "68def2867641fe2675b80ad65c24cf74db7f1e93e8d0b1fc1d34d93ff5adc362",
+          "progress": 0.5714285714285714
+        },
+        {
+          "asset": "bear-burst-morph.frame-9.svg",
+          "assetHash": "2d74089b78dd922e3300b8a8e4759c4c45ae0b730768deb784270d5ad15af5ab",
+          "progress": 0.6428571428571429
+        },
+        {
+          "asset": "bear-burst-morph.frame-10.svg",
+          "assetHash": "ad508a8f64224be31280a2ab1b9b95b1db8aeec7a31e21a4796466f38d7aac91",
+          "progress": 0.7142857142857143
+        },
+        {
+          "asset": "bear-burst-morph.frame-11.svg",
+          "assetHash": "884daa3117297f61be0cc49dfa35c6081d2fd025cc7732bf23cb8302272c6592",
+          "progress": 0.7857142857142857
+        },
+        {
+          "asset": "bear-burst-morph.frame-12.svg",
+          "assetHash": "a18bfda37581064ea3c690e7149542d6cd5ef07d20c717aa91076468d6987dd8",
+          "progress": 0.8571428571428571
+        },
+        {
+          "asset": "bear-burst-morph.frame-13.svg",
+          "assetHash": "d04227e3b9ee38171ef21d1b8278f97e04c83ad30c0f732ace3ce85d052f54b8",
+          "progress": 0.9285714285714286
+        },
+        {
+          "asset": "bear-burst-morph.frame-14.svg",
+          "assetHash": "af804c062a7427017c88d1f43ca7b10fb38aa901e7eefca243cbf989f2ff66e3",
+          "progress": 1
+        }
+      ],
+      "presetId": "bear-burst-morph",
+      "progress": 0.54,
+      "sourceFingerprint": "d15a18864da1cdac359deb2c5bb7e81e7cd88bb9c9ef217e31977d72187429d4"
+    }
+  ],
+  "representativeEntity": "bear",
+  "sourceFingerprint": "73c43cca9c5092b91d91cecae4c325cc83077c7b04d6f4b20f6b34db206faa04",
+  "version": 1
+}

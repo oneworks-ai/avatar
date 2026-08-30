@@ -1,7 +1,7 @@
 {
   "name": "@oneworks/avatar-assets",
   "type": "module",
-  "version": "1.0.0-rc.7",
+  "version": "1.0.0-rc.8",
   "packageManager": "pnpm@11.7.0",
   "private": true,
   "description": "OneWorks geometric 3D Avatar editor, runtime, and framework adapters",
@@ -10,20 +10,25 @@
     "url": "https://github.com/oneworks-ai/avatar.git"
   },
   "scripts": {
+    "animation-covers:check": "node scripts/generate-avatar-animation-preset-covers.mjs --check",
+    "animation-covers:generate": "node scripts/generate-avatar-animation-preset-covers.mjs",
     "build": "pnpm build:app-source",
-    "build:app-source": "tsc -p tsconfig.app-source.json --noEmit --pretty false && vite build",
-    "build:npm": "tsc -p tsconfig.json --noEmit --pretty false && vite build",
+    "build:app-source": "pnpm animation-covers:check && tsc -p tsconfig.app-source.json --noEmit --pretty false && vite build",
+    "build:npm": "pnpm animation-covers:check && tsc -p tsconfig.json --noEmit --pretty false && vite build",
     "build:sdk": "pnpm --filter './packages/*' build",
     "dev": "vite",
     "preview": "vite preview",
     "snapshots:pixel": "node scripts/generate-avatar-pixel-style-snapshots.mjs",
     "smoke:sdk": "node scripts/smoke-sdk-packages.mjs",
     "test": "node scripts/run-vitest-groups.mjs",
+    "test:timeline:e2e": "node scripts/verify-avatar-timeline-e2e.mjs",
+    "test:timeline:performance": "node scripts/verify-avatar-timeline-performance.mjs",
     "typecheck": "tsc -p tsconfig.app-source.json --noEmit --pretty false",
     "typecheck:npm": "tsc -p tsconfig.json --noEmit --pretty false",
     "typecheck:sdk": "pnpm build:sdk && pnpm --filter './packages/*' typecheck"
   },
   "dependencies": {
+    "@material-symbols/svg-400": "0.44.8",
     "@oneworks/avatar": "link:packages/avatar",
     "@oneworks/route-layout": "beta",
     "gifenc": "^1.0.3"

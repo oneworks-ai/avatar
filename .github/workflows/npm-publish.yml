@@ -21,6 +21,10 @@ on:
         options:
           - oidc
           - token
+      candidate_run_id:
+        description: Reuse immutable tarballs from this exact successful publish-validation run.
+        required: false
+        type: string
 
 permissions:
   contents: read
@@ -33,8 +37,77 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  preflight:
+    name: publish-preflight
+    if: ${{ !inputs.dry_run }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    environment:
+      name: npm-publish
+    permissions:
+      actions: read
+      contents: read
+      id-token: write
+    outputs:
+      candidate_run_id: ${{ steps.candidate.outputs.run_id }}
+      reuse_candidate: ${{ steps.candidate.outputs.reuse_candidate }}
+      version: ${{ steps.version.outputs.version }}
+
+    steps:
+      - name: Checkout requested source
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          ref: ${{ github.sha }}
+
+      - name: Require protected main and configured publishing authentication
+        env:
+          AUTH_MODE: ${{ inputs.auth_mode }}
+          NODE_AUTH_TOKEN: ${{ inputs.auth_mode == 'token' && secrets.NPM_TOKEN || '' }}
+          TRUSTED_PUBLISHERS: ${{ vars.NPM_TRUSTED_PUBLISHERS }}
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REF" = 'refs/heads/main'
+          if [ "$AUTH_MODE" = 'oidc' ]; then
+            test "$TRUSTED_PUBLISHERS" = '@oneworks/avatar,@oneworks/avatar-react,@oneworks/avatar-web,@oneworks/avatar-vue|oneworks-ai/avatar|npm-publish.yml|npm-publish|allow:npm-publish|token:none'
+          else
+            test "$AUTH_MODE" = 'token'
+            test -n "$NODE_AUTH_TOKEN"
+          fi
+
+      - name: Resolve one SDK release version
+        id: version
+        run: |
+          set -euo pipefail
+          version="$(node -e "const fs=require('fs'); const files=['packages/avatar/package.json','packages/react/package.json','packages/web/package.json','packages/vue/package.json']; const versions=[...new Set(files.map(file=>JSON.parse(fs.readFileSync(file)).version))]; if(versions.length!==1) process.exit(1); process.stdout.write(versions[0])")"
+          test -n "$version"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+
+      - name: Verify candidate validation evidence
+        id: candidate
+        env:
+          GH_TOKEN: ${{ github.token }}
+          CANDIDATE_RUN_ID: ${{ inputs.candidate_run_id }}
+          SOURCE_SHA: ${{ github.sha }}
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          set -euo pipefail
+          if [ -z "$CANDIDATE_RUN_ID" ]; then
+            echo 'reuse_candidate=false' >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          [[ "$CANDIDATE_RUN_ID" =~ ^[1-9][0-9]*$ ]]
+          gh api "repos/$GITHUB_REPOSITORY/actions/runs/$CANDIDATE_RUN_ID" > run.json
+          gh api "repos/$GITHUB_REPOSITORY/actions/runs/$CANDIDATE_RUN_ID/jobs?per_page=100" > jobs.json
+          gh api "repos/$GITHUB_REPOSITORY/actions/runs/$CANDIDATE_RUN_ID/artifacts?per_page=100" > artifacts.json
+          gh api "repos/$GITHUB_REPOSITORY/actions/workflows/npm-publish.yml" > workflow.json
+          node scripts/verify-npm-publish-candidate.mjs run.json jobs.json artifacts.json workflow.json
+          echo "run_id=$CANDIDATE_RUN_ID" >> "$GITHUB_OUTPUT"
+          echo 'reuse_candidate=true' >> "$GITHUB_OUTPUT"
+
   validate:
     name: test-pack-validate
+    needs: preflight
+    if: ${{ always() && (inputs.dry_run || (needs.preflight.result == 'success' && needs.preflight.outputs.reuse_candidate != 'true')) }}
     runs-on: ubuntu-latest
     timeout-minutes: 45
     permissions:
@@ -92,17 +165,47 @@ jobs:
           name: avatar-sdk-${{ steps.publish.outputs.version }}
           path: ${{ runner.temp }}/avatar-sdk-tarballs
           if-no-files-found: error
-          retention-days: 1
+          retention-days: 7
+
+  reuse-candidate:
+    name: verify-candidate-tarballs
+    needs: preflight
+    if: ${{ always() && !inputs.dry_run && needs.preflight.result == 'success' && needs.preflight.outputs.reuse_candidate == 'true' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      actions: read
+      contents: read
+
+    steps:
+      - name: Checkout requested source
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          ref: ${{ github.sha }}
+
+      - name: Download candidate immutable npm tarballs
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          name: avatar-sdk-${{ needs.preflight.outputs.version }}
+          path: ${{ runner.temp }}/avatar-sdk-tarballs
+          run-id: ${{ needs.preflight.outputs.candidate_run_id }}
+          github-token: ${{ github.token }}
+
+      - name: Verify candidate source, version, and package integrities
+        env:
+          NPM_PUBLISH_TARBALL_DIRECTORY: ${{ runner.temp }}/avatar-sdk-tarballs
+        run: node scripts/publish-sdk-packages.mjs --verify-prepared
 
   publish:
     name: npm-publish-verify
-    needs: validate
-    if: ${{ !inputs.dry_run }}
+    needs: [preflight, validate, reuse-candidate]
+    if: ${{ always() && !inputs.dry_run && needs.preflight.result == 'success' && ((needs.validate.result == 'success' && needs['reuse-candidate'].result == 'skipped') || (needs.validate.result == 'skipped' && needs['reuse-candidate'].result == 'success')) }}
     runs-on: ubuntu-latest
     timeout-minutes: 20
     environment:
       name: npm-publish
     permissions:
+      actions: read
       contents: read
       id-token: write
     outputs:
@@ -126,23 +229,15 @@ jobs:
       - name: Download immutable npm tarballs
         uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
         with:
-          name: avatar-sdk-${{ needs.validate.outputs.version }}
+          name: avatar-sdk-${{ needs.preflight.outputs.version }}
           path: ${{ runner.temp }}/avatar-sdk-tarballs
+          run-id: ${{ needs.preflight.outputs.candidate_run_id || github.run_id }}
+          github-token: ${{ github.token }}
 
-      - name: Require protected main for publishing
+      - name: Verify downloaded immutable npm tarballs
         env:
-          AUTH_MODE: ${{ inputs.auth_mode }}
-          NODE_AUTH_TOKEN: ${{ inputs.auth_mode == 'token' && secrets.NPM_TOKEN || '' }}
-          TRUSTED_PUBLISHERS: ${{ vars.NPM_TRUSTED_PUBLISHERS }}
-        run: |
-          set -euo pipefail
-          test "$GITHUB_REF" = 'refs/heads/main'
-          if [ "$AUTH_MODE" = 'oidc' ]; then
-            test "$TRUSTED_PUBLISHERS" = '@oneworks/avatar,@oneworks/avatar-react,@oneworks/avatar-web,@oneworks/avatar-vue|oneworks-ai/avatar|npm-publish.yml|npm-publish|allow:npm-publish|token:none'
-          else
-            test "$AUTH_MODE" = 'token'
-            test -n "$NODE_AUTH_TOKEN"
-          fi
+          NPM_PUBLISH_TARBALL_DIRECTORY: ${{ runner.temp }}/avatar-sdk-tarballs
+        run: node scripts/publish-sdk-packages.mjs --verify-prepared
 
       - name: Create isolated npm configuration
         env:

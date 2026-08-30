@@ -153,12 +153,19 @@ export type AvatarEntityPreset = (typeof AVATAR_ENTITY_PRESETS)[number]
 
 export const AVATAR_BUILT_IN_ENTITY_PRESETS = ['cloud', 'sun', 'cat', 'dog', 'bear', 'rabbit', 'fox', 'hamster', 'capybara', 'otter', 'pig', 'deer', 'sheep', 'alpaca', 'cow', 'squirrel', 'tiger', 'lion', 'hedgehog', 'seal', 'beaver', 'guinea-pig', 'chinchilla', 'ferret', 'monkey', 'chick', 'duck', 'penguin', 'owl', 'parrot', 'goose', 'bun'] as const satisfies readonly AvatarEntityPreset[]
 
+export interface AvatarEntityGroup {
+  readonly id: string
+  readonly label: string
+}
+
 export interface AvatarEntityPart {
   readonly baseColor: string
   readonly bottomTaper?: number
   readonly cutAngle?: number
   readonly face: boolean
   readonly foregroundColor: string
+  readonly groupId?: string
+  readonly groupLabel?: string
   readonly highlightColor: string
   readonly hollow?: boolean
   readonly id: string
@@ -3822,6 +3829,29 @@ const finiteNumber = (value: unknown, fallback: number) => {
   return typeof value === 'number' && Number.isFinite(value) ? value : fallback
 }
 
+export const serializeAvatarEntityGroups = (groups: readonly AvatarEntityGroup[]) => JSON.stringify(
+  groups.map(group => [group.id, group.label])
+)
+
+export const deserializeAvatarEntityGroups = (value: string | null): AvatarEntityGroup[] => {
+  if (value == null) return []
+  try {
+    const parsed: unknown = JSON.parse(value)
+    if (!Array.isArray(parsed)) return []
+    const ids = new Set<string>()
+    return parsed.flatMap(item => {
+      if (!Array.isArray(item) || typeof item[0] !== 'string' || typeof item[1] !== 'string') return []
+      const id = item[0].trim()
+      const label = item[1].trim()
+      if (id === '' || label === '' || ids.has(id)) return []
+      ids.add(id)
+      return [{ id, label }]
+    })
+  } catch {
+    return []
+  }
+}
+
 export const serializeAvatarEntityParts = (parts: readonly AvatarEntityPart[]) => JSON.stringify(parts.map(part => [
   part.id,
   part.shape,
@@ -3847,7 +3877,9 @@ export const serializeAvatarEntityParts = (parts: readonly AvatarEntityPart[]) =
   part.occludedByFace == null ? null : part.occludedByFace ? 1 : 0,
   part.occlusionAmount ?? null,
   part.occlusionPole ?? null,
-  part.bottomTaper ?? null
+  part.bottomTaper ?? null,
+  part.groupId ?? null,
+  part.groupLabel ?? null
 ]))
 
 export const deserializeAvatarEntityParts = (
@@ -3957,7 +3989,15 @@ export const deserializeAvatarEntityParts = (
                 AVATAR_ENTITY_RANGES.bottomTaper.min,
                 AVATAR_ENTITY_RANGES.bottomTaper.max
               )
-            })
+            }),
+        ...(typeof item[25] === 'string' && item[25].trim() !== ''
+          ? {
+              groupId: item[25],
+              ...(typeof item[26] === 'string' && item[26].trim() !== ''
+                ? { groupLabel: item[26] }
+                : {})
+            }
+          : {})
       }
     })
     const normalizedParts = preset === 'hamster'

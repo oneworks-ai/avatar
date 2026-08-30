@@ -261,6 +261,9 @@ export const AVATAR_ENTITY_RANGES = deepFreeze(
     topScale: { max: 1.2, min: .4 }
   } as const
 )
+export const AVATAR_ANIMATION_PART_SCALE_RANGE = deepFreeze(
+  { max: AVATAR_ENTITY_RANGES.scaleX.max, min: .01 } as const
+)
 export const AVATAR_LIGHTING_RANGES = deepFreeze(
   {
     azimuth: { max: 180, min: -180 },
@@ -593,6 +596,48 @@ export interface AvatarEntityPart {
   readonly z: number
 }
 
+export type AvatarEntityPartTransform = Partial<Pick<AvatarEntityPart,
+  | 'rotationZ'
+  | 'scaleX'
+  | 'scaleY'
+  | 'scaleZ'
+  | 'x'
+  | 'y'
+  | 'z'
+>>
+
+export type AvatarEntityPartTransforms = Readonly<Record<string, AvatarEntityPartTransform>>
+
+export interface AvatarEntityPartShapeMorph {
+  readonly fromShape: AvatarBodyShape
+  readonly progress: number
+  readonly toShape: AvatarBodyShape
+}
+
+export type AvatarEntityPartShapeMorphs = Readonly<Record<string, AvatarEntityPartShapeMorph>>
+
+export type AvatarAnimationShapeKind = 'ellipse' | 'exclamation' | 'rounded-rect'
+
+export interface AvatarAnimationShape {
+  readonly color: string
+  readonly height: number
+  readonly id: string
+  readonly kind: AvatarAnimationShapeKind
+  readonly opacity: number
+  readonly rotation: number
+  readonly roundness: number
+  readonly width: number
+  readonly x: number
+  readonly y: number
+}
+
+export interface AvatarAnimationEntityPart {
+  readonly composition?: 'co-compiled' | 'independent-depth'
+  readonly opacity: number
+  readonly part: AvatarEntityPart
+  readonly transform?: AvatarEntityPartTransform
+}
+
 export interface AvatarShadow {
   readonly color?: string
   readonly direction: number
@@ -675,8 +720,13 @@ export interface AvatarScene {
 }
 
 export interface AvatarScenePatch {
+  readonly auxiliaryParts?: readonly AvatarAnimationEntityPart[]
+  readonly auxiliaryShapes?: readonly AvatarAnimationShape[]
   readonly colorGrade?: Partial<AvatarColorGrade>
   readonly face?: Partial<AvatarFace>
+  readonly partShapeMorphs?: AvatarEntityPartShapeMorphs
+  readonly partTransforms?: AvatarEntityPartTransforms
+  readonly release?: readonly AvatarAnimationResourceClaim[]
   readonly view?: Partial<Pick<AvatarView, 'pitch' | 'positionX' | 'positionY' | 'yaw'>>
 }
 
@@ -686,12 +736,63 @@ export interface AvatarAnimationKeyframe {
   readonly patch: AvatarScenePatch
 }
 
+export type AvatarAnimationResourceClaim = string
+export type AvatarAnimationParameterValue = boolean | number | string
+export type AvatarAnimationParameterValues = Readonly<Record<string, AvatarAnimationParameterValue>>
+
+interface AvatarAnimationParameterBase {
+  readonly advanced?: boolean
+  readonly id: string
+  readonly label: string
+}
+
+export interface AvatarAnimationBooleanParameter extends AvatarAnimationParameterBase {
+  readonly default: boolean
+  readonly type: 'boolean'
+}
+
+export interface AvatarAnimationColorParameter extends AvatarAnimationParameterBase {
+  readonly binding?: {
+    readonly partId: string
+    readonly type: 'auxiliary-part-material'
+  }
+  readonly default: string
+  readonly type: 'color'
+}
+
+export interface AvatarAnimationEnumParameter extends AvatarAnimationParameterBase {
+  readonly default: string
+  readonly options: readonly {
+    readonly label: string
+    readonly value: string
+  }[]
+  readonly type: 'enum'
+}
+
+export interface AvatarAnimationNumberParameter extends AvatarAnimationParameterBase {
+  readonly default: number
+  readonly max: number
+  readonly min: number
+  readonly step?: number
+  readonly type: 'number'
+}
+
+export type AvatarAnimationParameter =
+  | AvatarAnimationBooleanParameter
+  | AvatarAnimationColorParameter
+  | AvatarAnimationEnumParameter
+  | AvatarAnimationNumberParameter
+
 export interface AvatarAnimationClip {
   readonly anchor: AvatarAnimationAnchor
+  readonly blendMode?: 'replace'
   readonly durationMs: number
   readonly keyframes: readonly AvatarAnimationKeyframe[]
   readonly label?: string
+  readonly parameterValues?: AvatarAnimationParameterValues
+  readonly parameters?: readonly AvatarAnimationParameter[]
   readonly playback: AvatarPlaybackMode
+  readonly resourceClaims?: readonly AvatarAnimationResourceClaim[]
 }
 
 export interface AvatarAnimationGroup {
@@ -741,11 +842,153 @@ export interface CreateSeededAvatarDefinitionOptions {
 }
 
 export interface ResolvedAvatarAnimationFrame {
+  readonly auxiliaryParts?: readonly AvatarAnimationEntityPart[]
+  readonly auxiliaryShapes?: readonly AvatarAnimationShape[]
   readonly elapsedMs: number
   readonly finished: boolean
+  readonly partShapeMorphs?: AvatarEntityPartShapeMorphs
+  readonly partTransforms?: AvatarEntityPartTransforms
+  readonly patch: AvatarScenePatch
   readonly progress: number
+  readonly resourceWeights: Readonly<Record<AvatarAnimationResourceClaim, number>>
   readonly scene: AvatarScene
+  readonly trackResourceWeights?: Readonly<
+    Record<string, Readonly<Record<AvatarAnimationResourceClaim, number>>>
+  >
+  readonly trackWrites?: Readonly<Record<string, readonly AvatarAnimationResourceClaim[]>>
+  readonly writes: readonly AvatarAnimationResourceClaim[]
 }
+
+export interface AvatarAnimationResolvedInstance {
+  readonly frame: ResolvedAvatarAnimationFrame
+  readonly instanceId: string
+  readonly resourceClaims?: readonly AvatarAnimationResourceClaim[]
+}
+
+export interface AvatarAnimationTrack {
+  readonly clip: AvatarAnimationClip
+  readonly elapsedMs: number
+  readonly muted?: boolean
+  readonly parameterValues?: AvatarAnimationParameterValues
+  readonly preserveAuxiliaryPartIds?: boolean
+  readonly solo?: boolean
+  readonly speed?: number
+  readonly trackId: string
+  readonly weight?: number
+}
+
+export interface AvatarAnimationTimelineEnvelope {
+  readonly fadeInMs?: number
+  readonly fadeOutMs?: number
+}
+
+export interface AvatarAnimationTimelineInlineSource {
+  readonly clip: AvatarAnimationClip
+  readonly type: 'inline'
+  readonly version: 1
+}
+
+export interface AvatarAnimationTimelinePresetSource {
+  readonly fallback: 'skip'
+  readonly presetId: string
+  readonly presetVersion: number
+  readonly type: 'preset'
+}
+
+export type AvatarAnimationTimelineClipSource =
+  | AvatarAnimationTimelineInlineSource
+  | AvatarAnimationTimelinePresetSource
+
+export interface AvatarAnimationTimelineFrameLoop {
+  readonly endFrameIndex: number
+  readonly iterations: number | 'infinite'
+  readonly startFrameIndex: number
+}
+
+export interface AvatarAnimationTimelineFrameSequence {
+  readonly firstFrameIndex: number
+  readonly lastFrameIndex: number
+  readonly loop?: AvatarAnimationTimelineFrameLoop
+}
+
+export interface AvatarAnimationTimelineClipInstance {
+  readonly durationMs: number
+  readonly envelope?: AvatarAnimationTimelineEnvelope
+  readonly frameSequence?: AvatarAnimationTimelineFrameSequence
+  readonly instanceId: string
+  readonly parameterValues?: AvatarAnimationParameterValues
+  readonly playback?: AvatarPlaybackMode
+  readonly playbackRate: number
+  readonly preserveAuxiliaryPartIds?: boolean
+  readonly source: AvatarAnimationTimelineClipSource
+  readonly sourceOffsetMs: number
+  readonly startMs: number
+  readonly weight: number
+}
+
+export interface AvatarAnimationTimelineTrack {
+  readonly clips: readonly AvatarAnimationTimelineClipInstance[]
+  readonly muted?: boolean
+  readonly name?: string
+  readonly solo?: boolean
+  readonly trackId: string
+  readonly weight?: number
+}
+
+export interface AvatarAnimationTimeline {
+  readonly durationMs: number
+  readonly tracks: readonly AvatarAnimationTimelineTrack[]
+  readonly version: 1
+}
+
+export interface AvatarAnimationTimelineActiveClip {
+  readonly instanceId: string
+  readonly resourceWeights: Readonly<Record<AvatarAnimationResourceClaim, number>>
+  readonly sourceTimeMs: number
+  readonly trackId: string
+  readonly writes: readonly AvatarAnimationResourceClaim[]
+}
+
+export interface ResolvedAvatarAnimationTimelineFrame extends ResolvedAvatarAnimationFrame {
+  readonly activeClips: readonly AvatarAnimationTimelineActiveClip[]
+  readonly timelineTimeMs: number
+  readonly unresolvedClipIds: readonly string[]
+}
+
+export type AvatarAnimationTimelineEditFailure = 'conflict' | 'invalid' | 'not-found'
+
+export type AvatarAnimationTimelineEditResult =
+  | {
+      readonly conflictInstanceId?: string
+      readonly reason: AvatarAnimationTimelineEditFailure
+      readonly timeline: AvatarAnimationTimeline
+      readonly valid: false
+    }
+  | {
+      readonly snappedTimeMs: number
+      readonly timeline: AvatarAnimationTimeline
+      readonly undo: AvatarAnimationTimelineUndoCommand
+      readonly valid: true
+    }
+
+export interface AvatarAnimationTimelineUndoCommand {
+  readonly clip: AvatarAnimationTimelineClipInstance
+  readonly timelineDurationMs: number
+  readonly trackId: string
+  readonly type: 'restore-clip'
+}
+
+export interface AvatarAnimationTimelinePresetResolver {
+  (
+    source: AvatarAnimationTimelinePresetSource,
+    instance?: AvatarAnimationTimelineClipInstance
+  ): AvatarAnimationClip | null | undefined
+}
+
+export interface AvatarAnimationResolveOptions {
+  readonly parameterValues?: AvatarAnimationParameterValues
+}
+
 
 export const DEFAULT_AVATAR_COLOR_GRADE: AvatarColorGrade = {
   brightness: 1,
@@ -1860,30 +2103,237 @@ const isPartialAvatarFace = (value: unknown) => {
   })
 }
 
+const isAvatarEntityPartTransform = (value: unknown): value is AvatarEntityPartTransform => {
+  if (!isRecord(value)) return false
+  const allowedKeys = ['rotationZ', 'scaleX', 'scaleY', 'scaleZ', 'x', 'y', 'z']
+  if (!hasOnlyKeys(value, allowedKeys)) return false
+  return Object.entries(value).every(([key, field]) => {
+    if (key === 'scaleX' || key === 'scaleY' || key === 'scaleZ') {
+      return isFiniteInRange(field, AVATAR_ANIMATION_PART_SCALE_RANGE)
+    }
+    const range = AVATAR_ENTITY_RANGES[key as keyof typeof AVATAR_ENTITY_RANGES]
+    return range == null ? isFiniteNumber(field) : isFiniteInRange(field, range)
+  })
+}
+
+const isAvatarEntityPartShapeMorph = (value: unknown): value is AvatarEntityPartShapeMorph => (
+  isRecord(value) &&
+  hasOnlyKeys(value, ['fromShape', 'progress', 'toShape']) &&
+  hasOwnKeys(value, ['fromShape', 'progress', 'toShape']) &&
+  isOneOf(value.fromShape, [
+    'capsule', 'cone', 'diamond', 'ellipse', 'frustum', 'half-cone',
+    'rounded', 'square', 'sphere', 'teardrop', 'trapezoid'
+  ]) &&
+  isFiniteNumber(value.progress) && value.progress >= 0 && value.progress <= 1 &&
+  isOneOf(value.toShape, [
+    'capsule', 'cone', 'diamond', 'ellipse', 'frustum', 'half-cone',
+    'rounded', 'square', 'sphere', 'teardrop', 'trapezoid'
+  ])
+)
+
+const isAvatarAnimationShape = (value: unknown): value is AvatarAnimationShape => (
+  isRecord(value) &&
+  hasOnlyKeys(value, [
+    'color',
+    'height',
+    'id',
+    'kind',
+    'opacity',
+    'rotation',
+    'roundness',
+    'width',
+    'x',
+    'y'
+  ]) &&
+  hasOwnKeys(value, [
+    'color',
+    'height',
+    'id',
+    'kind',
+    'opacity',
+    'rotation',
+    'roundness',
+    'width',
+    'x',
+    'y'
+  ]) &&
+  isHexColor(value.color) &&
+  isFiniteNumber(value.height) && value.height >= 0 && value.height <= 840 &&
+  typeof value.id === 'string' && value.id.trim().length > 0 && value.id.length <= 80 &&
+  isOneOf(value.kind, ['ellipse', 'exclamation', 'rounded-rect']) &&
+  isFiniteNumber(value.opacity) && value.opacity >= 0 && value.opacity <= 100 &&
+  isFiniteNumber(value.rotation) && value.rotation >= -360 && value.rotation <= 360 &&
+  isFiniteNumber(value.roundness) && value.roundness >= 0 && value.roundness <= 100 &&
+  isFiniteNumber(value.width) && value.width >= 0 && value.width <= 840 &&
+  isFiniteNumber(value.x) &&
+  isFiniteNumber(value.y)
+)
+
+const isAvatarAnimationEntityPart = (value: unknown): value is AvatarAnimationEntityPart => (
+  isRecord(value) &&
+  hasOnlyKeys(value, ['composition', 'opacity', 'part', 'transform']) &&
+  hasOwnKeys(value, ['opacity', 'part']) &&
+  (value.composition === undefined || isOneOf(value.composition, ['co-compiled', 'independent-depth'])) &&
+  isFiniteNumber(value.opacity) && value.opacity >= 0 && value.opacity <= 100 &&
+  isAvatarEntityPart(value.part) &&
+  (value.transform === undefined || isAvatarEntityPartTransform(value.transform))
+)
+
+const isTransformRecord = <T>(
+  value: unknown,
+  validate: (field: unknown) => field is T
+): value is Readonly<Record<string, T>> => (
+  isRecord(value) && Object.entries(value).every(([id, field]) => id.trim().length > 0 && validate(field))
+)
+
 const isAvatarScenePatch = (value: unknown): value is AvatarScenePatch => {
-  if (!isRecord(value) || Object.keys(value).some(key => !['colorGrade', 'face', 'view'].includes(key))) {
+  if (!isRecord(value) || Object.keys(value).some(key => ![
+    'auxiliaryParts',
+    'auxiliaryShapes',
+    'colorGrade',
+    'face',
+    'partShapeMorphs',
+    'partTransforms',
+    'release',
+    'view'
+  ].includes(key))) {
     return false
+  }
+  if (value.auxiliaryParts !== undefined) {
+    if (
+      !isDenseArray<AvatarAnimationEntityPart>(value.auxiliaryParts) ||
+      value.auxiliaryParts.length > 16 ||
+      !value.auxiliaryParts.every(isAvatarAnimationEntityPart) ||
+      new Set(value.auxiliaryParts.map(item => item.part.id)).size !== value.auxiliaryParts.length
+    ) return false
+  }
+  if (value.auxiliaryShapes !== undefined) {
+    if (
+      !isDenseArray<AvatarAnimationShape>(value.auxiliaryShapes) ||
+      value.auxiliaryShapes.length > 16 ||
+      !value.auxiliaryShapes.every(isAvatarAnimationShape) ||
+      new Set(value.auxiliaryShapes.map(shape => shape.id)).size !== value.auxiliaryShapes.length
+    ) return false
   }
   if (value.colorGrade !== undefined && !isPartialAvatarColorGrade(value.colorGrade)) return false
   if (value.view !== undefined && !isPartialAvatarView(value.view)) return false
   if (value.face !== undefined && !isPartialAvatarFace(value.face)) return false
+  if (
+    value.partShapeMorphs !== undefined &&
+    !isTransformRecord(value.partShapeMorphs, isAvatarEntityPartShapeMorph)
+  ) return false
+  if (
+    value.partTransforms !== undefined &&
+    !isTransformRecord(value.partTransforms, isAvatarEntityPartTransform)
+  ) return false
+  if (
+    value.release !== undefined && (
+      !isDenseArray<AvatarAnimationResourceClaim>(value.release) ||
+      !value.release.every(isAvatarAnimationResourceClaim) ||
+      new Set(value.release).size !== value.release.length
+    )
+  ) return false
   return true
+}
+
+const AVATAR_ANIMATION_RESOURCE_CLAIM_PATTERN = /^(?:exclusive:\*|(?:aux|decal|effect|face|part|shape|view):[a-z0-9_-]+(?:\.[a-z0-9_-]+)*)$/iu
+
+const isAvatarAnimationResourceClaim = (value: unknown): value is AvatarAnimationResourceClaim => (
+  isString(value) && value.length <= 160 && AVATAR_ANIMATION_RESOURCE_CLAIM_PATTERN.test(value)
+)
+
+const isAvatarAnimationParameter = (value: unknown): value is AvatarAnimationParameter => {
+  if (
+    !isRecord(value) || !isString(value.id) || value.id.trim() !== value.id || value.id.length === 0 ||
+    !isString(value.label) || value.label.trim().length === 0 ||
+    (value.advanced !== undefined && !isBoolean(value.advanced))
+  ) return false
+  const commonKeys = ['advanced', 'default', 'id', 'label', 'type']
+  if (value.type === 'boolean') {
+    return hasOnlyKeys(value, commonKeys) && isBoolean(value.default)
+  }
+  if (value.type === 'color') {
+    return hasOnlyKeys(value, [...commonKeys, 'binding']) && isHexColor(value.default) && (
+      value.binding === undefined || (
+        isRecord(value.binding) && hasOnlyKeys(value.binding, ['partId', 'type']) &&
+        value.binding.type === 'auxiliary-part-material' && isString(value.binding.partId) &&
+        value.binding.partId.trim().length > 0
+      )
+    )
+  }
+  if (value.type === 'number') {
+    return hasOnlyKeys(value, [...commonKeys, 'max', 'min', 'step']) &&
+      isFiniteNumber(value.default) && isFiniteNumber(value.min) && isFiniteNumber(value.max) &&
+      value.min <= value.default && value.default <= value.max && value.min < value.max &&
+      (value.step === undefined || isFiniteNumber(value.step) && value.step > 0)
+  }
+  if (value.type === 'enum') {
+    return hasOnlyKeys(value, [...commonKeys, 'options']) && isString(value.default) &&
+      isDenseArray<{ readonly label: string; readonly value: string }>(value.options) &&
+      value.options.length > 0 && value.options.every(option => (
+        isRecord(option) && hasOnlyKeys(option, ['label', 'value']) &&
+        isString(option.label) && option.label.trim().length > 0 &&
+        isString(option.value) && option.value.length > 0
+      )) && new Set(value.options.map(option => option.value)).size === value.options.length &&
+      value.options.some(option => option.value === value.default)
+  }
+  return false
+}
+
+const isAvatarAnimationParameterValue = (
+  parameter: AvatarAnimationParameter,
+  value: unknown
+): value is AvatarAnimationParameterValue => {
+  if (parameter.type === 'boolean') return isBoolean(value)
+  if (parameter.type === 'color') return isHexColor(value)
+  if (parameter.type === 'number') return isFiniteNumber(value) && value >= parameter.min && value <= parameter.max
+  return isString(value) && parameter.options.some(option => option.value === value)
+}
+
+const isAvatarAnimationParameterValues = (
+  parameters: readonly AvatarAnimationParameter[],
+  values: unknown
+): values is AvatarAnimationParameterValues => {
+  if (!isRecord(values)) return false
+  const byId = new Map(parameters.map(parameter => [parameter.id, parameter]))
+  return Object.entries(values).every(([id, value]) => {
+    const parameter = byId.get(id)
+    return parameter != null && isAvatarAnimationParameterValue(parameter, value)
+  })
 }
 
 const isAvatarAnimationClip = (value: unknown): value is AvatarAnimationClip => {
   if (
     !isRecord(value) || !hasOnlyKeys(value, [
       'anchor',
+      'blendMode',
       'durationMs',
       'keyframes',
       'label',
-      'playback'
+      'parameterValues',
+      'parameters',
+      'playback',
+      'resourceClaims'
     ]) || !hasOwnKeys(value, ['anchor', 'durationMs', 'keyframes', 'playback']) ||
     !isOneOf(value.anchor, ['absolute', 'relative']) ||
+    (value.blendMode !== undefined && value.blendMode !== 'replace') ||
     !isFiniteNumber(value.durationMs) || value.durationMs <= 0 || !isOptionalString(value.label) ||
     !isOneOf(value.playback, ['loop', 'once']) ||
     !isDenseArray<AvatarAnimationKeyframe>(value.keyframes) ||
-    value.keyframes.length === 0 || (value.playback === 'loop' && value.keyframes.length < 2)
+    value.keyframes.length === 0 || (value.playback === 'loop' && value.keyframes.length < 2) ||
+    (value.resourceClaims !== undefined && (
+      !isDenseArray<AvatarAnimationResourceClaim>(value.resourceClaims) ||
+      value.resourceClaims.length === 0 || !value.resourceClaims.every(isAvatarAnimationResourceClaim) ||
+      new Set(value.resourceClaims).size !== value.resourceClaims.length
+    )) ||
+    (value.parameters !== undefined && (
+      !isDenseArray<AvatarAnimationParameter>(value.parameters) ||
+      !value.parameters.every(isAvatarAnimationParameter) ||
+      new Set(value.parameters.map(parameter => parameter.id)).size !== value.parameters.length
+    )) ||
+    (value.parameterValues !== undefined && (
+      value.parameters === undefined || !isAvatarAnimationParameterValues(value.parameters, value.parameterValues)
+    ))
   ) return false
   const durationMs = value.durationMs
   if (
@@ -1927,6 +2377,40 @@ export const parseAvatarAnimationClip = (input: unknown): AvatarAnimationClip =>
   } catch {
     throw new TypeError('Invalid OneWorks Avatar animation clip')
   }
+}
+
+export const resolveAvatarAnimationParameterValues = (
+  clip: Pick<AvatarAnimationClip, 'parameterValues' | 'parameters'>,
+  overrides: AvatarAnimationParameterValues = {}
+): AvatarAnimationParameterValues => {
+  const parameters = clip.parameters ?? []
+  const merged = {
+    ...Object.fromEntries(parameters.map(parameter => [parameter.id, parameter.default])),
+    ...clip.parameterValues,
+    ...overrides
+  }
+  if (!isAvatarAnimationParameterValues(parameters, merged)) {
+    throw new TypeError('Invalid OneWorks Avatar animation parameter values')
+  }
+  return merged
+}
+
+const blendAvatarAnimationColor = (source: string, target: 0 | 255, amount: number) => {
+  const sourceValue = Number.parseInt(source.slice(1), 16)
+  const channel = (shift: number) => Math.round(
+    ((sourceValue >> shift) & 0xff) * (1 - amount) + target * amount
+  )
+  return `#${[16, 8, 0].map(shift => channel(shift).toString(16).padStart(2, '0')).join('')}`
+}
+
+export const resolveAvatarAnimationColorMaterial = (baseColor: string) => {
+  if (!isHexColor(baseColor)) throw new TypeError('Invalid OneWorks Avatar animation color')
+  return {
+    baseColor,
+    foregroundColor: blendAvatarAnimationColor(baseColor, 0, .58),
+    highlightColor: blendAvatarAnimationColor(baseColor, 255, .38),
+    shadowColor: blendAvatarAnimationColor(baseColor, 0, .34)
+  } as const
 }
 
 const isAvatarAnimationLibrary = (value: unknown): value is AvatarAnimationLibrary => (
@@ -2198,8 +2682,23 @@ export const easeAvatarAnimationProgress = (progress: number, easing: AvatarAnim
   return value
 }
 
+export const applyAvatarEntityPartTransforms = (
+  parts: readonly AvatarEntityPart[],
+  transforms?: AvatarEntityPartTransforms
+): readonly AvatarEntityPart[] => {
+  if (transforms == null) return parts
+  return parts.map(part => {
+    const transform = transforms[part.id]
+    return transform == null ? part : { ...part, ...transform }
+  })
+}
+
 export const applyAvatarScenePatch = (scene: AvatarScene, patch: AvatarScenePatch): AvatarScene => ({
   ...scene,
+  entity: {
+    ...scene.entity,
+    parts: applyAvatarEntityPartTransforms(scene.entity.parts, patch.partTransforms)
+  },
   effects: {
     ...scene.effects,
     colorGrade: { ...scene.effects.colorGrade, ...patch.colorGrade }
@@ -2230,10 +2729,130 @@ const interpolateRecord = <T extends object>(from: T, to: T, progress: number): 
   return result as T
 }
 
+const hiddenAnimationShape = (shape: AvatarAnimationShape): AvatarAnimationShape => ({
+  ...shape,
+  height: 0,
+  opacity: 0,
+  width: 0
+})
+
+const interpolateAnimationShapes = (
+  from: readonly AvatarAnimationShape[] | undefined,
+  to: readonly AvatarAnimationShape[] | undefined,
+  progress: number
+): readonly AvatarAnimationShape[] | undefined => {
+  if ((from == null || from.length === 0) && (to == null || to.length === 0)) return undefined
+  const fromById = new Map(from?.map(shape => [shape.id, shape]) ?? [])
+  const toById = new Map(to?.map(shape => [shape.id, shape]) ?? [])
+  const ids = [...new Set([...(from?.map(shape => shape.id) ?? []), ...(to?.map(shape => shape.id) ?? [])])]
+  return ids.map(id => {
+    const fromShape = fromById.get(id)
+    const toShape = toById.get(id)
+    const source = fromShape ?? hiddenAnimationShape(toShape!)
+    const target = toShape ?? hiddenAnimationShape(fromShape!)
+    return {
+      color: progress < 1 ? source.color : target.color,
+      height: interpolate(source.height, target.height, progress),
+      id,
+      kind: progress < 1 ? source.kind : target.kind,
+      opacity: interpolate(source.opacity, target.opacity, progress),
+      rotation: interpolate(source.rotation, target.rotation, progress),
+      roundness: interpolate(source.roundness, target.roundness, progress),
+      width: interpolate(source.width, target.width, progress),
+      x: interpolate(source.x, target.x, progress),
+      y: interpolate(source.y, target.y, progress)
+    }
+  })
+}
+
+const interpolateAnimationPartTransform = (
+  source: AvatarAnimationEntityPart,
+  target: AvatarAnimationEntityPart,
+  progress: number
+): AvatarEntityPartTransform => Object.fromEntries(
+  (['rotationZ', 'scaleX', 'scaleY', 'scaleZ', 'x', 'y', 'z'] as const).map(key => {
+    const sourceValue = source.transform?.[key] ?? source.part[key] ?? (
+      key === 'scaleZ' ? Math.min(source.part.scaleX, source.part.scaleY) : 0
+    )
+    const targetValue = target.transform?.[key] ?? target.part[key] ?? (
+      key === 'scaleZ' ? Math.min(target.part.scaleX, target.part.scaleY) : 0
+    )
+    return [key, interpolate(sourceValue, targetValue, progress)]
+  })
+)
+
+const hiddenAnimationEntityPart = (
+  item: AvatarAnimationEntityPart
+): AvatarAnimationEntityPart => ({ ...item, opacity: 0 })
+
+const interpolateAnimationEntityParts = (
+  from: readonly AvatarAnimationEntityPart[] | undefined,
+  to: readonly AvatarAnimationEntityPart[] | undefined,
+  progress: number
+): readonly AvatarAnimationEntityPart[] | undefined => {
+  if ((from == null || from.length === 0) && (to == null || to.length === 0)) return undefined
+  const fromById = new Map(from?.map(item => [item.part.id, item]) ?? [])
+  const toById = new Map(to?.map(item => [item.part.id, item]) ?? [])
+  const ids = [...new Set([
+    ...(from?.map(item => item.part.id) ?? []),
+    ...(to?.map(item => item.part.id) ?? [])
+  ])]
+  return ids.map(id => {
+    const fromItem = fromById.get(id)
+    const toItem = toById.get(id)
+    const source = fromItem ?? hiddenAnimationEntityPart(toItem!)
+    const target = toItem ?? hiddenAnimationEntityPart(fromItem!)
+    return {
+      ...(source.composition == null && target.composition == null
+        ? {}
+        : { composition: progress < 1 ? source.composition : target.composition }),
+      opacity: interpolate(source.opacity, target.opacity, progress),
+      part: progress < 1 ? source.part : target.part,
+      transform: interpolateAnimationPartTransform(source, target, progress)
+    }
+  })
+}
+
+const interpolatePartShapeMorphs = (
+  from: AvatarEntityPartShapeMorphs | undefined,
+  to: AvatarEntityPartShapeMorphs | undefined,
+  progress: number
+): AvatarEntityPartShapeMorphs | undefined => {
+  if (from == null && to == null) return undefined
+  const ids = [...new Set([...Object.keys(from ?? {}), ...Object.keys(to ?? {})])]
+  return Object.fromEntries(ids.map(id => {
+    const source = from?.[id] ?? { ...to![id]!, progress: 0 }
+    const target = to?.[id] ?? { ...from![id]!, progress: 0 }
+    return [id, {
+      fromShape: progress < 1 ? source.fromShape : target.fromShape,
+      progress: interpolate(source.progress, target.progress, progress),
+      toShape: progress < 1 ? source.toShape : target.toShape
+    }]
+  }))
+}
+
 const interpolateScene = (from: AvatarScene, to: AvatarScene, progress: number): AvatarScene => {
   const face = interpolateRecord(from.face, to.face, progress)
+  const toParts = new Map(to.entity.parts.map(part => [part.id, part]))
   return {
     ...from,
+    entity: {
+      ...from.entity,
+      parts: from.entity.parts.map(part => {
+        const target = toParts.get(part.id)
+        if (target == null) return part
+        const interpolated = interpolateRecord(part, target, progress)
+        if (part.scaleZ == null && target.scaleZ == null) return interpolated
+        return {
+          ...interpolated,
+          scaleZ: interpolate(
+            part.scaleZ ?? Math.min(part.scaleX, part.scaleY),
+            target.scaleZ ?? Math.min(target.scaleX, target.scaleY),
+            progress
+          )
+        }
+      })
+    },
     effects: {
       ...from.effects,
       colorGrade: interpolateRecord(from.effects.colorGrade, to.effects.colorGrade, progress)
@@ -2246,50 +2865,1570 @@ const interpolateScene = (from: AvatarScene, to: AvatarScene, progress: number):
   }
 }
 
-export const resolveAvatarAnimationFrame = (
-  definition: AvatarDefinition,
-  clip: AvatarAnimationClip,
-  elapsedMs: number
-): ResolvedAvatarAnimationFrame => {
-  const authored = [...clip.keyframes].sort((a, b) => a.atMs - b.atMs)
-  if (authored.length === 0 || clip.durationMs <= 0) {
-    return { elapsedMs: 0, finished: true, progress: 1, scene: definition.scene }
+const resolveScenePartTransforms = (
+  base: readonly AvatarEntityPart[],
+  resolved: readonly AvatarEntityPart[]
+): AvatarEntityPartTransforms | undefined => {
+  const baseById = new Map(base.map(part => [part.id, part]))
+  const transforms = Object.fromEntries(resolved.flatMap(part => {
+    const source = baseById.get(part.id)
+    if (source == null) return []
+    const transform: Record<string, number> = {}
+    for (const key of ['rotationZ', 'scaleX', 'scaleY', 'scaleZ', 'x', 'y', 'z'] as const) {
+      const sourceValue = key === 'rotationZ'
+        ? source[key] ?? 0
+        : key === 'scaleZ'
+        ? source.scaleZ ?? Math.min(source.scaleX, source.scaleY)
+        : source[key]
+      const resolvedValue = key === 'rotationZ'
+        ? part[key] ?? 0
+        : key === 'scaleZ'
+        ? part.scaleZ ?? Math.min(part.scaleX, part.scaleY)
+        : part[key]
+      if (sourceValue !== resolvedValue) transform[key] = resolvedValue
+    }
+    return Object.keys(transform).length === 0 ? [] : [[part.id, transform]]
+  })) as AvatarEntityPartTransforms
+  return Object.keys(transforms).length === 0 ? undefined : transforms
+}
+
+const resolveFaceResourceClaims = (face: Partial<AvatarFace>): readonly AvatarAnimationResourceClaim[] => (
+  Object.keys(face).flatMap(key => {
+    if (key === 'height') return ['face:leftEye.height', 'face:rightEye.height']
+    if (key === 'width') return ['face:leftEye.width', 'face:rightEye.width']
+    if (key === 'rotation') return ['face:leftEye.rotation', 'face:rightEye.rotation']
+    if (key === 'eyeShape') return ['face:leftEye.shape', 'face:rightEye.shape']
+    if (key === 'leftEyeHeight') return ['face:leftEye.height']
+    if (key === 'rightEyeHeight') return ['face:rightEye.height']
+    if (key === 'leftEyeWidth') return ['face:leftEye.width']
+    if (key === 'rightEyeWidth') return ['face:rightEye.width']
+    if (key === 'leftEyeRotation') return ['face:leftEye.rotation']
+    if (key === 'rightEyeRotation') return ['face:rightEye.rotation']
+    if (key === 'leftEyeShape') return ['face:leftEye.shape']
+    if (key === 'rightEyeShape') return ['face:rightEye.shape']
+    if (key === 'eyeHighlight' && face.eyeHighlight != null) {
+      return Object.keys(face.eyeHighlight).map(field => `face:eyeHighlight.${field}`)
+    }
+    return [`face:${key}`]
+  })
+)
+
+export const resolveAvatarScenePatchWrites = (
+  patch: AvatarScenePatch
+): readonly AvatarAnimationResourceClaim[] => [...new Set([
+  ...Object.keys(patch.colorGrade ?? {}).map(key => `effect:colorGrade.${key}`),
+  ...resolveFaceResourceClaims(patch.face ?? {}),
+  ...Object.entries(patch.partTransforms ?? {}).flatMap(([partId, transform]) => (
+    Object.keys(transform).map(field => `part:${partId}.transform.${field}`)
+  )),
+  ...Object.keys(patch.partShapeMorphs ?? {}).map(partId => `part:${partId}.shapeMorph`),
+  ...Object.keys(patch.view ?? {}).map(key => `view:${key}`),
+  ...(patch.auxiliaryParts ?? []).map(item => `aux:${item.part.id}`),
+  ...(patch.auxiliaryShapes ?? []).map(shape => `shape:${shape.id}`)
+])].sort()
+
+const avatarAnimationClaimAllows = (
+  declared: AvatarAnimationResourceClaim,
+  actual: AvatarAnimationResourceClaim
+) => declared === actual || actual.startsWith(`${declared}.`)
+
+export const assertAvatarAnimationClaims = (
+  declared: readonly AvatarAnimationResourceClaim[] | undefined,
+  actual: readonly AvatarAnimationResourceClaim[]
+) => {
+  if (declared == null) return
+  const undeclared = actual.filter(resource => !declared.some(claim => avatarAnimationClaimAllows(claim, resource)))
+  if (undeclared.length > 0) {
+    throw new TypeError(`OneWorks Avatar animation wrote undeclared resources: ${undeclared.join(', ')}`)
   }
-  const ordered: readonly AvatarAnimationKeyframe[] = authored[0]!.atMs > 0
+}
+
+const resolveParameterizedAuxiliaryParts = (
+  clip: AvatarAnimationClip,
+  items: readonly AvatarAnimationEntityPart[] | undefined,
+  parameterValues: AvatarAnimationParameterValues | undefined
+) => {
+  if (items == null || items.length === 0 || clip.parameters == null) return items
+  const values = resolveAvatarAnimationParameterValues(clip, parameterValues)
+  const materialByPartId = new Map<string, ReturnType<typeof resolveAvatarAnimationColorMaterial>>()
+  clip.parameters.forEach(parameter => {
+    if (parameter.type !== 'color' || parameter.binding?.type !== 'auxiliary-part-material') return
+    materialByPartId.set(
+      parameter.binding.partId,
+      resolveAvatarAnimationColorMaterial(values[parameter.id] as string)
+    )
+  })
+  if (materialByPartId.size === 0) return items
+  return items.map(item => {
+    const material = materialByPartId.get(item.part.id)
+    return material == null ? item : { ...item, part: { ...item.part, ...material } }
+  })
+}
+
+type AvatarAnimationResourceValue = AvatarAnimationEntityPart | AvatarAnimationShape |
+  AvatarEntityPartShapeMorph | AvatarAnimationParameterValue
+
+interface ResolvedAvatarAnimationSparseState {
+  readonly elapsedMs: number
+  readonly finished: boolean
+  readonly progress: number
+  readonly resources: ReadonlyMap<AvatarAnimationResourceClaim, AvatarAnimationResourceValue>
+  readonly resourceWeights: ReadonlyMap<AvatarAnimationResourceClaim, number>
+}
+
+const setFacePatchResources = (
+  resources: Map<AvatarAnimationResourceClaim, AvatarAnimationResourceValue>,
+  face: Partial<AvatarFace>
+) => {
+  const sharedEyeFields = {
+    eyeShape: ['shape', face.eyeShape],
+    height: ['height', face.height],
+    rotation: ['rotation', face.rotation],
+    width: ['width', face.width]
+  } as const
+  Object.values(sharedEyeFields).forEach(([field, value]) => {
+    if (value == null) return
+    resources.set(`face:leftEye.${field}`, value)
+    resources.set(`face:rightEye.${field}`, value)
+  })
+  Object.entries(face).forEach(([key, value]) => {
+    if (value == null) return
+    if (key === 'height' || key === 'width' || key === 'rotation' || key === 'eyeShape') return
+    if (key === 'leftEyeHeight') resources.set('face:leftEye.height', value as number)
+    else if (key === 'rightEyeHeight') resources.set('face:rightEye.height', value as number)
+    else if (key === 'leftEyeWidth') resources.set('face:leftEye.width', value as number)
+    else if (key === 'rightEyeWidth') resources.set('face:rightEye.width', value as number)
+    else if (key === 'leftEyeRotation') resources.set('face:leftEye.rotation', value as number)
+    else if (key === 'rightEyeRotation') resources.set('face:rightEye.rotation', value as number)
+    else if (key === 'leftEyeShape') resources.set('face:leftEye.shape', value as string)
+    else if (key === 'rightEyeShape') resources.set('face:rightEye.shape', value as string)
+    else if (key === 'eyeHighlight' && isRecord(value)) {
+      Object.entries(value).forEach(([field, fieldValue]) => {
+        resources.set(`face:eyeHighlight.${field}`, fieldValue as AvatarAnimationParameterValue)
+      })
+    } else resources.set(`face:${key}`, value as AvatarAnimationParameterValue)
+  })
+}
+
+const applyPatchToResourceMap = (
+  current: ReadonlyMap<AvatarAnimationResourceClaim, AvatarAnimationResourceValue>,
+  patch: AvatarScenePatch
+) => {
+  const next = new Map(current)
+  patch.release?.forEach(resource => next.delete(resource))
+  Object.entries(patch.colorGrade ?? {}).forEach(([key, value]) => {
+    if (value != null) next.set(`effect:colorGrade.${key}`, value)
+  })
+  setFacePatchResources(next, patch.face ?? {})
+  Object.entries(patch.partTransforms ?? {}).forEach(([partId, transform]) => {
+    Object.entries(transform).forEach(([field, value]) => {
+      if (value != null) next.set(`part:${partId}.transform.${field}`, value)
+    })
+  })
+  Object.entries(patch.partShapeMorphs ?? {}).forEach(([partId, morph]) => {
+    next.set(`part:${partId}.shapeMorph`, morph)
+  })
+  Object.entries(patch.view ?? {}).forEach(([key, value]) => {
+    if (value != null) next.set(`view:${key}`, value)
+  })
+  patch.auxiliaryParts?.forEach(item => next.set(`aux:${item.part.id}`, item))
+  patch.auxiliaryShapes?.forEach(shape => next.set(`shape:${shape.id}`, shape))
+  return next
+}
+
+const interpolateAvatarAnimationHexColor = (from: string, to: string, progress: number) => {
+  if (progress <= 0) return from
+  if (progress >= 1) return to
+  const fromValue = Number.parseInt(from.slice(1), 16)
+  const toValue = Number.parseInt(to.slice(1), 16)
+  return `#${[16, 8, 0].map(shift => Math.round(interpolate(
+    (fromValue >> shift) & 0xff,
+    (toValue >> shift) & 0xff,
+    progress
+  )).toString(16).padStart(2, '0')).join('')}`
+}
+
+const interpolateAvatarAnimationResourceValue = (
+  resource: AvatarAnimationResourceClaim,
+  from: AvatarAnimationResourceValue,
+  to: AvatarAnimationResourceValue,
+  progress: number
+): AvatarAnimationResourceValue => {
+  if (progress <= 0) return from
+  if (progress >= 1) return to
+  if (typeof from === 'number' && typeof to === 'number') return interpolate(from, to, progress)
+  if (
+    typeof from === 'string' && typeof to === 'string' &&
+    /^#[\da-f]{6}$/iu.test(from) && /^#[\da-f]{6}$/iu.test(to)
+  ) return interpolateAvatarAnimationHexColor(from, to, progress)
+  if (resource.startsWith('aux:')) {
+    return interpolateAnimationEntityParts(
+      [from as AvatarAnimationEntityPart],
+      [to as AvatarAnimationEntityPart],
+      progress
+    )![0]!
+  }
+  if (resource.startsWith('shape:')) {
+    return interpolateAnimationShapes(
+      [from as AvatarAnimationShape],
+      [to as AvatarAnimationShape],
+      progress
+    )![0]!
+  }
+  if (resource.endsWith('.shapeMorph')) {
+    const result = interpolatePartShapeMorphs(
+      { value: from as AvatarEntityPartShapeMorph },
+      { value: to as AvatarEntityPartShapeMorph },
+      progress
+    )
+    return result!.value!
+  }
+  return progress < .5 ? from : to
+}
+
+const resolveAvatarAnimationSparseState = (
+  clip: AvatarAnimationClip,
+  elapsedMs: number,
+  options: AvatarAnimationResolveOptions
+): ResolvedAvatarAnimationSparseState => {
+  const authored = [...clip.keyframes].sort((a, b) => a.atMs - b.atMs)
+  const ordered: readonly AvatarAnimationKeyframe[] = authored[0]?.atMs > 0
     ? [{ atMs: 0, easing: authored[0]!.easing, patch: {} }, ...authored]
     : authored
+  const buildStates = (
+    initial: ReadonlyMap<AvatarAnimationResourceClaim, AvatarAnimationResourceValue>
+  ) => {
+    const resolved: ReadonlyMap<AvatarAnimationResourceClaim, AvatarAnimationResourceValue>[] = []
+    let state = new Map(initial)
+    ordered.forEach(frame => {
+      state = applyPatchToResourceMap(state, frame.patch)
+      resolved.push(state)
+    })
+    return resolved
+  }
+  let states = buildStates(new Map())
+  if (clip.playback === 'loop') states = buildStates(states.at(-1) ?? new Map())
   const requested = Math.max(elapsedMs, 0)
   const finished = clip.playback === 'once' && requested >= clip.durationMs
   const timeline = clip.playback === 'loop'
     ? requested % clip.durationMs
     : Math.min(requested, clip.durationMs)
-  let currentIndex = 0
+  let fromIndex = 0
   ordered.forEach((frame, index) => {
-    if (frame.atMs <= timeline) currentIndex = index
+    if (frame.atMs <= timeline) fromIndex = index
   })
-  const fromFrame = ordered[currentIndex]!
-  const nextFrame = ordered[currentIndex + 1]
-  const fromScene = applyAvatarScenePatch(definition.scene, fromFrame.patch)
+  const fromFrame = ordered[fromIndex]!
+  const nextFrame = ordered[fromIndex + 1] ?? (clip.playback === 'loop' ? ordered[0] : undefined)
+  const fromState = states[fromIndex] ?? new Map()
   if (nextFrame == null) {
-    if (clip.playback === 'once') {
-      return { elapsedMs: timeline, finished, progress: 1, scene: fromScene }
+    const parameterized = new Map(fromState)
+    for (const [resource, value] of parameterized) {
+      if (!resource.startsWith('aux:')) continue
+      const resolved = resolveParameterizedAuxiliaryParts(clip, [value as AvatarAnimationEntityPart], options.parameterValues)
+      parameterized.set(resource, resolved![0]!)
     }
-    const toFrame = ordered[0]!
-    const span = Math.max(clip.durationMs - fromFrame.atMs + toFrame.atMs, 1)
-    const progress = easeAvatarAnimationProgress((timeline - fromFrame.atMs) / span, toFrame.easing)
+    const writes = [...parameterized.keys()].sort()
+    assertAvatarAnimationClaims(clip.resourceClaims, writes)
     return {
       elapsedMs: timeline,
-      finished: false,
-      progress,
-      scene: interpolateScene(fromScene, applyAvatarScenePatch(definition.scene, toFrame.patch), progress)
+      finished,
+      progress: 1,
+      resources: parameterized,
+      resourceWeights: new Map(writes.map(resource => [resource, 1]))
     }
   }
-  const span = Math.max(nextFrame.atMs - fromFrame.atMs, 1)
-  const progress = easeAvatarAnimationProgress((timeline - fromFrame.atMs) / span, nextFrame.easing)
+  const toIndex = fromIndex + 1 < ordered.length ? fromIndex + 1 : 0
+  const toState = states[toIndex] ?? new Map()
+  const span = Math.max(
+    toIndex === 0
+      ? clip.durationMs - fromFrame.atMs + nextFrame.atMs
+      : nextFrame.atMs - fromFrame.atMs,
+    1
+  )
+  const rawProgress = toIndex === 0
+    ? (timeline - fromFrame.atMs) / span
+    : (timeline - fromFrame.atMs) / span
+  const progress = easeAvatarAnimationProgress(rawProgress, nextFrame.easing)
+  const resources = new Map<AvatarAnimationResourceClaim, AvatarAnimationResourceValue>()
+  const resourceWeights = new Map<AvatarAnimationResourceClaim, number>()
+  const keys = new Set([...fromState.keys(), ...toState.keys()])
+  keys.forEach(resource => {
+    const from = fromState.get(resource)
+    const to = toState.get(resource)
+    if (from != null && to != null) {
+      resources.set(resource, interpolateAvatarAnimationResourceValue(resource, from, to, progress))
+      resourceWeights.set(resource, 1)
+    } else if (from != null) {
+      resources.set(resource, from)
+      resourceWeights.set(resource, 1 - progress)
+    } else if (to != null) {
+      resources.set(resource, to)
+      resourceWeights.set(resource, progress)
+    }
+  })
+  for (const [resource, value] of resources) {
+    if (!resource.startsWith('aux:')) continue
+    const resolved = resolveParameterizedAuxiliaryParts(clip, [value as AvatarAnimationEntityPart], options.parameterValues)
+    resources.set(resource, resolved![0]!)
+  }
+  const writes = [...resources.keys()].filter(resource => (resourceWeights.get(resource) ?? 0) > 0).sort()
+  assertAvatarAnimationClaims(clip.resourceClaims, writes)
+  return { elapsedMs: timeline, finished, progress, resources, resourceWeights }
+}
+
+interface MutableAvatarAnimationComposition {
+  auxiliaryParts: AvatarAnimationEntityPart[]
+  auxiliaryShapes: AvatarAnimationShape[]
+  partShapeMorphs: Record<string, AvatarEntityPartShapeMorph>
+  scene: AvatarScene
+}
+
+const createAvatarAnimationComposition = (definition: AvatarDefinition): MutableAvatarAnimationComposition => ({
+  auxiliaryParts: [],
+  auxiliaryShapes: [],
+  partShapeMorphs: {},
+  scene: {
+    ...definition.scene,
+    effects: {
+      ...definition.scene.effects,
+      colorGrade: { ...definition.scene.effects.colorGrade }
+    },
+    entity: {
+      ...definition.scene.entity,
+      parts: definition.scene.entity.parts.map(part => ({ ...part }))
+    },
+    face: {
+      ...definition.scene.face,
+      eyeHighlight: { ...definition.scene.face.eyeHighlight }
+    },
+    view: { ...definition.scene.view }
+  }
+})
+
+const blendAvatarAnimationValue = (
+  lower: AvatarAnimationParameterValue,
+  upper: AvatarAnimationParameterValue,
+  weight: number
+) => {
+  if (weight <= 0) return lower
+  if (weight >= 1) return upper
+  if (typeof lower === 'number' && typeof upper === 'number') return interpolate(lower, upper, weight)
+  if (
+    typeof lower === 'string' && typeof upper === 'string' &&
+    /^#[\da-f]{6}$/iu.test(lower) && /^#[\da-f]{6}$/iu.test(upper)
+  ) return interpolateAvatarAnimationHexColor(lower, upper, weight)
+  return weight < .5 ? lower : upper
+}
+
+const readAvatarAnimationResource = (
+  composition: MutableAvatarAnimationComposition,
+  resource: AvatarAnimationResourceClaim
+): AvatarAnimationResourceValue | undefined => {
+  const scene = composition.scene
+  if (resource.endsWith('.shapeMorph')) {
+    return composition.partShapeMorphs[resource.slice('part:'.length, -'.shapeMorph'.length)]
+  }
+  if (resource.startsWith('view:')) {
+    const key = resource.slice('view:'.length) as keyof Pick<AvatarView, 'pitch' | 'positionX' | 'positionY' | 'yaw'>
+    return scene.view[key]
+  }
+  if (resource.startsWith('effect:colorGrade.')) {
+    return scene.effects.colorGrade[resource.slice('effect:colorGrade.'.length) as keyof AvatarColorGrade]
+  }
+  if (resource.startsWith('part:') && resource.includes('.transform.')) {
+    const [partId, field] = resource.slice('part:'.length).split('.transform.') as [string, keyof AvatarEntityPartTransform]
+    const part = scene.entity.parts.find(candidate => candidate.id === partId)
+    if (part == null) return undefined
+    return field === 'rotationZ'
+      ? part.rotationZ ?? 0
+      : field === 'scaleZ'
+      ? part.scaleZ ?? Math.min(part.scaleX, part.scaleY)
+      : part[field] as number
+  }
+  if (!resource.startsWith('face:')) return undefined
+  const face = scene.face as unknown as Record<string, AvatarAnimationParameterValue>
+  const field = resource.slice('face:'.length)
+  const eyeField = field.match(/^(leftEye|rightEye)\.(height|rotation|shape|width)$/u)
+  if (eyeField != null) {
+    const prefix = eyeField[1]!
+    const suffix = eyeField[2]!
+    const key = `${prefix}${suffix[0]!.toUpperCase()}${suffix.slice(1)}`
+    return face[key] ?? face[suffix === 'shape' ? 'eyeShape' : suffix]
+  }
+  if (field.startsWith('eyeHighlight.')) {
+    return (scene.face.eyeHighlight as unknown as Record<string, AvatarAnimationParameterValue>)[
+      field.slice('eyeHighlight.'.length)
+    ]
+  }
+  return face[field]
+}
+
+const applyAvatarAnimationResource = (
+  composition: MutableAvatarAnimationComposition,
+  resource: AvatarAnimationResourceClaim,
+  value: AvatarAnimationResourceValue,
+  weight: number,
+  namespace?: string,
+  lowerValue?: AvatarAnimationResourceValue
+) => {
+  if (weight <= 0) return
+  if (resource.startsWith('aux:')) {
+    const item = value as AvatarAnimationEntityPart
+    composition.auxiliaryParts.push({
+      ...item,
+      opacity: blendAvatarAnimationValue(0, item.opacity, weight) as number,
+      part: {
+        ...item.part,
+        id: namespace == null
+          ? item.part.id
+          : `${encodeAvatarAnimationIdComponent(namespace)}/${encodeAvatarAnimationIdComponent(item.part.id)}`
+      }
+    })
+    return
+  }
+  if (resource.startsWith('shape:')) {
+    const shape = value as AvatarAnimationShape
+    composition.auxiliaryShapes.push({
+      ...shape,
+      id: namespace == null
+        ? shape.id
+        : `${encodeAvatarAnimationIdComponent(namespace)}/${encodeAvatarAnimationIdComponent(shape.id)}`,
+      opacity: blendAvatarAnimationValue(0, shape.opacity, weight) as number
+    })
+    return
+  }
+  if (resource.endsWith('.shapeMorph')) {
+    const partId = resource.slice('part:'.length, -'.shapeMorph'.length)
+    const upper = value as AvatarEntityPartShapeMorph
+    const lower = lowerValue as AvatarEntityPartShapeMorph | undefined
+    composition.partShapeMorphs[partId] = lower == null
+      ? { ...upper, progress: blendAvatarAnimationValue(0, upper.progress, weight) as number }
+      : {
+          fromShape: weight < .5 ? lower.fromShape : upper.fromShape,
+          progress: blendAvatarAnimationValue(lower.progress, upper.progress, weight) as number,
+          toShape: weight < .5 ? lower.toShape : upper.toShape
+        }
+    return
+  }
+  const scene = composition.scene
+  if (resource.startsWith('view:')) {
+    const key = resource.slice('view:'.length) as keyof Pick<AvatarView, 'pitch' | 'positionX' | 'positionY' | 'yaw'>
+    ;(scene.view as unknown as Record<string, AvatarAnimationParameterValue>)[key] = blendAvatarAnimationValue(
+      (lowerValue ?? scene.view[key]) as AvatarAnimationParameterValue,
+      value as AvatarAnimationParameterValue,
+      weight
+    )
+    return
+  }
+  if (resource.startsWith('effect:colorGrade.')) {
+    const key = resource.slice('effect:colorGrade.'.length) as keyof AvatarColorGrade
+    ;(scene.effects.colorGrade as unknown as Record<string, AvatarAnimationParameterValue>)[key] = blendAvatarAnimationValue(
+      (lowerValue ?? scene.effects.colorGrade[key]) as AvatarAnimationParameterValue,
+      value as AvatarAnimationParameterValue,
+      weight
+    )
+    return
+  }
+  if (resource.startsWith('part:') && resource.includes('.transform.')) {
+    const [partId, field] = resource.slice('part:'.length).split('.transform.') as [string, keyof AvatarEntityPartTransform]
+    const part = scene.entity.parts.find(candidate => candidate.id === partId)
+    if (part == null) return
+    const lower = (lowerValue as AvatarAnimationParameterValue | undefined) ?? (field === 'rotationZ'
+      ? part.rotationZ ?? 0
+      : field === 'scaleZ'
+      ? part.scaleZ ?? Math.min(part.scaleX, part.scaleY)
+      : part[field] as number)
+    ;(part as unknown as Record<string, number>)[field] = blendAvatarAnimationValue(
+      lower, value as number, weight
+    ) as number
+    return
+  }
+  if (!resource.startsWith('face:')) return
+  const face = scene.face as unknown as Record<string, AvatarAnimationParameterValue>
+  const field = resource.slice('face:'.length)
+  const eyeField = field.match(/^(leftEye|rightEye)\.(height|rotation|shape|width)$/u)
+  if (eyeField != null) {
+    const prefix = eyeField[1]!
+    const suffix = eyeField[2]!
+    const key = `${prefix}${suffix[0]!.toUpperCase()}${suffix.slice(1)}`
+    const fallbackKey = suffix === 'shape' ? 'eyeShape' : suffix
+    const lower = (lowerValue as AvatarAnimationParameterValue | undefined) ?? face[key] ?? face[fallbackKey]
+    face[key] = blendAvatarAnimationValue(lower!, value as AvatarAnimationParameterValue, weight)
+    return
+  }
+  if (field.startsWith('eyeHighlight.')) {
+    const key = field.slice('eyeHighlight.'.length)
+    const highlight = scene.face.eyeHighlight as unknown as Record<string, AvatarAnimationParameterValue>
+    highlight[key] = blendAvatarAnimationValue(
+      ((lowerValue as AvatarAnimationParameterValue | undefined) ?? highlight[key])!,
+      value as AvatarAnimationParameterValue,
+      weight
+    )
+    return
+  }
+  face[field] = blendAvatarAnimationValue(
+    ((lowerValue as AvatarAnimationParameterValue | undefined) ?? face[field])!,
+    value as AvatarAnimationParameterValue,
+    weight
+  )
+}
+
+const encodeAvatarAnimationIdComponent = (value: string) => {
+  let encoded = ''
+  for (let index = 0; index < value.length; index += 1) {
+    const codeUnit = value.charCodeAt(index)
+    if (codeUnit >= 0xd800 && codeUnit <= 0xdbff) {
+      const nextCodeUnit = value.charCodeAt(index + 1)
+      if (nextCodeUnit >= 0xdc00 && nextCodeUnit <= 0xdfff) {
+        encoded += encodeURIComponent(value.slice(index, index + 2))
+        index += 1
+      } else encoded += `%u${codeUnit.toString(16).toUpperCase().padStart(4, '0')}`
+    } else if (codeUnit >= 0xdc00 && codeUnit <= 0xdfff) {
+      encoded += `%u${codeUnit.toString(16).toUpperCase().padStart(4, '0')}`
+    } else encoded += encodeURIComponent(value[index]!)
+  }
+  return encoded
+}
+
+const namespaceAvatarAnimationResource = (
+  resource: AvatarAnimationResourceClaim,
+  namespace?: string
+): AvatarAnimationResourceClaim => {
+  if (namespace == null) return resource
+  if (resource.startsWith('aux:')) {
+    return `aux:${encodeAvatarAnimationIdComponent(namespace)}/${encodeAvatarAnimationIdComponent(resource.slice('aux:'.length))}`
+  }
+  if (resource.startsWith('shape:')) {
+    return `shape:${encodeAvatarAnimationIdComponent(namespace)}/${encodeAvatarAnimationIdComponent(resource.slice('shape:'.length))}`
+  }
+  return resource
+}
+
+const createResolvedAvatarAnimationFrame = (
+  definition: AvatarDefinition,
+  composition: MutableAvatarAnimationComposition,
+  patch: AvatarScenePatch,
+  elapsedMs: number,
+  finished: boolean,
+  progress: number,
+  resourceWeights: ReadonlyMap<AvatarAnimationResourceClaim, number>
+): ResolvedAvatarAnimationFrame => {
+  const partTransforms = resolveScenePartTransforms(definition.scene.entity.parts, composition.scene.entity.parts)
+  const weights = Object.fromEntries(resourceWeights)
+  const writes = [...resourceWeights.entries()].filter(([, weight]) => weight > 0).map(([resource]) => resource).sort()
   return {
-    elapsedMs: timeline,
+    ...(composition.auxiliaryParts.length === 0 ? {} : { auxiliaryParts: composition.auxiliaryParts }),
+    ...(composition.auxiliaryShapes.length === 0 ? {} : { auxiliaryShapes: composition.auxiliaryShapes }),
+    elapsedMs,
     finished,
+    ...(Object.keys(composition.partShapeMorphs).length === 0
+      ? {}
+      : { partShapeMorphs: composition.partShapeMorphs }),
+    ...(partTransforms == null ? {} : { partTransforms }),
+    patch,
     progress,
-    scene: interpolateScene(fromScene, applyAvatarScenePatch(definition.scene, nextFrame.patch), progress)
+    resourceWeights: weights,
+    scene: composition.scene,
+    writes
   }
 }
+
+const patchFromAvatarAnimationResources = (
+  resources: ReadonlyMap<AvatarAnimationResourceClaim, AvatarAnimationResourceValue>
+): AvatarScenePatch => {
+  const auxiliaryParts: AvatarAnimationEntityPart[] = []
+  const auxiliaryShapes: AvatarAnimationShape[] = []
+  const colorGrade: Record<string, number> = {}
+  const face: Record<string, unknown> = {}
+  const partShapeMorphs: Record<string, AvatarEntityPartShapeMorph> = {}
+  const partTransforms: Record<string, Record<string, number>> = {}
+  const view: Record<string, number> = {}
+  resources.forEach((value, resource) => {
+    if (resource.startsWith('aux:')) auxiliaryParts.push(value as AvatarAnimationEntityPart)
+    else if (resource.startsWith('shape:')) auxiliaryShapes.push(value as AvatarAnimationShape)
+    else if (resource.startsWith('effect:colorGrade.')) {
+      colorGrade[resource.slice('effect:colorGrade.'.length)] = value as number
+    } else if (resource.startsWith('view:')) view[resource.slice('view:'.length)] = value as number
+    else if (resource.endsWith('.shapeMorph')) {
+      partShapeMorphs[resource.slice('part:'.length, -'.shapeMorph'.length)] = value as AvatarEntityPartShapeMorph
+    } else if (resource.startsWith('part:') && resource.includes('.transform.')) {
+      const [partId, field] = resource.slice('part:'.length).split('.transform.')
+      partTransforms[partId!] ??= {}
+      partTransforms[partId!]![field!] = value as number
+    } else if (resource.startsWith('face:')) {
+      const field = resource.slice('face:'.length)
+      const eyeField = field.match(/^(leftEye|rightEye)\.(height|rotation|shape|width)$/u)
+      if (eyeField != null) {
+        const suffix = eyeField[2]!
+        face[`${eyeField[1]}${suffix[0]!.toUpperCase()}${suffix.slice(1)}`] = value
+      } else if (field.startsWith('eyeHighlight.')) {
+        const eyeHighlight = (face.eyeHighlight ??= {}) as Record<string, unknown>
+        eyeHighlight[field.slice('eyeHighlight.'.length)] = value
+      } else face[field] = value
+    }
+  })
+  return {
+    ...(auxiliaryParts.length === 0 ? {} : { auxiliaryParts }),
+    ...(auxiliaryShapes.length === 0 ? {} : { auxiliaryShapes }),
+    ...(Object.keys(colorGrade).length === 0 ? {} : { colorGrade }),
+    ...(Object.keys(face).length === 0 ? {} : { face: face as Partial<AvatarFace> }),
+    ...(Object.keys(partShapeMorphs).length === 0 ? {} : { partShapeMorphs }),
+    ...(Object.keys(partTransforms).length === 0 ? {} : { partTransforms }),
+    ...(Object.keys(view).length === 0 ? {} : { view })
+  }
+}
+
+export const resolveAvatarAnimationFrame = (
+  definition: AvatarDefinition,
+  clip: AvatarAnimationClip,
+  elapsedMs: number,
+  options: AvatarAnimationResolveOptions = {}
+): ResolvedAvatarAnimationFrame => {
+  const sparse = resolveAvatarAnimationSparseState(clip, elapsedMs, options)
+  const composition = createAvatarAnimationComposition(definition)
+  const lowerValues = new Map([...sparse.resources.keys()].map(resource => [
+    resource,
+    readAvatarAnimationResource(composition, resource)
+  ]))
+  sparse.resources.forEach((value, resource) => {
+    applyAvatarAnimationResource(
+      composition,
+      resource,
+      value,
+      sparse.resourceWeights.get(resource) ?? 0,
+      undefined,
+      lowerValues.get(resource)
+    )
+  })
+  return createResolvedAvatarAnimationFrame(
+    definition,
+    composition,
+    patchFromAvatarAnimationResources(sparse.resources),
+    sparse.elapsedMs,
+    sparse.finished,
+    sparse.progress,
+    sparse.resourceWeights
+  )
+}
+
+export const MAX_AVATAR_ANIMATION_TRACKS = 16
+
+export const validateAvatarAnimationTracks = (tracks: readonly AvatarAnimationTrack[]) => {
+  if (tracks.length > MAX_AVATAR_ANIMATION_TRACKS) {
+    throw new TypeError(`OneWorks Avatar supports at most ${MAX_AVATAR_ANIMATION_TRACKS} animation tracks`)
+  }
+  const ids = new Set<string>()
+  tracks.forEach(track => {
+    if (
+      track.trackId.trim().length === 0 || track.trackId !== track.trackId.trim() || ids.has(track.trackId) ||
+      !Number.isFinite(track.elapsedMs) || track.elapsedMs < 0 ||
+      !Number.isFinite(track.speed ?? 1) || (track.speed ?? 1) <= 0 ||
+      !Number.isFinite(track.weight ?? 1) || (track.weight ?? 1) < 0 || (track.weight ?? 1) > 1 ||
+      (track.muted !== undefined && typeof track.muted !== 'boolean') ||
+      (track.preserveAuxiliaryPartIds !== undefined && typeof track.preserveAuxiliaryPartIds !== 'boolean') ||
+      (track.solo !== undefined && typeof track.solo !== 'boolean')
+    ) throw new TypeError('Invalid OneWorks Avatar animation track')
+    ids.add(track.trackId)
+  })
+  return tracks
+}
+
+export const resolveAvatarAnimationTracks = (
+  definition: AvatarDefinition,
+  tracks: readonly AvatarAnimationTrack[]
+): ResolvedAvatarAnimationFrame => {
+  validateAvatarAnimationTracks(tracks)
+  const hasSolo = tracks.some(track => track.solo === true && track.muted !== true)
+  const active = tracks.filter(track => track.muted !== true && (!hasSolo || track.solo === true))
+  const composition = createAvatarAnimationComposition(definition)
+  const combinedWeights = new Map<AvatarAnimationResourceClaim, number>()
+  const trackResourceWeights = new Map<
+    string,
+    Readonly<Record<AvatarAnimationResourceClaim, number>>
+  >()
+  const trackWrites = new Map<string, readonly AvatarAnimationResourceClaim[]>()
+  let elapsedMs = 0
+  let finished = active.length > 0
+  let progress = 0
+  active.forEach(track => {
+    const sparse = resolveAvatarAnimationSparseState(
+      track.clip,
+      track.elapsedMs * (track.speed ?? 1),
+      { parameterValues: track.parameterValues }
+    )
+    const trackWeight = track.weight ?? 1
+    const namespace = track.preserveAuxiliaryPartIds === true ? undefined : track.trackId
+    const effectiveWeights = new Map<AvatarAnimationResourceClaim, number>()
+    sparse.resourceWeights.forEach((weight, resource) => {
+      const effectiveWeight = weight * trackWeight
+      if (effectiveWeight <= 0) return
+      effectiveWeights.set(namespaceAvatarAnimationResource(resource, namespace), effectiveWeight)
+    })
+    trackResourceWeights.set(track.trackId, Object.fromEntries(effectiveWeights))
+    trackWrites.set(track.trackId, [...effectiveWeights.keys()].sort())
+    const lowerValues = new Map([...sparse.resources.keys()].map(resource => [
+      resource,
+      readAvatarAnimationResource(composition, resource)
+    ]))
+    sparse.resources.forEach((value, resource) => {
+      const weight = (sparse.resourceWeights.get(resource) ?? 0) * trackWeight
+      applyAvatarAnimationResource(
+        composition,
+        resource,
+        value,
+        weight,
+        namespace,
+        lowerValues.get(resource)
+      )
+      if (weight > 0) combinedWeights.set(namespaceAvatarAnimationResource(resource, namespace), weight)
+    })
+    elapsedMs = Math.max(elapsedMs, sparse.elapsedMs)
+    finished = finished && sparse.finished
+    progress = Math.max(progress, sparse.progress)
+  })
+  const patch: AvatarScenePatch = {
+    ...(composition.auxiliaryParts.length === 0 ? {} : { auxiliaryParts: composition.auxiliaryParts }),
+    ...(composition.auxiliaryShapes.length === 0 ? {} : { auxiliaryShapes: composition.auxiliaryShapes }),
+    ...(Object.keys(composition.partShapeMorphs).length === 0
+      ? {}
+      : { partShapeMorphs: composition.partShapeMorphs })
+  }
+  return {
+    ...createResolvedAvatarAnimationFrame(
+    definition,
+    composition,
+    patch,
+    elapsedMs,
+    finished,
+    progress,
+    combinedWeights
+    ),
+    trackResourceWeights: Object.fromEntries(trackResourceWeights),
+    trackWrites: Object.fromEntries(trackWrites)
+  }
+}
+
+export const AVATAR_ANIMATION_TIMELINE_VERSION = 1 as const
+export const MAX_AVATAR_ANIMATION_TIMELINE_CLIPS = 256
+
+const avatarAnimationTimelineClipEnd = (clip: AvatarAnimationTimelineClipInstance) => (
+  clip.startMs + clip.durationMs
+)
+
+export const getAvatarAnimationTimelineContentEndMs = (
+  timeline: AvatarAnimationTimeline
+) => Math.max(
+  0,
+  ...timeline.tracks.flatMap(track => track.clips.map(avatarAnimationTimelineClipEnd))
+)
+
+const avatarAnimationTimelineClipsOverlap = (
+  left: AvatarAnimationTimelineClipInstance,
+  right: AvatarAnimationTimelineClipInstance
+) => left.startMs < avatarAnimationTimelineClipEnd(right) &&
+  right.startMs < avatarAnimationTimelineClipEnd(left)
+
+const isSerializableAvatarAnimationParameterValues = (value: unknown) => (
+  value === undefined || isRecord(value) && Object.entries(value).every(([id, field]) => (
+    id.trim().length > 0 && (
+      typeof field === 'boolean' || typeof field === 'string' || isFiniteNumber(field)
+    )
+  ))
+)
+
+const isAvatarAnimationTimelineSource = (value: unknown): value is AvatarAnimationTimelineClipSource => {
+  if (!isRecord(value) || value.type !== 'inline' && value.type !== 'preset') return false
+  if (value.type === 'inline') {
+    return hasOnlyKeys(value, ['clip', 'type', 'version']) && value.version === 1 &&
+      isAvatarAnimationClip(value.clip)
+  }
+  return hasOnlyKeys(value, ['fallback', 'presetId', 'presetVersion', 'type']) &&
+    value.fallback === 'skip' && isString(value.presetId) && value.presetId.trim() === value.presetId &&
+    value.presetId.length > 0 && isFiniteNumber(value.presetVersion) &&
+    Number.isSafeInteger(value.presetVersion) && value.presetVersion > 0
+}
+
+const isAvatarAnimationTimelineFrameSequence = (
+  value: unknown
+): value is AvatarAnimationTimelineFrameSequence => {
+  if (!isRecord(value) || !hasOnlyKeys(value, ['firstFrameIndex', 'lastFrameIndex', 'loop']) ||
+    !hasOwnKeys(value, ['firstFrameIndex', 'lastFrameIndex']) ||
+    !isFiniteNumber(value.firstFrameIndex) || !Number.isSafeInteger(value.firstFrameIndex) ||
+    !isFiniteNumber(value.lastFrameIndex) || !Number.isSafeInteger(value.lastFrameIndex) ||
+    value.firstFrameIndex < 0 || value.lastFrameIndex < value.firstFrameIndex) return false
+  if (value.loop === undefined) return true
+  if (!isRecord(value.loop) ||
+    !hasOnlyKeys(value.loop, ['endFrameIndex', 'iterations', 'startFrameIndex']) ||
+    !hasOwnKeys(value.loop, ['endFrameIndex', 'iterations', 'startFrameIndex']) ||
+    !isFiniteNumber(value.loop.startFrameIndex) || !Number.isSafeInteger(value.loop.startFrameIndex) ||
+    !isFiniteNumber(value.loop.endFrameIndex) || !Number.isSafeInteger(value.loop.endFrameIndex) ||
+    value.loop.startFrameIndex < value.firstFrameIndex ||
+    value.loop.endFrameIndex <= value.loop.startFrameIndex ||
+    value.loop.endFrameIndex > value.lastFrameIndex) return false
+  return value.loop.iterations === 'infinite' || (
+    isFiniteNumber(value.loop.iterations) && Number.isSafeInteger(value.loop.iterations) &&
+    value.loop.iterations >= 2
+  )
+}
+
+interface ResolvedAvatarAnimationTimelineFrameSequence {
+  readonly firstAtMs: number
+  readonly lastAtMs: number
+  readonly loop?: {
+    readonly endAtMs: number
+    readonly iterations: number | 'infinite'
+    readonly spanMs: number
+    readonly startAtMs: number
+  }
+  readonly virtualDurationMs: number
+}
+
+const resolveAvatarAnimationTimelineFrameSequenceDefinition = (
+  sequence: AvatarAnimationTimelineFrameSequence,
+  sourceClip: AvatarAnimationClip
+): ResolvedAvatarAnimationTimelineFrameSequence => {
+  const first = sourceClip.keyframes[sequence.firstFrameIndex]
+  const last = sourceClip.keyframes[sequence.lastFrameIndex]
+  if (first == null || last == null) {
+    throw new TypeError('Invalid OneWorks Avatar animation timeline frame sequence')
+  }
+  if (sequence.loop == null) {
+    return {
+      firstAtMs: first.atMs,
+      lastAtMs: last.atMs,
+      virtualDurationMs: last.atMs - first.atMs
+    }
+  }
+  const loopStart = sourceClip.keyframes[sequence.loop.startFrameIndex]
+  const loopEnd = sourceClip.keyframes[sequence.loop.endFrameIndex]
+  if (loopStart == null || loopEnd == null || loopEnd.atMs <= loopStart.atMs) {
+    throw new TypeError('Invalid OneWorks Avatar animation timeline frame loop')
+  }
+  const spanMs = loopEnd.atMs - loopStart.atMs
+  const loopDurationMs = sequence.loop.iterations === 'infinite'
+    ? Infinity
+    : spanMs * (sequence.loop.iterations * 2 - 1)
+  return {
+    firstAtMs: first.atMs,
+    lastAtMs: last.atMs,
+    loop: {
+      endAtMs: loopEnd.atMs,
+      iterations: sequence.loop.iterations,
+      spanMs,
+      startAtMs: loopStart.atMs
+    },
+    virtualDurationMs: loopStart.atMs - first.atMs + loopDurationMs +
+      (sequence.loop.iterations === 'infinite' ? 0 : last.atMs - loopEnd.atMs)
+  }
+}
+
+export interface AvatarAnimationTimelineSequenceNode {
+  readonly sequenceTimeMs: number
+  readonly sourceFrameIndex: number
+}
+
+const MAX_AVATAR_ANIMATION_TIMELINE_SEQUENCE_NODES = 256
+
+const sampleIntegerRange = (start: number, end: number, limit: number): readonly number[] => {
+  if (end < start || limit <= 0) return []
+  const length = end - start + 1
+  if (length <= limit) return Array.from({ length }, (_, index) => start + index)
+  return Array.from({ length: limit }, (_, index) => (
+    start + Math.round((end - start) * (index / Math.max(limit - 1, 1)))
+  ))
+}
+
+const limitAvatarAnimationTimelineSequenceNodes = (
+  nodes: readonly AvatarAnimationTimelineSequenceNode[]
+): readonly AvatarAnimationTimelineSequenceNode[] => {
+  const ordered = [...nodes].sort((first, second) => first.sequenceTimeMs - second.sequenceTimeMs)
+  const unique = ordered.filter((node, index) => index === 0 || (
+    node.sequenceTimeMs !== ordered[index - 1]!.sequenceTimeMs ||
+    node.sourceFrameIndex !== ordered[index - 1]!.sourceFrameIndex
+  ))
+  if (unique.length <= MAX_AVATAR_ANIMATION_TIMELINE_SEQUENCE_NODES) return unique
+  return sampleIntegerRange(
+    0,
+    unique.length - 1,
+    MAX_AVATAR_ANIMATION_TIMELINE_SEQUENCE_NODES
+  ).map(index => unique[index]!)
+}
+
+export const resolveAvatarAnimationTimelineSequenceNodes = (
+  clip: AvatarAnimationTimelineClipInstance,
+  sourceClip: AvatarAnimationClip
+): readonly AvatarAnimationTimelineSequenceNode[] => {
+  const playback = clip.playback ?? sourceClip.playback
+  const visibleStartMs = clip.sourceOffsetMs
+  const visibleEndMs = clip.sourceOffsetMs + clip.durationMs * clip.playbackRate
+  const nodes: AvatarAnimationTimelineSequenceNode[] = []
+  const push = (sourceFrameIndex: number, sequenceTimeMs: number) => {
+    if (
+      sequenceTimeMs >= visibleStartMs &&
+      sequenceTimeMs <= visibleEndMs
+    ) {
+      nodes.push({ sequenceTimeMs, sourceFrameIndex })
+    }
+  }
+  const pushLoopingSequence = (
+    sourceFrameIndices: readonly number[],
+    sequenceTimeForFrame: (sourceFrameIndex: number) => number,
+    cycleDurationMs: number
+  ) => {
+    if (cycleDurationMs <= 0) return
+    const firstCycle = Math.max(Math.floor(visibleStartMs / cycleDurationMs) - 1, 0)
+    const lastCycle = Math.ceil(visibleEndMs / cycleDurationMs)
+    const cycleSampleLimit = Math.max(
+      Math.floor(MAX_AVATAR_ANIMATION_TIMELINE_SEQUENCE_NODES / Math.max(sourceFrameIndices.length, 1)),
+      2
+    )
+    const sampledCycles = new Set(sampleIntegerRange(firstCycle, lastCycle, cycleSampleLimit))
+    for (let offset = 0; offset <= 2; offset += 1) {
+      if (firstCycle + offset <= lastCycle) sampledCycles.add(firstCycle + offset)
+      if (lastCycle - offset >= firstCycle) sampledCycles.add(lastCycle - offset)
+    }
+    for (const cycle of [...sampledCycles].sort((first, second) => first - second)) {
+      const cycleStartMs = cycle * cycleDurationMs
+      for (const sourceFrameIndex of sourceFrameIndices) {
+        push(sourceFrameIndex, cycleStartMs + sequenceTimeForFrame(sourceFrameIndex))
+      }
+    }
+  }
+  const sequence = clip.frameSequence
+  if (sequence == null) {
+    const sourceFrameIndices = sourceClip.keyframes.map((_, sourceFrameIndex) => sourceFrameIndex)
+    if (playback === 'loop') {
+      pushLoopingSequence(
+        sourceFrameIndices,
+        sourceFrameIndex => sourceClip.keyframes[sourceFrameIndex]!.atMs,
+        sourceClip.durationMs
+      )
+    } else {
+      for (const sourceFrameIndex of sourceFrameIndices) {
+        push(sourceFrameIndex, sourceClip.keyframes[sourceFrameIndex]!.atMs)
+      }
+    }
+    return limitAvatarAnimationTimelineSequenceNodes(nodes)
+  }
+  const resolved = resolveAvatarAnimationTimelineFrameSequenceDefinition(sequence, sourceClip)
+  if (sequence.loop == null || resolved.loop == null) {
+    const sourceFrameIndices = Array.from(
+      { length: sequence.lastFrameIndex - sequence.firstFrameIndex + 1 },
+      (_, offset) => sequence.firstFrameIndex + offset
+    )
+    if (playback === 'loop') {
+      pushLoopingSequence(
+        sourceFrameIndices,
+        sourceFrameIndex => sourceClip.keyframes[sourceFrameIndex]!.atMs - resolved.firstAtMs,
+        resolved.virtualDurationMs
+      )
+    } else {
+      for (const sourceFrameIndex of sourceFrameIndices) {
+        push(sourceFrameIndex, sourceClip.keyframes[sourceFrameIndex]!.atMs - resolved.firstAtMs)
+      }
+    }
+    return limitAvatarAnimationTimelineSequenceNodes(nodes)
+  }
+
+  for (let index = sequence.firstFrameIndex; index <= sequence.loop.startFrameIndex; index += 1) {
+    push(index, sourceClip.keyframes[index]!.atMs - resolved.firstAtMs)
+  }
+  let cursorMs = resolved.loop.startAtMs - resolved.firstAtMs
+  const requestedIterations = sequence.loop.iterations === 'infinite'
+    ? Math.max(Math.floor((visibleEndMs - cursorMs) /
+        Math.max(resolved.loop.spanMs * 2, 1)) + 1, 1)
+    : sequence.loop.iterations
+  const loopFramesPerIteration = Math.max(
+    sequence.loop.endFrameIndex - sequence.loop.startFrameIndex,
+    1
+  ) * 2
+  const iterationSampleLimit = Math.max(
+    Math.floor(MAX_AVATAR_ANIMATION_TIMELINE_SEQUENCE_NODES / loopFramesPerIteration),
+    2
+  )
+  const firstVisibleIteration = Math.min(Math.max(
+    Math.floor((visibleStartMs - cursorMs) / Math.max(resolved.loop.spanMs * 2, 1)) - 1,
+    0
+  ), requestedIterations - 1)
+  const lastVisibleIteration = Math.min(Math.max(
+    Math.floor((visibleEndMs - cursorMs) / Math.max(resolved.loop.spanMs * 2, 1)) + 1,
+    firstVisibleIteration
+  ), requestedIterations - 1)
+  const sampledIterations = new Set(sampleIntegerRange(
+    firstVisibleIteration,
+    lastVisibleIteration,
+    iterationSampleLimit
+  ))
+  for (let offset = 0; offset <= 2; offset += 1) {
+    if (firstVisibleIteration + offset <= lastVisibleIteration) {
+      sampledIterations.add(firstVisibleIteration + offset)
+    }
+    if (lastVisibleIteration - offset >= firstVisibleIteration) {
+      sampledIterations.add(lastVisibleIteration - offset)
+    }
+  }
+  for (const iteration of [...sampledIterations].sort((first, second) => first - second)) {
+    cursorMs = resolved.loop.startAtMs - resolved.firstAtMs + iteration * resolved.loop.spanMs * 2
+    for (let index = sequence.loop.startFrameIndex + 1; index <= sequence.loop.endFrameIndex; index += 1) {
+      push(index, cursorMs + sourceClip.keyframes[index]!.atMs - resolved.loop.startAtMs)
+    }
+    cursorMs += resolved.loop.spanMs
+    if (iteration === requestedIterations - 1 && sequence.loop.iterations !== 'infinite') break
+    for (let index = sequence.loop.endFrameIndex - 1; index >= sequence.loop.startFrameIndex; index -= 1) {
+      push(index, cursorMs + resolved.loop.endAtMs - sourceClip.keyframes[index]!.atMs)
+    }
+    cursorMs += resolved.loop.spanMs
+  }
+  if (sequence.loop.iterations !== 'infinite') {
+    cursorMs = resolved.loop.startAtMs - resolved.firstAtMs +
+      resolved.loop.spanMs * (sequence.loop.iterations * 2 - 1)
+    for (let index = sequence.loop.endFrameIndex + 1; index <= sequence.lastFrameIndex; index += 1) {
+      push(index, cursorMs + sourceClip.keyframes[index]!.atMs - resolved.loop.endAtMs)
+    }
+  }
+  return limitAvatarAnimationTimelineSequenceNodes(nodes)
+}
+
+const isAvatarAnimationTimelineClip = (value: unknown): value is AvatarAnimationTimelineClipInstance => {
+  if (!isRecord(value) || !hasOnlyKeys(value, [
+    'durationMs',
+    'envelope',
+    'frameSequence',
+    'instanceId',
+    'parameterValues',
+    'playback',
+    'playbackRate',
+    'preserveAuxiliaryPartIds',
+    'source',
+    'sourceOffsetMs',
+    'startMs',
+    'weight'
+  ]) || !hasOwnKeys(value, [
+    'durationMs',
+    'instanceId',
+    'playbackRate',
+    'source',
+    'sourceOffsetMs',
+    'startMs',
+    'weight'
+  ]) || !isString(value.instanceId) || value.instanceId.trim() !== value.instanceId ||
+    value.instanceId.length === 0 || !isFiniteNumber(value.startMs) || value.startMs < 0 ||
+    !isFiniteNumber(value.durationMs) || value.durationMs <= 0 ||
+    !isFiniteNumber(value.sourceOffsetMs) || value.sourceOffsetMs < 0 ||
+    !isFiniteNumber(value.playbackRate) || value.playbackRate <= 0 ||
+    !isFiniteNumber(value.weight) || value.weight < 0 || value.weight > 1 ||
+    (value.playback !== undefined && !isOneOf(value.playback, ['loop', 'once'])) ||
+    (value.preserveAuxiliaryPartIds !== undefined && !isBoolean(value.preserveAuxiliaryPartIds)) ||
+    (value.frameSequence !== undefined && !isAvatarAnimationTimelineFrameSequence(value.frameSequence)) ||
+    !isSerializableAvatarAnimationParameterValues(value.parameterValues) ||
+    !isAvatarAnimationTimelineSource(value.source)) return false
+  if (value.envelope !== undefined) {
+    if (!isRecord(value.envelope) || !hasOnlyKeys(value.envelope, ['fadeInMs', 'fadeOutMs'])) return false
+    const fadeInMs = value.envelope.fadeInMs ?? 0
+    const fadeOutMs = value.envelope.fadeOutMs ?? 0
+    if (
+      !isFiniteNumber(fadeInMs) || fadeInMs < 0 || !isFiniteNumber(fadeOutMs) || fadeOutMs < 0 ||
+      fadeInMs + fadeOutMs > value.durationMs
+    ) return false
+  }
+  if (value.source.type === 'inline') {
+    const sourceDurationMs = value.source.clip.durationMs
+    const playback = value.playback ?? value.source.clip.playback
+    if (value.frameSequence != null && value.frameSequence.lastFrameIndex >= value.source.clip.keyframes.length) {
+      return false
+    }
+    if (
+      value.frameSequence == null && (
+        value.sourceOffsetMs > sourceDurationMs ||
+        playback === 'loop' && value.sourceOffsetMs >= sourceDurationMs
+      )
+    ) return false
+    if (value.frameSequence != null) {
+      try {
+        const sequence = resolveAvatarAnimationTimelineFrameSequenceDefinition(
+          value.frameSequence,
+          value.source.clip
+        )
+        if (Number.isFinite(sequence.virtualDurationMs) && value.sourceOffsetMs > sequence.virtualDurationMs) {
+          return false
+        }
+      } catch {
+        return false
+      }
+    }
+    try {
+      resolveAvatarAnimationParameterValues(
+        value.source.clip,
+        value.parameterValues as AvatarAnimationParameterValues | undefined
+      )
+    } catch {
+      return false
+    }
+  }
+  return true
+}
+
+// Timeline values are immutable by contract. Validation is therefore cached by
+// identity so the frame evaluator can stay O(tracks * log clips); every edit
+// helper below returns a fresh timeline identity and validates that new value.
+const validatedAvatarAnimationTimelines = new WeakSet<object>()
+
+export const validateAvatarAnimationTimeline = (timeline: AvatarAnimationTimeline) => {
+  if (
+    !isRecord(timeline) || !hasOnlyKeys(timeline, ['durationMs', 'tracks', 'version']) ||
+    timeline.version !== AVATAR_ANIMATION_TIMELINE_VERSION ||
+    !isFiniteNumber(timeline.durationMs) || timeline.durationMs < 0 ||
+    !isDenseArray<AvatarAnimationTimelineTrack>(timeline.tracks) ||
+    timeline.tracks.length > MAX_AVATAR_ANIMATION_TRACKS
+  ) throw new TypeError('Invalid OneWorks Avatar animation timeline')
+  const trackIds = new Set<string>()
+  const instanceIds = new Set<string>()
+  let clipCount = 0
+  let maxEndMs = 0
+  timeline.tracks.forEach(track => {
+    if (
+      !isRecord(track) || !hasOnlyKeys(track, ['clips', 'muted', 'name', 'solo', 'trackId', 'weight']) ||
+      !isString(track.trackId) || track.trackId.trim() !== track.trackId || track.trackId.length === 0 ||
+      trackIds.has(track.trackId) || !isDenseArray<AvatarAnimationTimelineClipInstance>(track.clips) ||
+      (track.muted !== undefined && !isBoolean(track.muted)) ||
+      (track.solo !== undefined && !isBoolean(track.solo)) ||
+      (track.name !== undefined && (!isString(track.name) || track.name.trim().length === 0)) ||
+      (track.weight !== undefined && (!isFiniteNumber(track.weight) || track.weight < 0 || track.weight > 1))
+    ) throw new TypeError('Invalid OneWorks Avatar animation timeline track')
+    trackIds.add(track.trackId)
+    let previous: AvatarAnimationTimelineClipInstance | undefined
+    track.clips.forEach(clip => {
+      if (!isAvatarAnimationTimelineClip(clip) || instanceIds.has(clip.instanceId)) {
+        throw new TypeError('Invalid OneWorks Avatar animation timeline clip')
+      }
+      if (previous != null && (
+        clip.startMs < previous.startMs || avatarAnimationTimelineClipsOverlap(previous, clip)
+      )) throw new TypeError('Overlapping OneWorks Avatar animation timeline clips')
+      instanceIds.add(clip.instanceId)
+      previous = clip
+      clipCount += 1
+      maxEndMs = Math.max(maxEndMs, avatarAnimationTimelineClipEnd(clip))
+    })
+  })
+  if (clipCount > MAX_AVATAR_ANIMATION_TIMELINE_CLIPS || timeline.durationMs < maxEndMs) {
+    throw new TypeError('Invalid OneWorks Avatar animation timeline duration')
+  }
+  validatedAvatarAnimationTimelines.add(timeline)
+  return timeline
+}
+
+export const normalizeAvatarAnimationTimeline = (timeline: AvatarAnimationTimeline): AvatarAnimationTimeline => {
+  const tracks = timeline.tracks.map(track => ({
+    ...track,
+    clips: [...track.clips].sort((left, right) => (
+      left.startMs - right.startMs || left.instanceId.localeCompare(right.instanceId)
+    ))
+  }))
+  const maxEndMs = getAvatarAnimationTimelineContentEndMs({ ...timeline, tracks })
+  const normalized = {
+    ...timeline,
+    durationMs: Math.max(timeline.durationMs, maxEndMs),
+    tracks
+  }
+  validateAvatarAnimationTimeline(normalized)
+  return normalized
+}
+
+export const migrateAvatarAnimationTrackToTimeline = (
+  track: AvatarAnimationTrack
+): AvatarAnimationTimelineTrack => {
+  const playbackRate = track.speed ?? 1
+  const rawSourceOffsetMs = track.elapsedMs * playbackRate
+  const sourceOffsetMs = track.clip.playback === 'loop'
+    ? rawSourceOffsetMs % track.clip.durationMs
+    : Math.min(rawSourceOffsetMs, track.clip.durationMs)
+  return {
+    clips: [{
+      durationMs: track.clip.durationMs / playbackRate,
+      instanceId: `${track.trackId}-clip-1`,
+      parameterValues: track.parameterValues,
+      playbackRate,
+      preserveAuxiliaryPartIds: track.preserveAuxiliaryPartIds,
+      source: { clip: track.clip, type: 'inline', version: 1 },
+      sourceOffsetMs,
+      startMs: 0,
+      weight: 1
+    }],
+    muted: track.muted,
+    name: track.clip.label ?? track.trackId,
+    solo: track.solo,
+    trackId: track.trackId,
+    weight: track.weight
+  }
+}
+
+export const migrateAvatarAnimationTracksToTimeline = (
+  tracks: readonly AvatarAnimationTrack[]
+): AvatarAnimationTimeline => normalizeAvatarAnimationTimeline({
+  durationMs: Math.max(0, ...tracks.map(track => track.clip.durationMs / (track.speed ?? 1))),
+  tracks: tracks.map(migrateAvatarAnimationTrackToTimeline),
+  version: AVATAR_ANIMATION_TIMELINE_VERSION
+})
+
+const findActiveAvatarAnimationTimelineClip = (
+  clips: readonly AvatarAnimationTimelineClipInstance[],
+  timelineTimeMs: number
+) => {
+  let low = 0
+  let high = clips.length - 1
+  let candidate: AvatarAnimationTimelineClipInstance | undefined
+  while (low <= high) {
+    const middle = (low + high) >>> 1
+    const clip = clips[middle]!
+    if (clip.startMs <= timelineTimeMs) {
+      candidate = clip
+      low = middle + 1
+    } else high = middle - 1
+  }
+  return candidate != null && timelineTimeMs < avatarAnimationTimelineClipEnd(candidate)
+    ? candidate
+    : undefined
+}
+
+const resolveAvatarAnimationTimelineEnvelopeWeight = (
+  clip: AvatarAnimationTimelineClipInstance,
+  localTimeMs: number
+) => {
+  const fadeInMs = clip.envelope?.fadeInMs ?? 0
+  const fadeOutMs = clip.envelope?.fadeOutMs ?? 0
+  const fadeInWeight = fadeInMs === 0 ? 1 : Math.min(Math.max(localTimeMs / fadeInMs, 0), 1)
+  const remainingMs = clip.durationMs - localTimeMs
+  const fadeOutWeight = fadeOutMs === 0 ? 1 : Math.min(Math.max(remainingMs / fadeOutMs, 0), 1)
+  return Math.min(fadeInWeight, fadeOutWeight)
+}
+
+const resolveAvatarAnimationTimelineSourceTime = (
+  clip: AvatarAnimationTimelineClipInstance,
+  sourceClip: AvatarAnimationClip,
+  localTimeMs: number
+) => {
+  const playback = clip.playback ?? sourceClip.playback
+  if (clip.frameSequence != null) {
+    const sequence = resolveAvatarAnimationTimelineFrameSequenceDefinition(clip.frameSequence, sourceClip)
+    const rawTimeMs = clip.sourceOffsetMs + localTimeMs * clip.playbackRate
+    if (sequence.virtualDurationMs === 0) return sequence.firstAtMs
+    if (sequence.loop == null) {
+      const sequenceTimeMs = playback === 'loop'
+        ? rawTimeMs % sequence.virtualDurationMs
+        : Math.min(rawTimeMs, sequence.virtualDurationMs)
+      return sequence.firstAtMs + sequenceTimeMs
+    }
+    const prefixDurationMs = sequence.loop.startAtMs - sequence.firstAtMs
+    if (rawTimeMs <= prefixDurationMs) return sequence.firstAtMs + rawTimeMs
+    if (sequence.loop.iterations === 'infinite') {
+      const loopTimeMs = (rawTimeMs - prefixDurationMs) % (sequence.loop.spanMs * 2)
+      return loopTimeMs <= sequence.loop.spanMs
+        ? sequence.loop.startAtMs + loopTimeMs
+        : sequence.loop.endAtMs - (loopTimeMs - sequence.loop.spanMs)
+    }
+    const loopDurationMs = sequence.loop.spanMs * (sequence.loop.iterations * 2 - 1)
+    const timeAfterPrefixMs = rawTimeMs - prefixDurationMs
+    if (timeAfterPrefixMs <= loopDurationMs) {
+      const legIndex = Math.min(Math.floor(timeAfterPrefixMs / sequence.loop.spanMs),
+        sequence.loop.iterations * 2 - 2)
+      const legTimeMs = timeAfterPrefixMs - legIndex * sequence.loop.spanMs
+      return legIndex % 2 === 0
+        ? sequence.loop.startAtMs + legTimeMs
+        : sequence.loop.endAtMs - legTimeMs
+    }
+    return Math.min(
+      sequence.loop.endAtMs + timeAfterPrefixMs - loopDurationMs,
+      sequence.lastAtMs
+    )
+  }
+  if (
+    clip.sourceOffsetMs > sourceClip.durationMs ||
+    playback === 'loop' && clip.sourceOffsetMs >= sourceClip.durationMs
+  ) throw new TypeError('Invalid OneWorks Avatar animation timeline source offset')
+  const rawTimeMs = clip.sourceOffsetMs + localTimeMs * clip.playbackRate
+  return playback === 'loop'
+    ? rawTimeMs % sourceClip.durationMs
+    : Math.min(rawTimeMs, sourceClip.durationMs)
+}
+
+export const resolveAvatarAnimationTimelineFrame = (
+  definition: AvatarDefinition,
+  timeline: AvatarAnimationTimeline,
+  timelineTimeMs: number,
+  resolvePreset?: AvatarAnimationTimelinePresetResolver
+): ResolvedAvatarAnimationTimelineFrame => {
+  if (!validatedAvatarAnimationTimelines.has(timeline)) validateAvatarAnimationTimeline(timeline)
+  if (!isFiniteNumber(timelineTimeMs)) throw new TypeError('Invalid OneWorks Avatar timeline time')
+  const resolvedTimeMs = Math.min(Math.max(timelineTimeMs, 0), timeline.durationMs)
+  const hasSolo = timeline.tracks.some(track => track.solo === true && track.muted !== true)
+  const unresolvedClipIds: string[] = []
+  const active = timeline.tracks.flatMap(track => {
+    if (track.muted === true || hasSolo && track.solo !== true) return []
+    const instance = findActiveAvatarAnimationTimelineClip(track.clips, resolvedTimeMs)
+    if (instance == null) return []
+    const sourceClip = instance.source.type === 'inline'
+      ? instance.source.clip
+      : resolvePreset?.(instance.source, instance)
+    if (sourceClip == null) {
+      unresolvedClipIds.push(instance.instanceId)
+      return []
+    }
+    const localTimeMs = resolvedTimeMs - instance.startMs
+    const sourceTimeMs = resolveAvatarAnimationTimelineSourceTime(instance, sourceClip, localTimeMs)
+    const runtimeTrackId = `timeline:${encodeAvatarAnimationIdComponent(track.trackId)}:${encodeAvatarAnimationIdComponent(instance.instanceId)}`
+    return [{
+      instance,
+      runtimeTrack: {
+        clip: sourceClip,
+        elapsedMs: sourceTimeMs,
+        parameterValues: instance.parameterValues,
+        preserveAuxiliaryPartIds: instance.preserveAuxiliaryPartIds,
+        trackId: runtimeTrackId,
+        weight: (track.weight ?? 1) * instance.weight *
+          resolveAvatarAnimationTimelineEnvelopeWeight(instance, localTimeMs)
+      } satisfies AvatarAnimationTrack,
+      runtimeTrackId,
+      sourceTimeMs,
+      trackId: track.trackId
+    }]
+  })
+  const frame = resolveAvatarAnimationTracks(definition, active.map(item => item.runtimeTrack))
+  return {
+    ...frame,
+    activeClips: active.map(item => ({
+      instanceId: item.instance.instanceId,
+      resourceWeights: frame.trackResourceWeights?.[item.runtimeTrackId] ?? {},
+      sourceTimeMs: item.sourceTimeMs,
+      trackId: item.trackId,
+      writes: frame.trackWrites?.[item.runtimeTrackId] ?? []
+    })),
+    timelineTimeMs: resolvedTimeMs,
+    unresolvedClipIds
+  }
+}
+
+const clampAvatarAnimationTimelineEnvelope = (
+  envelope: AvatarAnimationTimelineEnvelope | undefined,
+  durationMs: number
+) => {
+  if (envelope == null) return undefined
+  const fadeInMs = Math.max(envelope.fadeInMs ?? 0, 0)
+  const fadeOutMs = Math.max(envelope.fadeOutMs ?? 0, 0)
+  const total = fadeInMs + fadeOutMs
+  const scale = total > durationMs && total > 0 ? durationMs / total : 1
+  const resolved = { fadeInMs: fadeInMs * scale, fadeOutMs: fadeOutMs * scale }
+  return resolved.fadeInMs === 0 && resolved.fadeOutMs === 0 ? undefined : resolved
+}
+
+const getAvatarAnimationTimelineSnapPoints = (
+  timeline: AvatarAnimationTimeline,
+  excludedInstanceId: string,
+  playheadMs?: number
+) => [
+  0,
+  ...(playheadMs == null ? [] : [playheadMs]),
+  ...timeline.tracks.flatMap(track => track.clips.flatMap(clip => (
+    clip.instanceId === excludedInstanceId ? [] : [clip.startMs, avatarAnimationTimelineClipEnd(clip)]
+  )))
+]
+
+const snapAvatarAnimationTimelineRange = (
+  startMs: number,
+  durationMs: number,
+  points: readonly number[],
+  thresholdMs: number
+) => {
+  let bestDelta = 0
+  let bestDistance = Infinity
+  for (const point of points) {
+    for (const edge of [startMs, startMs + durationMs]) {
+      const delta = point - edge
+      const distance = Math.abs(delta)
+      if (distance <= thresholdMs && distance < bestDistance) {
+        bestDelta = delta
+        bestDistance = distance
+      }
+    }
+  }
+  return Math.max(startMs + bestDelta, 0)
+}
+
+const avatarAnimationTimelineEditFailure = (
+  timeline: AvatarAnimationTimeline,
+  reason: AvatarAnimationTimelineEditFailure,
+  conflictInstanceId?: string
+): AvatarAnimationTimelineEditResult => ({
+  ...(conflictInstanceId == null ? {} : { conflictInstanceId }),
+  reason,
+  timeline,
+  valid: false
+})
+
+export const previewMoveAvatarAnimationTimelineClip = (
+  timeline: AvatarAnimationTimeline,
+  options: {
+    readonly instanceId: string
+    readonly playheadMs?: number
+    readonly snap?: boolean
+    readonly snapThresholdMs?: number
+    readonly startMs: number
+    readonly targetTrackId: string
+  }
+): AvatarAnimationTimelineEditResult => {
+  validateAvatarAnimationTimeline(timeline)
+  const sourceTrack = timeline.tracks.find(track => track.clips.some(clip => clip.instanceId === options.instanceId))
+  const targetTrack = timeline.tracks.find(track => track.trackId === options.targetTrackId)
+  const sourceClip = sourceTrack?.clips.find(clip => clip.instanceId === options.instanceId)
+  if (sourceTrack == null || targetTrack == null || sourceClip == null) {
+    return avatarAnimationTimelineEditFailure(timeline, 'not-found')
+  }
+  if (!isFiniteNumber(options.startMs) || options.startMs < 0) {
+    return avatarAnimationTimelineEditFailure(timeline, 'invalid')
+  }
+  const snappedTimeMs = options.snap === false
+    ? options.startMs
+    : snapAvatarAnimationTimelineRange(
+        options.startMs,
+        sourceClip.durationMs,
+        getAvatarAnimationTimelineSnapPoints(timeline, sourceClip.instanceId, options.playheadMs),
+        Math.max(options.snapThresholdMs ?? 80, 0)
+      )
+  const movedClip = { ...sourceClip, startMs: snappedTimeMs }
+  const conflict = targetTrack.clips.find(clip => (
+    clip.instanceId !== sourceClip.instanceId && avatarAnimationTimelineClipsOverlap(clip, movedClip)
+  ))
+  if (conflict != null) return avatarAnimationTimelineEditFailure(timeline, 'conflict', conflict.instanceId)
+  const nextTracks = timeline.tracks.map(track => {
+    const withoutSource = track.clips.filter(clip => clip.instanceId !== sourceClip.instanceId)
+    return track.trackId === targetTrack.trackId
+      ? { ...track, clips: [...withoutSource, movedClip] }
+      : { ...track, clips: withoutSource }
+  })
+  const nextTimeline = normalizeAvatarAnimationTimeline({ ...timeline, tracks: nextTracks })
+  return {
+    snappedTimeMs,
+    timeline: nextTimeline,
+    undo: {
+      clip: sourceClip,
+      timelineDurationMs: timeline.durationMs,
+      trackId: sourceTrack.trackId,
+      type: 'restore-clip'
+    },
+    valid: true
+  }
+}
+
+export const previewTrimAvatarAnimationTimelineClip = (
+  timeline: AvatarAnimationTimeline,
+  options: {
+    readonly edge: 'end' | 'start'
+    readonly instanceId: string
+    readonly playheadMs?: number
+    readonly resolvePreset?: AvatarAnimationTimelinePresetResolver
+    readonly snap?: boolean
+    readonly snapThresholdMs?: number
+    readonly timeMs: number
+  }
+): AvatarAnimationTimelineEditResult => {
+  validateAvatarAnimationTimeline(timeline)
+  const track = timeline.tracks.find(candidate => candidate.clips.some(clip => clip.instanceId === options.instanceId))
+  const sourceClip = track?.clips.find(clip => clip.instanceId === options.instanceId)
+  if (track == null || sourceClip == null) return avatarAnimationTimelineEditFailure(timeline, 'not-found')
+  if (!isFiniteNumber(options.timeMs)) return avatarAnimationTimelineEditFailure(timeline, 'invalid')
+  const points = getAvatarAnimationTimelineSnapPoints(timeline, sourceClip.instanceId, options.playheadMs)
+  const snappedTimeMs = options.snap === false
+    ? options.timeMs
+    : snapAvatarAnimationTimelineRange(options.timeMs, 0, points, Math.max(options.snapThresholdMs ?? 80, 0))
+  const sourceEndMs = avatarAnimationTimelineClipEnd(sourceClip)
+  const nextStartMs = options.edge === 'start' ? snappedTimeMs : sourceClip.startMs
+  const nextEndMs = options.edge === 'end' ? snappedTimeMs : sourceEndMs
+  const durationMs = nextEndMs - nextStartMs
+  if (durationMs <= 0 || nextStartMs < 0) {
+    return avatarAnimationTimelineEditFailure(timeline, 'invalid')
+  }
+  let sourceOffsetMs = sourceClip.sourceOffsetMs
+  if (options.edge === 'start') {
+    const sourceDefinition = sourceClip.source.type === 'inline'
+      ? sourceClip.source.clip
+      : options.resolvePreset?.(sourceClip.source, sourceClip)
+    if (sourceDefinition == null) return avatarAnimationTimelineEditFailure(timeline, 'invalid')
+    const rawSourceOffsetMs = sourceClip.sourceOffsetMs +
+      (nextStartMs - sourceClip.startMs) * sourceClip.playbackRate
+    if (sourceClip.frameSequence != null) {
+      const sequence = resolveAvatarAnimationTimelineFrameSequenceDefinition(
+        sourceClip.frameSequence,
+        sourceDefinition
+      )
+      sourceOffsetMs = !Number.isFinite(sequence.virtualDurationMs)
+        ? Math.max(rawSourceOffsetMs, 0)
+        : (sourceClip.playback ?? sourceDefinition.playback) === 'loop' && sequence.loop == null && sequence.virtualDurationMs > 0
+          ? ((rawSourceOffsetMs % sequence.virtualDurationMs) + sequence.virtualDurationMs) %
+            sequence.virtualDurationMs
+          : Math.min(Math.max(rawSourceOffsetMs, 0), sequence.virtualDurationMs)
+    } else {
+      sourceOffsetMs = (sourceClip.playback ?? sourceDefinition.playback) === 'loop'
+        ? ((rawSourceOffsetMs % sourceDefinition.durationMs) + sourceDefinition.durationMs) % sourceDefinition.durationMs
+        : Math.min(Math.max(rawSourceOffsetMs, 0), sourceDefinition.durationMs)
+    }
+  }
+  const trimmedClip = {
+    ...sourceClip,
+    durationMs,
+    envelope: clampAvatarAnimationTimelineEnvelope(sourceClip.envelope, durationMs),
+    sourceOffsetMs,
+    startMs: nextStartMs
+  }
+  if (!isAvatarAnimationTimelineClip(trimmedClip)) return avatarAnimationTimelineEditFailure(timeline, 'invalid')
+  const conflict = track.clips.find(clip => (
+    clip.instanceId !== sourceClip.instanceId && avatarAnimationTimelineClipsOverlap(clip, trimmedClip)
+  ))
+  if (conflict != null) return avatarAnimationTimelineEditFailure(timeline, 'conflict', conflict.instanceId)
+  const nextTimeline = normalizeAvatarAnimationTimeline({
+    ...timeline,
+    tracks: timeline.tracks.map(candidate => candidate.trackId === track.trackId
+      ? { ...candidate, clips: candidate.clips.map(clip => clip.instanceId === sourceClip.instanceId ? trimmedClip : clip) }
+      : candidate)
+  })
+  return {
+    snappedTimeMs,
+    timeline: nextTimeline,
+    undo: {
+      clip: sourceClip,
+      timelineDurationMs: timeline.durationMs,
+      trackId: track.trackId,
+      type: 'restore-clip'
+    },
+    valid: true
+  }
+}
+
+export const restoreAvatarAnimationTimelineClip = (
+  timeline: AvatarAnimationTimeline,
+  command: AvatarAnimationTimelineUndoCommand
+) => normalizeAvatarAnimationTimeline({
+  ...timeline,
+  durationMs: command.timelineDurationMs,
+  tracks: timeline.tracks.map(track => {
+    const clips = track.clips.filter(clip => clip.instanceId !== command.clip.instanceId)
+    return track.trackId === command.trackId ? { ...track, clips: [...clips, command.clip] } : { ...track, clips }
+  })
+})
+
+export const reorderAvatarAnimationTimelineTrack = (
+  timeline: AvatarAnimationTimeline,
+  trackId: string,
+  targetRuntimeIndex: number
+) => {
+  validateAvatarAnimationTimeline(timeline)
+  const sourceIndex = timeline.tracks.findIndex(track => track.trackId === trackId)
+  const targetIndex = Math.min(Math.max(Math.round(targetRuntimeIndex), 0), timeline.tracks.length - 1)
+  if (sourceIndex < 0) throw new TypeError('Unknown OneWorks Avatar animation timeline track')
+  const tracks = [...timeline.tracks]
+  const [track] = tracks.splice(sourceIndex, 1)
+  tracks.splice(targetIndex, 0, track!)
+  return { ...timeline, tracks }
+}
+
+export const getAvatarAnimationTimelineDisplayTracks = (timeline: AvatarAnimationTimeline) => (
+  [...timeline.tracks].reverse()
+)

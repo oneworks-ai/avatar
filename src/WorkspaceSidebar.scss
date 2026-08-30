@@ -1,0 +1,163 @@
+.avatar-workspace-sidebar {
+  position: fixed;
+  z-index: 12;
+  inset: auto;
+  display: flex;
+  width: min(240px, calc(100% - 36px));
+  max-height: min(390px, calc(100% - 84px));
+  min-height: 0;
+  flex-direction: column;
+  border: 1px solid var(--avatar-glass-border, var(--border-color));
+  border-radius: 12px;
+  background: var(--avatar-glass-bg, color-mix(in srgb, var(--bg-color) 88%, transparent));
+  box-shadow: var(--avatar-glass-shadow, 0 18px 44px color-mix(in srgb, black 18%, transparent));
+  backdrop-filter: var(--avatar-glass-filter, blur(24px) saturate(145%));
+  -webkit-backdrop-filter: var(--avatar-glass-filter, blur(24px) saturate(145%));
+  overflow: hidden;
+
+  button,
+  input { font: inherit; }
+
+  svg {
+    width: 18px;
+    height: 18px;
+    flex: 0 0 auto;
+    fill: none;
+    stroke: currentColor;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+    stroke-width: 1.5;
+  }
+
+  &__project,
+  &__recent { padding: 8px 10px; }
+
+  &__project {
+    display: flex;
+    min-width: 0;
+    min-height: 34px;
+    align-items: center;
+    gap: 8px;
+    border-bottom: 1px solid var(--border-color);
+
+    strong {
+      min-width: 0;
+      flex: 1 1 auto;
+      overflow: hidden;
+      font-size: 12px;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+  }
+
+  &__section-heading {
+    display: flex;
+    min-width: 0;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    min-height: 0;
+    margin-bottom: 0;
+
+    span { color: var(--sub-text-color); font-size: 10px; }
+  }
+
+  &__save-status[data-state='saved'] { color: var(--primary-color); }
+  &__save-status[data-state='error'] { color: var(--danger-color, #d95a4e); }
+
+  &__save-status { flex: 0 0 auto; font-size: 10px; }
+
+  &__items,
+  &__danger {
+    display: grid;
+    padding: 6px;
+    gap: 2px;
+
+    > button {
+      display: flex;
+      width: 100%;
+      min-height: 34px;
+      align-items: center;
+      justify-content: flex-start;
+      gap: 8px;
+      border: 0;
+      border-radius: 7px;
+      padding: 7px 9px;
+      background: transparent;
+      color: var(--text-color);
+      cursor: pointer;
+      font-size: 12px;
+      font-weight: 500;
+      text-align: left;
+
+      span { flex: 1 1 auto; }
+      svg:last-child { width: 14px; height: 14px; color: var(--sub-text-color); }
+      &:disabled { cursor: default; opacity: .38; }
+    }
+  }
+
+  &__danger {
+    border-top: 1px solid var(--border-color);
+
+    > button { color: var(--danger-color, var(--primary-color)); }
+  }
+
+  &__items--home { border-top: 1px solid var(--border-color); }
+
+  &__name {
+    box-sizing: border-box;
+    width: 100%;
+    height: 36px;
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    padding: 0 11px;
+    outline: 0;
+    background: var(--bg-color);
+    color: var(--text-color);
+
+    &:focus { border-color: var(--primary-color); box-shadow: 0 0 0 2px color-mix(in srgb, var(--primary-color) 18%, transparent); }
+  }
+
+  &__recent {
+    max-height: 164px;
+    min-height: 0;
+    overflow-y: auto;
+    border-top: 1px solid var(--border-color);
+    overscroll-behavior: contain;
+  }
+
+  &__empty { display: block; padding: 8px; color: var(--sub-text-color); font-size: 11px; }
+
+  &__project-row {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 32px;
+    align-items: center;
+    border-radius: 8px;
+
+    &[data-active='true'] { background: var(--primary-soft-bg); }
+
+    button {
+      min-width: 0;
+      border: 0;
+      padding: 8px;
+      background: transparent;
+      color: inherit;
+      cursor: pointer;
+      text-align: left;
+
+      &:last-child { display: grid; width: 32px; height: 32px; place-items: center; padding: 0; color: var(--sub-text-color); }
+    }
+
+    strong,
+    span { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    strong { font-size: 12px; }
+    span { margin-top: 2px; color: var(--sub-text-color); font-size: 9px; }
+  }
+
+  button:hover { background-color: color-mix(in srgb, var(--text-color) 6%, transparent); }
+  button:focus-visible { outline: 2px solid var(--primary-color); outline-offset: -2px; }
+}
+
+@media (max-height: 650px) {
+  .avatar-workspace-sidebar__recent { display: none; }
+}

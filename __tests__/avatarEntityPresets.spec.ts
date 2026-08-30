@@ -103,6 +103,7 @@ import {
   createSealSurfaceDecals,
   createSquirrelSurfaceDecals,
   createTigerSurfaceDecals,
+  deserializeAvatarEntityGroups,
   deserializeAvatarEntityParts,
   CHICK_BEAK_SIZE_RANGE,
   DUCK_BILL_SIZE_RANGE,
@@ -180,6 +181,7 @@ import {
   normalizeSheepEntityParts,
   normalizeSquirrelEntityParts,
   resolveAvatarEntityPresetFaceStyle,
+  serializeAvatarEntityGroups,
   serializeAvatarEntityParts
 } from '../src/avatarEntityPresets'
 import { DEFAULT_AVATAR_FACE_STYLE } from '../src/avatarGeometry'
@@ -1451,6 +1453,38 @@ describe('built-in entity preset scenes', () => {
     const invalidTuples = tuples.map(tuple => tuple[0] === 'fox-head' ? [...tuple.slice(0, 24), 160] : tuple)
     expect(deserializeAvatarEntityParts(JSON.stringify(invalidTuples), 'fox')
       .find(part => part.id === 'fox-head')?.bottomTaper).toBe(100)
+  })
+
+  it('round-trips optional node-tree group metadata without changing legacy tuples', () => {
+    const parts = createAvatarEntityParts('fox').map((part, index) => index === 0
+      ? { ...part, groupId: 'features', groupLabel: 'Features' }
+      : part)
+    const serialized = serializeAvatarEntityParts(parts)
+    const tuples = JSON.parse(serialized) as unknown[][]
+
+    expect(tuples[0]?.slice(25, 27)).toEqual(['features', 'Features'])
+    expect(deserializeAvatarEntityParts(serialized, 'fox')[0]).toMatchObject({
+      groupId: 'features',
+      groupLabel: 'Features'
+    })
+    expect(deserializeAvatarEntityParts(JSON.stringify(tuples.map(tuple => tuple.slice(0, 25))), 'fox')[0])
+      .not.toHaveProperty('groupId')
+  })
+
+  it('round-trips empty node-tree groups independently from entity parts', () => {
+    const groups = [
+      { id: 'face-details', label: 'Face details' },
+      { id: 'empty-group', label: 'Empty group' }
+    ]
+
+    expect(deserializeAvatarEntityGroups(serializeAvatarEntityGroups(groups))).toEqual(groups)
+    expect(deserializeAvatarEntityGroups(JSON.stringify([
+      ['face-details', 'Face details'],
+      ['face-details', 'Duplicate'],
+      ['', 'Invalid'],
+      ['empty-group', 'Empty group']
+    ]))).toEqual(groups)
+    expect(deserializeAvatarEntityGroups('not-json')).toEqual([])
   })
 
   it('applies a palette to every part of a multipart entity', () => {

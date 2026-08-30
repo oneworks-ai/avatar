@@ -65,6 +65,110 @@ const renderApp = async () => {
   }
 }
 
+const openRightTab = async (tab: 'body' | 'effects' | 'style') => {
+  act(() => host.querySelector<HTMLButtonElement>(`#avatar-controls-right-tab-${tab}`)?.click())
+  await flushEffects()
+}
+
+const openBuildDetail = async (page: 'coat-pattern' | 'parameters' | 'seed') => {
+  const id = `avatar-controls-build-detail-${page}`
+  if (host.querySelector(`#${id}`) != null) return
+  const back = host.querySelector<HTMLButtonElement>('[aria-label="Back to Build overview"]')
+  if (back != null) {
+    act(() => back.click())
+    await flushEffects()
+  }
+  act(() => host.querySelector<HTMLButtonElement>('#avatar-controls-left-tab-build')?.click())
+  await flushEffects()
+  act(() => host.querySelector<HTMLButtonElement>(`[aria-controls="${id}"]`)?.click())
+  await flushEffects()
+}
+
+const closeBuildDetail = async () => {
+  const back = host.querySelector<HTMLButtonElement>('[aria-label="Back to Build overview"]')
+  if (back == null) return
+  act(() => back.click())
+  await flushEffects()
+}
+
+const selectBreed = async (selector: string) => {
+  await closeBuildDetail()
+  let button = host.querySelector<HTMLButtonElement>(selector)
+  if (button == null) {
+    const attribute = selector.match(/^\[([^=]+)=/)?.[1]
+    const sample = attribute == null
+      ? null
+      : host.querySelector<HTMLElement>(`[${attribute}]`)
+    act(() => sample?.closest('section')?.querySelector<HTMLButtonElement>('[aria-label="More presets"]')?.click())
+    await flushEffects()
+    button = host.querySelector<HTMLButtonElement>(selector)
+  }
+  act(() => button?.click())
+  await flushEffects()
+}
+
+const openStyleDetail = async (page: 'camera-background' | 'palette') => {
+  const id = `avatar-controls-style-detail-${page}`
+  if (host.querySelector(`#${id}`) != null) return
+  act(() => host.querySelector<HTMLButtonElement>('#avatar-controls-right-tab-style')?.click())
+  await flushEffects()
+  const back = host.querySelector<HTMLButtonElement>('[aria-label="Back to Style overview"]')
+  if (back != null) {
+    act(() => back.click())
+    await flushEffects()
+  }
+  const label = page === 'palette' ? 'More Palette' : 'More Camera background'
+  act(() => host.querySelector<HTMLButtonElement>(`[aria-label="${label}"]`)?.click())
+  await flushEffects()
+}
+
+const restoreSavedPreset = async () => {
+  await closeBuildDetail()
+  act(() => host.querySelector<HTMLButtonElement>('[aria-label^="Restore preset saved"]')?.click())
+  await flushEffects()
+}
+
+const openFaceAdvanced = async () => {
+  await closeBuildDetail()
+  if (host.querySelector('#avatar-controls-build-detail-face') != null) return
+  act(() => host.querySelector<HTMLButtonElement>('[aria-controls="avatar-controls-build-detail-face"]')?.click())
+  await flushEffects()
+}
+
+const selectFacePreset = async (label: string) => {
+  await closeBuildDetail()
+  let button = Array.from(host.querySelectorAll<HTMLButtonElement>('button'))
+    .find(candidate => candidate.getAttribute('aria-label') === label)
+  if (button == null) {
+    act(() => host.querySelector<HTMLButtonElement>('[aria-label="Face presets"] [aria-label="More presets"]')?.click())
+    await flushEffects()
+    button = Array.from(host.querySelectorAll<HTMLButtonElement>('button'))
+      .find(candidate => candidate.getAttribute('aria-label') === label)
+  }
+  act(() => button?.click())
+  await flushEffects()
+}
+
+const selectEntityPreset = async (preset: string) => {
+  await closeBuildDetail()
+  let button = host.querySelector<HTMLButtonElement>(`[data-entity-preset="${preset}"]`)
+  if (button == null) {
+    act(() => host.querySelector<HTMLButtonElement>('[aria-label="Avatar type"] [aria-label="More presets"]')?.click())
+    await flushEffects()
+    button = host.querySelector<HTMLButtonElement>(`[data-entity-preset="${preset}"]`)
+  }
+  act(() => button?.click())
+  await flushEffects()
+}
+
+const selectShapeNode = async (label: string) => {
+  await openRightTab('body')
+  const item = Array.from(host.querySelectorAll<HTMLButtonElement>('[role="treeitem"]'))
+    .find(candidate => candidate.querySelector('span')?.textContent === label)
+  act(() => item?.click())
+  await flushEffects()
+}
+
 beforeEach(() => {
   globalThis.IS_REACT_ACT_ENVIRONMENT = true
   vi.stubGlobal('ResizeObserver', class {
@@ -92,11 +196,64 @@ afterEach(() => {
 })
 
 describe('App Seed authoring', () => {
+  it('keeps the details sidebar collapsed until a configurable target is selected', async () => {
+    await renderApp()
+    const workspace = host.querySelector<HTMLElement>('.avatar-app__workspace')
+
+    expect(workspace?.getAttribute('data-controls-collapsed')).toBe('true')
+    expect(new URLSearchParams(window.location.search).get('sidebar')).toBe('0')
+
+    act(() => host.querySelector<HTMLButtonElement>('#avatar-controls-left-tab-animation')?.click())
+    await flushEffects()
+    expect(workspace?.getAttribute('data-controls-collapsed')).toBe('true')
+
+    const animationPreset = host.querySelector<HTMLButtonElement>(
+      '#avatar-controls-left-panel-animation .avatar-animation-sidebar__asset'
+    )
+    expect(animationPreset).not.toBeNull()
+    act(() => animationPreset?.click())
+    await flushEffects()
+
+    expect(workspace?.getAttribute('data-controls-collapsed')).toBe('false')
+    expect(new URLSearchParams(window.location.search).get('sidebar')).toBe('1')
+    expect(host.querySelector('[aria-label="Animation preset inspector"]')).not.toBeNull()
+  })
+
+  it('persists empty custom shape groups through the URL and reload', async () => {
+    window.history.replaceState(null, '', '/?entity=custom&sidebar=1')
+    await renderApp()
+    act(() => host.querySelector<HTMLButtonElement>('#avatar-controls-left-tab-body')?.click())
+    await flushEffects()
+
+    const tree = host.querySelector<HTMLElement>('[role="tree"][aria-label="Shape node tree"]')
+    expect(tree).not.toBeNull()
+    act(() => tree?.dispatchEvent(new MouseEvent('contextmenu', {
+      bubbles: true,
+      clientX: 80,
+      clientY: 120
+    })))
+    const newGroup = Array.from(document.querySelectorAll<HTMLButtonElement>('[role="menuitem"]'))
+      .find(button => button.textContent === 'New group')
+    expect(newGroup).not.toBeUndefined()
+    act(() => newGroup?.click())
+    await flushEffects()
+
+    const serializedGroups = new URLSearchParams(window.location.search).get('entityGroups')
+    expect(serializedGroups).not.toBeNull()
+
+    act(() => root.unmount())
+    root = createRoot(host)
+    await renderApp()
+    act(() => host.querySelector<HTMLButtonElement>('#avatar-controls-left-tab-body')?.click())
+    await flushEffects()
+
+    expect(host.querySelector('[role="tree"]')?.textContent).toContain('Group')
+  })
+
   it('adjusts and reloads a standalone ellipse bottom taper through its shared URL', async () => {
     window.history.replaceState(null, '', '/?shape=ellipse&bottomTaper=42&seed=v1-taper')
     await renderApp()
-    act(() => host.querySelector<HTMLButtonElement>('#avatar-controls-tab-body')?.click())
-    await flushEffects()
+    await openRightTab('body')
 
     const taper = host.querySelector<HTMLInputElement>('[aria-label="Body bottom taper"]')
     expect(taper?.value).toBe('42')
@@ -111,16 +268,14 @@ describe('App Seed authoring', () => {
     act(() => root.unmount())
     root = createRoot(host)
     await renderApp()
-    act(() => host.querySelector<HTMLButtonElement>('#avatar-controls-tab-body')?.click())
-    await flushEffects()
+    await openRightTab('body')
     expect(host.querySelector<HTMLInputElement>('[aria-label="Body bottom taper"]')?.value).toBe('79')
   })
 
   it('replaces stale optional eye overrides when selecting a complete face preset', async () => {
     window.history.replaceState(null, '', '/?eyeH=54&eyeLeftH=68&eyeRightH=42&eyeLeftW=34&eyeRightW=14&eyeLeftRot=21&eyeRightRot=-19')
     await renderApp()
-    act(() => Array.from(host.querySelectorAll<HTMLButtonElement>('button')).find(button => button.getAttribute('aria-label') === 'Sleepy')?.click())
-    await flushEffects()
+    await selectFacePreset('Sleepy')
     const params = new URLSearchParams(window.location.search)
     expect(params.get('eyeLeftH')).toBeNull()
     expect(params.get('eyeRightH')).toBeNull()
@@ -133,13 +288,7 @@ describe('App Seed authoring', () => {
 
   it('serializes the Mixed signal preset as independently vertical and horizontal eyes', async () => {
     await renderApp()
-    act(() => host.querySelector<HTMLButtonElement>(
-      '[aria-label="Face presets"] [aria-label="More presets"]'
-    )?.click())
-    await flushEffects()
-    act(() => Array.from(host.querySelectorAll<HTMLButtonElement>('button'))
-      .find(button => button.getAttribute('aria-label') === 'Mixed signal')?.click())
-    await flushEffects()
+    await selectFacePreset('Mixed signal')
 
     const params = new URLSearchParams(window.location.search)
     expect(Number(params.get('eyeLeftH'))).toBeGreaterThan(Number(params.get('eyeLeftW')))
@@ -265,6 +414,7 @@ describe('App Seed authoring', () => {
       removeEventListener: vi.fn()
     })))
     await renderApp()
+    await openBuildDetail('parameters')
 
     act(() => host.querySelector<HTMLButtonElement>('[aria-label="Follow Seed: View composition"]')?.click())
     await flushEffects()
@@ -297,6 +447,7 @@ describe('App Seed authoring', () => {
     const requestAnimationFrame = vi.spyOn(window, 'requestAnimationFrame')
     await renderApp()
     requestAnimationFrame.mockClear()
+    await openBuildDetail('parameters')
 
     act(() => host.querySelector<HTMLButtonElement>('[aria-label="Follow Seed: View composition"]')?.click())
     await flushEffects()
@@ -328,8 +479,7 @@ describe('App Seed authoring', () => {
     params = new URLSearchParams(window.location.search)
     expect(params.get('cameraFrame')).toBe('circle')
 
-    act(() => host.querySelector<HTMLButtonElement>('#avatar-controls-tab-style')?.click())
-    await flushEffects()
+    await openRightTab('effects')
     act(() => Array.from(host.querySelectorAll<HTMLButtonElement>('[aria-label="Camera frame shape"] [role="radio"]'))
       .find(button => button.textContent === 'Square')?.click())
     await flushEffects()
@@ -338,8 +488,7 @@ describe('App Seed authoring', () => {
 
   it('locks an explicitly selected avatar type while leaving its applicable fields Seed-capable', async () => {
     await renderApp()
-    act(() => host.querySelector<HTMLButtonElement>('[data-entity-preset="cat"]')?.click())
-    await flushEffects()
+    await selectEntityPreset('cat')
 
     const fields = new URLSearchParams(window.location.search).get('seedFields')?.split(',') ?? []
     expect(fields).not.toContain(AVATAR_SEED_FIELD.entityPreset)
@@ -357,8 +506,7 @@ describe('App Seed authoring', () => {
     )
     await renderApp()
 
-    act(() => host.querySelector<HTMLButtonElement>('[data-entity-preset="fox"]')?.click())
-    await flushEffects()
+    await selectEntityPreset('fox')
 
     const params = new URLSearchParams(window.location.search)
     const decals = JSON.parse(params.get('decals') ?? '[]') as unknown[][]
@@ -379,8 +527,7 @@ describe('App Seed authoring', () => {
     ])
     expect(host.querySelector('[data-avatar-surface-decal="fox-cheek-left"]')).not.toBeNull()
 
-    act(() => host.querySelector<HTMLButtonElement>('#avatar-controls-tab-body')?.click())
-    await flushEffects()
+    await selectShapeNode('Head')
     const foxTaper = host.querySelector<HTMLInputElement>('[aria-label="Part bottom taper"]')
     expect(foxTaper?.value).toBe('52')
     act(() => {
@@ -510,8 +657,7 @@ describe('App Seed authoring', () => {
       expect(params.get('cameraBg')).toBe(scene.cameraBackground)
       expect(params.get('cameraFrame')).toBe(scene.cameraFrame)
 
-      act(() => host.querySelector<HTMLButtonElement>(`[data-animal-breed="${breed}"]`)?.click())
-      await flushEffects()
+      await selectBreed(`[data-animal-breed="${breed}"]`)
       params = new URLSearchParams(window.location.search)
       expect(params.get('breed')).toBe(breed)
       expect(Number(params.get('yaw'))).toBeCloseTo(scene.viewState.yaw, 4)
@@ -555,8 +701,7 @@ describe('App Seed authoring', () => {
       window.history.replaceState(null, '', `/?entity=lion&breed=${breed}&seed=v1-${breed}-selected`)
       await renderApp()
 
-      act(() => host.querySelector<HTMLButtonElement>(`[data-animal-breed="${breed}"]`)?.click())
-      await flushEffects()
+      await selectBreed(`[data-animal-breed="${breed}"]`)
 
       const params = new URLSearchParams(window.location.search)
       expect(params.get('breed')).toBe(breed)
@@ -611,8 +756,7 @@ describe('App Seed authoring', () => {
     )
     await renderApp()
 
-    act(() => host.querySelector<HTMLButtonElement>('[data-animal-breed="white-lion"]')?.click())
-    await flushEffects()
+    await selectBreed('[data-animal-breed="white-lion"]')
 
     const params = new URLSearchParams(window.location.search)
     expect(params.get('breed')).toBe('white-lion')
@@ -627,8 +771,7 @@ describe('App Seed authoring', () => {
   it('applies a Cat type as a deterministic Seed constraint profile', async () => {
     window.history.replaceState(null, '', '/?entity=cat&seed=v1-siamese-a')
     await renderApp()
-    act(() => host.querySelector<HTMLButtonElement>('[data-cat-breed="siamese"]')?.click())
-    await flushEffects()
+    await selectBreed('[data-cat-breed="siamese"]')
 
     const selected = new URLSearchParams(window.location.search)
     expect(selected.get('breed')).toBe('siamese')
@@ -675,8 +818,7 @@ describe('App Seed authoring', () => {
     )
     await renderApp()
 
-    act(() => host.querySelector<HTMLButtonElement>('[data-cat-breed="siamese"]')?.click())
-    await flushEffects()
+    await selectBreed('[data-cat-breed="siamese"]')
 
     const selected = new URLSearchParams(window.location.search)
     const seededFields = selected.get('seedFields')?.split(',') ?? []
@@ -690,8 +832,7 @@ describe('App Seed authoring', () => {
   it('applies a Dog type as a deterministic constrained profile with Dog-only ear fields', async () => {
     window.history.replaceState(null, '', '/?entity=dog&seed=v1-husky-a')
     await renderApp()
-    act(() => host.querySelector<HTMLButtonElement>('[data-dog-breed="husky"]')?.click())
-    await flushEffects()
+    await selectBreed('[data-dog-breed="husky"]')
 
     const selected = new URLSearchParams(window.location.search)
     expect(selected.get('entity')).toBe('dog')
@@ -730,8 +871,7 @@ describe('App Seed authoring', () => {
   it('applies a Rabbit type as a deterministic constrained profile with Rabbit-only 3D size fields', async () => {
     window.history.replaceState(null, '', '/?entity=rabbit&seed=v1-holland-lop-a')
     await renderApp()
-    act(() => host.querySelector<HTMLButtonElement>('[data-rabbit-breed="holland-lop"]')?.click())
-    await flushEffects()
+    await selectBreed('[data-rabbit-breed="holland-lop"]')
 
     const selected = new URLSearchParams(window.location.search)
     expect(selected.get('entity')).toBe('rabbit')
@@ -775,8 +915,8 @@ describe('App Seed authoring', () => {
   it('applies a Bear type as a deterministic constrained profile with Bear-only 3D size fields', async () => {
     window.history.replaceState(null, '', '/?entity=bear&seed=v1-giant-panda-a')
     await renderApp()
-    act(() => host.querySelector<HTMLButtonElement>('[data-bear-breed="giant-panda"]')?.click())
-    await flushEffects()
+    await selectBreed('[data-bear-breed="giant-panda"]')
+    await openBuildDetail('parameters')
 
     const selected = new URLSearchParams(window.location.search)
     expect(selected.get('entity')).toBe('bear')
@@ -793,6 +933,7 @@ describe('App Seed authoring', () => {
     expect(Number(selected.get('bearHeadWidth'))).toBeGreaterThanOrEqual(108)
     expect(Number(selected.get('bearHeadWidth'))).toBeLessThanOrEqual(124)
 
+    await closeBuildDetail()
     act(() => host.querySelector<HTMLButtonElement>('[aria-label="Generate random Seed"]')?.click())
     await flushEffects()
     const rerolled = new URLSearchParams(window.location.search)
@@ -893,6 +1034,7 @@ describe('App Seed authoring', () => {
   ] as const)('preserves an explicitly selected ellipse eye shape in a legacy %s share link', async (species, breed) => {
     window.history.replaceState(null, '', `/?entity=${species}&breed=${breed}&eyeShape=ellipse&seed=v1-${breed}-manual-eyes`)
     await renderApp()
+    await openFaceAdvanced()
 
     expect(new URLSearchParams(window.location.search).get('eyeShape')).toBe('ellipse')
     expect(host.querySelector('[aria-label="Eye shape"] [role="radio"][aria-checked="true"]')?.textContent)
@@ -1197,8 +1339,7 @@ describe('App Seed authoring', () => {
   ] as const)('applies and restores a constrained %s breed with species-specific Seed fields', async (species, id) => {
     window.history.replaceState(null, '', `/?entity=${species}&seed=v1-${id}-editor`)
     await renderApp()
-    act(() => host.querySelector<HTMLButtonElement>(`[data-animal-breed="${id}"]`)?.click())
-    await flushEffects()
+    await selectBreed(`[data-animal-breed="${id}"]`)
 
     const selected = new URLSearchParams(window.location.search)
     const template = getAvatarAnimalBreedTemplate(species, id)!
@@ -1251,8 +1392,8 @@ describe('App Seed authoring', () => {
   it('freezes a manually adjusted new-species head width while keeping breed colors and horns fixed', async () => {
     window.history.replaceState(null, '', '/?entity=deer&seed=v1-deer-manual')
     await renderApp()
-    act(() => host.querySelector<HTMLButtonElement>('[data-animal-breed="reindeer"]')?.click())
-    await flushEffects()
+    await selectBreed('[data-animal-breed="reindeer"]')
+    await openBuildDetail('parameters')
 
     const slider = host.querySelector<HTMLInputElement>('[aria-label="Deer head width"]')
     expect(slider).not.toBeNull()
@@ -1266,6 +1407,7 @@ describe('App Seed authoring', () => {
     expect(manual.get('deerHeadWidth')).toBe('109')
     expect(manual.get('seedFields') ?? '').not.toContain(AVATAR_ANIMAL_SPECIES_SEED_FIELDS.deer.headWidth)
 
+    await closeBuildDetail()
     act(() => host.querySelector<HTMLButtonElement>('[aria-label="Generate random Seed"]')?.click())
     await flushEffects()
     const rerolled = new URLSearchParams(window.location.search)
@@ -1286,6 +1428,7 @@ describe('App Seed authoring', () => {
     async (species, breed, label, queryKey, partPrefix, value) => {
       window.history.replaceState(null, '', `/?entity=${species}&breed=${breed}&seed=v1-${breed}-manual-feature`)
       await renderApp()
+      await openBuildDetail('parameters')
 
       const slider = host.querySelector<HTMLInputElement>(`input[aria-label="${label}"]`)
       expect(slider).not.toBeNull()
@@ -1326,14 +1469,12 @@ describe('App Seed authoring', () => {
   it('clears previous-species dimensions and Seed followers when switching between new animal types', async () => {
     window.history.replaceState(null, '', '/?entity=hamster&seed=v1-species-switch')
     await renderApp()
-    act(() => host.querySelector<HTMLButtonElement>('[data-animal-breed="syrian-hamster"]')?.click())
-    await flushEffects()
+    await selectBreed('[data-animal-breed="syrian-hamster"]')
     expect(new URLSearchParams(window.location.search).get('seedFields')).toContain(
       AVATAR_ANIMAL_SPECIES_SEED_FIELDS.hamster.headWidth
     )
 
-    act(() => host.querySelector<HTMLButtonElement>('[data-entity-preset="pig"]')?.click())
-    await flushEffects()
+    await selectEntityPreset('pig')
     const pig = new URLSearchParams(window.location.search)
     expect(pig.get('entity')).toBe('pig')
     expect(pig.get('hamsterHeadWidth')).toBeNull()
@@ -1401,12 +1542,10 @@ describe('App Seed authoring', () => {
   it('clears Bear-only Seed bindings and concrete dimensions when switching animal types', async () => {
     window.history.replaceState(null, '', '/?entity=bear&seed=v1-bear-switch')
     await renderApp()
-    act(() => host.querySelector<HTMLButtonElement>('[data-bear-breed="giant-panda"]')?.click())
-    await flushEffects()
+    await selectBreed('[data-bear-breed="giant-panda"]')
     expect(new URLSearchParams(window.location.search).get('bearHeadWidth')).not.toBeNull()
 
-    act(() => host.querySelector<HTMLButtonElement>('[data-entity-preset="dog"]')?.click())
-    await flushEffects()
+    await selectEntityPreset('dog')
     const params = new URLSearchParams(window.location.search)
     expect(params.get('entity')).toBe('dog')
     expect(params.get('seedFields') ?? '').not.toContain(AVATAR_SEED_FIELD.bearEarWidth)
@@ -1420,8 +1559,8 @@ describe('App Seed authoring', () => {
   it('freezes an independently edited Bear head width across Seed rerolls and URL reloads', async () => {
     window.history.replaceState(null, '', '/?entity=bear&seed=v1-giant-panda-head')
     await renderApp()
-    act(() => host.querySelector<HTMLButtonElement>('[data-bear-breed="giant-panda"]')?.click())
-    await flushEffects()
+    await selectBreed('[data-bear-breed="giant-panda"]')
+    await openBuildDetail('parameters')
     expect(new URLSearchParams(window.location.search).get('seedFields')).toContain(AVATAR_SEED_FIELD.bearHeadWidth)
 
     act(() => {
@@ -1439,6 +1578,7 @@ describe('App Seed authoring', () => {
     expect(manual.get('seedFields')).not.toContain(AVATAR_SEED_FIELD.bearHeadWidth)
     expect(manual.get('seedFields')).toContain(AVATAR_SEED_FIELD.bearEarWidth)
 
+    await closeBuildDetail()
     act(() => host.querySelector<HTMLButtonElement>('[aria-label="Generate random Seed"]')?.click())
     await flushEffects()
     const rerolled = new URLSearchParams(window.location.search)
@@ -1463,8 +1603,7 @@ describe('App Seed authoring', () => {
     ])
     window.history.replaceState(null, '', `/?entity=rabbit&seed=v1-rabbit-switch&seedFields=${seededFields}`)
     await renderApp()
-    act(() => host.querySelector<HTMLButtonElement>('[data-entity-preset="dog"]')?.click())
-    await flushEffects()
+    await selectEntityPreset('dog')
     const params = new URLSearchParams(window.location.search)
     expect(params.get('entity')).toBe('dog')
     expect(params.get('seedFields')).not.toContain(AVATAR_SEED_FIELD.rabbitEarWidth)
@@ -1478,8 +1617,8 @@ describe('App Seed authoring', () => {
   it('clears Rabbit profile dimensions when switching directly from Rabbit to Cat', async () => {
     window.history.replaceState(null, '', '/?entity=rabbit&seed=v1-rabbit-cat-switch')
     await renderApp()
-    act(() => host.querySelector<HTMLButtonElement>('[data-rabbit-breed="lionhead-rabbit"]')?.click())
-    await flushEffects()
+    await selectBreed('[data-rabbit-breed="lionhead-rabbit"]')
+    await openBuildDetail('parameters')
     expect(new URLSearchParams(window.location.search).get('rabbitHeadWidth')).not.toBeNull()
 
     const rabbit = new URLSearchParams(window.location.search)
@@ -1501,8 +1640,8 @@ describe('App Seed authoring', () => {
   it('freezes an independently edited Rabbit head width across Seed rerolls and URL reloads', async () => {
     window.history.replaceState(null, '', '/?entity=rabbit&seed=v1-lionhead-head')
     await renderApp()
-    act(() => host.querySelector<HTMLButtonElement>('[data-rabbit-breed="lionhead-rabbit"]')?.click())
-    await flushEffects()
+    await selectBreed('[data-rabbit-breed="lionhead-rabbit"]')
+    await openBuildDetail('parameters')
 
     const selected = new URLSearchParams(window.location.search)
     expect(selected.get('seedFields')).toContain(AVATAR_SEED_FIELD.rabbitHeadWidth)
@@ -1523,6 +1662,7 @@ describe('App Seed authoring', () => {
     expect(manual.get('seedFields')).not.toContain(AVATAR_SEED_FIELD.rabbitHeadWidth)
     expect(manual.get('seedFields')).toContain(AVATAR_SEED_FIELD.rabbitHeadHeight)
 
+    await closeBuildDetail()
     act(() => host.querySelector<HTMLButtonElement>('[aria-label="Generate random Seed"]')?.click())
     await flushEffects()
     const rerolled = new URLSearchParams(window.location.search)
@@ -1545,8 +1685,8 @@ describe('App Seed authoring', () => {
   it('freezes an independently edited Dog head width across Seed rerolls and URL reloads', async () => {
     window.history.replaceState(null, '', '/?entity=dog&seed=v1-corgi-head')
     await renderApp()
-    act(() => host.querySelector<HTMLButtonElement>('[data-dog-breed="corgi"]')?.click())
-    await flushEffects()
+    await selectBreed('[data-dog-breed="corgi"]')
+    await openBuildDetail('parameters')
 
     const selected = new URLSearchParams(window.location.search)
     expect(selected.get('seedFields')).toContain(AVATAR_SEED_FIELD.dogHeadWidth)
@@ -1567,6 +1707,7 @@ describe('App Seed authoring', () => {
     expect(manual.get('seedFields')).not.toContain(AVATAR_SEED_FIELD.dogHeadWidth)
     expect(manual.get('seedFields')).toContain(AVATAR_SEED_FIELD.dogHeadHeight)
 
+    await closeBuildDetail()
     act(() => host.querySelector<HTMLButtonElement>('[aria-label="Generate random Seed"]')?.click())
     await flushEffects()
     const rerolled = new URLSearchParams(window.location.search)
@@ -1624,11 +1765,9 @@ describe('App Seed authoring', () => {
   it('keeps Dog ears outside the head when its real part dimensions are edited and restored', async () => {
     window.history.replaceState(null, '', '/?entity=dog&seed=v1-corgi-part-dimensions')
     await renderApp()
-    act(() => host.querySelector<HTMLButtonElement>('[data-dog-breed="corgi"]')?.click())
-    await flushEffects()
+    await selectBreed('[data-dog-breed="corgi"]')
 
-    act(() => host.querySelector<HTMLButtonElement>('#avatar-controls-tab-body')?.click())
-    await flushEffects()
+    await selectShapeNode('Primary')
 
     const setPartDimension = async (label: 'Part width' | 'Part height', value: string) => {
       const input = host.querySelector<HTMLInputElement>(`[aria-label="${label}"]`)
@@ -1677,15 +1816,13 @@ describe('App Seed authoring', () => {
     window.history.replaceState(null, '', `/?entity=cat&seed=v1-cross-species-cat&seedFields=${seededFields}`)
     await renderApp()
 
-    act(() => host.querySelector<HTMLButtonElement>('[data-entity-preset="dog"]')?.click())
-    await flushEffects()
+    await selectEntityPreset('dog')
     let params = new URLSearchParams(window.location.search)
     expect(params.get('entity')).toBe('dog')
     expect(params.get('seedFields')).not.toContain(AVATAR_SEED_FIELD.catEarWidth)
     expect(params.get('seedFields')).not.toContain(AVATAR_SEED_FIELD.catEarHeight)
 
-    act(() => host.querySelector<HTMLButtonElement>('[data-dog-breed="husky"]')?.click())
-    await flushEffects()
+    await selectBreed('[data-dog-breed="husky"]')
     act(() => host.querySelector<HTMLButtonElement>('[aria-label="Generate random Seed"]')?.click())
     await flushEffects()
     params = new URLSearchParams(window.location.search)
@@ -1709,8 +1846,7 @@ describe('App Seed authoring', () => {
     window.history.replaceState(null, '', `/?entity=dog&seed=v1-cross-species-dog&seedFields=${seededFields}`)
     await renderApp()
 
-    act(() => host.querySelector<HTMLButtonElement>('[data-entity-preset="cat"]')?.click())
-    await flushEffects()
+    await selectEntityPreset('cat')
     let params = new URLSearchParams(window.location.search)
     expect(params.get('entity')).toBe('cat')
     expect(params.get('seedFields')).not.toContain(AVATAR_SEED_FIELD.dogEarWidth)
@@ -1718,8 +1854,7 @@ describe('App Seed authoring', () => {
     expect(params.get('seedFields')).not.toContain(AVATAR_SEED_FIELD.dogHeadWidth)
     expect(params.get('seedFields')).not.toContain(AVATAR_SEED_FIELD.dogHeadHeight)
 
-    act(() => host.querySelector<HTMLButtonElement>('[data-cat-breed="russian-blue"]')?.click())
-    await flushEffects()
+    await selectBreed('[data-cat-breed="russian-blue"]')
     act(() => host.querySelector<HTMLButtonElement>('[aria-label="Generate random Seed"]')?.click())
     await flushEffects()
     params = new URLSearchParams(window.location.search)
@@ -1760,16 +1895,14 @@ describe('App Seed authoring', () => {
   it('cancels a Dog type without changing its concrete appearance', async () => {
     window.history.replaceState(null, '', '/?entity=dog&seed=v1-shiba-cancel')
     await renderApp()
-    act(() => host.querySelector<HTMLButtonElement>('[data-dog-breed="shiba-inu"]')?.click())
-    await flushEffects()
+    await selectBreed('[data-dog-breed="shiba-inu"]')
     const selected = new URLSearchParams(window.location.search)
     const concrete = {
       ears: selected.get('entityParts'),
       palette: selected.get('palette'),
       width: selected.get('coatLightPatchWidth')
     }
-    act(() => host.querySelector<HTMLButtonElement>('[data-dog-breed="shiba-inu"]')?.click())
-    await flushEffects()
+    await selectBreed('[data-dog-breed="shiba-inu"]')
     const cancelled = new URLSearchParams(window.location.search)
     expect(cancelled.get('breed')).toBeNull()
     expect(cancelled.get('entityParts')).toBe(concrete.ears)
@@ -1780,8 +1913,7 @@ describe('App Seed authoring', () => {
   it('locks Cow Cat colors and centered patch while its permitted patch size follows Seed', async () => {
     window.history.replaceState(null, '', '/?entity=cat&seed=v1-cow-profile')
     await renderApp()
-    act(() => host.querySelector<HTMLButtonElement>('[data-cat-breed="cow-cat"]')?.click())
-    await flushEffects()
+    await selectBreed('[data-cat-breed="cow-cat"]')
 
     const selected = new URLSearchParams(window.location.search)
     expect(selected.get('breed')).toBe('cow-cat')
@@ -1809,8 +1941,7 @@ describe('App Seed authoring', () => {
   it('keeps Black Cat coat-free and near-black while its constrained ear size follows Seed', async () => {
     window.history.replaceState(null, '', '/?entity=cat&seed=v1-black-profile')
     await renderApp()
-    act(() => host.querySelector<HTMLButtonElement>('[data-cat-breed="black-cat"]')?.click())
-    await flushEffects()
+    await selectBreed('[data-cat-breed="black-cat"]')
 
     const selected = new URLSearchParams(window.location.search)
     expect(selected.get('breed')).toBe('black-cat')
@@ -1828,8 +1959,7 @@ describe('App Seed authoring', () => {
     expect(rerolled.get('entity')).toBe('cat')
     expect(rerolled.get('palette')).toBe('black-cat')
     expect(rerolled.get('coat')).toBe('0')
-    expect(rerolled.get('seedFields')).toContain(AVATAR_SEED_FIELD.viewPose)
-    expect(rerolled.get('positionX')).not.toBe('0')
+    expect(rerolled.get('seedFields')).toBe(selected.get('seedFields'))
   })
 
   it('locks Cat identity when a Cat type replaces an entity Seed binding', async () => {
@@ -1841,8 +1971,7 @@ describe('App Seed authoring', () => {
     expect(new URLSearchParams(window.location.search).get('seedFields'))
       .toContain(AVATAR_SEED_FIELD.entityPreset)
 
-    act(() => host.querySelector<HTMLButtonElement>('[data-cat-breed="siamese"]')?.click())
-    await flushEffects()
+    await selectBreed('[data-cat-breed="siamese"]')
     const selected = new URLSearchParams(window.location.search)
     expect(selected.get('entity')).toBe('cat')
     expect(selected.get('seedFields')).not.toContain(AVATAR_SEED_FIELD.entityPreset)
@@ -1856,8 +1985,7 @@ describe('App Seed authoring', () => {
   it('cancels the current Cat type without changing its concrete appearance', async () => {
     window.history.replaceState(null, '', '/?entity=cat&seed=v1-siamese-cancel')
     await renderApp()
-    act(() => host.querySelector<HTMLButtonElement>('[data-cat-breed="siamese"]')?.click())
-    await flushEffects()
+    await selectBreed('[data-cat-breed="siamese"]')
 
     const selected = new URLSearchParams(window.location.search)
     const concrete = {
@@ -1866,8 +1994,7 @@ describe('App Seed authoring', () => {
       palette: selected.get('palette'),
       width: selected.get('coatLightPatchWidth')
     }
-    act(() => host.querySelector<HTMLButtonElement>('[data-cat-breed="siamese"]')?.click())
-    await flushEffects()
+    await selectBreed('[data-cat-breed="siamese"]')
 
     const cancelled = new URLSearchParams(window.location.search)
     expect(cancelled.get('breed')).toBeNull()
@@ -1881,10 +2008,8 @@ describe('App Seed authoring', () => {
   it('keeps the Cat type domain for remaining fields after a manual palette edit', async () => {
     window.history.replaceState(null, '', '/?entity=cat&seed=v1-orange-manual')
     await renderApp()
-    act(() => host.querySelector<HTMLButtonElement>('[data-cat-breed="orange-tabby"]')?.click())
-    await flushEffects()
-    act(() => host.querySelector<HTMLButtonElement>('#avatar-controls-tab-style')?.click())
-    await flushEffects()
+    await selectBreed('[data-cat-breed="orange-tabby"]')
+    await openStyleDetail('palette')
     act(() => host.querySelector<HTMLButtonElement>('[aria-label="Coral"]')?.click())
     await flushEffects()
     act(() => Array.from(host.querySelectorAll<HTMLButtonElement>('button'))
@@ -1896,8 +2021,7 @@ describe('App Seed authoring', () => {
     expect(manual.get('palette')).toBe('coral')
     expect(manual.get('seedFields')).not.toContain(AVATAR_SEED_FIELD.palette)
 
-    act(() => host.querySelector<HTMLButtonElement>('#avatar-controls-tab-build')?.click())
-    await flushEffects()
+    await openBuildDetail('seed')
     act(() => host.querySelector<HTMLButtonElement>('[aria-label="Generate random Seed"]')?.click())
     await flushEffects()
     const rerolled = new URLSearchParams(window.location.search)
@@ -1908,7 +2032,8 @@ describe('App Seed authoring', () => {
 
   it('replays a field deterministically and makes manual edits leave Seed control', async () => {
     await renderApp()
-    const faceSeed = host.querySelector<HTMLButtonElement>('[aria-label="Follow Seed: Face"]')
+    await closeBuildDetail()
+    let faceSeed = host.querySelector<HTMLButtonElement>('[aria-label="Follow Seed: Face"]')
     expect(faceSeed?.getAttribute('aria-checked')).toBe('false')
 
     act(() => faceSeed?.click())
@@ -1916,6 +2041,7 @@ describe('App Seed authoring', () => {
     const first = new URLSearchParams(window.location.search)
     expect(first.get('seedFields')).toContain('scene.face.preset')
 
+    await openBuildDetail('seed')
     const seedInput = host.querySelector<HTMLInputElement>('[aria-label="Current Seed"]')
     act(() => {
       const valueSetter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')?.set
@@ -1935,6 +2061,8 @@ describe('App Seed authoring', () => {
 
     const changedFace = ['eyeShape', 'eyeW', 'eyeH', 'eyeGap', 'nose', 'mouth'].map(key => changedSeed.get(key))
 
+    await closeBuildDetail()
+    faceSeed = host.querySelector<HTMLButtonElement>('[aria-label="Follow Seed: Face"]')
     act(() => faceSeed?.click())
     await flushEffects()
     act(() => faceSeed?.click())
@@ -1942,9 +2070,7 @@ describe('App Seed authoring', () => {
     const replayed = new URLSearchParams(window.location.search)
     expect(['eyeShape', 'eyeW', 'eyeH', 'eyeGap', 'nose', 'mouth'].map(key => replayed.get(key))).toEqual(changedFace)
 
-    const cute = host.querySelector<HTMLButtonElement>('[aria-label="Cute"]')
-    act(() => cute?.click())
-    await flushEffects()
+    await selectFacePreset('Cute')
     expect(new URLSearchParams(window.location.search).get('seedFields')).toBeNull()
     expect(faceSeed?.getAttribute('aria-checked')).toBe('false')
   })
@@ -1959,13 +2085,12 @@ describe('App Seed authoring', () => {
     }])
     await renderApp()
 
-    const restore = host.querySelector<HTMLButtonElement>('[aria-label^="Restore preset saved"]')
-    act(() => restore?.click())
-    await flushEffects()
-
-    expect(host.querySelector<HTMLInputElement>('[aria-label="Current Seed"]')?.value).toBe('v1-preset')
-    expect(host.querySelector('[aria-label="Follow Seed: Face"]')?.getAttribute('aria-checked')).toBe('true')
+    await restoreSavedPreset()
     expect(new URLSearchParams(window.location.search).get('seedFields')).toBe('scene.face.preset')
+    await openBuildDetail('seed')
+    expect(host.querySelector<HTMLInputElement>('[aria-label="Current Seed"]')?.value).toBe('v1-preset')
+    await closeBuildDetail()
+    expect(host.querySelector('[aria-label="Follow Seed: Face"]')?.getAttribute('aria-checked')).toBe('true')
   })
 
   it('restores a saved Bear profile, its real dimensions, and its Seed-following fields', async () => {
@@ -1978,8 +2103,7 @@ describe('App Seed authoring', () => {
     }])
     await renderApp()
 
-    act(() => host.querySelector<HTMLButtonElement>('[aria-label^="Restore preset saved"]')?.click())
-    await flushEffects()
+    await restoreSavedPreset()
     const restored = new URLSearchParams(window.location.search)
     expect(restored.get('entity')).toBe('bear')
     expect(restored.get('breed')).toBe('giant-panda')
@@ -2025,8 +2149,7 @@ describe('App Seed authoring', () => {
     }])
     await renderApp()
 
-    act(() => host.querySelector<HTMLButtonElement>('[aria-label^="Restore preset saved"]')?.click())
-    await flushEffects()
+    await restoreSavedPreset()
     const restored = new URLSearchParams(window.location.search)
     expect(restored.get('entity')).toBe(species)
     expect(restored.get('breed')).toBe(id)
@@ -2077,6 +2200,7 @@ describe('App Seed authoring', () => {
     )
     await renderApp()
 
+    await closeBuildDetail()
     const entitySeed = host.querySelector<HTMLButtonElement>('[aria-label="Follow Seed: Avatar type"]')
     act(() => entitySeed?.click())
     await flushEffects()
@@ -2096,8 +2220,7 @@ describe('App Seed authoring', () => {
       '/?seed=v1-stable&entity=dog&palette=white&seedFields=scene.entity.preset,scene.appearance.paletteId'
     )
     await renderApp()
-    act(() => host.querySelector<HTMLButtonElement>('#avatar-controls-tab-style')?.click())
-    await flushEffects()
+    await openStyleDetail('palette')
     const baseColor = host.querySelector<HTMLInputElement>('[aria-label="Base"]')
     act(() => {
       const valueSetter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')?.set
@@ -2115,6 +2238,7 @@ describe('App Seed authoring', () => {
   it('authors a deterministic coat algorithm without serializing generated decals', async () => {
     window.history.replaceState(null, '', '/?seed=v1-tabby-cat&entity=cat&palette=tabby&coat=1')
     await renderApp()
+    await openBuildDetail('coat-pattern')
     const algorithmSeed = host.querySelector<HTMLButtonElement>('[aria-label="Follow Seed: Pattern algorithm"]')
     expect(algorithmSeed?.getAttribute('aria-checked')).toBe('false')
 
@@ -2139,6 +2263,7 @@ describe('App Seed authoring', () => {
       '/?seed=v1-light-patch&entity=cat&palette=tabby&coat=1&coatLightPatchLength=88&coatLightPatchOffsetY=-24&coatLightPatchWidth=124&coatLightPatchShape=ellipse'
     )
     await renderApp()
+    await openBuildDetail('coat-pattern')
     let params = new URLSearchParams(window.location.search)
     expect(params.get('coatLightPatchLength')).toBe('88')
     expect(params.get('coatLightPatchOffsetY')).toBe('-24')
@@ -2197,6 +2322,7 @@ describe('App Seed authoring', () => {
   it('uses a natural default when first enabling a coat but preserves a manually fixed coral palette', async () => {
     window.history.replaceState(null, '', '/?seed=v1-natural-default&entity=cat')
     await renderApp()
+    await closeBuildDetail()
     const toggle = host.querySelector<HTMLButtonElement>('[aria-label="Coat pattern"]')
 
     act(() => toggle?.click())
@@ -2207,6 +2333,7 @@ describe('App Seed authoring', () => {
     root = createRoot(host)
     window.history.replaceState(null, '', '/?seed=v1-manual-coral&entity=cat&palette=coral')
     await renderApp()
+    await closeBuildDetail()
     const manualToggle = host.querySelector<HTMLButtonElement>('[aria-label="Coat pattern"]')
 
     act(() => manualToggle?.click())
@@ -2215,9 +2342,11 @@ describe('App Seed authoring', () => {
     expect(manual.get('coat')).toBe('1')
     expect(manual.get('palette')).toBe('coral')
 
+    await openBuildDetail('coat-pattern')
     const layoutSeed = host.querySelector<HTMLButtonElement>('[aria-label="Follow Seed: Pattern layout"]')
     act(() => layoutSeed?.click())
     await flushEffects()
+    await openBuildDetail('seed')
     const seedInput = host.querySelector<HTMLInputElement>('[aria-label="Current Seed"]')
     act(() => {
       const valueSetter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')?.set
@@ -2239,6 +2368,7 @@ describe('App Seed authoring', () => {
       '/?seed=v1-layout-a&entity=cat&palette=tabby&coat=1&coatAlgorithm=mackerel&coatSeed=v1-concrete-layout'
     )
     await renderApp()
+    await openBuildDetail('coat-pattern')
     const layoutSeed = host.querySelector<HTMLButtonElement>('[aria-label="Follow Seed: Pattern layout"]')
     expect(layoutSeed?.getAttribute('aria-checked')).toBe('false')
 
@@ -2247,6 +2377,7 @@ describe('App Seed authoring', () => {
     expect(new URLSearchParams(window.location.search).get('seedFields'))
       .toBe('scene.appearance.coatPattern.seed')
 
+    await openBuildDetail('seed')
     const seedInput = host.querySelector<HTMLInputElement>('[aria-label="Current Seed"]')
     act(() => {
       const valueSetter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')?.set
@@ -2302,6 +2433,7 @@ describe('App Seed authoring', () => {
     expect(host.querySelector('[data-avatar-surface-decal="user-badge"]')).not.toBeNull()
     expect(host.querySelectorAll('[data-avatar-surface-decal="coat-mackerel-forehead-outer-left"]')).toHaveLength(1)
     expect(host.querySelectorAll('[data-avatar-surface-decal^="coat-mackerel-"]').length).toBeGreaterThan(0)
+    await openBuildDetail('coat-pattern')
     act(() => Array.from(host.querySelectorAll<HTMLButtonElement>('button')).find(button => button.textContent?.includes('Convert to editable decals'))?.click())
     await flushEffects()
     const converted = new URLSearchParams(window.location.search)
@@ -2341,8 +2473,7 @@ describe('App Seed authoring', () => {
       '/?seed=v1-tabby-cat&entity=custom&coat=1&seedFields=scene.appearance.coatPattern.algorithm'
     )
     await renderApp()
-    act(() => host.querySelector<HTMLButtonElement>('#avatar-controls-tab-body')?.click())
-    await flushEffects()
+    await openRightTab('body')
     act(() => host.querySelector<HTMLButtonElement>('[aria-label="Sphere"]')?.click())
     await flushEffects()
 
@@ -2434,6 +2565,7 @@ describe('App Seed authoring', () => {
       ))
     })
     await flushEffects()
+    await openBuildDetail('parameters')
 
     expect(onDefinitionChange).not.toHaveBeenCalled()
     expect(host.querySelector<HTMLInputElement>('[aria-label="Dog head width"]')?.value).toBe('124')
@@ -2481,6 +2613,7 @@ describe('App Seed authoring', () => {
 
     expect(onDefinitionChange).not.toHaveBeenCalled()
     expect(host.querySelector('[data-bear-breed="giant-panda"]')?.getAttribute('aria-pressed')).toBe('true')
+    await openBuildDetail('parameters')
     expect(host.querySelector<HTMLInputElement>('[aria-label="Bear ear width"]')?.value)
       .toBe(String(resolved.bearEarWidth))
     expect(host.querySelector<HTMLInputElement>('[aria-label="Bear head width"]')?.value)
@@ -2549,6 +2682,7 @@ describe('App Seed authoring', () => {
 
     expect(onDefinitionChange).not.toHaveBeenCalled()
     expect(host.querySelector(`[data-animal-breed="${id}"]`)?.getAttribute('aria-pressed')).toBe('true')
+    await openBuildDetail('parameters')
     const speciesLabel = species === 'guinea-pig'
       ? 'Guinea Pig'
       : `${species[0]!.toUpperCase()}${species.slice(1)}`
@@ -2657,6 +2791,7 @@ describe('App Seed authoring', () => {
       ))
     })
     await flushEffects()
+    await openBuildDetail('coat-pattern')
 
     act(() => Array.from(host.querySelectorAll<HTMLButtonElement>('button')).find(button => button.textContent?.includes('Convert to editable decals'))?.click())
     await flushEffects()
@@ -2690,8 +2825,7 @@ describe('App Seed authoring', () => {
     await flushEffects()
     expect(onDefinitionChange).not.toHaveBeenCalled()
 
-    act(() => host.querySelector<HTMLButtonElement>('#avatar-controls-tab-style')?.click())
-    await flushEffects()
+    await openRightTab('style')
     const paletteSeed = host.querySelector<HTMLButtonElement>('[aria-label="Follow Seed: Palette"]')
     expect(paletteSeed?.getAttribute('aria-checked')).toBe('true')
     act(() => paletteSeed?.click())
@@ -2722,14 +2856,13 @@ describe('App Seed authoring', () => {
     const lowHead = getConcreteHead()
     const lowCheek = host.querySelector('[data-avatar-surface-decal="fox-cheek-left"]')?.getAttribute('fill')
 
-    act(() => host.querySelector<HTMLButtonElement>('#avatar-controls-tab-style')?.click())
-    await flushEffects()
+    await openRightTab('style')
     const paletteSeed = host.querySelector<HTMLButtonElement>('[aria-label="Follow Seed: Palette"]')
     expect(paletteSeed?.getAttribute('aria-checked')).toBe('true')
     act(() => paletteSeed?.click())
     await flushEffects()
 
-    act(() => host.querySelector<HTMLButtonElement>('#avatar-controls-tab-build')?.click())
+    act(() => host.querySelector<HTMLButtonElement>('#avatar-controls-left-tab-build')?.click())
     await flushEffects()
     const seedInput = host.querySelector<HTMLInputElement>('[aria-label="Current Seed"]')
     expect(seedInput).not.toBeNull()
@@ -2745,8 +2878,7 @@ describe('App Seed authoring', () => {
     expect(getConcreteHead()).toBe(lowHead)
     expect(host.querySelector('[data-avatar-surface-decal="fox-cheek-left"]')?.getAttribute('fill')).toBe(lowCheek)
 
-    act(() => host.querySelector<HTMLButtonElement>('#avatar-controls-tab-style')?.click())
-    await flushEffects()
+    await openRightTab('style')
     act(() => host.querySelector<HTMLButtonElement>('[aria-label="Follow Seed: Palette"]')?.click())
     await flushEffects()
     expect(getConcreteHead()).not.toBe(lowHead)
@@ -2754,5 +2886,476 @@ describe('App Seed authoring', () => {
     const restored = new URLSearchParams(window.location.search)
     expect(restored.get('palette')).toBe('red-fox')
     expect(restored.get('seedFields')).toContain(AVATAR_SEED_FIELD.palette)
+  })
+})
+
+describe('App animation stage controls', () => {
+  const prepareAlertTimeline = () => {
+    window.history.replaceState(null, '', '/?entity=bear&animationPanel=1&seed=v1-stage-controls')
+    window.localStorage.setItem('oneworks-avatar-animation-timeline-v1', JSON.stringify({
+      durationMs: 6000,
+      tracks: [{
+        clips: [{
+          durationMs: 4600,
+          instanceId: 'alert-clip',
+          playbackRate: 1,
+          source: {
+            fallback: 'skip',
+            presetId: 'bear-alert-morph',
+            presetVersion: 1,
+            type: 'preset'
+          },
+          sourceOffsetMs: 0,
+          startMs: 0,
+          weight: 1
+        }],
+        trackId: 'alert-track',
+        weight: 1
+      }],
+      version: 1
+    }))
+  }
+
+  const selectAlertKeyframe = async () => {
+    const keyframe = host.querySelector<HTMLButtonElement>('[aria-label="Edit keyframe 7 of Exclamation"]')
+    expect(keyframe).not.toBeNull()
+    act(() => keyframe?.click())
+    await flushEffects()
+    const preview = host.querySelector<HTMLElement>('.avatar-app__preview-art--hero')
+    expect(preview?.getAttribute('data-avatar-animation-morphs')).not.toBeNull()
+    return preview
+  }
+
+  it('upgrades legacy generated loop defaults without overwriting later trims', async () => {
+    window.history.replaceState(null, '', '/?entity=bear&animationPanel=1&seed=v1-burst-duration-migration')
+    window.localStorage.setItem('oneworks-avatar-animation-timeline-v1', JSON.stringify({
+      durationMs: 30000,
+      tracks: [
+        {
+          clips: [{
+            durationMs: 3100,
+            instanceId: 'legacy-burst-clip',
+            playbackRate: 1,
+            source: {
+              fallback: 'skip',
+              presetId: 'bear-burst-morph',
+              presetVersion: 1,
+              type: 'preset'
+            },
+            sourceOffsetMs: 0,
+            startMs: 0,
+            weight: 1
+          }],
+          trackId: 'legacy-burst-track',
+          weight: 1
+        },
+        {
+          clips: [{
+            durationMs: 5000,
+            instanceId: 'trimmed-burst-clip',
+            playbackRate: 1,
+            source: {
+              fallback: 'skip',
+              presetId: 'bear-burst-morph',
+              presetVersion: 1,
+              type: 'preset'
+            },
+            sourceOffsetMs: 0,
+            startMs: 24000,
+            weight: 1
+          }],
+          trackId: 'trimmed-burst-track',
+          weight: 1
+        },
+        {
+          clips: [{
+            durationMs: 14100,
+            instanceId: 'legacy-alert-default-clip',
+            playbackRate: 1,
+            source: {
+              fallback: 'skip',
+              presetId: 'bear-alert-morph',
+              presetVersion: 1,
+              type: 'preset'
+            },
+            sourceOffsetMs: 0,
+            startMs: 0,
+            weight: 1
+          }],
+          trackId: 'legacy-alert-default-track',
+          weight: 1
+        },
+        {
+          clips: [{
+            durationMs: 21900,
+            instanceId: 'legacy-idle-default-clip',
+            playbackRate: 1,
+            source: {
+              fallback: 'skip',
+              presetId: 'idle',
+              presetVersion: 1,
+              type: 'preset'
+            },
+            sourceOffsetMs: 0,
+            startMs: 0,
+            weight: 1
+          }],
+          trackId: 'legacy-idle-default-track',
+          weight: 1
+        }
+      ],
+      version: 1
+    }))
+
+    await renderApp()
+
+    const persisted = JSON.parse(
+      window.localStorage.getItem('oneworks-avatar-animation-timeline-v1') ?? 'null'
+    )
+    expect(persisted.tracks[0].clips[0].durationMs).toBe(3200)
+    expect(persisted.tracks[1].clips[0].durationMs).toBe(5000)
+    expect(persisted.tracks[2].clips[0].durationMs).toBe(3200)
+    expect(persisted.tracks[3].clips[0].durationMs).toBe(3200)
+  })
+
+  it('keeps the evaluated timeline frame when switching the stage drag mode', async () => {
+    prepareAlertTimeline()
+    await renderApp()
+    const preview = await selectAlertKeyframe()
+    const morphs = preview?.getAttribute('data-avatar-animation-morphs')
+    const playhead = host.querySelector('.avatar-animation-panel__playhead')?.getAttribute('style')
+
+    act(() => host.querySelector<HTMLButtonElement>('[aria-label="Move with primary drag"]')?.click())
+    await flushEffects()
+
+    expect(preview?.getAttribute('data-avatar-animation-morphs')).toBe(morphs)
+    expect(host.querySelector('.avatar-animation-panel__playhead')?.getAttribute('style')).toBe(playhead)
+    expect(host.querySelector('[aria-label="Move with primary drag"]')?.getAttribute('aria-pressed')).toBe('true')
+  })
+
+  it('starts orientation changes from the visible animated view without clearing the frame', async () => {
+    prepareAlertTimeline()
+    await renderApp()
+    const preview = await selectAlertKeyframe()
+    const morphs = preview?.getAttribute('data-avatar-animation-morphs')
+    const playhead = host.querySelector('.avatar-animation-panel__playhead')?.getAttribute('style')
+    const orientation = host.querySelector<HTMLButtonElement>('.avatar-orientation-control__orbit')
+    const beforeLabel = orientation?.getAttribute('aria-label')
+
+    act(() => orientation?.dispatchEvent(new KeyboardEvent('keydown', {
+      bubbles: true,
+      key: 'ArrowRight'
+    })))
+    await flushEffects()
+
+    expect(preview?.getAttribute('data-avatar-animation-morphs')).toBe(morphs)
+    expect(host.querySelector('.avatar-animation-panel__playhead')?.getAttribute('style')).toBe(playhead)
+    expect(orientation?.getAttribute('aria-label')).not.toBe(beforeLabel)
+  })
+
+  it('previews library animations only while the Timeline is closed and restores its saved frame on reopen', async () => {
+    prepareAlertTimeline()
+    await renderApp()
+    const preview = await selectAlertKeyframe()
+    const timelineMorphs = preview?.getAttribute('data-avatar-animation-morphs')
+    const persistedBefore = window.localStorage.getItem('oneworks-avatar-animation-timeline-v1')
+
+    act(() => host.querySelector<HTMLButtonElement>('[aria-label="Close animation timeline"]')?.click())
+    await flushEffects()
+    expect(host.querySelector('#avatar-animation-panel')).toBeNull()
+
+    act(() => host.querySelector<HTMLButtonElement>('#avatar-controls-left-tab-animation')?.click())
+    await flushEffects()
+    expect(host.querySelector('#avatar-animation-panel')).toBeNull()
+
+    act(() => host.querySelector<HTMLButtonElement>('button[aria-label="Three-ball loading"]')?.click())
+    await flushEffects()
+    expect(host.querySelector('#avatar-animation-panel')).toBeNull()
+    expect(host.querySelector('[aria-label="Three-ball loading"]')?.getAttribute('data-selected')).toBe('true')
+    expect(preview?.getAttribute('data-avatar-animation-morphs')).not.toBe(timelineMorphs)
+    expect(window.localStorage.getItem('oneworks-avatar-animation-timeline-v1')).toBe(persistedBefore)
+
+    act(() => host.querySelector<HTMLButtonElement>('[aria-label="Open animation editor"]')?.click())
+    await flushEffects()
+    expect(host.querySelector('#avatar-animation-panel')).not.toBeNull()
+    expect(host.querySelectorAll('.avatar-animation-panel__clip')).toHaveLength(1)
+    expect(preview?.getAttribute('data-avatar-animation-morphs')).toBe(timelineMorphs)
+    expect(window.localStorage.getItem('oneworks-avatar-animation-timeline-v1')).toBe(persistedBefore)
+  })
+
+  it('keeps library preset edits temporary, resets them on reselect, and carries them into a dropped clip', async () => {
+    prepareAlertTimeline()
+    await renderApp()
+    act(() => host.querySelector<HTMLButtonElement>('[aria-label="Close animation timeline"]')?.click())
+    await flushEffects()
+    act(() => host.querySelector<HTMLButtonElement>('#avatar-controls-left-tab-animation')?.click())
+    await flushEffects()
+
+    const persistedBefore = window.localStorage.getItem('oneworks-avatar-animation-timeline-v1')
+    const selectNotification = async () => {
+      act(() => host.querySelector<HTMLButtonElement>('button[aria-label="Notification"]')?.click())
+      await flushEffects()
+    }
+    await selectNotification()
+    expect(host.querySelector('[aria-label="Animation preset inspector"]')).not.toBeNull()
+    expect(host.querySelector('[role="note"]')?.textContent).toContain('不会改写原始动画')
+    const framePreviewSources = Array.from(
+      host.querySelectorAll<HTMLImageElement>('[aria-label="Animation preset frame list"] img'),
+      image => image.src
+    )
+    expect(framePreviewSources).toHaveLength(8)
+    expect(new Set(framePreviewSources).size).toBeGreaterThan(1)
+
+    const preview = host.querySelector<HTMLElement>('.avatar-app__preview-art--hero')!
+    const readPreviewFrame = () => JSON.stringify([
+      preview.getAttribute('data-avatar-animation-morphs'),
+      preview.getAttribute('data-avatar-animation-entities'),
+      preview.getAttribute('data-avatar-animation-shapes')
+    ])
+    const openDraftFrame = async (index: number) => {
+      const frames = host.querySelectorAll<HTMLButtonElement>('[aria-label="Animation preset frame list"] button')
+      act(() => frames[index]?.click())
+      await flushEffects()
+      expect(host.querySelector('[aria-label="Animation preset frame detail"]')).not.toBeNull()
+    }
+    await openDraftFrame(0)
+    const firstFrame = readPreviewFrame()
+    act(() => host.querySelector<HTMLButtonElement>('[aria-label="Back to preset inspector"]')?.click())
+    await flushEffects()
+    await openDraftFrame(4)
+    const fifthFrame = readPreviewFrame()
+    expect(fifthFrame).not.toBe(firstFrame)
+
+    const originalFrameTime = Number(
+      host.querySelector<HTMLInputElement>('input[aria-label="动画帧时间"]')?.value
+    )
+    const changedFrameTime = originalFrameTime + .1
+    const originalEasing = host.querySelector<HTMLButtonElement>(
+      '[aria-label="动画帧缓动类型"] button[aria-pressed="true"]'
+    )?.getAttribute('aria-label')
+    const changedEasingButton = Array.from(host.querySelectorAll<HTMLButtonElement>(
+      '[aria-label="动画帧缓动类型"] button'
+    )).find(button => button.getAttribute('aria-label') !== originalEasing)!
+    const changedEasing = changedEasingButton.getAttribute('aria-label')!
+    const changedEasingValue = ({
+      '线性': 'linear',
+      '缓入': 'ease-in',
+      '缓出': 'ease-out',
+      '缓入缓出': 'ease-in-out'
+    } as const)[changedEasing as '线性' | '缓入' | '缓出' | '缓入缓出']
+    const setFrameTime = async (value: number) => {
+      const input = host.querySelector<HTMLInputElement>('input[aria-label="动画帧时间"]')!
+      act(() => {
+        const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')?.set
+        setter?.call(input, String(value))
+        input.dispatchEvent(new Event('change', { bubbles: true }))
+      })
+      await flushEffects()
+    }
+    await setFrameTime(changedFrameTime)
+    act(() => changedEasingButton.click())
+    await flushEffects()
+    expect(Number(host.querySelector<HTMLInputElement>('input[aria-label="动画帧时间"]')?.value))
+      .toBeCloseTo(changedFrameTime)
+    expect(host.querySelector<HTMLButtonElement>(
+      `[aria-label="动画帧缓动类型"] button[aria-label="${changedEasing}"]`
+    )?.getAttribute('aria-pressed')).toBe('true')
+    act(() => host.querySelector<HTMLButtonElement>('[aria-label="Back to preset inspector"]')?.click())
+    await flushEffects()
+
+    const setDraftColor = async (value: string) => {
+      const input = host.querySelector<HTMLInputElement>('[aria-label="Animation preset inspector"] input[type="color"]')!
+      act(() => {
+        const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')?.set
+        setter?.call(input, value)
+        input.dispatchEvent(new Event('change', { bubbles: true }))
+      })
+      await flushEffects()
+    }
+    await setDraftColor('#ff3366')
+    expect(host.querySelector<HTMLInputElement>('[aria-label="Animation preset inspector"] input[type="color"]')?.value)
+      .toBe('#ff3366')
+    expect(window.localStorage.getItem('oneworks-avatar-animation-timeline-v1')).toBe(persistedBefore)
+
+    await selectNotification()
+    expect(host.querySelector<HTMLInputElement>('[aria-label="Animation preset inspector"] input[type="color"]')?.value)
+      .toBe('#3b82f6')
+    await openDraftFrame(4)
+    expect(Number(host.querySelector<HTMLInputElement>('input[aria-label="动画帧时间"]')?.value))
+      .toBeCloseTo(originalFrameTime)
+    expect(host.querySelector<HTMLButtonElement>(
+      `[aria-label="动画帧缓动类型"] button[aria-label="${originalEasing}"]`
+    )?.getAttribute('aria-pressed')).toBe('true')
+    await setFrameTime(changedFrameTime)
+    act(() => host.querySelector<HTMLButtonElement>(
+      `[aria-label="动画帧缓动类型"] button[aria-label="${changedEasing}"]`
+    )?.click())
+    await flushEffects()
+    act(() => host.querySelector<HTMLButtonElement>('[aria-label="Back to preset inspector"]')?.click())
+    await flushEffects()
+    await setDraftColor('#ff3366')
+
+    act(() => host.querySelector<HTMLButtonElement>('[aria-label="Open animation editor"]')?.click())
+    await flushEffects()
+    const dragValues = new Map<string, string>()
+    const dataTransfer = {
+      dropEffect: 'copy',
+      effectAllowed: 'copy',
+      getData: (type: string) => dragValues.get(type) ?? '',
+      get types() { return [...dragValues.keys()] },
+      setData: (type: string, value: string) => { dragValues.set(type, value) }
+    }
+    const dragStart = new Event('dragstart', { bubbles: true, cancelable: true })
+    Object.defineProperty(dragStart, 'dataTransfer', { value: dataTransfer })
+    act(() => host.querySelector<HTMLButtonElement>('button[aria-label="Notification"]')?.dispatchEvent(dragStart))
+
+    const newTrack = host.querySelector<HTMLElement>('.avatar-animation-panel__new-track')!
+    vi.spyOn(newTrack, 'getBoundingClientRect').mockReturnValue({
+      bottom: 44, height: 44, left: 0, right: 600, top: 0, width: 600, x: 0, y: 0, toJSON: () => ({})
+    })
+    const drop = new Event('drop', { bubbles: true, cancelable: true })
+    Object.defineProperties(drop, {
+      clientX: { value: 192 },
+      dataTransfer: { value: dataTransfer }
+    })
+    act(() => newTrack.dispatchEvent(drop))
+    await flushEffects()
+
+    expect(host.querySelectorAll('.avatar-animation-panel__clip')).toHaveLength(2)
+    expect(host.querySelector<HTMLInputElement>('[aria-label="Animation clip inspector"] input[type="color"]')?.value)
+      .toBe('#ff3366')
+    expect(window.localStorage.getItem('oneworks-avatar-animation-timeline-v1')).not.toBe(persistedBefore)
+    const persistedAfter = JSON.parse(
+      window.localStorage.getItem('oneworks-avatar-animation-timeline-v1') ?? 'null'
+    )
+    const droppedClip = persistedAfter.tracks
+      .flatMap((track: { clips: unknown[] }) => track.clips)
+      .find((clip: { parameterValues?: { orbColor?: string } }) => clip.parameterValues?.orbColor === '#ff3366')
+    expect(droppedClip.source.type).toBe('inline')
+    expect(droppedClip.source.clip.keyframes[4].atMs).toBe(Math.round(changedFrameTime * 1000))
+    expect(droppedClip.source.clip.keyframes[4].easing).toBe(changedEasingValue)
+  })
+
+  it('undoes and redoes timeline commands without falling back to URL history', async () => {
+    prepareAlertTimeline()
+    await renderApp()
+    const clip = host.querySelector<HTMLElement>('.avatar-animation-panel__clip')
+    expect(clip).not.toBeNull()
+    act(() => clip?.click())
+    await flushEffects()
+
+    const playbackRate = Array.from(host.querySelectorAll<HTMLLabelElement>('.avatar-animation-sidebar__field'))
+      .find(label => label.textContent?.includes('播放速度'))
+      ?.querySelector<HTMLInputElement>('input[type="number"]')
+    expect(playbackRate?.value).toBe('1')
+    act(() => {
+      const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')?.set
+      setter?.call(playbackRate, '1.5')
+      playbackRate?.dispatchEvent(new Event('input', { bubbles: true }))
+    })
+    await flushEffects()
+    expect(playbackRate?.value).toBe('1.5')
+
+    act(() => window.dispatchEvent(new KeyboardEvent('keydown', {
+      bubbles: true,
+      ctrlKey: true,
+      key: 'z'
+    })))
+    await flushEffects()
+    expect(Array.from(host.querySelectorAll<HTMLLabelElement>('.avatar-animation-sidebar__field'))
+      .find(label => label.textContent?.includes('播放速度'))
+      ?.querySelector<HTMLInputElement>('input[type="number"]')?.value).toBe('1')
+
+    act(() => window.dispatchEvent(new KeyboardEvent('keydown', {
+      bubbles: true,
+      ctrlKey: true,
+      key: 'y'
+    })))
+    await flushEffects()
+    expect(Array.from(host.querySelectorAll<HTMLLabelElement>('.avatar-animation-sidebar__field'))
+      .find(label => label.textContent?.includes('播放速度'))
+      ?.querySelector<HTMLInputElement>('input[type="number"]')?.value).toBe('1.5')
+
+    const deleteClip = Array.from(host.querySelectorAll<HTMLButtonElement>('button'))
+      .find(button => button.textContent?.includes('删除片段'))
+    act(() => deleteClip?.click())
+    await flushEffects()
+    expect(host.querySelectorAll('.avatar-animation-panel__clip')).toHaveLength(0)
+
+    act(() => window.dispatchEvent(new KeyboardEvent('keydown', {
+      bubbles: true,
+      ctrlKey: true,
+      key: 'z'
+    })))
+    await flushEffects()
+    expect(host.querySelectorAll('.avatar-animation-panel__clip')).toHaveLength(1)
+    expect(host.querySelector('[aria-label="Animation clip inspector"]')).not.toBeNull()
+
+    act(() => window.dispatchEvent(new KeyboardEvent('keydown', {
+      bubbles: true,
+      ctrlKey: true,
+      key: 'z',
+      shiftKey: true
+    })))
+    await flushEffects()
+    expect(host.querySelectorAll('.avatar-animation-panel__clip')).toHaveLength(0)
+  })
+
+  it('persists Timeline edits and restores them after the App remounts', async () => {
+    prepareAlertTimeline()
+    const initialTimeline = JSON.parse(
+      window.localStorage.getItem('oneworks-avatar-animation-timeline-v1') ?? 'null'
+    )
+    initialTimeline.tracks[0].clips[0].frameSequence = {
+      firstFrameIndex: 1,
+      lastFrameIndex: 5,
+      loop: { endFrameIndex: 4, iterations: 3, startFrameIndex: 2 }
+    }
+    window.localStorage.setItem('oneworks-avatar-animation-timeline-v1', JSON.stringify(initialTimeline))
+    await renderApp()
+    act(() => host.querySelector<HTMLElement>('.avatar-animation-panel__clip')?.click())
+    await flushEffects()
+
+    const findPlaybackRate = () => Array.from(
+      host.querySelectorAll<HTMLLabelElement>('.avatar-animation-sidebar__field')
+    ).find(label => label.textContent?.includes('播放速度'))
+      ?.querySelector<HTMLInputElement>('input[type="number"]')
+    const playbackRate = findPlaybackRate()
+    act(() => {
+      const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')?.set
+      setter?.call(playbackRate, '1.75')
+      playbackRate?.dispatchEvent(new Event('input', { bubbles: true }))
+    })
+    await flushEffects()
+
+    const loopIterations = host.querySelector<HTMLSelectElement>('select[aria-label="循环遍数"]')
+    expect(host.querySelector<HTMLSelectElement>('select[aria-label="序列起始帧"]')?.value).toBe('1')
+    expect(host.querySelector<HTMLSelectElement>('select[aria-label="序列结束帧"]')?.value).toBe('5')
+    expect(loopIterations?.value).toBe('3')
+    act(() => {
+      if (loopIterations == null) return
+      loopIterations.value = 'infinite'
+      loopIterations.dispatchEvent(new Event('change', { bubbles: true }))
+    })
+    await flushEffects()
+
+    const persisted = JSON.parse(
+      window.localStorage.getItem('oneworks-avatar-animation-timeline-v1') ?? 'null'
+    )
+    expect(persisted.tracks[0].clips[0].playbackRate).toBe(1.75)
+    expect(persisted.tracks[0].clips[0].frameSequence).toEqual({
+      firstFrameIndex: 1,
+      lastFrameIndex: 5,
+      loop: { endFrameIndex: 4, iterations: 'infinite', startFrameIndex: 2 }
+    })
+
+    act(() => root.unmount())
+    root = createRoot(host)
+    await renderApp()
+    act(() => host.querySelector<HTMLElement>('.avatar-animation-panel__clip')?.click())
+    await flushEffects()
+
+    expect(findPlaybackRate()?.value).toBe('1.75')
+    expect(host.querySelector<HTMLSelectElement>('select[aria-label="循环遍数"]')?.value).toBe('infinite')
   })
 })

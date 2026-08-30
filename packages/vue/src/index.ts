@@ -7,16 +7,31 @@ import type {
   AvatarAnimationClip,
   AvatarAnimationLibrary,
   AvatarAnimationRef,
+  AvatarAnimationTimeline,
+  AvatarAnimationTimelinePresetResolver,
   AvatarDefinition
 } from '@oneworks/avatar'
-import { createAvatar, createAvatarEditor } from '@oneworks/avatar-web'
+import {
+  createAvatar,
+  createAvatarAnimationPicker,
+  createAvatarEditor,
+  createAvatarPresetPicker
+} from '@oneworks/avatar-web'
 import type {
+  AvatarAnimationPickerMountOptions,
+  AvatarAnimationPickerOption,
   AvatarCaptureOptions,
   AvatarEditorMount,
   AvatarEditorMountOptions,
   AvatarMount,
   AvatarMountOptions,
   AvatarPlayOptions,
+  AvatarPresetPickerMountOptions,
+  AvatarPresetPickerOption,
+  AvatarPickerMount,
+  AvatarTimelineOptions,
+  AvatarTrackInput,
+  AvatarTrackUpdate,
   AvatarTheme
 } from '@oneworks/avatar-web'
 
@@ -26,9 +41,18 @@ export type {
   AvatarAnimationKeyframe,
   AvatarAnimationLibrary,
   AvatarAnimationRef,
+  AvatarAnimationTimeline,
+  AvatarAnimationTimelineClipInstance,
+  AvatarAnimationTimelinePresetResolver,
+  AvatarAnimationTimelineTrack,
+  AvatarAnimationPickerOption,
   AvatarCaptureOptions,
   AvatarDefinition,
   AvatarPlayOptions,
+  AvatarPresetPickerOption,
+  AvatarTimelineOptions,
+  AvatarTrackInput,
+  AvatarTrackUpdate,
   AvatarTheme
 } from '@oneworks/avatar-web'
 
@@ -37,15 +61,19 @@ type AvatarAnimation = AvatarAnimationClip | AvatarAnimationRef | null
 export interface OneWorksAvatarHandle {
   capture(options: AvatarCaptureOptions): ReturnType<AvatarMount['capture']>
   getDefinition(): AvatarDefinition
-  pause(): void
+  pause(trackId?: string): void
   play(
     animation: Exclude<AvatarAnimation, null>,
     options?: AvatarPlayOptions
   ): ReturnType<AvatarMount['play']>
-  resume(): void
-  seek(timeMs: number): void
+  removeTrack(trackId: string): void
+  resume(trackId?: string): void
+  seek(timeMs: number, trackId?: string): void
   setDefinition(definition: AvatarDefinition): void
-  stop(options?: { readonly reset?: boolean }): void
+  setTimeline(timeline: AvatarAnimationTimeline | null, options?: AvatarTimelineOptions): void
+  setTracks(tracks: readonly AvatarTrackInput[]): ReturnType<AvatarMount['setTracks']>
+  stop(options?: { readonly reset?: boolean; readonly trackId?: string }): void
+  updateTrack(trackId: string, update: AvatarTrackUpdate): void
 }
 
 export interface OneWorksAvatarEditorHandle {
@@ -60,7 +88,12 @@ const avatarProps = {
   autoplay: { default: false, type: Boolean },
   definition: { default: undefined, type: Object as PropType<AvatarDefinition | undefined> },
   interactive: { default: false, type: Boolean },
-  theme: { default: 'system', type: String as PropType<AvatarTheme> }
+  resolveTimelinePreset: { default: undefined, type: Function as PropType<AvatarAnimationTimelinePresetResolver | undefined> },
+  theme: { default: 'system', type: String as PropType<AvatarTheme> },
+  timeline: { default: null, type: Object as PropType<AvatarAnimationTimeline | null> },
+  timelineLoop: { default: false, type: Boolean },
+  timelineSpeed: { default: 1, type: Number },
+  timelineTimeMs: { default: 0, type: Number }
 }
 
 const oneWorksAvatarComponent = defineComponent({
@@ -84,7 +117,12 @@ const oneWorksAvatarComponent = defineComponent({
       autoplay: props.autoplay,
       definition: props.definition,
       interactive: props.interactive,
-      theme: props.theme
+      resolveTimelinePreset: props.resolveTimelinePreset,
+      theme: props.theme,
+      timeline: props.timeline,
+      timelineLoop: props.timelineLoop,
+      timelineSpeed: props.timelineSpeed,
+      timelineTimeMs: props.timelineTimeMs
     })
 
     onMounted(() => {
@@ -111,21 +149,32 @@ const oneWorksAvatarComponent = defineComponent({
       props.autoplay,
       props.definition,
       props.interactive,
-      props.theme
+      props.resolveTimelinePreset,
+      props.theme,
+      props.timeline,
+      props.timelineLoop,
+      props.timelineSpeed,
+      props.timelineTimeMs
     ], () => mount?.update(options()))
     onBeforeUnmount(() => mount?.destroy())
 
     expose({
       capture: (captureOptions: AvatarCaptureOptions) => mount!.capture(captureOptions),
       getDefinition: () => mount!.getDefinition(),
-      pause: () => mount!.pause(),
+      pause: (trackId?: string) => mount!.pause(trackId),
       play: (animation: Exclude<AvatarAnimation, null>, playOptions?: AvatarPlayOptions) => (
         mount!.play(animation, playOptions)
       ),
-      resume: () => mount!.resume(),
-      seek: (timeMs: number) => mount!.seek(timeMs),
+      removeTrack: (trackId: string) => mount!.removeTrack(trackId),
+      resume: (trackId?: string) => mount!.resume(trackId),
+      seek: (timeMs: number, trackId?: string) => mount!.seek(timeMs, trackId),
       setDefinition: (definition: AvatarDefinition) => mount!.setDefinition(definition),
-      stop: (options?: { readonly reset?: boolean }) => mount!.stop(options)
+      setTimeline: (timeline: AvatarAnimationTimeline | null, options?: AvatarTimelineOptions) => (
+        mount!.setTimeline(timeline, options)
+      ),
+      setTracks: (tracks: readonly AvatarTrackInput[]) => mount!.setTracks(tracks),
+      stop: (options?: { readonly reset?: boolean; readonly trackId?: string }) => mount!.stop(options),
+      updateTrack: (trackId: string, update: AvatarTrackUpdate) => mount!.updateTrack(trackId, update)
     })
 
     return () => h('div', { ...attrs, ref: host })
@@ -188,3 +237,116 @@ const oneWorksAvatarEditorComponent = defineComponent({
 export const OneWorksAvatarEditor = oneWorksAvatarEditorComponent as typeof oneWorksAvatarEditorComponent & {
   new(): InstanceType<typeof oneWorksAvatarEditorComponent> & OneWorksAvatarEditorHandle
 }
+
+const animationPickerProps = {
+  draggable: { default: false, type: Boolean },
+  emptyLabel: { default: 'No animations found', type: String },
+  options: { default: () => [], type: Array as PropType<readonly AvatarAnimationPickerOption[]> },
+  placeholder: { default: 'Search animations', type: String },
+  searchable: { default: true, type: Boolean },
+  value: { default: null, type: String as PropType<string | null> }
+}
+
+export const OneWorksAvatarAnimationPicker = defineComponent({
+  emits: {
+    change: (_option: AvatarAnimationPickerOption) => true,
+    'drag-start': (_option: AvatarAnimationPickerOption) => true
+  },
+  name: 'OneWorksAvatarAnimationPicker',
+  props: animationPickerProps,
+  setup(props, { attrs, emit }) {
+    const host = ref<HTMLElement | null>(null)
+    let mount: AvatarPickerMount<AvatarAnimationPickerMountOptions> | null = null
+    const options = (): AvatarAnimationPickerMountOptions => ({
+      draggable: props.draggable,
+      emptyLabel: props.emptyLabel,
+      options: props.options,
+      placeholder: props.placeholder,
+      searchable: props.searchable,
+      value: props.value
+    })
+    const handleChange = (event: Event) => emit(
+      'change',
+      (event as CustomEvent<{ option: AvatarAnimationPickerOption }>).detail.option
+    )
+    const handleDragStart = (event: Event) => emit(
+      'drag-start',
+      (event as CustomEvent<{ option: AvatarAnimationPickerOption }>).detail.option
+    )
+
+    onMounted(() => {
+      if (host.value == null) return
+      host.value.addEventListener('animationchange', handleChange)
+      host.value.addEventListener('animationdragstart', handleDragStart)
+      mount = createAvatarAnimationPicker(host.value, options())
+    })
+    watch(() => [
+      props.draggable,
+      props.emptyLabel,
+      props.options,
+      props.placeholder,
+      props.searchable,
+      props.value
+    ], () => mount?.update(options()))
+    onBeforeUnmount(() => {
+      host.value?.removeEventListener('animationchange', handleChange)
+      host.value?.removeEventListener('animationdragstart', handleDragStart)
+      mount?.destroy()
+    })
+
+    return () => h('div', { ...attrs, ref: host })
+  }
+})
+
+const presetPickerProps = {
+  emptyLabel: { default: 'No avatars found', type: String },
+  options: { default: () => [], type: Array as PropType<readonly AvatarPresetPickerOption[]> },
+  placeholder: { default: 'Search avatars', type: String },
+  searchable: { default: false, type: Boolean },
+  theme: { default: 'system', type: String as PropType<AvatarTheme> },
+  value: { default: null, type: String as PropType<string | null> }
+}
+
+export const OneWorksAvatarPresetPicker = defineComponent({
+  emits: {
+    change: (_option: AvatarPresetPickerOption) => true
+  },
+  name: 'OneWorksAvatarPresetPicker',
+  props: presetPickerProps,
+  setup(props, { attrs, emit }) {
+    const host = ref<HTMLElement | null>(null)
+    let mount: AvatarPickerMount<AvatarPresetPickerMountOptions> | null = null
+    const options = (): AvatarPresetPickerMountOptions => ({
+      emptyLabel: props.emptyLabel,
+      options: props.options,
+      placeholder: props.placeholder,
+      searchable: props.searchable,
+      theme: props.theme,
+      value: props.value
+    })
+    const handleChange = (event: Event) => emit(
+      'change',
+      (event as CustomEvent<{ option: AvatarPresetPickerOption }>).detail.option
+    )
+
+    onMounted(() => {
+      if (host.value == null) return
+      host.value.addEventListener('avatarpresetchange', handleChange)
+      mount = createAvatarPresetPicker(host.value, options())
+    })
+    watch(() => [
+      props.emptyLabel,
+      props.options,
+      props.placeholder,
+      props.searchable,
+      props.theme,
+      props.value
+    ], () => mount?.update(options()))
+    onBeforeUnmount(() => {
+      host.value?.removeEventListener('avatarpresetchange', handleChange)
+      mount?.destroy()
+    })
+
+    return () => h('div', { ...attrs, ref: host })
+  }
+})

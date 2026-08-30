@@ -4,7 +4,15 @@ import { memo, useEffect, useId, useMemo, useRef, useState } from 'react'
 import type { KeyboardEvent, PointerEvent, WheelEvent } from 'react'
 
 import { AVATAR_VIEW_RANGES } from '@oneworks/avatar'
-import type { AvatarBackgroundStyle, AvatarPalette, AvatarPixelEffect } from '@oneworks/avatar'
+import type {
+  AvatarAnimationEntityPart,
+  AvatarAnimationShape,
+  AvatarBackgroundStyle,
+  AvatarEntityPartShapeMorphs,
+  AvatarEntityPartTransforms,
+  AvatarPalette,
+  AvatarPixelEffect
+} from '@oneworks/avatar'
 import { applyAvatarColorGrade } from './avatarColorGrade'
 import type { AvatarColorGrade } from './avatarColorGrade'
 import { paintPixelatedAvatarCanvas } from './avatarPixelation'
@@ -89,12 +97,15 @@ export const DEFAULT_AVATAR_VIEW_STATE: AvatarViewState = {
 }
 
 export interface InteractiveAvatarProps {
+  readonly auxiliaryParts?: readonly AvatarAnimationEntityPart[]
+  readonly auxiliaryShapes?: readonly AvatarAnimationShape[]
   readonly colorGrade?: AvatarColorGrade
   readonly avatarOutlineStyle?: AvatarOutlineStyle
   readonly avatarShadowStyle?: AvatarDropShadowStyle
   readonly backgroundStyle: AvatarBackgroundStyle
   readonly bodyShape: AvatarBodyShape
   readonly bottomTaper?: number
+  readonly canvasBackgroundColor?: string
   readonly entityParts?: readonly AvatarEntityPart[]
   readonly entityPreset?: AvatarEntityPreset
   readonly faceStyleTransitionsEnabled?: boolean
@@ -108,6 +119,8 @@ export interface InteractiveAvatarProps {
   readonly onInteractionStart?: () => void
   readonly onViewStateChange: (state: AvatarViewState) => void
   readonly palette: AvatarPalette
+  readonly partShapeMorphs?: AvatarEntityPartShapeMorphs
+  readonly partTransforms?: AvatarEntityPartTransforms
   readonly pixelEffect?: AvatarPixelEffect
   readonly renderSurfaceCells?: boolean
   readonly shadowStyle: AvatarFaceShadowStyle
@@ -157,6 +170,12 @@ const EMPTY_PROJECTED_FACE: ProjectedFace = {
   nose: null,
   visible: false
 }
+const EMPTY_PROJECTED_SURFACE_DECALS: readonly ProjectedSurfaceDecal[] = []
+const EMPTY_ENTITY_PART_GEOMETRIES: Readonly<Record<string, BodyGeometry>> = {}
+const CANONICAL_AUXILIARY_POSE: AvatarPose = { pitch: 0, yaw: 0 }
+const isIndependentAuxiliaryPart = (item: AvatarAnimationEntityPart) => (
+  item.composition === 'independent-depth'
+)
 const ROTATION_PER_PIXEL = Math.PI / 280
 const KEY_ROTATION = Math.PI / 12
 const KEY_POSITION_MOVE = 8
@@ -230,12 +249,15 @@ function EntityPrimitive({
 
 const getEntityPartGeometryOptions = (
   part: AvatarEntityPart,
-  compositorDensity: number = 2
+  compositorDensity: number = 2,
+  shapeMorph?: AvatarEntityPartShapeMorphs[string]
 ): AvatarBodyGeometryOptions => ({
   bottomTaper: part.bottomTaper,
   compositorDensity,
   cutAngle: part.cutAngle,
   hollow: part.hollow,
+  morphFromShape: shapeMorph?.fromShape,
+  morphProgress: shapeMorph?.progress,
   occlusionAmount: part.occlusionAmount,
   occlusionPole: part.occlusionPole,
   rotationX: part.rotationX,
@@ -250,9 +272,10 @@ const getEntityPartGeometryOptions = (
 
 const getEntityFaceGeometryOptions = (
   part: AvatarEntityPart,
-  preset: AvatarEntityPreset
+  preset: AvatarEntityPreset,
+  shapeMorph?: AvatarEntityPartShapeMorphs[string]
 ): AvatarBodyGeometryOptions => ({
-  ...getEntityPartGeometryOptions(part),
+  ...getEntityPartGeometryOptions(part, 2, shapeMorph),
   faceOffsetY: preset === 'dog' ? -22 : undefined
 })
 
@@ -261,13 +284,14 @@ const buildEntityPartGeometry = (
   pose: AvatarPose,
   lightDirection: AvatarLightDirection,
   gridDensity: number,
-  compositorDensity: number
+  compositorDensity: number,
+  shapeMorph?: AvatarEntityPartShapeMorphs[string]
 ) => buildAvatarBodyGeometry(
-  part.shape,
+  shapeMorph?.toShape ?? part.shape,
   pose,
   lightDirection,
   gridDensity,
-  getEntityPartGeometryOptions(part, compositorDensity)
+  getEntityPartGeometryOptions(part, compositorDensity, shapeMorph)
 )
 
 const entityPartGeometryCache = new WeakMap<readonly AvatarEntityPart[], Map<string, Record<string, BodyGeometry>>>()
@@ -277,7 +301,8 @@ const buildEntityPartGeometries = (
   pose: AvatarPose,
   lightDirection: AvatarLightDirection,
   gridDensity: number,
-  compositorDensity: number
+  compositorDensity: number,
+  shapeMorphs?: AvatarEntityPartShapeMorphs
 ): Record<string, BodyGeometry> => {
   const cacheKey = [
     pose.pitch.toFixed(5),
@@ -285,7 +310,8 @@ const buildEntityPartGeometries = (
     lightDirection.azimuth.toFixed(3),
     lightDirection.elevation.toFixed(3),
     gridDensity,
-    compositorDensity.toFixed(3)
+    compositorDensity.toFixed(3),
+    JSON.stringify(shapeMorphs ?? {})
   ].join(':')
   const partCache = entityPartGeometryCache.get(parts) ?? new Map<string, Record<string, BodyGeometry>>()
   entityPartGeometryCache.set(parts, partCache)
@@ -312,11 +338,16 @@ const buildEntityPartGeometries = (
       compositorDensity,
       part.scaleX,
       part.scaleY,
-      resolveAvatarEntityPartScaleZ(part)
+      resolveAvatarEntityPartScaleZ(part),
+      shapeMorphs?.[part.id]?.fromShape ?? null,
+      shapeMorphs?.[part.id]?.progress ?? 1,
+      shapeMorphs?.[part.id]?.toShape ?? null
     ])
     let geometry = cache.get(geometryKey)
     if (geometry == null) {
-      geometry = buildEntityPartGeometry(part, pose, lightDirection, gridDensity, compositorDensity)
+      geometry = buildEntityPartGeometry(
+        part, pose, lightDirection, gridDensity, compositorDensity, shapeMorphs?.[part.id]
+      )
       cache.set(geometryKey, geometry)
     }
     return [part.id, geometry]
@@ -332,11 +363,16 @@ function EntityPresetBody({
   faceStyle,
   geometries,
   idPrefix,
+  independentOutline = false,
+  independentOutlineColor,
   interactive,
   interactiveQuality = false,
   isDragging = false,
   lightDistance,
   partHitResolverRef,
+  partOpacities,
+  partShapeMorphs,
+  partTransforms,
   parts,
   pose,
   preview = false,
@@ -355,11 +391,16 @@ function EntityPresetBody({
   readonly faceStyle: AvatarFaceStyle
   readonly geometries: Readonly<Record<string, BodyGeometry>>
   readonly idPrefix: string
+  readonly independentOutline?: boolean
+  readonly independentOutlineColor?: string
   readonly interactive: boolean
   readonly interactiveQuality?: boolean
   readonly isDragging?: boolean
   readonly lightDistance: number
   readonly partHitResolverRef?: { current: ((x: number, y: number) => string | null) | null }
+  readonly partOpacities?: Readonly<Record<string, number>>
+  readonly partShapeMorphs?: AvatarEntityPartShapeMorphs
+  readonly partTransforms?: AvatarEntityPartTransforms
   readonly parts: readonly AvatarEntityPart[]
   readonly pose: AvatarPose
   readonly preview?: boolean
@@ -484,6 +525,28 @@ function EntityPresetBody({
   const partTransform = (part: (typeof projectedParts)[number]) => (
     `translate(${part.projectedX} ${part.projectedY})`
   )
+  const hasAnimatedPartGeometry = (part: (typeof projectedParts)[number]) => (
+    partTransforms?.[part.id] != null || partShapeMorphs?.[part.id] != null
+  )
+  const animatedPartTransform = (part: (typeof projectedParts)[number]) => {
+    const transform = partTransforms?.[part.id]
+    if (transform == null) return undefined
+    const targetX = transform.x ?? part.x
+    const targetY = transform.y ?? part.y
+    const targetZ = transform.z ?? part.z
+    const yawX = targetX * cosYaw + targetZ * sinYaw
+    const yawZ = -targetX * sinYaw + targetZ * cosYaw
+    const projectedY = targetY * cosPitch + yawZ * sinPitch
+    const sourceCenterX = VIEW_SIZE / 2 + part.projectedX
+    const sourceCenterY = 202 + part.projectedY
+    const targetCenterX = VIEW_SIZE / 2 + yawX
+    const targetCenterY = 202 + projectedY
+    const scaleX = (transform.scaleX ?? part.scaleX) / part.scaleX
+    const scaleY = (transform.scaleY ?? part.scaleY) / part.scaleY
+    const rotation = (transform.rotationZ ?? part.rotationZ ?? 0) - (part.rotationZ ?? 0)
+    return `translate(${targetCenterX} ${targetCenterY}) rotate(${rotation}) scale(${scaleX} ${scaleY}) ` +
+      `translate(${-sourceCenterX} ${-sourceCenterY})`
+  }
   const ownerClipId = (part: (typeof projectedParts)[number]) => `${idPrefix}-compiled-owner-${part.index}`
   const ownerPath = (part: (typeof projectedParts)[number]) => projection.ownerPaths[part.id] ?? ''
   const shadowDirection = shadowStyle.direction * Math.PI / 180
@@ -627,7 +690,7 @@ function EntityPresetBody({
           </clipPath>
         ))}
       </defs>
-      <g filter={outlineEnabled ? `url(#${idPrefix}-entity-outline)` : undefined}>
+      <g filter={outlineEnabled && !independentOutline ? `url(#${idPrefix}-entity-outline)` : undefined}>
         {projectedParts.map(part => (
           <g
             key={part.id}
@@ -636,23 +699,35 @@ function EntityPresetBody({
             data-avatar-fragment-interaction-ratio={interactionVisibleArea(part) > 0 ? '1' : '0'}
             data-avatar-fragment-raw-visible-area={String(stageVisibleArea(part))}
             data-avatar-fragment-visible-area={String(stageVisibleArea(part))}
+            data-avatar-part-geometry={hasAnimatedPartGeometry(part) ? 'full-semantic' : 'compiled-owner'}
+            data-avatar-part-outline={independentOutline ? 'independent-geometry' : undefined}
+            data-avatar-part-scale-z={partTransforms?.[part.id]?.scaleZ}
+            data-avatar-part-shape-morph={partShapeMorphs?.[part.id]?.progress}
+            data-avatar-part-transform={partTransforms?.[part.id] == null ? undefined : 'projection-time'}
+            data-avatar-animation-entity-part={partOpacities?.[part.id] == null ? undefined : part.id}
+            opacity={partOpacities?.[part.id] == null ? undefined : partOpacities[part.id]! / 100}
             pointerEvents={interactive ? 'none' : undefined}
+            transform={animatedPartTransform(part)}
           >
-            {ownerPath(part) === ''
+            {ownerPath(part) === '' && !hasAnimatedPartGeometry(part)
               ? <g data-avatar-compiled-hidden-part={part.id} transform={partTransform(part)} />
               : (
                 <>
                 <g data-avatar-compiled-base-layer={part.id}>
-                  <path
-                    data-avatar-compiled-base={part.id}
-                    d={ownerPath(part)}
-                    fill={part.baseColor}
-                    transform={`scale(${rasterToStageScale})`}
-                  />
+                  {hasAnimatedPartGeometry(part)
+                    ? null
+                    : (
+                      <path
+                        data-avatar-compiled-base={part.id}
+                        d={ownerPath(part)}
+                        fill={part.baseColor}
+                        transform={`scale(${rasterToStageScale})`}
+                      />
+                    )}
                 </g>
                 <g
                   data-avatar-compiled-surface-layer={part.id}
-                  clipPath={`url(#${ownerClipId(part)})`}
+                  clipPath={hasAnimatedPartGeometry(part) ? undefined : `url(#${ownerClipId(part)})`}
                 >
                   <g transform={partTransform(part)}>
                     {geometries[part.id] == null
@@ -662,32 +737,34 @@ function EntityPresetBody({
                           clipId={`${idPrefix}-entity-${preset}-${part.index}`}
                           geometry={geometries[part.id]}
                           part={part}
-                          showBase={false}
-                          showLight={showLight && renderSurfaceCells && (part.face || part.scaleX * part.scaleY >= .075)}
+                          showBase={hasAnimatedPartGeometry(part)}
+                          showLight={showLight && renderSurfaceCells && (
+                            partOpacities?.[part.id] != null || part.face || part.scaleX * part.scaleY >= .075
+                          )}
                           lightDistance={lightDistance}
                         />
                       )}
-                    {surfaceDecals.filter(decal => decal.targetPartId === part.id).map(decal => {
-                      const materialId = getAvatarCompiledSurfaceDecalMaterialId(preset, decal)
-                      const path = materialId == null ? '' : projection.materialPaths[materialId] ?? ''
-                      return path === ''
-                        ? null
-                        : (
-                          <path
-                            key={`compiled-${decal.id}`}
-                            data-avatar-compiled-surface-marking={decal.id}
-                            data-avatar-surface-decal={decal.id}
-                            data-avatar-surface-decal-renderer='compiled'
-                            d={path}
-                            fill={decal.color}
-                            fillOpacity={decal.opacity / 100}
-                            transform={`translate(${-part.projectedX} ${-part.projectedY}) scale(${rasterToStageScale})`}
-                          />
-                        )
-                    })}
                     <g clipPath={geometries[part.id] == null
                       ? undefined
                       : `url(#${idPrefix}-entity-${preset}-${part.index})`}>
+                      {surfaceDecals.filter(decal => decal.targetPartId === part.id).map(decal => {
+                        const materialId = getAvatarCompiledSurfaceDecalMaterialId(preset, decal)
+                        const path = materialId == null ? '' : projection.materialPaths[materialId] ?? ''
+                        return path === ''
+                          ? null
+                          : (
+                            <path
+                              key={`compiled-${decal.id}`}
+                              data-avatar-compiled-surface-marking={decal.id}
+                              data-avatar-surface-decal={decal.id}
+                              data-avatar-surface-decal-renderer='compiled'
+                              d={path}
+                              fill={decal.color}
+                              fillOpacity={decal.opacity / 100}
+                              transform={`translate(${-part.projectedX} ${-part.projectedY}) scale(${rasterToStageScale})`}
+                            />
+                          )
+                      })}
                       {surfaceDecals.filter(decal => (
                         decal.targetPartId === part.id &&
                         getAvatarCompiledSurfaceDecalMaterialId(preset, decal) == null &&
@@ -717,6 +794,21 @@ function EntityPresetBody({
                       )}
                   </g>
                 </g>
+                {independentOutline && outlineEnabled && ownerPath(part) !== ''
+                  ? (
+                    <path
+                      data-avatar-independent-outline={part.id}
+                      d={ownerPath(part)}
+                      fill='none'
+                      stroke={independentOutlineColor ?? avatarOutlineStyle.color}
+                      strokeLinejoin='round'
+                      strokeOpacity='1'
+                      strokeWidth={avatarOutlineStyle.width}
+                      transform={`scale(${rasterToStageScale})`}
+                      vectorEffect='non-scaling-stroke'
+                    />
+                  )
+                  : null}
                 </>
               )}
           </g>
@@ -729,6 +821,7 @@ function EntityPresetBody({
             data-avatar-entity-grid={part.id}
             clipPath={`url(#${ownerClipId(part)})`}
             pointerEvents='none'
+            transform={animatedPartTransform(part)}
           >
             <path
               data-avatar-compiled-selection-grid={part.id}
@@ -754,6 +847,7 @@ function EntityPresetBody({
             data-avatar-selection-grid-segments={String(selectedOverlay?.gridSegmentCount ?? 0)}
             clipPath={`url(#${ownerClipId(selectedPart)})`}
             pointerEvents='none'
+            transform={animatedPartTransform(selectedPart)}
           >
             <path
               data-avatar-compiled-selection-contour={selectedPart.id}
@@ -905,11 +999,12 @@ const useAnimatedFaceStyle = (target: AvatarFaceStyle, transitionsEnabled: boole
   const [animatedStyle, setAnimatedStyle] = useState(target)
   const animatedStyleRef = useRef(target)
   const animationFrameRef = useRef<number>()
+  const shouldAnimate = transitionsEnabled &&
+    !window.matchMedia('(prefers-reduced-motion: reduce)').matches
 
   useEffect(() => {
-    if (!transitionsEnabled || window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+    if (!shouldAnimate) {
       animatedStyleRef.current = target
-      setAnimatedStyle(target)
       return
     }
 
@@ -1008,18 +1103,79 @@ const useAnimatedFaceStyle = (target: AvatarFaceStyle, transitionsEnabled: boole
     target.rightEyeWidth,
     target.rightEyeRotation,
     target.width,
-    transitionsEnabled
+    shouldAnimate
   ])
 
-  return animatedStyle
+  return shouldAnimate ? animatedStyle : target
+}
+
+function AvatarAuxiliaryShape({ shape }: { readonly shape: AvatarAnimationShape }) {
+  const transform = `translate(${VIEW_SIZE / 2 + shape.x} ${202 + shape.y}) rotate(${shape.rotation})`
+  const radiusX = shape.width / 2
+  const radiusY = shape.height / 2
+  const cornerRadius = Math.min(radiusX, radiusY) * shape.roundness / 100
+  return (
+    <g
+      aria-hidden='true'
+      data-avatar-animation-shape={shape.id}
+      data-avatar-animation-shape-kind={shape.kind}
+      opacity={shape.opacity / 100}
+      pointerEvents='none'
+      transform={transform}
+    >
+      {shape.kind === 'ellipse'
+        ? <ellipse cx='0' cy='0' fill={shape.color} rx={radiusX} ry={radiusY} />
+        : shape.kind === 'rounded-rect'
+        ? (
+          <rect
+            fill={shape.color}
+            height={shape.height}
+            rx={cornerRadius}
+            width={shape.width}
+            x={-radiusX}
+            y={-radiusY}
+          />
+        )
+        : (() => {
+            const dotSize = Math.min(shape.width * 1.22, shape.height * .28)
+            const gap = Math.min(shape.width * .58, shape.height * .12)
+            const stemHeight = Math.max(shape.height - dotSize - gap, 0)
+            const stemRadius = Math.min(shape.width / 2, stemHeight / 2) * shape.roundness / 100
+            return (
+              <>
+                <rect
+                  data-avatar-animation-shape-part='stem'
+                  fill={shape.color}
+                  height={stemHeight}
+                  rx={stemRadius}
+                  width={shape.width}
+                  x={-shape.width / 2}
+                  y={-shape.height / 2}
+                />
+                <ellipse
+                  data-avatar-animation-shape-part='dot'
+                  cx='0'
+                  cy={shape.height / 2 - dotSize / 2}
+                  fill={shape.color}
+                  rx={dotSize / 2}
+                  ry={dotSize / 2}
+                />
+              </>
+            )
+          })()}
+    </g>
+  )
 }
 
 function InteractiveAvatarComponent({
+  auxiliaryParts,
+  auxiliaryShapes,
   avatarOutlineStyle,
   avatarShadowStyle,
   backgroundStyle,
   bodyShape,
   bottomTaper = 0,
+  canvasBackgroundColor,
   colorGrade,
   entityParts = [],
   entityPreset = 'custom',
@@ -1034,6 +1190,8 @@ function InteractiveAvatarComponent({
   onInteractionStart,
   onViewStateChange,
   palette,
+  partShapeMorphs,
+  partTransforms,
   pixelEffect,
   renderSurfaceCells = true,
   selectedEntityPartId,
@@ -1120,9 +1278,43 @@ function InteractiveAvatarComponent({
   const renderedGridDensity = gridInteractiveQuality
     ? Math.min(resolvedGridDensity, 24)
     : resolvedGridDensity
-  const sourceEntityParts = useMemo(
+  const baseEntityParts = useMemo(
     () => entityParts.length > 0 ? entityParts : createAvatarEntityParts(entityPreset),
     [entityParts, entityPreset]
+  )
+  const independentAuxiliaryParts = useMemo(
+    () => auxiliaryParts?.filter(isIndependentAuxiliaryPart) ?? [],
+    [auxiliaryParts]
+  )
+  const coCompiledAuxiliaryParts = useMemo(
+    () => auxiliaryParts?.filter(item => !isIndependentAuxiliaryPart(item)) ?? [],
+    [auxiliaryParts]
+  )
+  const sourceEntityParts = useMemo(
+    () => coCompiledAuxiliaryParts.length === 0
+      ? baseEntityParts
+      : [...baseEntityParts, ...coCompiledAuxiliaryParts.map(item => item.part)],
+    [baseEntityParts, coCompiledAuxiliaryParts]
+  )
+  const resolvedPartTransforms = useMemo<AvatarEntityPartTransforms | undefined>(() => {
+    if (coCompiledAuxiliaryParts.length === 0 && partTransforms == null) return undefined
+    return {
+      ...partTransforms,
+      ...Object.fromEntries(coCompiledAuxiliaryParts.map(item => [item.part.id, item.transform ?? {}]))
+    }
+  }, [coCompiledAuxiliaryParts, partTransforms])
+  const geometryEntityParts = useMemo(
+    () => sourceEntityParts.map(part => {
+      const scaleZ = resolvedPartTransforms?.[part.id]?.scaleZ
+      return scaleZ == null ? part : { ...part, scaleZ }
+    }),
+    [resolvedPartTransforms, sourceEntityParts]
+  )
+  const animationPartOpacities = useMemo<Readonly<Record<string, number>> | undefined>(
+    () => coCompiledAuxiliaryParts.length === 0
+      ? undefined
+      : Object.fromEntries(coCompiledAuxiliaryParts.map(item => [item.part.id, item.opacity])),
+    [coCompiledAuxiliaryParts]
   )
   const usesEntityParts = sourceEntityParts.length > 0
   const bodyGeometryOptions = useMemo<AvatarBodyGeometryOptions>(
@@ -1151,16 +1343,102 @@ function InteractiveAvatarComponent({
       })),
     [colorGrade, sourceEntityParts]
   )
-  const requiresEntityGeometry = showLight || sourceEntityParts.some(part => part.hollow === true)
+  const resolvedIndependentAuxiliaryParts = useMemo(
+    () => independentAuxiliaryParts.map(item => ({
+      ...item,
+      part: {
+        ...item.part,
+        baseColor: applyAvatarColorGrade(item.part.baseColor, colorGrade),
+        highlightColor: applyAvatarColorGrade(item.part.highlightColor, colorGrade),
+        shadowColor: applyAvatarColorGrade(item.part.shadowColor, colorGrade)
+      }
+    })),
+    [colorGrade, independentAuxiliaryParts]
+  )
+  const independentAuxiliaryPartCacheRef = useRef(new Map<string, {
+    readonly fingerprint: string
+    readonly part: AvatarEntityPart
+    readonly parts: readonly AvatarEntityPart[]
+  }>())
+  const independentAuxiliarySources = useMemo(() => {
+    const activeIds = new Set(resolvedIndependentAuxiliaryParts.map(item => item.part.id))
+    for (const id of independentAuxiliaryPartCacheRef.current.keys()) {
+      if (!activeIds.has(id)) independentAuxiliaryPartCacheRef.current.delete(id)
+    }
+    return resolvedIndependentAuxiliaryParts.map(item => {
+      const part = item.part
+      const scaleZ = resolveAvatarEntityPartScaleZ(part)
+      const canonicalProjection = part.shape === 'sphere' &&
+        Math.abs(part.scaleX - part.scaleY) < 1e-6 && Math.abs(part.scaleX - scaleZ) < 1e-6
+      const renderPart = canonicalProjection ? { ...part, x: 0, y: 0, z: 0 } : part
+      const fingerprint = JSON.stringify(renderPart)
+      const cached = independentAuxiliaryPartCacheRef.current.get(part.id)
+      const resolved = cached?.fingerprint === fingerprint
+        ? cached
+        : { fingerprint, part: renderPart, parts: [renderPart] as readonly AvatarEntityPart[] }
+      independentAuxiliaryPartCacheRef.current.set(part.id, resolved)
+      return { ...item, canonicalProjection, renderPart: resolved.part, renderParts: resolved.parts }
+    })
+  }, [resolvedIndependentAuxiliaryParts])
+  const independentAuxiliaryGeometryParts = useMemo(
+    () => independentAuxiliarySources.map(item => item.renderPart),
+    [independentAuxiliarySources]
+  )
+  const independentAuxiliaryGeometries = useMemo(
+    () => independentAuxiliaryGeometryParts.length === 0 || !showLight || !renderSurfaceCells
+      ? EMPTY_ENTITY_PART_GEOMETRIES
+      : buildEntityPartGeometries(
+          independentAuxiliaryGeometryParts,
+          independentAuxiliarySources.every(item => item.canonicalProjection)
+            ? CANONICAL_AUXILIARY_POSE
+            : pose,
+          lightDirection,
+          renderedGridDensity,
+          renderingInteractively ? .5 : 1,
+          partShapeMorphs
+        ),
+    [
+      independentAuxiliaryGeometryParts,
+      independentAuxiliarySources,
+      lightDirection,
+      partShapeMorphs,
+      pose,
+      renderSurfaceCells,
+      renderedGridDensity,
+      renderingInteractively,
+      showLight
+    ]
+  )
+  const independentAuxiliaryRenderItems = useMemo(() => {
+    const cosYaw = Math.cos(pose.yaw)
+    const sinYaw = Math.sin(pose.yaw)
+    const cosPitch = Math.cos(pose.pitch)
+    const sinPitch = Math.sin(pose.pitch)
+    return independentAuxiliarySources.map(item => {
+      const x = item.transform?.x ?? item.part.x
+      const y = item.transform?.y ?? item.part.y
+      const z = item.transform?.z ?? item.part.z
+      const yawDepth = -x * sinYaw + z * cosYaw
+      const cameraDepth = -y * sinPitch + yawDepth * cosPitch
+      return {
+        ...item,
+        cameraDepth,
+        layer: cameraDepth >= 0 ? 'front' as const : 'back' as const
+      }
+    })
+  }, [independentAuxiliarySources, pose.pitch, pose.yaw])
+  const requiresEntityGeometry = resolvedPartTransforms != null ||
+    showLight || sourceEntityParts.some(part => part.hollow === true)
   const entityGeometryBuild = useMemo(() => {
     const startedAt = performance.now()
     const geometries = requiresEntityGeometry
       ? buildEntityPartGeometries(
-          sourceEntityParts,
+          geometryEntityParts,
           pose,
           lightDirection,
           renderedGridDensity,
-          renderingInteractively ? .5 : 1
+          renderingInteractively ? .5 : 1,
+          partShapeMorphs
         )
       : {}
     const duration = performance.now() - startedAt
@@ -1189,19 +1467,26 @@ function InteractiveAvatarComponent({
     renderedGridDensity,
     requiresEntityGeometry,
     renderingInteractively,
-    sourceEntityParts
+    partShapeMorphs,
+    geometryEntityParts
   ])
   const entityGeometries = entityGeometryBuild.geometries
-  const entityFacePart = sourceEntityParts.find(part => part.face)
+  const entityFacePart = geometryEntityParts.find(part => part.face)
   const entityFace = useMemo(
     () =>
       projectDefaultFace(
         pose,
-        entityFacePart?.shape ?? 'sphere',
+        entityFacePart == null
+          ? 'sphere'
+          : partShapeMorphs?.[entityFacePart.id]?.toShape ?? entityFacePart.shape,
         animatedFaceStyle,
-        entityFacePart == null ? {} : getEntityFaceGeometryOptions(entityFacePart, entityPreset)
+        entityFacePart == null
+          ? {}
+          : getEntityFaceGeometryOptions(
+              entityFacePart, entityPreset, partShapeMorphs?.[entityFacePart.id]
+            )
       ),
-    [animatedFaceStyle, entityFacePart, entityPreset, pose]
+    [animatedFaceStyle, entityFacePart, entityPreset, partShapeMorphs, pose]
   )
   const visibleFace = usesEntityParts ? entityFace : face
   const projectedSurfaceDecals = useMemo<ProjectedSurfaceDecal[]>(() =>
@@ -1217,7 +1502,7 @@ function InteractiveAvatarComponent({
       }
       const targetPart = decal.targetPartId == null
         ? entityFacePart
-        : sourceEntityParts.find(part => part.id === decal.targetPartId)
+        : geometryEntityParts.find(part => part.id === decal.targetPartId)
       if (targetPart == null) return []
       const resolvedDecal = { ...decal, targetPartId: targetPart.id }
       if (getAvatarCompiledSurfaceDecalMaterialId(entityPreset, resolvedDecal) != null) {
@@ -1234,7 +1519,7 @@ function InteractiveAvatarComponent({
         path: projected.path,
         ...(projected.transform == null ? {} : { transform: projected.transform })
       }]
-    }), [bodyGeometryOptions, bodyShape, entityFacePart, entityPreset, pose, sourceEntityParts, surfaceDecals, usesEntityParts])
+    }), [bodyGeometryOptions, bodyShape, entityFacePart, entityPreset, geometryEntityParts, pose, surfaceDecals, usesEntityParts])
   const surfaceMid = applyAvatarColorGrade(
     backgroundStyle === 'gradient' ? palette.gradient[1] : palette.background,
     colorGrade
@@ -1440,7 +1725,7 @@ function InteractiveAvatarComponent({
         window.cancelAnimationFrame(pixelRenderFrameRef.current)
         pixelRenderFrameRef.current = undefined
       }
-      setPixelReady(false)
+      if (pixelReady) setPixelReady(false)
       return
     }
     pixelRenderPendingRef.current = true
@@ -1672,6 +1957,7 @@ function InteractiveAvatarComponent({
       const delta = positionDelta[event.key]
       if (delta == null) return
       event.preventDefault()
+      event.stopPropagation()
       updatePosition({
         x: clamp(
           positionRef.current.x + delta.x,
@@ -1696,10 +1982,90 @@ function InteractiveAvatarComponent({
     const delta = poseDelta[event.key]
     if (delta == null) return
     event.preventDefault()
+    event.stopPropagation()
     updatePose({
       pitch: poseRef.current.pitch + delta.pitch,
       yaw: poseRef.current.yaw + delta.yaw
     })
+  }
+
+  const renderIndependentAuxiliaryLayer = (layer: 'back' | 'front') => {
+    const items = independentAuxiliaryRenderItems.filter(item => (
+      item.layer === layer &&
+      item.opacity > 0 &&
+      (item.transform?.scaleX ?? item.part.scaleX) > 0 &&
+      (item.transform?.scaleY ?? item.part.scaleY) > 0 &&
+      (item.transform?.scaleZ ?? resolveAvatarEntityPartScaleZ(item.part)) > 0
+    ))
+    if (items.length === 0) return null
+    const transformPart = (item: (typeof items)[number]) => {
+      const transform = item.transform
+      if (transform == null) return undefined
+      const part = item.part
+      const sourceYawX = part.x * Math.cos(pose.yaw) + part.z * Math.sin(pose.yaw)
+      const sourceYawZ = -part.x * Math.sin(pose.yaw) + part.z * Math.cos(pose.yaw)
+      const sourceY = part.y * Math.cos(pose.pitch) + sourceYawZ * Math.sin(pose.pitch)
+      const targetX = transform.x ?? part.x
+      const targetY = transform.y ?? part.y
+      const targetZ = transform.z ?? part.z
+      const targetYawX = targetX * Math.cos(pose.yaw) + targetZ * Math.sin(pose.yaw)
+      const targetYawZ = -targetX * Math.sin(pose.yaw) + targetZ * Math.cos(pose.yaw)
+      const targetProjectedY = targetY * Math.cos(pose.pitch) + targetYawZ * Math.sin(pose.pitch)
+      const sourceCenterX = item.canonicalProjection ? VIEW_SIZE / 2 : VIEW_SIZE / 2 + sourceYawX
+      const sourceCenterY = item.canonicalProjection ? 202 : 202 + sourceY
+      const targetCenterX = VIEW_SIZE / 2 + targetYawX
+      const targetCenterY = 202 + targetProjectedY
+      const scaleX = (transform.scaleX ?? part.scaleX) / part.scaleX
+      const scaleY = (transform.scaleY ?? part.scaleY) / part.scaleY
+      const rotation = (transform.rotationZ ?? part.rotationZ ?? 0) - (part.rotationZ ?? 0)
+      return `translate(${targetCenterX} ${targetCenterY}) rotate(${rotation}) scale(${scaleX} ${scaleY}) ` +
+        `translate(${-sourceCenterX} ${-sourceCenterY})`
+    }
+    return (
+      <g
+        data-avatar-auxiliary-composition='independent-depth-layer'
+        data-avatar-auxiliary-depth-layer={layer}
+      >
+        {items.map(item => (
+          <g
+            key={item.part.id}
+            data-avatar-independent-auxiliary-part={item.part.id}
+            data-avatar-auxiliary-camera-depth={item.cameraDepth.toFixed(4)}
+            data-avatar-auxiliary-scale-z={item.transform?.scaleZ ?? item.part.scaleZ}
+            opacity={item.opacity / 100}
+            transform={transformPart(item)}
+          >
+            <EntityPresetBody
+              avatarOutlineStyle={avatarOutlineStyle}
+              face={EMPTY_PROJECTED_FACE}
+              faceStyle={DEFAULT_AVATAR_FACE_STYLE}
+              geometries={independentAuxiliaryGeometries}
+              idPrefix={`${id}-aux-${item.part.id}`}
+              independentOutline
+              independentOutlineColor={canvasBackgroundColor === 'transparent'
+                ? palette.background
+                : canvasBackgroundColor ?? palette.background}
+              interactive={false}
+              interactiveQuality={fragmentInteractiveQuality}
+              isDragging={dragging}
+              lightDistance={lightDistance}
+              partShapeMorphs={partShapeMorphs}
+              parts={item.renderParts}
+              pose={item.canonicalProjection ? CANONICAL_AUXILIARY_POSE : pose}
+              preset={entityPreset}
+              renderSurfaceCells={renderSurfaceCells}
+              selectedPartId={null}
+              shadowStyle={shadowStyle}
+              surfaceDecals={EMPTY_PROJECTED_SURFACE_DECALS}
+              showGrid={false}
+              showLight={showLight}
+              showOutline={showOutline}
+              showShadow={false}
+            />
+          </g>
+        ))}
+      </g>
+    )
   }
 
   const dragRuntimeStats = dragRuntimeStatsRef.current
@@ -1800,6 +2166,7 @@ function InteractiveAvatarComponent({
             avatarRoll * 180 / Math.PI
           }) scale(${avatarScale}) translate(${-VIEW_SIZE / 2} ${-VIEW_SIZE / 2})`}
         >
+          {usesEntityParts ? renderIndependentAuxiliaryLayer('back') : null}
           {!usesEntityParts
             ? (
               <>
@@ -1945,6 +2312,9 @@ function InteractiveAvatarComponent({
                 isDragging={dragging}
                 lightDistance={lightDistance}
                 partHitResolverRef={entityPartHitResolverRef}
+                partOpacities={animationPartOpacities}
+                partShapeMorphs={partShapeMorphs}
+                partTransforms={resolvedPartTransforms}
                 parts={resolvedEntityParts}
                 pose={pose}
                 preset={entityPreset}
@@ -1957,6 +2327,14 @@ function InteractiveAvatarComponent({
                 showOutline={showOutline}
                 showShadow={showShadow}
               />
+            )}
+          {usesEntityParts ? renderIndependentAuxiliaryLayer('front') : null}
+          {auxiliaryShapes == null || auxiliaryShapes.length === 0
+            ? null
+            : (
+              <g data-avatar-animation-shape-layer='auxiliary'>
+                {auxiliaryShapes.map(shape => <AvatarAuxiliaryShape key={shape.id} shape={shape} />)}
+              </g>
             )}
         </g>
       </svg>
@@ -1983,9 +2361,12 @@ const areInteractiveAvatarPropsEqual = (
   previous: InteractiveAvatarProps,
   next: InteractiveAvatarProps
 ) => (
+  previous.auxiliaryParts === next.auxiliaryParts &&
+  previous.auxiliaryShapes === next.auxiliaryShapes &&
   previous.backgroundStyle === next.backgroundStyle &&
   previous.bodyShape === next.bodyShape &&
   previous.bottomTaper === next.bottomTaper &&
+  previous.canvasBackgroundColor === next.canvasBackgroundColor &&
   previous.entityParts === next.entityParts &&
   previous.entityPreset === next.entityPreset &&
   previous.faceStyleTransitionsEnabled === next.faceStyleTransitionsEnabled &&
@@ -1997,6 +2378,8 @@ const areInteractiveAvatarPropsEqual = (
   previous.onInteractionStart === next.onInteractionStart &&
   previous.onViewStateChange === next.onViewStateChange &&
   previous.palette === next.palette &&
+  previous.partShapeMorphs === next.partShapeMorphs &&
+  previous.partTransforms === next.partTransforms &&
   shallowEqualObject(previous.pixelEffect, next.pixelEffect) &&
   previous.renderSurfaceCells === next.renderSurfaceCells &&
   previous.selectedEntityPartId === next.selectedEntityPartId &&

@@ -24,6 +24,8 @@ export interface AvatarBodyGeometryOptions {
   readonly cutAngle?: number
   readonly faceOffsetY?: number
   readonly hollow?: boolean
+  readonly morphFromShape?: AvatarBodyShape
+  readonly morphProgress?: number
   readonly occlusionAmount?: number
   readonly occlusionPole?: 'bottom' | 'top'
   readonly rotationX?: number
@@ -394,6 +396,19 @@ const getSurfacePoint = (
   faceCoordinates = false,
   options: AvatarBodyGeometryOptions = {}
 ): Vec3 => {
+  const morphProgress = clamp(options.morphProgress ?? 1, 0, 1)
+  if (options.morphFromShape != null && options.morphFromShape !== spec.profile && morphProgress < 1) {
+    const stableOptions = { ...options, morphFromShape: undefined, morphProgress: undefined }
+    const source = getSurfacePoint(
+      SHAPE_SPECS[options.morphFromShape], longitude, latitude, faceCoordinates, stableOptions
+    )
+    const target = getSurfacePoint(spec, longitude, latitude, faceCoordinates, stableOptions)
+    return {
+      x: interpolate(source.x, target.x, morphProgress),
+      y: interpolate(source.y, target.y, morphProgress),
+      z: interpolate(source.z, target.z, morphProgress)
+    }
+  }
   if (spec.profile === 'teardrop') {
     const scale = faceCoordinates ? spec.faceScale : 1
     const scaledLongitude = longitude * scale
