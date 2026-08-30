@@ -664,7 +664,17 @@ export const AVATAR_BEAR_BREED_TEMPLATES: readonly AvatarBearBreedTemplate[] = [
   bearTemplate('giant-panda', 'Giant Panda', 'panda', 'giant-panda', [118, 110], [116, 112], [AVATAR_SEED_FIELD.bearEarWidth, AVATAR_SEED_FIELD.bearHeadWidth], bearRange([108, 128], [102, 118], [108, 124], [104, 118])),
   bearTemplate('spectacled-bear', 'Spectacled Bear', 'teddy', 'spectacled-bear', [92, 92], [108, 110], [AVATAR_SEED_FIELD.bearHeadWidth], bearRange([84, 100], [84, 100], [102, 116], [104, 116]), {}, '#e8decc', '#241711'),
   bearTemplate('sun-bear', 'Sun Bear', 'compact', 'sun-bear', [76, 80], [98, 112], [AVATAR_SEED_FIELD.bearEarHeight, AVATAR_SEED_FIELD.bearHeadHeight], bearRange([70, 84], [74, 88], [92, 106], [106, 120]), {}, '#e8decc'),
-  bearTemplate('red-panda', 'Red Panda', 'pointed', 'red-panda', [108, 106], [106, 110], [AVATAR_SEED_FIELD.bearEarWidth, AVATAR_SEED_FIELD.bearHeadWidth], bearRange([98, 120], [98, 116], [98, 116], [104, 116])),
+  bearTemplate('red-panda', 'Red Panda', 'pointed', 'red-panda', [108, 106], [106, 110], [AVATAR_SEED_FIELD.bearEarWidth, AVATAR_SEED_FIELD.bearHeadWidth], bearRange([98, 120], [98, 116], [98, 116], [104, 116]), {}, '#214b45', undefined, {
+    gap: 46,
+    leftEyeRotation: 5,
+    mouthEnabled: false,
+    noseEnabled: true,
+    noseHeight: 13,
+    noseShape: 'inverted-triangle',
+    noseWidth: 19,
+    noseY: 28,
+    rightEyeRotation: -5
+  }),
   bearTemplate('koala', 'Koala', 'koala', 'koala', [132, 124], [108, 110], [AVATAR_SEED_FIELD.bearEarWidth, AVATAR_SEED_FIELD.bearEarHeight], bearRange([120, 145], [114, 136], [102, 114], [104, 116]), {}, undefined, undefined, {
     mouthEnabled: false,
     noseEnabled: true,

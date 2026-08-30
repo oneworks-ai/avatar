@@ -18,8 +18,7 @@ describe('procedural avatar coat patterns', () => {
       'spectacled-bear': ['coat-bear-spectacles-ring-left', 'coat-bear-spectacles-ring-right', 'coat-bear-spectacles-muzzle'],
       'sun-bear': ['coat-bear-sun-sun'],
       'red-panda': [
-        'coat-bear-red-panda-brow-left', 'coat-bear-red-panda-brow-right',
-        'coat-bear-red-panda-cheek-left', 'coat-bear-red-panda-cheek-right',
+        'coat-bear-red-panda-eye-mask-left', 'coat-bear-red-panda-eye-mask-right',
         'coat-bear-red-panda-muzzle'
       ],
       raccoon: ['coat-bear-raccoon-mask', 'coat-bear-raccoon-muzzle'],
@@ -36,6 +35,13 @@ describe('procedural avatar coat patterns', () => {
       expect(decals.map(decal => decal.id)).toEqual(expectedIds)
       expect(decals.every(decal => decal.targetPartId === 'primary' && decal.opacity === 100)).toBe(true)
       expect(decals.every(decal => decal.color !== getAvatarPalette(paletteId).foreground)).toBe(true)
+      if (paletteId === 'red-panda') {
+        expect(decals).toMatchObject([
+          { height: 92, rotation: -12, shape: 'ellipse', side: 'face', targetPartId: 'primary', width: 58, x: -32, y: -4 },
+          { height: 92, rotation: 12, shape: 'ellipse', side: 'face', targetPartId: 'primary', width: 58, x: 32, y: -4 },
+          { color: '#f7e8d1', height: 44, shape: 'ellipse', side: 'face', targetPartId: 'primary', width: 88, x: 0, y: 39 }
+        ])
+      }
     }
   })
 

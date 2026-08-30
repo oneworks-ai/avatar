@@ -318,6 +318,25 @@ describe('bear type Seed constraint profiles', () => {
     expect(getAvatarPalette('giant-panda').entityMaterials?.['ear-left']?.baseColor).toBe('#24272a')
   })
 
+  it('keeps the adapted red panda inside the Bear breed contract', () => {
+    const template = getAvatarBearBreedTemplate('red-panda')!
+    const resolved = resolveAvatarBearBreedTemplate(template, 'v1-red-panda-adapted')
+    const palette = getAvatarPalette('red-panda')
+
+    expect(template.id).toBe('red-panda')
+    expect(template.previewBackground).toBe('#214b45')
+    expect(resolved.faceStyle).toMatchObject({
+      eyeShape: 'rounded', gap: 46, leftEyeRotation: 5, mouthEnabled: false,
+      noseHeight: 13, noseShape: 'inverted-triangle', noseWidth: 19, noseY: 28,
+      rightEyeRotation: -5
+    })
+    expect(palette).toMatchObject({ background: '#a96343', foreground: '#231714', shadow: '#613b2e' })
+    expect(palette.entityMaterials?.['ear-left']).toMatchObject({
+      baseColor: '#4d2f2b', highlightColor: '#765047', shadowColor: '#2b1c19'
+    })
+    expect(resolved.entityParts.map(part => part.id)).toEqual(['ear-left', 'ear-right', 'primary'])
+  })
+
   it('keeps Spectacled Bear facial features distinct from both pale eye rings and the muzzle', () => {
     const template = getAvatarBearBreedTemplate('spectacled-bear')!
     const resolved = resolveAvatarBearBreedTemplate(template, 'v1-spectacled-bear-contrast')

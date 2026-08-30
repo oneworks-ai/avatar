@@ -1265,7 +1265,7 @@ describe('App Seed authoring', () => {
   it.each([
     ['sheep', 'black-faced-sheep', '#39353a'],
     ['deer', 'sika-deer', '#f5e7cf'],
-    ['otter', 'river-otter', '#e5d0ad']
+    ['otter', 'river-otter', '#e8d2aa']
   ] as const)('migrates the legacy protruding %s muzzle in an old share link to its head surface', async (
     species,
     breed,

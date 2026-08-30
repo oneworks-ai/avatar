@@ -1439,11 +1439,9 @@ const resolveAvatarBearCoatPatternDecals = ({ facePartId, palette, pattern }: {
   if (marking === 'moon') return [fixed('moon', 'Asian black bear moon chest', patch, 'rounded-triangle', 0, 50, 88, 54, 180)]
   if (marking === 'sun') return [fixed('sun', 'Sun bear chest crescent', patch, 'rounded-triangle', 0, 48, 76, 52, 180)]
   if (marking === 'red-panda') return [
-    fixed('brow-left', 'Red panda left brow', patch, 'rounded', -48, -37, 42, 18, -16),
-    fixed('brow-right', 'Red panda right brow', patch, 'rounded', 48, -37, 42, 18, 16),
-    fixed('cheek-left', 'Red panda left cheek', patch, 'ellipse', -52, 37, 58, 54, -18),
-    fixed('cheek-right', 'Red panda right cheek', patch, 'ellipse', 52, 37, 58, 54, 18),
-    fixed('muzzle', 'Red panda muzzle', '#fff2d8', 'ellipse', 0, 44, 78, 40)
+    fixed('eye-mask-left', 'Red panda left eye mask', patch, 'ellipse', -32, -4, 58, 92, -12),
+    fixed('eye-mask-right', 'Red panda right eye mask', patch, 'ellipse', 32, -4, 58, 92, 12),
+    fixed('muzzle', 'Red panda muzzle', '#f7e8d1', 'ellipse', 0, 39, 88, 44)
   ]
   if (marking === 'raccoon') return [fixed('mask', 'Raccoon eye mask', mark, 'face-mask', 0, 2, 146, 76), fixed('muzzle', 'Raccoon muzzle', patch, 'ellipse', 0, 47, 88, 44)]
   if (marking === 'wombat') return [fixed('muzzle', 'Wombat broad muzzle', patch, 'ellipse', 0, 43, 122, 54)]
