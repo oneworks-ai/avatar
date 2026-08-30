@@ -36,7 +36,9 @@
   "devDependencies": {
     "@types/react": "^18.3.12",
     "@types/react-dom": "^18.3.2",
+    "jpeg-js": "^0.4.4",
     "jsdom": "^26.1.0",
+    "markdown-it": "^15.0.1",
     "@vitejs/plugin-react": "^5.1.2",
     "@vitejs/plugin-vue": "^5.2.4",
     "react": "^18.3.1",

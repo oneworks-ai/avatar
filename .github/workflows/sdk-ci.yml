@@ -50,7 +50,7 @@ jobs:
              git cat-file -e "$BASE_SHA^{commit}" 2>/dev/null &&
              git cat-file -e "$HEAD_SHA^{commit}" 2>/dev/null; then
             mapfile -d '' -t trust_changes < <(git diff --name-only --no-renames -z "$BASE_SHA" "$HEAD_SHA" -- \
-              .github/workflows/sdk-ci.yml scripts/verify-pr-ci-evidence.mjs)
+              .github/workflows/sdk-ci.yml scripts/verify-pr-ci-evidence.mjs scripts/validate-readme-cover-assets.mjs package.json pnpm-lock.yaml)
             if (( ${#trust_changes[@]} == 0 )); then
               allowed=true
             fi
@@ -89,10 +89,13 @@ jobs:
               path_class=must-full
               has_docs_assets=false
               has_reusable_source=false
+              has_cover_contract_change=false
+              declare -A cover_contract_paths=()
               cover_pattern='^\.github/assets/avatar-cover-(light|dark)-(en|zh-Hans)\.jpg$'
+              cover_generator='scripts/readme-cover.html'
               documentation_pattern='^(README(\.[[:alnum:]_-]+)?\.md|AGENTS\.md|packages/[[:alnum:]_.-]+/(README(\.[[:alnum:]_-]+)?|AGENTS)\.md|docs(/[[:alnum:]_.-]+)+\.(md|png|jpe?g|gif|webp|svg)|skills/[a-z0-9]+(-[a-z0-9]+)*/(SKILL\.md|references/[[:alnum:]_.-]+\.md|agents/openai\.yaml))$'
               reusable_source_pattern='^(src/|packages/|scripts/[[:alnum:]_.-]+\.mjs$|package\.json$|pnpm-lock\.yaml$|pnpm-workspace\.yaml$|tsconfig[^/]*\.json$|vite\.config\.[[:alnum:]_-]+$)'
-              must_full_pattern='^(scripts/readme-cover\.html|\.github/assets/bear-breed-profiles\.png|\.github/)'
+              must_full_pattern='^(package\.json|pnpm-lock\.yaml|scripts/validate-readme-cover-assets\.mjs|\.github/assets/bear-breed-profiles\.png|\.github/)'
 
               for (( index = 0; index < ${#changes[@]}; index += 2 )); do
                 change_status=${changes[index]}
@@ -114,11 +117,18 @@ jobs:
                   fi
                 fi
 
-                # The four generated README covers are the only .github paths
-                # eligible for docs-assets. Check them before the broad
-                # .github must-full rule so precedence cannot shadow them.
+                # A cover update is a bounded completeness rule, not a claim
+                # that these JPEGs are deterministically derived. Any change
+                # to the generator or one cover must update the generator and
+                # every cover as regular 100644 A/M files in this same diff.
                 if [[ "$changed_path" =~ $cover_pattern ]]; then
                   has_docs_assets=true
+                  has_cover_contract_change=true
+                  cover_contract_paths["$changed_path"]=1
+                elif [[ "$changed_path" == "$cover_generator" ]]; then
+                  has_docs_assets=true
+                  has_cover_contract_change=true
+                  cover_contract_paths["$changed_path"]=1
                 elif [[ "$changed_path" =~ $must_full_pattern ]]; then
                   break
                 elif [[ "$changed_path" =~ $documentation_pattern ]]; then
@@ -129,6 +139,22 @@ jobs:
                   break
                 fi
               done
+
+              if [[ "$index" -eq "${#changes[@]}" && "$has_cover_contract_change" == true ]]; then
+                required_cover_contract=(
+                  scripts/readme-cover.html
+                  .github/assets/avatar-cover-dark-en.jpg
+                  .github/assets/avatar-cover-light-en.jpg
+                  .github/assets/avatar-cover-dark-zh-Hans.jpg
+                  .github/assets/avatar-cover-light-zh-Hans.jpg
+                )
+                for required_path in "${required_cover_contract[@]}"; do
+                  if [[ -z "${cover_contract_paths[$required_path]+present}" ]]; then
+                    index=-1
+                    break
+                  fi
+                done
+              fi
 
               if [[ "$index" -eq "${#changes[@]}" ]]; then
                 if [[ "$has_docs_assets" == true && "$has_reusable_source" == false ]]; then
@@ -153,6 +179,24 @@ jobs:
           printf 'scope=%s\nbase=%s\nhead=%s\n' "$scope" "$BASE_SHA" "$HEAD_SHA" >> "$GITHUB_OUTPUT"
           printf 'Validation scope: %s\n' "$scope"
 
+      - name: Setup pnpm for documentation assets
+        if: steps.scope.outputs.scope == 'docs-assets'
+        uses: pnpm/action-setup@v4
+        with:
+          version: 11.7.0
+
+      - name: Setup Node.js for documentation assets
+        if: steps.scope.outputs.scope == 'docs-assets'
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+          cache-dependency-path: pnpm-lock.yaml
+
+      - name: Install documentation asset validator dependencies
+        if: steps.scope.outputs.scope == 'docs-assets'
+        run: pnpm install --frozen-lockfile --ignore-scripts
+
       - name: Validate documentation, cover assets, and skill metadata
         if: steps.scope.outputs.scope == 'docs-assets'
         shell: bash
@@ -162,6 +206,8 @@ jobs:
         run: |
           set -euo pipefail
           git diff --check "$BASE_SHA" "$HEAD_SHA"
+
+          node scripts/validate-readme-cover-assets.mjs
 
           python3 - <<'PY'
           import json
