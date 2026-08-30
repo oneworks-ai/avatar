@@ -10,7 +10,9 @@ on:
   workflow_dispatch:
 
 permissions:
+  actions: read
   contents: read
+  pull-requests: read
 
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: 'true'
@@ -20,8 +22,8 @@ concurrency:
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
-  sdk:
-    name: build-test-pack
+  validate:
+    name: validate-sdk-ci
     runs-on: ubuntu-latest
     timeout-minutes: 30
 
@@ -30,6 +32,40 @@ jobs:
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
+
+      - name: Guard reusable evidence trust boundary
+        id: evidence-eligibility
+        shell: bash
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          BASE_SHA: ${{ github.event.before || '' }}
+          HEAD_SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+
+          allowed=false
+          if [[ "$EVENT_NAME" == push &&
+                "$BASE_SHA" =~ ^[[:xdigit:]]{40}$ &&
+                "$HEAD_SHA" =~ ^[[:xdigit:]]{40}$ ]] &&
+             git cat-file -e "$BASE_SHA^{commit}" 2>/dev/null &&
+             git cat-file -e "$HEAD_SHA^{commit}" 2>/dev/null; then
+            mapfile -d '' -t trust_changes < <(git diff --name-only --no-renames -z "$BASE_SHA" "$HEAD_SHA" -- \
+              .github/workflows/sdk-ci.yml scripts/verify-pr-ci-evidence.mjs)
+            if (( ${#trust_changes[@]} == 0 )); then
+              allowed=true
+            fi
+          fi
+
+          printf 'allowed=%s\n' "$allowed" >> "$GITHUB_OUTPUT"
+          printf 'Reusable evidence lookup allowed: %s\n' "$allowed"
+
+      - name: Collect trusted pull-request CI evidence
+        id: evidence
+        if: steps.evidence-eligibility.outputs.allowed == 'true'
+        shell: bash
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: node scripts/verify-pr-ci-evidence.mjs
 
       - name: Classify validation scope
         id: scope
@@ -42,48 +78,83 @@ jobs:
           set -euo pipefail
 
           scope=full
-          if [[ "$EVENT_NAME" != workflow_dispatch ]] &&
-             [[ "$BASE_SHA" =~ ^[[:xdigit:]]{40}$ ]] &&
+          evidence_scope='${{ steps.evidence.outputs.scope }}'
+          if [[ "$EVENT_NAME" != workflow_dispatch &&
+                "$BASE_SHA" =~ ^[[:xdigit:]]{40}$ ]] &&
              [[ "$HEAD_SHA" =~ ^[[:xdigit:]]{40}$ ]] &&
              git cat-file -e "$BASE_SHA^{commit}" 2>/dev/null &&
              git cat-file -e "$HEAD_SHA^{commit}" 2>/dev/null; then
             mapfile -d '' -t changes < <(git diff --name-status --no-renames -z "$BASE_SHA" "$HEAD_SHA")
             if (( ${#changes[@]} > 0 && ${#changes[@]} % 2 == 0 )); then
-              scope=documentation
-              documentation_pattern='^(README(\.[[:alnum:]_-]+)?\.md|AGENTS\.md|packages/[[:alnum:]_.-]+/(README(\.[[:alnum:]_-]+)?|AGENTS)\.md|\.github/assets/[[:alnum:]_.-]+\.(png|jpe?g|gif|webp)|docs(/[[:alnum:]_.-]+)+\.(md|png|jpe?g|gif|webp|svg)|skills/[a-z0-9]+(-[a-z0-9]+)*/(SKILL\.md|references/[[:alnum:]_.-]+\.md|agents/openai\.yaml))$'
+              path_class=must-full
+              has_docs_assets=false
+              has_reusable_source=false
+              cover_pattern='^\.github/assets/avatar-cover-(light|dark)-(en|zh-Hans)\.jpg$'
+              documentation_pattern='^(README(\.[[:alnum:]_-]+)?\.md|AGENTS\.md|packages/[[:alnum:]_.-]+/(README(\.[[:alnum:]_-]+)?|AGENTS)\.md|docs(/[[:alnum:]_.-]+)+\.(md|png|jpe?g|gif|webp|svg)|skills/[a-z0-9]+(-[a-z0-9]+)*/(SKILL\.md|references/[[:alnum:]_.-]+\.md|agents/openai\.yaml))$'
+              reusable_source_pattern='^(src/|packages/|scripts/[[:alnum:]_.-]+\.mjs$|package\.json$|pnpm-lock\.yaml$|pnpm-workspace\.yaml$|tsconfig[^/]*\.json$|vite\.config\.[[:alnum:]_-]+$)'
+              must_full_pattern='^(scripts/readme-cover\.html|\.github/assets/bear-breed-profiles\.png|\.github/)'
 
               for (( index = 0; index < ${#changes[@]}; index += 2 )); do
                 change_status=${changes[index]}
                 changed_path=${changes[index + 1]}
 
-                if [[ ! "$change_status" =~ ^[AM]$ ]] ||
-                   [[ ! "$changed_path" =~ $documentation_pattern ]]; then
-                  scope=full
+                if [[ ! "$change_status" =~ ^[AM]$ ]]; then
                   break
                 fi
 
                 head_entry=$(git ls-tree "$HEAD_SHA" -- "$changed_path")
                 if [[ ! "$head_entry" =~ ^100644[[:space:]]blob[[:space:]][[:xdigit:]]{40}[[:space:]] ]]; then
-                  scope=full
                   break
                 fi
 
                 if [[ "$change_status" == M ]]; then
                   base_entry=$(git ls-tree "$BASE_SHA" -- "$changed_path")
                   if [[ ! "$base_entry" =~ ^100644[[:space:]]blob[[:space:]][[:xdigit:]]{40}[[:space:]] ]]; then
-                    scope=full
                     break
                   fi
                 fi
+
+                # The four generated README covers are the only .github paths
+                # eligible for docs-assets. Check them before the broad
+                # .github must-full rule so precedence cannot shadow them.
+                if [[ "$changed_path" =~ $cover_pattern ]]; then
+                  has_docs_assets=true
+                elif [[ "$changed_path" =~ $must_full_pattern ]]; then
+                  break
+                elif [[ "$changed_path" =~ $documentation_pattern ]]; then
+                  has_docs_assets=true
+                elif [[ "$changed_path" =~ $reusable_source_pattern ]]; then
+                  has_reusable_source=true
+                else
+                  break
+                fi
               done
+
+              if [[ "$index" -eq "${#changes[@]}" ]]; then
+                if [[ "$has_docs_assets" == true && "$has_reusable_source" == false ]]; then
+                  path_class=docs-assets
+                elif [[ "$has_docs_assets" == false && "$has_reusable_source" == true ]]; then
+                  path_class=reusable-source
+                fi
+              fi
+
+              if [[ "$EVENT_NAME" == pull_request && "$path_class" == docs-assets ]]; then
+                scope=docs-assets
+              elif [[ "$EVENT_NAME" == push && "$evidence_scope" == reused-pr-ci ]]; then
+                if [[ "$path_class" == docs-assets ]]; then
+                  scope=docs-assets
+                elif [[ "$path_class" == reusable-source ]]; then
+                  scope=reused-pr-ci
+                fi
+              fi
             fi
           fi
 
           printf 'scope=%s\nbase=%s\nhead=%s\n' "$scope" "$BASE_SHA" "$HEAD_SHA" >> "$GITHUB_OUTPUT"
           printf 'Validation scope: %s\n' "$scope"
 
-      - name: Validate documentation and skill metadata
-        if: steps.scope.outputs.scope == 'documentation'
+      - name: Validate documentation, cover assets, and skill metadata
+        if: steps.scope.outputs.scope == 'docs-assets'
         shell: bash
         env:
           BASE_SHA: ${{ steps.scope.outputs.base }}
@@ -118,6 +189,30 @@ jobs:
               for path in changed
               if pathlib.Path(path).suffix.lower() in {".gif", ".jpeg", ".jpg", ".png", ".svg", ".webp"}
           }
+          cover_images = {
+              ".github/assets/avatar-cover-light-en.jpg",
+              ".github/assets/avatar-cover-dark-en.jpg",
+              ".github/assets/avatar-cover-light-zh-Hans.jpg",
+              ".github/assets/avatar-cover-dark-zh-Hans.jpg",
+          }
+          required_readme_covers = {}
+          if any(path in cover_images for path in changed):
+              markdown_files.update({root / "README.md", root / "README.zh-Hans.md"})
+              for image in cover_images:
+                  media_files.add(root / image)
+              required_readme_covers = {
+                  root / "README.md": {
+                      ".github/assets/avatar-cover-dark-en.jpg",
+                      ".github/assets/avatar-cover-light-en.jpg",
+                  },
+                  root / "README.zh-Hans.md": {
+                      ".github/assets/avatar-cover-dark-zh-Hans.jpg",
+                      ".github/assets/avatar-cover-light-zh-Hans.jpg",
+                  },
+              }
+              for readme in required_readme_covers:
+                  if readme.is_symlink() or not readme.is_file():
+                      raise SystemExit(f"Missing regular README cover owner: {readme.relative_to(root)}")
 
           ruby_yaml_parser = r"""
           require "json"
@@ -254,6 +349,14 @@ jobs:
               targets.extend(re.findall(r"\b(?:href|src)\s*=\s*[\"']([^\"']+)[\"']", markdown, re.I))
               for source_set in re.findall(r"\bsrcset\s*=\s*[\"']([^\"']+)[\"']", markdown, re.I):
                   targets.extend(candidate.strip().split()[0] for candidate in source_set.split(",") if candidate.strip())
+              expected_covers = required_readme_covers.get(markdown_file)
+              if expected_covers is not None:
+                  missing_covers = expected_covers.difference(targets)
+                  if missing_covers:
+                      raise SystemExit(
+                          f"README must link required cover(s): {markdown_file.relative_to(root)} -> "
+                          f"{', '.join(sorted(missing_covers))}"
+                      )
               for target in targets:
                   if target.startswith("#"):
                       continue
@@ -290,7 +393,7 @@ jobs:
           PY
 
       - name: Checkout shared OneWorks sources
-        if: steps.scope.outputs.scope != 'documentation'
+        if: steps.scope.outputs.scope == 'full'
         uses: actions/checkout@v4
         with:
           repository: oneworks-ai/app
@@ -298,13 +401,13 @@ jobs:
           submodules: false
 
       - name: Setup pnpm
-        if: steps.scope.outputs.scope != 'documentation'
+        if: steps.scope.outputs.scope == 'full'
         uses: pnpm/action-setup@v4
         with:
           version: 11.7.0
 
       - name: Setup Node.js
-        if: steps.scope.outputs.scope != 'documentation'
+        if: steps.scope.outputs.scope == 'full'
         uses: actions/setup-node@v4
         with:
           node-version-file: app-source/.node-version
@@ -315,29 +418,163 @@ jobs:
             app-source/pnpm-lock.yaml
 
       - name: Install dependencies
-        if: steps.scope.outputs.scope != 'documentation'
+        if: steps.scope.outputs.scope == 'full'
         run: pnpm install --frozen-lockfile
 
       - name: Test editor and runtime contracts
-        if: steps.scope.outputs.scope != 'documentation'
+        if: steps.scope.outputs.scope == 'full'
         run: pnpm test
 
       - name: Typecheck app source
-        if: steps.scope.outputs.scope != 'documentation'
+        if: steps.scope.outputs.scope == 'full'
         run: pnpm typecheck
 
       - name: Build and typecheck SDK packages
-        if: steps.scope.outputs.scope != 'documentation'
+        if: steps.scope.outputs.scope == 'full'
         run: pnpm typecheck:sdk
 
       - name: Build app source
-        if: steps.scope.outputs.scope != 'documentation'
+        if: steps.scope.outputs.scope == 'full'
         run: pnpm build:app-source
 
       - name: Test packed packages in a clean consumer
-        if: steps.scope.outputs.scope != 'documentation'
+        if: steps.scope.outputs.scope == 'full'
         run: pnpm smoke:sdk
 
       - name: Audit production dependencies
-        if: steps.scope.outputs.scope != 'documentation'
+        if: steps.scope.outputs.scope == 'full'
         run: pnpm audit --prod --audit-level high
+
+      - name: Validate reused PR CI source diff
+        if: steps.scope.outputs.scope == 'reused-pr-ci'
+        shell: bash
+        env:
+          BASE_SHA: ${{ steps.scope.outputs.base }}
+          HEAD_SHA: ${{ steps.scope.outputs.head }}
+        run: git diff --check "$BASE_SHA" "$HEAD_SHA"
+
+  sdk:
+    name: build-test-pack
+    needs: validate
+    if: always()
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - name: Enforce validation success
+        shell: bash
+        env:
+          VALIDATION_RESULT: ${{ needs.validate.result }}
+        run: |
+          set -euo pipefail
+          if [[ "$VALIDATION_RESULT" != success ]]; then
+            printf 'Validation job did not succeed: %s\n' "$VALIDATION_RESULT" >&2
+            exit 1
+          fi
+
+      - name: Produce isolated pull-request CI evidence
+        id: evidence
+        if: github.event_name == 'pull_request'
+        shell: bash
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          REPOSITORY_ID: ${{ github.repository_id }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          BASE_REPOSITORY_ID: ${{ github.event.pull_request.base.repo.id }}
+          BASE_REPOSITORY: ${{ github.event.pull_request.base.repo.full_name }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          HEAD_REPOSITORY_ID: ${{ github.event.pull_request.head.repo.id }}
+          HEAD_REPOSITORY: ${{ github.event.pull_request.head.repo.full_name }}
+        run: |
+          set -euo pipefail
+          node --input-type=module <<'NODE'
+          import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs'
+          import { join } from 'node:path'
+
+          const shaPattern = /^[0-9a-f]{40}$/u
+          const integer = value => /^\d+$/u.test(value) ? Number(value) : Number.NaN
+          const required = name => {
+            const value = process.env[name]
+            if (!value) throw new Error(`Missing trusted context: ${name}`)
+            return value
+          }
+          const request = async path => {
+            const controller = new AbortController()
+            const timer = setTimeout(() => controller.abort(), 10_000)
+            try {
+              const response = await fetch(`${required('GITHUB_API_URL')}/repos/${required('GITHUB_REPOSITORY')}${path}`, {
+                signal: controller.signal,
+                headers: {
+                  accept: 'application/vnd.github+json',
+                  authorization: `Bearer ${required('GITHUB_TOKEN')}`,
+                  'x-github-api-version': '2022-11-28'
+                }
+              })
+              if (!response.ok) throw new Error(`GitHub API returned ${response.status}`)
+              return response.json()
+            } finally {
+              clearTimeout(timer)
+            }
+          }
+
+          const repositoryId = integer(required('REPOSITORY_ID'))
+          const runId = integer(required('GITHUB_RUN_ID'))
+          const runAttempt = integer(required('GITHUB_RUN_ATTEMPT'))
+          const pullRequestNumber = integer(required('PR_NUMBER'))
+          const baseRepositoryId = integer(required('BASE_REPOSITORY_ID'))
+          const headRepositoryId = integer(required('HEAD_REPOSITORY_ID'))
+          const integrationSha = required('GITHUB_SHA')
+          const baseSha = required('BASE_SHA')
+          const headSha = required('HEAD_SHA')
+          if (![repositoryId, runId, runAttempt, pullRequestNumber, baseRepositoryId, headRepositoryId].every(Number.isInteger) ||
+              ![integrationSha, baseSha, headSha].every(value => shaPattern.test(value))) {
+            throw new Error('Invalid trusted evidence identity')
+          }
+
+          const [run, integration] = await Promise.all([
+            request(`/actions/runs/${runId}`),
+            request(`/commits/${integrationSha}`)
+          ])
+          if (run.id !== runId || run.run_attempt !== runAttempt || run.workflow_id == null ||
+              run.name !== 'Avatar SDK CI' || run.path !== '.github/workflows/sdk-ci.yml' ||
+              run.event !== 'pull_request' || run.head_sha !== headSha ||
+              run.repository?.id !== repositoryId || integration.sha !== integrationSha ||
+              integration.commit?.tree?.sha == null || integration.parents?.length !== 2 ||
+              integration.parents[0]?.sha !== baseSha || integration.parents[1]?.sha !== headSha) {
+            throw new Error('Official PR run or integration commit identity mismatch')
+          }
+
+          const evidence = {
+            schema_version: 1,
+            generated_at: new Date().toISOString(),
+            repository: { id: repositoryId, full_name: required('GITHUB_REPOSITORY') },
+            workflow: { id: run.workflow_id, name: run.name, path: run.path },
+            run: { id: runId, attempt: runAttempt, event: run.event, head_sha: run.head_sha },
+            pull_request: {
+              number: pullRequestNumber,
+              base: { sha: baseSha, repository: { id: baseRepositoryId, full_name: required('BASE_REPOSITORY') } },
+              head: { sha: headSha, repository: { id: headRepositoryId, full_name: required('HEAD_REPOSITORY') } }
+            },
+            integration: {
+              sha: integrationSha,
+              tree: integration.commit.tree.sha,
+              parents: integration.parents.map(parent => parent.sha)
+            }
+          }
+          const directory = mkdtempSync(join(required('RUNNER_TEMP'), 'avatar-pr-ci-evidence-'))
+          mkdirSync(directory, { recursive: true, mode: 0o700 })
+          const evidencePath = join(directory, 'pr-ci-evidence.json')
+          writeFileSync(evidencePath, `${JSON.stringify(evidence)}\n`, { encoding: 'utf8', flag: 'wx', mode: 0o600 })
+          writeFileSync(required('GITHUB_OUTPUT'), `path=${evidencePath}\n`, { encoding: 'utf8', flag: 'a' })
+          console.log('Created isolated PR CI evidence for the current run attempt.')
+          NODE
+
+      - name: Upload pull-request CI evidence
+        if: github.event_name == 'pull_request'
+        uses: actions/upload-artifact@v4
+        with:
+          name: avatar-pr-ci-evidence-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ steps.evidence.outputs.path }}
+          if-no-files-found: error
+          retention-days: 2
