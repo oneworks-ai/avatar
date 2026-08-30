@@ -380,20 +380,20 @@ export const AVATAR_ANIMATION_PRESETS: readonly AvatarAnimationPreset[] = [
   { description: 'Quick happy hops with a bright expression.', durationMs: DEFAULT_AVATAR_ANIMATION_DURATION_MS, id: 'excited', label: 'Excited', playbackMode: 'once' },
   { description: 'A broad side-to-side victory bounce.', durationMs: DEFAULT_AVATAR_ANIMATION_DURATION_MS, id: 'celebrate', label: 'Celebrate', playbackMode: 'once' },
   {
-    description: 'The intact bear becomes the dot beneath an independent alert stem, then fully restores.',
+    description: 'The intact character becomes the dot beneath an independent alert stem, then fully restores.',
     durationMs: DEFAULT_AVATAR_ANIMATION_DURATION_MS,
     id: 'bear-alert-morph',
-    label: 'Bear · Exclamation',
+    label: 'Exclamation',
     playbackMode: 'once',
-    requiredEntityPreset: 'bear'
+    requiresEntityParts: true
   },
   {
-    description: 'The intact bear becomes the center ball while two independent 3D loading balls join it, then fully restores.',
+    description: 'The intact character becomes the center ball while two independent 3D loading balls join it, then fully restores.',
     durationMs: DEFAULT_AVATAR_ANIMATION_DURATION_MS,
     id: 'bear-loading-morph',
-    label: 'Bear · Three-ball loading',
+    label: 'Three-ball loading',
     playbackMode: 'once',
-    requiredEntityPreset: 'bear'
+    requiresEntityParts: true
   },
   {
     description: 'The intact character focuses as a transient 3D notification badge scales at a head-safe upper anchor.',
@@ -1392,7 +1392,8 @@ const buildPresetFrames = (
     factor: number,
     targetX: number,
     targetY: number,
-    ballProgress: number = 0
+    ballProgress: number = 0,
+    sphericalPrimary: boolean = false
   ): AvatarEntityPartTransforms => {
     if (entityPrimary == null) return entityBaseTransforms
     const mix = (from: number, to: number) => from + (to - from) * ballProgress
@@ -1406,10 +1407,17 @@ const buildPresetFrames = (
       const relativeY = (part.y - entityPrimary.y) * factor
       const scaledX = targetX + relativeX * cosSpin - relativeY * sinSpin
       const scaledY = targetY + relativeX * sinSpin + relativeY * cosSpin
+      const primaryScaleX = part.scaleX * factor
+      const primaryScaleY = part.scaleY * factor
+      const sphereScale = Math.min(primaryScaleX, primaryScaleY)
       return [part.id, {
         rotationZ: (isPrimary ? part.rotationZ ?? 0 : mix(part.rotationZ ?? 0, 0)) + spinDegrees,
-        scaleX: scaleWithinRange(isPrimary ? part.scaleX * factor : mix(part.scaleX * factor, .01)),
-        scaleY: scaleWithinRange(isPrimary ? part.scaleY * factor : mix(part.scaleY * factor, .01)),
+        scaleX: scaleWithinRange(isPrimary
+          ? mix(primaryScaleX, sphericalPrimary ? sphereScale : primaryScaleX)
+          : mix(primaryScaleX, .01)),
+        scaleY: scaleWithinRange(isPrimary
+          ? mix(primaryScaleY, sphericalPrimary ? sphereScale : primaryScaleY)
+          : mix(primaryScaleY, .01)),
         x: isPrimary ? scaledX : mix(scaledX, targetX),
         y: isPrimary ? scaledY : mix(scaledY, targetY),
         z: isPrimary
@@ -1421,12 +1429,12 @@ const buildPresetFrames = (
   const withAnimatedScaleZ = (transforms: AvatarEntityPartTransforms): AvatarEntityPartTransforms => (
     Object.fromEntries(Object.entries(transforms).map(([partId, transform]) => {
       const part = animatedEntityParts[partId]
+      const targetScaleX = transform.scaleX ?? part?.scaleX ?? 1
+      const targetScaleY = transform.scaleY ?? part?.scaleY ?? 1
+      const projectionScaleX = part == null ? 1 : targetScaleX / part.scaleX
       return [partId, {
         ...transform,
-        scaleZ: Math.min(
-          transform.scaleX ?? part?.scaleX ?? 1,
-          transform.scaleY ?? part?.scaleY ?? 1
-        )
+        scaleZ: Math.min(targetScaleX, targetScaleY) / projectionScaleX
       }]
     }))
   )
@@ -1491,22 +1499,22 @@ const buildPresetFrames = (
   const notificationBadgeSettle = createNotificationBadge(100, notificationScale)
   const notificationBadgePulse = createNotificationBadge(100, notificationScale * 1.05)
 
-  const sleepGather = withAnimatedScaleZ(compactEntity(.76, primaryX, primaryY + 10 * entityMotionScale, .18))
-  const sleepCurl = withAnimatedScaleZ(compactEntity(.4, primaryX, primaryY + 24 * entityMotionScale, .62))
-  const sleepBall = withAnimatedScaleZ(compactEntity(.16, primaryX, primaryY + 36 * entityMotionScale, 1))
-  const sleepFloatUp = withAnimatedScaleZ(compactEntity(.17, primaryX, primaryY + 28 * entityMotionScale, 1))
-  const sleepFloatDown = withAnimatedScaleZ(compactEntity(.155, primaryX, primaryY + 40 * entityMotionScale, 1))
+  const sleepGather = withAnimatedScaleZ(compactEntity(.76, primaryX, primaryY + 10 * entityMotionScale, .18, true))
+  const sleepCurl = withAnimatedScaleZ(compactEntity(.4, primaryX, primaryY + 24 * entityMotionScale, .62, true))
+  const sleepBall = withAnimatedScaleZ(compactEntity(.16, primaryX, primaryY + 36 * entityMotionScale, 1, true))
+  const sleepFloatUp = withAnimatedScaleZ(compactEntity(.17, primaryX, primaryY + 28 * entityMotionScale, 1, true))
+  const sleepFloatDown = withAnimatedScaleZ(compactEntity(.155, primaryX, primaryY + 40 * entityMotionScale, 1, true))
   const sleepShapeMorphs = (progress: number): AvatarEntityPartShapeMorphs => ({
     ...(entityPrimary == null ? {} : {
       [entityPrimary.id]: { fromShape: entityPrimary.shape, progress, toShape: 'sphere' }
     })
   })
 
-  const burstCompress = withAnimatedScaleZ(compactEntity(.58, primaryX, primaryY + 8 * entityMotionScale, .42))
-  const burstCore = withAnimatedScaleZ(compactEntity(.19, primaryX, primaryY + 10 * entityMotionScale, 1))
-  const burstCoreTight = withAnimatedScaleZ(compactEntity(.17, primaryX, primaryY + 10 * entityMotionScale, 1))
-  const burstRebound = withAnimatedScaleZ(compactEntity(1.08, primaryX, primaryY - 4 * entityMotionScale, 0))
-  const burstSettle = withAnimatedScaleZ(compactEntity(.96, primaryX, primaryY + entityMotionScale, 0))
+  const burstCompress = withAnimatedScaleZ(compactEntity(.58, primaryX, primaryY + 8 * entityMotionScale, .42, true))
+  const burstCore = withAnimatedScaleZ(compactEntity(.19, primaryX, primaryY + 10 * entityMotionScale, 1, true))
+  const burstCoreTight = withAnimatedScaleZ(compactEntity(.17, primaryX, primaryY + 10 * entityMotionScale, 1, true))
+  const burstRebound = withAnimatedScaleZ(compactEntity(1.08, primaryX, primaryY - 4 * entityMotionScale, 0, true))
+  const burstSettle = withAnimatedScaleZ(compactEntity(.96, primaryX, primaryY + entityMotionScale, 0, true))
   const burstShapeMorphs = (progress: number): AvatarEntityPartShapeMorphs => ({
     ...(entityPrimary == null ? {} : {
       [entityPrimary.id]: { fromShape: entityPrimary.shape, progress, toShape: 'sphere' }
@@ -1577,6 +1585,257 @@ const buildPresetFrames = (
   const burstParticlesConverging = createBurstParticles(44, 18, 5.78, .4)
   const burstParticlesAbsorbing = createBurstParticles(18, 6, Math.PI * 2, .22)
   const burstParticlesAbsorbed = createBurstParticles(0, 2, Math.PI * 2, .16)
+
+  // Keep the approved bear choreography byte-identical while deriving the same semantic morph
+  // from every real part for animals with a different head/appendage topology.
+  const approvedBearMorph = bearMorphAvailable && entityPrimary?.id === 'primary' && entityParts.length === 3
+  const morphDepth = entityPrimary?.z ?? 0
+  const genericAlertGather = compactEntity(
+    .86,
+    primaryX,
+    primaryY + 6 * entityMotionScale,
+    .08
+  )
+  const genericAlertShrink = compactEntity(
+    .68,
+    primaryX,
+    primaryY + 16 * entityMotionScale,
+    .25
+  )
+  const genericAlertMorphingEntity = compactEntity(
+    .38,
+    primaryX,
+    primaryY + 36 * entityMotionScale,
+    .68
+  )
+  const genericAlertCompact = compactEntity(
+    .17,
+    primaryX,
+    primaryY + 50 * entityMotionScale,
+    1
+  )
+  const genericAlertPulse = compactEntity(
+    .15,
+    primaryX,
+    primaryY + 52 * entityMotionScale,
+    1
+  )
+  const genericAlertStemPart: AvatarEntityPart = {
+    baseColor: entityPrimary?.baseColor ?? '#e3b17f',
+    face: false,
+    foregroundColor: entityPrimary?.foregroundColor ?? '#2b1d18',
+    highlightColor: entityPrimary?.highlightColor ?? '#f8d8ad',
+    id: 'alert-stem',
+    label: 'Animated alert droplet',
+    rotationX: 0,
+    rotationY: 0,
+    rotationZ: 0,
+    roundness: 88,
+    scaleX: scaleWithinRange(.16 * entityMotionScale),
+    scaleY: scaleWithinRange(.42 * entityMotionScale),
+    scaleZ: scaleWithinRange(.19 * entityMotionScale),
+    shadowColor: entityPrimary?.shadowColor ?? '#9a6346',
+    shape: 'teardrop',
+    x: primaryX,
+    y: primaryY - 50 * entityMotionScale,
+    z: morphDepth
+  }
+  const createGenericAlertPart = (
+    opacity: number,
+    scaleX: number,
+    scaleY: number,
+    x: number,
+    y: number,
+    rotationZ: number = 0
+  ): readonly AvatarAnimationEntityPart[] => [{
+    composition: 'independent-depth',
+    opacity,
+    part: genericAlertStemPart,
+    transform: {
+      rotationZ,
+      scaleX: scaleWithinRange(scaleX * entityMotionScale),
+      scaleY: scaleWithinRange(scaleY * entityMotionScale),
+      scaleZ: scaleWithinRange(Math.min(scaleX, scaleY) * entityMotionScale),
+      x: primaryX + x * entityMotionScale,
+      y: primaryY + y * entityMotionScale,
+      z: morphDepth
+    }
+  }]
+  const genericAlertPartHidden = createGenericAlertPart(0, .04, .04, 0, -132, 180)
+  const genericAlertPartEmerging = createGenericAlertPart(60, .06, .055, 0, -128, 180)
+  const genericAlertBall = createGenericAlertPart(100, .085, .078, 0, -120, 180)
+  const genericAlertMorphingPart = createGenericAlertPart(100, .115, .22, 0, -88, 180)
+  const genericAlertDroplet = createGenericAlertPart(100, .15, .37, 0, -60, 180)
+  const genericAlertPart = createGenericAlertPart(100, .16, .42, 0, -54, 180)
+  const genericAlertPartPulse = createGenericAlertPart(100, .17, .45, 0, -56, 180)
+  const genericAlertWigglePivot = {
+    x: primaryX,
+    y: primaryY - 2 * entityMotionScale
+  }
+  const rotateGenericAlertPoint = (degrees: number) => {
+    const radians = degrees * Math.PI / 180
+    const x = primaryX
+    const y = primaryY - 54 * entityMotionScale
+    const relativeX = x - genericAlertWigglePivot.x
+    const relativeY = y - genericAlertWigglePivot.y
+    return {
+      x: genericAlertWigglePivot.x + relativeX * Math.cos(radians) - relativeY * Math.sin(radians),
+      y: genericAlertWigglePivot.y + relativeX * Math.sin(radians) + relativeY * Math.cos(radians)
+    }
+  }
+  const createGenericAlertWigglePart = (degrees: number) => {
+    const point = rotateGenericAlertPoint(degrees)
+    return createGenericAlertPart(
+      100,
+      .16,
+      .42,
+      (point.x - primaryX) / entityMotionScale,
+      (point.y - primaryY) / entityMotionScale,
+      180 + degrees
+    )
+  }
+  const createGenericAlertWiggleEntity = (degrees: number): AvatarEntityPartTransforms => {
+    const radians = degrees * Math.PI / 180
+    return Object.fromEntries(Object.entries(genericAlertCompact).map(([partId, transform]) => {
+      const x = transform.x ?? primaryX
+      const y = transform.y ?? primaryY
+      const relativeX = x - genericAlertWigglePivot.x
+      const relativeY = y - genericAlertWigglePivot.y
+      return [partId, {
+        ...transform,
+        rotationZ: (transform.rotationZ ?? 0) + degrees,
+        x: genericAlertWigglePivot.x + relativeX * Math.cos(radians) - relativeY * Math.sin(radians),
+        y: genericAlertWigglePivot.y + relativeX * Math.sin(radians) + relativeY * Math.cos(radians)
+      }]
+    }))
+  }
+  const genericAlertShapeMorphs = (entityProgress: number, stemProgress: number): AvatarEntityPartShapeMorphs => ({
+    'alert-stem': { fromShape: 'sphere', progress: stemProgress, toShape: 'teardrop' },
+    ...(entityPrimary == null ? {} : {
+      [entityPrimary.id]: { fromShape: entityPrimary.shape, progress: entityProgress, toShape: 'sphere' }
+    })
+  })
+
+  const genericLoadingGather = compactEntity(
+    .78,
+    primaryX,
+    primaryY + 10 * entityMotionScale,
+    .15
+  )
+  const genericLoadingBall = compactEntity(
+    .18,
+    primaryX,
+    primaryY + 4 * entityMotionScale,
+    1
+  )
+  const genericLoadingBallLifted = compactEntity(
+    .18,
+    primaryX,
+    primaryY - 28 * entityMotionScale,
+    1
+  )
+  const createGenericLoadingBallPart = (
+    id: 'loading-ball-left' | 'loading-ball-right'
+  ): AvatarEntityPart => ({
+    baseColor: entityPrimary?.baseColor ?? '#e3b17f',
+    face: false,
+    foregroundColor: entityPrimary?.foregroundColor ?? '#2b1d18',
+    highlightColor: entityPrimary?.highlightColor ?? '#f8d8ad',
+    id,
+    label: id === 'loading-ball-left' ? 'Animated left loading ball' : 'Animated right loading ball',
+    rotationX: 0,
+    rotationY: 0,
+    rotationZ: 0,
+    roundness: 100,
+    scaleX: scaleWithinRange(.14 * entityMotionScale),
+    scaleY: scaleWithinRange(.14 * entityMotionScale),
+    scaleZ: scaleWithinRange(.14 * entityMotionScale),
+    shadowColor: entityPrimary?.shadowColor ?? '#9a6346',
+    shape: 'sphere',
+    x: primaryX,
+    y: primaryY + 4 * entityMotionScale,
+    z: morphDepth
+  })
+  const genericLoadingBallParts = {
+    left: createGenericLoadingBallPart('loading-ball-left'),
+    right: createGenericLoadingBallPart('loading-ball-right')
+  }
+  const createGenericLoadingParts = (
+    opacity: number,
+    leftX: number,
+    leftY: number,
+    rightX: number,
+    rightY: number,
+    scale: number
+  ): readonly AvatarAnimationEntityPart[] => [
+    {
+      composition: 'independent-depth',
+      opacity,
+      part: genericLoadingBallParts.left,
+      transform: {
+        rotationZ: 0,
+        scaleX: scaleWithinRange(scale * entityMotionScale),
+        scaleY: scaleWithinRange(scale * entityMotionScale),
+        scaleZ: scaleWithinRange(scale * entityMotionScale),
+        x: primaryX + leftX * entityMotionScale,
+        y: primaryY + leftY * entityMotionScale,
+        z: morphDepth
+      }
+    },
+    {
+      composition: 'independent-depth',
+      opacity,
+      part: genericLoadingBallParts.right,
+      transform: {
+        rotationZ: 0,
+        scaleX: scaleWithinRange(scale * entityMotionScale),
+        scaleY: scaleWithinRange(scale * entityMotionScale),
+        scaleZ: scaleWithinRange(scale * entityMotionScale),
+        x: primaryX + rightX * entityMotionScale,
+        y: primaryY + rightY * entityMotionScale,
+        z: morphDepth
+      }
+    }
+  ]
+  const genericLoadingPartsHidden = createGenericLoadingParts(0, -150, 10, 150, 10, .04)
+  const genericLoadingPartsEmerging = createGenericLoadingParts(60, -128, 10, 128, 10, .08)
+  const genericLoadingPartsFrame = (liftedBall?: 'left' | 'right') => createGenericLoadingParts(
+    100,
+    -68,
+    liftedBall === 'left' ? -28 : 4,
+    68,
+    liftedBall === 'right' ? -28 : 4,
+    .14
+  )
+  const genericLoadingShapeMorphs = (progress: number): AvatarEntityPartShapeMorphs => ({
+    ...(entityPrimary == null ? {} : {
+      [entityPrimary.id]: { fromShape: entityPrimary.shape, progress, toShape: 'sphere' }
+    })
+  })
+
+  const morphBaseTransforms = approvedBearMorph ? bearBaseTransforms : entityBaseTransforms
+  const resolvedAlertGather = approvedBearMorph ? alertGather : genericAlertGather
+  const resolvedAlertShrink = approvedBearMorph ? alertShrink : genericAlertShrink
+  const resolvedAlertMorphingEntity = approvedBearMorph ? alertMorphingBear : genericAlertMorphingEntity
+  const resolvedAlertCompact = approvedBearMorph ? alertCompact : genericAlertCompact
+  const resolvedAlertPulse = approvedBearMorph ? alertPulse : genericAlertPulse
+  const resolvedAlertPartHidden = approvedBearMorph ? alertPartHidden : genericAlertPartHidden
+  const resolvedAlertPartEmerging = approvedBearMorph ? alertPartEmerging : genericAlertPartEmerging
+  const resolvedAlertBall = approvedBearMorph ? alertBall : genericAlertBall
+  const resolvedAlertMorphingPart = approvedBearMorph ? alertMorphingPart : genericAlertMorphingPart
+  const resolvedAlertDroplet = approvedBearMorph ? alertDroplet : genericAlertDroplet
+  const resolvedAlertPart = approvedBearMorph ? alertPart : genericAlertPart
+  const resolvedAlertPartPulse = approvedBearMorph ? alertPartPulse : genericAlertPartPulse
+  const resolveAlertWigglePart = approvedBearMorph ? createAlertWigglePart : createGenericAlertWigglePart
+  const resolveAlertWiggleEntity = approvedBearMorph ? createAlertWiggleBear : createGenericAlertWiggleEntity
+  const resolveAlertShapeMorphs = approvedBearMorph ? alertShapeMorphs : genericAlertShapeMorphs
+  const resolvedLoadingGather = approvedBearMorph ? loadingGather : genericLoadingGather
+  const resolvedLoadingBall = approvedBearMorph ? loadingBall : genericLoadingBall
+  const resolvedLoadingBallLifted = approvedBearMorph ? loadingBallLifted : genericLoadingBallLifted
+  const resolvedLoadingPartsHidden = approvedBearMorph ? loadingPartsHidden : genericLoadingPartsHidden
+  const resolvedLoadingPartsEmerging = approvedBearMorph ? loadingPartsEmerging : genericLoadingPartsEmerging
+  const resolveLoadingPartsFrame = approvedBearMorph ? loadingPartsFrame : genericLoadingPartsFrame
+  const resolveLoadingShapeMorphs = approvedBearMorph ? loadingShapeMorphs : genericLoadingShapeMorphs
   const alertFace: Partial<AvatarFaceStyle> = {
     height: clampPresetValue(faceStyle.height * .86, 18, 92),
     leftEyeHeight: clampPresetValue((faceStyle.leftEyeHeight ?? faceStyle.height) * .86, 18, 92),
@@ -2027,39 +2286,39 @@ const buildPresetFrames = (
       { offset: 1 }
     ],
     'bear-alert-morph': [
-      { auxiliaryParts: alertPartHidden, offset: 0, partShapeMorphs: alertShapeMorphs(0, 0), partTransforms: bearBaseTransforms },
-      { auxiliaryParts: alertPartEmerging, easing: 'ease-in', faceStyle: alertFace, offset: .08, partShapeMorphs: alertShapeMorphs(.08, 0), partTransforms: alertGather },
-      { auxiliaryParts: alertBall, easing: 'linear', faceStyle: alertFace, offset: .18, partShapeMorphs: alertShapeMorphs(.25, 0), partTransforms: alertShrink },
-      { auxiliaryParts: alertMorphingPart, easing: 'linear', faceStyle: alertFace, offset: .31, partShapeMorphs: alertShapeMorphs(.68, .55), partTransforms: alertMorphingBear },
-      { auxiliaryParts: alertDroplet, easing: 'linear', faceStyle: alertFace, offset: .42, partShapeMorphs: alertShapeMorphs(1, 1), partTransforms: alertCompact },
-      { auxiliaryParts: alertPartPulse, easing: 'ease-out', faceStyle: alertFace, offset: .48, partShapeMorphs: alertShapeMorphs(1, 1), partTransforms: alertPulse },
-      { auxiliaryParts: alertPart, easing: 'ease-out', faceStyle: alertFace, offset: .54, partShapeMorphs: alertShapeMorphs(1, 1), partTransforms: alertCompact },
-      { auxiliaryParts: createAlertWigglePart(9), easing: 'linear', faceStyle: alertFace, offset: .59, partShapeMorphs: alertShapeMorphs(1, 1), partTransforms: createAlertWiggleBear(9) },
-      { auxiliaryParts: createAlertWigglePart(-7), easing: 'linear', faceStyle: alertFace, offset: .64, partShapeMorphs: alertShapeMorphs(1, 1), partTransforms: createAlertWiggleBear(-7) },
-      { auxiliaryParts: createAlertWigglePart(5), easing: 'linear', faceStyle: alertFace, offset: .68, partShapeMorphs: alertShapeMorphs(1, 1), partTransforms: createAlertWiggleBear(5) },
-      { auxiliaryParts: createAlertWigglePart(-3), easing: 'linear', faceStyle: alertFace, offset: .72, partShapeMorphs: alertShapeMorphs(1, 1), partTransforms: createAlertWiggleBear(-3) },
-      { auxiliaryParts: alertPart, easing: 'ease-out', faceStyle: alertFace, offset: .75, partShapeMorphs: alertShapeMorphs(1, 1), partTransforms: alertCompact },
-      { auxiliaryParts: alertMorphingPart, easing: 'linear', faceStyle: alertFace, offset: .86, partShapeMorphs: alertShapeMorphs(.68, .55), partTransforms: alertMorphingBear },
-      { auxiliaryParts: alertPartEmerging, easing: 'linear', faceStyle: alertFace, offset: .95, partShapeMorphs: alertShapeMorphs(.08, 0), partTransforms: alertGather },
-      { auxiliaryParts: alertPartHidden, easing: 'ease-out', offset: 1, partShapeMorphs: alertShapeMorphs(0, 0), partTransforms: bearBaseTransforms }
+      { auxiliaryParts: resolvedAlertPartHidden, offset: 0, partShapeMorphs: resolveAlertShapeMorphs(0, 0), partTransforms: morphBaseTransforms },
+      { auxiliaryParts: resolvedAlertPartEmerging, easing: 'ease-in', faceStyle: alertFace, offset: .08, partShapeMorphs: resolveAlertShapeMorphs(.08, 0), partTransforms: resolvedAlertGather },
+      { auxiliaryParts: resolvedAlertBall, easing: 'linear', faceStyle: alertFace, offset: .18, partShapeMorphs: resolveAlertShapeMorphs(.25, 0), partTransforms: resolvedAlertShrink },
+      { auxiliaryParts: resolvedAlertMorphingPart, easing: 'linear', faceStyle: alertFace, offset: .31, partShapeMorphs: resolveAlertShapeMorphs(.68, .55), partTransforms: resolvedAlertMorphingEntity },
+      { auxiliaryParts: resolvedAlertDroplet, easing: 'linear', faceStyle: alertFace, offset: .42, partShapeMorphs: resolveAlertShapeMorphs(1, 1), partTransforms: resolvedAlertCompact },
+      { auxiliaryParts: resolvedAlertPartPulse, easing: 'ease-out', faceStyle: alertFace, offset: .48, partShapeMorphs: resolveAlertShapeMorphs(1, 1), partTransforms: resolvedAlertPulse },
+      { auxiliaryParts: resolvedAlertPart, easing: 'ease-out', faceStyle: alertFace, offset: .54, partShapeMorphs: resolveAlertShapeMorphs(1, 1), partTransforms: resolvedAlertCompact },
+      { auxiliaryParts: resolveAlertWigglePart(9), easing: 'linear', faceStyle: alertFace, offset: .59, partShapeMorphs: resolveAlertShapeMorphs(1, 1), partTransforms: resolveAlertWiggleEntity(9) },
+      { auxiliaryParts: resolveAlertWigglePart(-7), easing: 'linear', faceStyle: alertFace, offset: .64, partShapeMorphs: resolveAlertShapeMorphs(1, 1), partTransforms: resolveAlertWiggleEntity(-7) },
+      { auxiliaryParts: resolveAlertWigglePart(5), easing: 'linear', faceStyle: alertFace, offset: .68, partShapeMorphs: resolveAlertShapeMorphs(1, 1), partTransforms: resolveAlertWiggleEntity(5) },
+      { auxiliaryParts: resolveAlertWigglePart(-3), easing: 'linear', faceStyle: alertFace, offset: .72, partShapeMorphs: resolveAlertShapeMorphs(1, 1), partTransforms: resolveAlertWiggleEntity(-3) },
+      { auxiliaryParts: resolvedAlertPart, easing: 'ease-out', faceStyle: alertFace, offset: .75, partShapeMorphs: resolveAlertShapeMorphs(1, 1), partTransforms: resolvedAlertCompact },
+      { auxiliaryParts: resolvedAlertMorphingPart, easing: 'linear', faceStyle: alertFace, offset: .86, partShapeMorphs: resolveAlertShapeMorphs(.68, .55), partTransforms: resolvedAlertMorphingEntity },
+      { auxiliaryParts: resolvedAlertPartEmerging, easing: 'linear', faceStyle: alertFace, offset: .95, partShapeMorphs: resolveAlertShapeMorphs(.08, 0), partTransforms: resolvedAlertGather },
+      { auxiliaryParts: resolvedAlertPartHidden, easing: 'ease-out', offset: 1, partShapeMorphs: resolveAlertShapeMorphs(0, 0), partTransforms: morphBaseTransforms }
     ],
     'bear-loading-morph': [
-      { auxiliaryParts: loadingPartsHidden, offset: 0, partShapeMorphs: loadingShapeMorphs(0), partTransforms: bearBaseTransforms },
-      { auxiliaryParts: loadingPartsEmerging, easing: 'ease-in', faceStyle: loadingFace, offset: .1, partShapeMorphs: loadingShapeMorphs(.15), partTransforms: loadingGather },
-      { auxiliaryParts: loadingPartsFrame(), easing: 'linear', faceStyle: loadingFace, offset: .22, partShapeMorphs: loadingShapeMorphs(1), partTransforms: loadingBall },
-      { auxiliaryParts: loadingPartsFrame('left'), faceStyle: loadingFace, offset: .32, partShapeMorphs: loadingShapeMorphs(1), partTransforms: loadingBall },
-      { auxiliaryParts: loadingPartsFrame(), faceStyle: loadingFace, offset: .38, partShapeMorphs: loadingShapeMorphs(1), partTransforms: loadingBall },
-      { auxiliaryParts: loadingPartsFrame(), faceStyle: loadingFace, offset: .44, partShapeMorphs: loadingShapeMorphs(1), partTransforms: loadingBallLifted },
-      { auxiliaryParts: loadingPartsFrame(), faceStyle: loadingFace, offset: .5, partShapeMorphs: loadingShapeMorphs(1), partTransforms: loadingBall },
-      { auxiliaryParts: loadingPartsFrame('right'), faceStyle: loadingFace, offset: .56, partShapeMorphs: loadingShapeMorphs(1), partTransforms: loadingBall },
-      { auxiliaryParts: loadingPartsFrame(), faceStyle: loadingFace, offset: .62, partShapeMorphs: loadingShapeMorphs(1), partTransforms: loadingBall },
-      { auxiliaryParts: loadingPartsFrame('left'), faceStyle: loadingFace, offset: .68, partShapeMorphs: loadingShapeMorphs(1), partTransforms: loadingBall },
-      { auxiliaryParts: loadingPartsFrame(), faceStyle: loadingFace, offset: .74, partShapeMorphs: loadingShapeMorphs(1), partTransforms: loadingBall },
-      { auxiliaryParts: loadingPartsFrame(), faceStyle: loadingFace, offset: .8, partShapeMorphs: loadingShapeMorphs(1), partTransforms: loadingBallLifted },
-      { auxiliaryParts: loadingPartsFrame('right'), faceStyle: loadingFace, offset: .86, partShapeMorphs: loadingShapeMorphs(1), partTransforms: loadingBall },
-      { auxiliaryParts: loadingPartsFrame(), faceStyle: loadingFace, offset: .9, partShapeMorphs: loadingShapeMorphs(1), partTransforms: loadingBall },
-      { auxiliaryParts: loadingPartsEmerging, easing: 'linear', faceStyle: loadingFace, offset: .96, partShapeMorphs: loadingShapeMorphs(.15), partTransforms: loadingGather },
-      { auxiliaryParts: loadingPartsHidden, easing: 'ease-out', offset: 1, partShapeMorphs: loadingShapeMorphs(0), partTransforms: bearBaseTransforms }
+      { auxiliaryParts: resolvedLoadingPartsHidden, offset: 0, partShapeMorphs: resolveLoadingShapeMorphs(0), partTransforms: morphBaseTransforms },
+      { auxiliaryParts: resolvedLoadingPartsEmerging, easing: 'ease-in', faceStyle: loadingFace, offset: .1, partShapeMorphs: resolveLoadingShapeMorphs(.15), partTransforms: resolvedLoadingGather },
+      { auxiliaryParts: resolveLoadingPartsFrame(), easing: 'linear', faceStyle: loadingFace, offset: .22, partShapeMorphs: resolveLoadingShapeMorphs(1), partTransforms: resolvedLoadingBall },
+      { auxiliaryParts: resolveLoadingPartsFrame('left'), faceStyle: loadingFace, offset: .32, partShapeMorphs: resolveLoadingShapeMorphs(1), partTransforms: resolvedLoadingBall },
+      { auxiliaryParts: resolveLoadingPartsFrame(), faceStyle: loadingFace, offset: .38, partShapeMorphs: resolveLoadingShapeMorphs(1), partTransforms: resolvedLoadingBall },
+      { auxiliaryParts: resolveLoadingPartsFrame(), faceStyle: loadingFace, offset: .44, partShapeMorphs: resolveLoadingShapeMorphs(1), partTransforms: resolvedLoadingBallLifted },
+      { auxiliaryParts: resolveLoadingPartsFrame(), faceStyle: loadingFace, offset: .5, partShapeMorphs: resolveLoadingShapeMorphs(1), partTransforms: resolvedLoadingBall },
+      { auxiliaryParts: resolveLoadingPartsFrame('right'), faceStyle: loadingFace, offset: .56, partShapeMorphs: resolveLoadingShapeMorphs(1), partTransforms: resolvedLoadingBall },
+      { auxiliaryParts: resolveLoadingPartsFrame(), faceStyle: loadingFace, offset: .62, partShapeMorphs: resolveLoadingShapeMorphs(1), partTransforms: resolvedLoadingBall },
+      { auxiliaryParts: resolveLoadingPartsFrame('left'), faceStyle: loadingFace, offset: .68, partShapeMorphs: resolveLoadingShapeMorphs(1), partTransforms: resolvedLoadingBall },
+      { auxiliaryParts: resolveLoadingPartsFrame(), faceStyle: loadingFace, offset: .74, partShapeMorphs: resolveLoadingShapeMorphs(1), partTransforms: resolvedLoadingBall },
+      { auxiliaryParts: resolveLoadingPartsFrame(), faceStyle: loadingFace, offset: .8, partShapeMorphs: resolveLoadingShapeMorphs(1), partTransforms: resolvedLoadingBallLifted },
+      { auxiliaryParts: resolveLoadingPartsFrame('right'), faceStyle: loadingFace, offset: .86, partShapeMorphs: resolveLoadingShapeMorphs(1), partTransforms: resolvedLoadingBall },
+      { auxiliaryParts: resolveLoadingPartsFrame(), faceStyle: loadingFace, offset: .9, partShapeMorphs: resolveLoadingShapeMorphs(1), partTransforms: resolvedLoadingBall },
+      { auxiliaryParts: resolvedLoadingPartsEmerging, easing: 'linear', faceStyle: loadingFace, offset: .96, partShapeMorphs: resolveLoadingShapeMorphs(.15), partTransforms: resolvedLoadingGather },
+      { auxiliaryParts: resolvedLoadingPartsHidden, easing: 'ease-out', offset: 1, partShapeMorphs: resolveLoadingShapeMorphs(0), partTransforms: morphBaseTransforms }
     ],
     'bear-notification-morph': [
       { auxiliaryParts: notificationBadgeHidden, offset: 0 },

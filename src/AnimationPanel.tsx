@@ -1,7 +1,7 @@
 import './AnimationPanel.scss'
 
 import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react'
-import type { DragEvent, MouseEvent, PointerEvent, ReactNode } from 'react'
+import type { CSSProperties, DragEvent, MouseEvent, PointerEvent, ReactNode } from 'react'
 
 import addIcon from '@material-symbols/svg-400/rounded/add.svg?url'
 import animationIcon from '@material-symbols/svg-400/rounded/animation.svg?url'
@@ -21,7 +21,9 @@ import playArrowIcon from '@material-symbols/svg-400/rounded/play_arrow.svg?url'
 import radioButtonCheckedIcon from '@material-symbols/svg-400/rounded/radio_button_checked.svg?url'
 import removeIcon from '@material-symbols/svg-400/rounded/remove.svg?url'
 import repeatIcon from '@material-symbols/svg-400/rounded/repeat.svg?url'
+import saveIcon from '@material-symbols/svg-400/rounded/save.svg?url'
 import scheduleIcon from '@material-symbols/svg-400/rounded/schedule.svg?url'
+import searchIcon from '@material-symbols/svg-400/rounded/search.svg?url'
 import speedIcon from '@material-symbols/svg-400/rounded/speed.svg?url'
 import swapHorizIcon from '@material-symbols/svg-400/rounded/swap_horiz.svg?url'
 import tagIcon from '@material-symbols/svg-400/rounded/tag.svg?url'
@@ -36,15 +38,24 @@ import volumeOffIcon from '@material-symbols/svg-400/rounded/volume_off.svg?url'
 
 import type {
   AvatarAnimationParameterValue,
+  AvatarAnimationParameterValues,
   AvatarPlaybackMode,
   AvatarAnimationTimeline,
   AvatarAnimationTimelineClipInstance,
   AvatarAnimationTimelineTrack
 } from '@oneworks/avatar'
 
-import type { AvatarAnimationEasing, AvatarAnimationPreset } from './avatarAnimations'
+import type {
+  AvatarAnimationEasing,
+  AvatarAnimationKeyframe,
+  AvatarAnimationPlaybackMode,
+  AvatarAnimationPreset,
+  SavedAvatarAnimation
+} from './avatarAnimations'
+import { useAvatarLocale } from './avatarLocale'
 
 const PRESET_DRAG_TYPE = 'application/x-oneworks-avatar-animation-preset'
+const PRESET_DRAFT_DRAG_TYPE = 'application/x-oneworks-avatar-animation-preset-draft'
 const CLIP_DRAG_TYPE = 'application/x-oneworks-avatar-animation-clip'
 const TRACK_DRAG_TYPE = 'application/x-oneworks-avatar-animation-track'
 const TRACK_HEADER_WIDTH = 164
@@ -56,6 +67,9 @@ const MIN_TIMELINE_CLIP_DURATION_MS = 50
 const TIMELINE_FOLDED_REPEAT_GAP_PX = 6
 const TIMELINE_FOLDED_REPEAT_SUMMARY_WIDTH_PX = 34
 const TIMELINE_FOLDED_REPEAT_WIDTH_PX = TIMELINE_FOLDED_REPEAT_GAP_PX + TIMELINE_FOLDED_REPEAT_SUMMARY_WIDTH_PX
+const MIN_TIMELINE_PANEL_HEIGHT = 248
+const MAX_TIMELINE_PANEL_VIEWPORT_RATIO = .72
+const TIMELINE_PANEL_RESIZE_STEP = 24
 
 const MaterialIcon = ({ src }: { readonly src: string }) => (
   <span className='avatar-material-icon' aria-hidden='true' style={{ maskImage: `url(${src})` }} />
@@ -72,10 +86,31 @@ interface SharedAnimationTimelineProps {
   readonly unresolvedClipIds: readonly string[]
 }
 
+export interface AnimationPresetDraft {
+  readonly durationMs: number
+  readonly frameSequence?: AvatarAnimationTimelineClipInstance['frameSequence']
+  readonly keyframes?: readonly AnimationPresetDraftKeyframe[]
+  readonly parameterValues?: AvatarAnimationParameterValues
+  readonly playback?: AvatarPlaybackMode
+  readonly playbackRate: number
+  readonly presetId: string
+  readonly sourceOffsetMs: number
+  readonly weight: number
+}
+
+export interface AnimationPresetDraftKeyframe {
+  readonly atMs: number
+  readonly easing: AvatarAnimationEasing
+  readonly keyframeIndex: number
+}
+
 interface AnimationSidebarProps extends SharedAnimationTimelineProps {
+  readonly inspectorContext?: 'preset-draft' | 'timeline'
+  readonly mode?: 'auto' | 'inspector' | 'library'
   readonly onDeleteClip: (instanceId: string) => void
   readonly onDeleteKeyframe: (instanceId: string, keyframeIndex: number) => void
   readonly onOpenCustomEditor: () => void
+  readonly onPreviewPresetFrame?: (instanceId: string, keyframeIndex: number | null) => void
   readonly onReplaceClip: (instanceId: string, presetId: string) => void
   readonly onSelectClip: (instanceId: string | null) => void
   readonly onSelectPreset: (presetId: string) => void
@@ -98,13 +133,46 @@ interface AnimationSidebarProps extends SharedAnimationTimelineProps {
   readonly selectedClipId: string | null
   readonly selectedKeyframe: AnimationTimelineKeyframeSelection | null
   readonly selectedPresetId: string | null
+  readonly selectedPresetDraft?: AnimationPresetDraft | null
+  readonly savedAnimations?: readonly SavedAvatarAnimation[]
+  readonly selectedSavedAnimationId?: string | null
+  readonly onRemoveSavedAnimation?: (animation: SavedAvatarAnimation) => void
+  readonly onSelectSavedAnimation?: (animation: SavedAvatarAnimation) => void
+}
+
+interface CustomAnimationEditorProps {
+  readonly capturePending: boolean
+  readonly isPlaying: boolean
+  readonly keyframes: readonly AvatarAnimationKeyframe[]
+  readonly lockStartPosition: boolean
+  readonly name: string
+  readonly onAddKeyframe: () => void
+  readonly onBack: () => void
+  readonly onDurationChange: (index: number, durationMs: number) => void
+  readonly onEasingChange: (index: number, easing: AvatarAnimationEasing) => void
+  readonly onLockStartPositionChange: (locked: boolean) => void
+  readonly onNameChange: (name: string) => void
+  readonly onPlaybackModeChange: (mode: AvatarAnimationPlaybackMode) => void
+  readonly onPreview: () => void
+  readonly onRemoveKeyframe: (index: number) => void
+  readonly onSave: () => void
+  readonly onSelectKeyframe: (index: number) => void
+  readonly onStartFrameChange: (index: number) => void
+  readonly playbackMode: AvatarAnimationPlaybackMode
+  readonly selectedKeyframe: number | null
+  readonly startFrameIndex: number
 }
 
 interface AnimationPanelProps extends SharedAnimationTimelineProps {
   readonly autoReplay: boolean
   readonly interactionControls?: ReactNode
   readonly isPlaying: boolean
-  readonly onAddPreset: (presetId: string, startMs: number, targetTrackId?: string) => void
+  readonly onAddPreset: (
+    presetId: string,
+    startMs: number,
+    targetTrackId?: string,
+    draft?: AnimationPresetDraft
+  ) => void
   readonly onClose: () => void
   readonly onClearTimeline: () => void
   readonly onClearTrack: (trackId: string) => void
@@ -122,6 +190,7 @@ interface AnimationPanelProps extends SharedAnimationTimelineProps {
   readonly onSelectClip: (instanceId: string | null) => void
   readonly onSeek: (timeMs: number) => void
   readonly onSelectKeyframe: (selection: AnimationTimelineKeyframeSelection | null) => void
+  readonly onSaveProject: () => void
   readonly onTrackReorder: (trackId: string, targetTrackId: string) => void
   readonly onTrackUpdate: (
     trackId: string,
@@ -129,6 +198,7 @@ interface AnimationPanelProps extends SharedAnimationTimelineProps {
   ) => void
   readonly onTrimClip: (instanceId: string, edge: 'end' | 'start', timeMs: number) => void
   readonly playbackSpeed: number
+  readonly projectSaveState: 'error' | 'idle' | 'saved' | 'saving'
   readonly playheadStore: AnimationPlayheadStore
   readonly renderPresetPreview: (preset: AvatarAnimationPreset, progress?: number) => ReactNode
   readonly resolveClipKeyframes: (
@@ -500,12 +570,167 @@ const getPresetAvailability = (
   return { available: true, preset, reason: null }
 }
 
+export function CustomAnimationEditor({
+  capturePending,
+  isPlaying,
+  keyframes,
+  lockStartPosition,
+  name,
+  onAddKeyframe,
+  onBack,
+  onDurationChange,
+  onEasingChange,
+  onLockStartPositionChange,
+  onNameChange,
+  onPlaybackModeChange,
+  onPreview,
+  onRemoveKeyframe,
+  onSave,
+  onSelectKeyframe,
+  onStartFrameChange,
+  playbackMode,
+  selectedKeyframe,
+  startFrameIndex
+}: CustomAnimationEditorProps) {
+  const { t } = useAvatarLocale()
+  const selectedIndex = selectedKeyframe ?? (keyframes.length === 0 ? null : Math.min(startFrameIndex, keyframes.length - 1))
+  const selected = selectedIndex == null ? null : keyframes[selectedIndex] ?? null
+  const ready = keyframes.length >= 2
+
+  return (
+    <section className='avatar-custom-animation-editor' aria-label={t('Custom animation editor')}>
+      <header className='avatar-custom-animation-editor__header'>
+        <button type='button' onClick={onBack} aria-label={t('Back to animation library')}>
+          <MaterialIcon src={arrowBackIcon} />
+        </button>
+        <div>
+          <strong>{t('Custom animation')}</strong>
+          <span>{t('Capture poses as keyframes')}</span>
+        </div>
+      </header>
+
+      <div className='avatar-custom-animation-editor__scroll'>
+        <label className='avatar-custom-animation-editor__field'>
+          <span>{t('Animation name')}</span>
+          <input value={name} onChange={event => onNameChange(event.currentTarget.value)} />
+        </label>
+
+        <div className='avatar-custom-animation-editor__capture'>
+          <div>
+            <strong>{t('Keyframes')}</strong>
+            <span>{keyframes.length} / 2 {t('minimum')}</span>
+          </div>
+          <button type='button' disabled={capturePending} onClick={onAddKeyframe}>
+            <MaterialIcon src={addIcon} />
+            <span>{t(capturePending ? 'Capturing…' : 'Capture keyframe')}</span>
+          </button>
+        </div>
+
+        {keyframes.length === 0
+          ? (
+            <div className='avatar-custom-animation-editor__empty' role='status'>
+              <MaterialIcon src={keyIcon} />
+              <span>{t('Move the avatar, then capture the first keyframe.')}</span>
+            </div>
+            )
+          : (
+            <div className='avatar-custom-animation-editor__keyframes' role='list' aria-label={t('Keyframes')}>
+              {keyframes.map((keyframe, index) => (
+                <div key={index} className='avatar-custom-animation-editor__keyframe' role='listitem'
+                  data-selected={selectedIndex === index}>
+                  <button type='button' className='avatar-custom-animation-editor__keyframe-preview'
+                    aria-label={`${t('Select keyframe')} ${index + 1}`} onClick={() => onSelectKeyframe(index)}>
+                    {keyframe.screenshot == null
+                      ? <span className='avatar-animation-panel__keyframe-fallback' aria-hidden='true' />
+                      : <img src={keyframe.screenshot} alt='' draggable={false} />}
+                    <span>{index + 1}</span>
+                  </button>
+                  <button type='button' className='avatar-custom-animation-editor__keyframe-remove'
+                    aria-label={`${t('Delete keyframe')} ${index + 1}`} onClick={() => onRemoveKeyframe(index)}>
+                    <MaterialIcon src={closeIcon} />
+                  </button>
+                </div>
+              ))}
+            </div>
+            )}
+
+        {selected == null
+          ? null
+          : (
+            <section className='avatar-custom-animation-editor__settings' aria-label={t('Selected keyframe settings')}>
+              <strong>{t('Keyframe')} {selectedIndex! + 1}</strong>
+              <label className='avatar-custom-animation-editor__field'>
+                <span>{t('Duration')}</span>
+                <span className='avatar-custom-animation-editor__number'>
+                  <input type='number' min='100' max='8000' step='50' value={selected.durationMs}
+                    onChange={event => onDurationChange(selectedIndex!, Number(event.currentTarget.value))} />
+                  <span>ms</span>
+                </span>
+              </label>
+              <label className='avatar-custom-animation-editor__field'>
+                <span>{t('Easing')}</span>
+                <select value={selected.easing}
+                  onChange={event => onEasingChange(selectedIndex!, event.currentTarget.value as AvatarAnimationEasing)}>
+                  <option value='linear'>Linear</option>
+                  <option value='ease-in'>Ease in</option>
+                  <option value='ease-out'>Ease out</option>
+                  <option value='ease-in-out'>Ease in out</option>
+                </select>
+              </label>
+            </section>
+            )}
+
+        <section className='avatar-custom-animation-editor__settings' aria-label={t('Playback settings')}>
+          <strong>{t('Playback')}</strong>
+          <label className='avatar-custom-animation-editor__field'>
+            <span>{t('Animation mode')}</span>
+            <select value={playbackMode}
+              onChange={event => onPlaybackModeChange(event.currentTarget.value as AvatarAnimationPlaybackMode)}>
+              <option value='once'>{t('Play once')}</option>
+              <option value='loop'>{t('Loop')}</option>
+            </select>
+          </label>
+          <label className='avatar-custom-animation-editor__field'>
+            <span>{t('Start frame')}</span>
+            <select value={Math.min(startFrameIndex, Math.max(keyframes.length - 1, 0))}
+              disabled={keyframes.length === 0}
+              onChange={event => onStartFrameChange(Number(event.currentTarget.value))}>
+              {keyframes.map((_, index) => <option key={index} value={index}>{index + 1}</option>)}
+            </select>
+          </label>
+          <label className='avatar-custom-animation-editor__toggle'>
+            <span>{t('Lock start position')}</span>
+            <input type='checkbox' checked={lockStartPosition}
+              onChange={event => onLockStartPositionChange(event.currentTarget.checked)} />
+          </label>
+        </section>
+      </div>
+
+      <footer className='avatar-custom-animation-editor__actions'>
+        <button type='button' disabled={!ready} onClick={onPreview} aria-label={t(isPlaying ? 'Stop preview' : 'Preview animation')}>
+          <MaterialIcon src={isPlaying ? pauseIcon : playArrowIcon} />
+          <span>{t(isPlaying ? 'Stop' : 'Preview')}</span>
+        </button>
+        <button type='button' data-primary disabled={!ready} onClick={onSave}>
+          <MaterialIcon src={saveIcon} />
+          <span>{t('Save animation')}</span>
+        </button>
+      </footer>
+    </section>
+  )
+}
+
 export function AnimationSidebar({
   animationPresets,
+  inspectorContext = 'timeline',
+  mode = 'auto',
   onDeleteClip,
   onDeleteKeyframe,
   onOpenCustomEditor,
+  onPreviewPresetFrame = () => {},
   onReplaceClip,
+  onRemoveSavedAnimation,
+  onSelectSavedAnimation,
   onSelectClip,
   onSelectPreset,
   onSetClipDuration,
@@ -517,10 +742,17 @@ export function AnimationSidebar({
   selectedClipId,
   selectedKeyframe,
   selectedPresetId,
+  selectedPresetDraft = null,
+  savedAnimations = [],
+  selectedSavedAnimationId = null,
   timeline,
   unresolvedClipIds
 }: AnimationSidebarProps) {
   const [search, setSearch] = useState('')
+  const [presetFrameDetail, setPresetFrameDetail] = useState<{
+    readonly clipId: string
+    readonly keyframeIndex: number
+  } | null>(null)
   const selected = findTimelineClip(timeline, selectedClipId)
   const selectedAvailability = selected == null
     ? null
@@ -531,9 +763,14 @@ export function AnimationSidebar({
       preset.label.toLocaleLowerCase().includes(query) || preset.id.toLocaleLowerCase().includes(query)
     ))
   }, [animationPresets, search])
+  const visibleSavedAnimations = useMemo(() => {
+    const query = search.trim().toLocaleLowerCase()
+    return savedAnimations.filter(animation => query === '' || animation.name.toLocaleLowerCase().includes(query))
+  }, [savedAnimations, search])
 
-  if (selected != null) {
+  if (selected != null && mode !== 'library') {
     const { clip } = selected
+    const presetDraft = inspectorContext === 'preset-draft'
     const resolvedKeyframeNodes = resolveClipKeyframes(clip)
     const sourceFrameCount = Math.max(
       1,
@@ -555,7 +792,9 @@ export function AnimationSidebar({
     const selectedKeyframeNode = selectedKeyframe?.instanceId === clip.instanceId
       ? resolvedKeyframeNodes.find(node => node.keyframeIndex === selectedKeyframe.keyframeIndex) ?? null
       : null
-    const inspectorLabel = selectedKeyframeNode == null ? 'Clip Inspector' : 'Keyframe Inspector'
+    const inspectorLabel = presetDraft
+      ? 'Preset Inspector'
+      : selectedKeyframeNode == null ? 'Clip Inspector' : 'Keyframe Inspector'
     const sourceId = clip.source.type === 'preset' ? clip.source.presetId : 'inline'
     const sourceVersion = clip.source.type === 'preset' ? clip.source.presetVersion : clip.source.version
     const preset = selectedAvailability?.preset ?? null
@@ -606,15 +845,111 @@ export function AnimationSidebar({
               ), 1)
         )
     const unavailable = unresolvedClipIds.includes(clip.instanceId) || selectedAvailability?.available === false
+    const sourceFrameNodes = [...new Map(resolvedKeyframeNodes.map(node => [node.keyframeIndex, node])).values()]
+      .sort((first, second) => first.keyframeIndex - second.keyframeIndex)
+    const presetFrameDetailNode = presetDraft && presetFrameDetail?.clipId === clip.instanceId
+      ? sourceFrameNodes.find(node => node.keyframeIndex === presetFrameDetail.keyframeIndex) ?? null
+      : null
+    if (presetFrameDetailNode != null) {
+      const frameProgress = presetFrameDetailNode.sourceDurationMs <= 0
+        ? 0
+        : Math.min(Math.max(presetFrameDetailNode.atMs / presetFrameDetailNode.sourceDurationMs, 0), 1)
+      return (
+        <section
+          className='avatar-animation-sidebar avatar-animation-sidebar--inspector'
+          aria-label='Animation preset frame detail'
+        >
+          <header className='avatar-animation-sidebar__heading'>
+            <button type='button' onClick={() => {
+              setPresetFrameDetail(null)
+              onPreviewPresetFrame(clip.instanceId, null)
+            }} aria-label='Back to preset inspector'>
+              <MaterialIcon src={arrowBackIcon} />
+            </button>
+            <div>
+              <strong>动画帧 {presetFrameDetailNode.keyframeIndex + 1}</strong>
+              <span>{preset?.label ?? sourceId}</span>
+            </div>
+          </header>
+          <div className='avatar-animation-sidebar__inspector-scroll'>
+            <div className='avatar-animation-sidebar__frame-detail-preview' aria-hidden='true'>
+              {preset == null
+                ? <span className='avatar-animation-panel__keyframe-fallback' />
+                : renderPresetPreview(preset, frameProgress)}
+            </div>
+            <dl className='avatar-animation-sidebar__source avatar-animation-sidebar__frame-detail-meta'>
+              <div><MaterialIcon src={keyIcon} /><dt>动画帧</dt><dd>{presetFrameDetailNode.keyframeIndex + 1} / {sourceFrameCount}</dd></div>
+              <div><MaterialIcon src={speedIcon} /><dt>进度</dt><dd>{Math.round(frameProgress * 100)}%</dd></div>
+            </dl>
+            <div className='avatar-animation-sidebar__settings avatar-animation-sidebar__frame-detail-settings'>
+              <label className='avatar-animation-sidebar__field avatar-animation-sidebar__keyframe-field'>
+                <span className='avatar-animation-sidebar__field-label'>
+                  <MaterialIcon src={scheduleIcon} /><span>时间</span>
+                </span>
+                <span className='avatar-animation-sidebar__control avatar-animation-sidebar__control--suffix'>
+                  <input
+                    aria-label='动画帧时间'
+                    type='number'
+                    min='0'
+                    step='0.1'
+                    value={presetFrameDetailNode.atMs / 1000}
+                    onChange={event => onUpdateKeyframeTime(
+                      clip.instanceId,
+                      presetFrameDetailNode.keyframeIndex,
+                      Number(event.currentTarget.value) * 1000
+                    )}
+                  />
+                  <output>s</output>
+                </span>
+              </label>
+              <div className='avatar-animation-sidebar__field'>
+                <span className='avatar-animation-sidebar__field-label'>
+                  <MaterialIcon src={tuneIcon} /><span>缓动</span>
+                </span>
+                <div className='avatar-animation-sidebar__easing' role='group' aria-label='动画帧缓动类型'>
+                  {([
+                    ['linear', '线性', linearScaleIcon],
+                    ['ease-in', '缓入', trendingUpIcon],
+                    ['ease-out', '缓出', trendingDownIcon],
+                    ['ease-in-out', '缓入缓出', showChartIcon]
+                  ] as const).map(([value, label, icon]) => (
+                    <button
+                      key={value}
+                      type='button'
+                      aria-label={label}
+                      aria-pressed={presetFrameDetailNode.easing === value}
+                      onClick={() => onUpdateKeyframeEasing(
+                        clip.instanceId,
+                        presetFrameDetailNode.keyframeIndex,
+                        value
+                      )}
+                    >
+                      <MaterialIcon src={icon} />
+                      <span>{label}</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+      )
+    }
     return (
       <section
         className='avatar-animation-sidebar avatar-animation-sidebar--inspector'
-        aria-label={selectedKeyframeNode == null ? 'Animation clip inspector' : 'Animation keyframe inspector'}
+        aria-label={presetDraft
+          ? 'Animation preset inspector'
+          : selectedKeyframeNode == null ? 'Animation clip inspector' : 'Animation keyframe inspector'}
       >
-        <header className='avatar-animation-sidebar__heading'>
-          <button type='button' onClick={() => onSelectClip(null)} aria-label='Back to animation library'>
-            <MaterialIcon src={arrowBackIcon} />
-          </button>
+        <header className={`avatar-animation-sidebar__heading${presetDraft ? ' avatar-animation-sidebar__heading--root' : ''}`}>
+          {presetDraft
+            ? null
+            : (
+              <button type='button' onClick={() => onSelectClip(null)} aria-label='Back to animation library'>
+                <MaterialIcon src={arrowBackIcon} />
+              </button>
+              )}
           <div><strong>{preset?.label ?? sourceId}</strong><span>{inspectorLabel}</span></div>
         </header>
         <div className='avatar-animation-sidebar__inspector-scroll'>
@@ -629,9 +964,47 @@ export function AnimationSidebar({
         <dl className='avatar-animation-sidebar__source'>
           <div><MaterialIcon src={animationIcon} /><dt>动画来源</dt><dd>{sourceId}</dd></div>
           <div><MaterialIcon src={tagIcon} /><dt>版本</dt><dd>{sourceVersion}</dd></div>
-          <div><MaterialIcon src={scheduleIcon} /><dt>开始时间</dt><dd>{formatTimelineTime(clip.startMs)}</dd></div>
+          {presetDraft
+            ? null
+            : <div><MaterialIcon src={scheduleIcon} /><dt>开始时间</dt><dd>{formatTimelineTime(clip.startMs)}</dd></div>}
           <div><MaterialIcon src={timerIcon} /><dt>持续时间</dt><dd>{formatTimelineTime(clip.durationMs)}</dd></div>
         </dl>
+        {presetDraft && sourceFrameNodes.length > 0
+          ? (
+            <section className='avatar-animation-sidebar__frames-overview' aria-label='Animation preset frame list'>
+              <header>
+                <span><MaterialIcon src={keyIcon} /><strong>动画帧</strong></span>
+                <small>{sourceFrameCount} 帧</small>
+              </header>
+              <div className='avatar-animation-sidebar__frame-strip' role='list' aria-label='动画帧'>
+                {sourceFrameNodes.map(node => {
+                  const progress = node.sourceDurationMs <= 0
+                    ? 0
+                    : Math.min(Math.max(node.atMs / node.sourceDurationMs, 0), 1)
+                  return (
+                    <button
+                      key={node.keyframeIndex}
+                      type='button'
+                      aria-label={`查看动画帧 ${node.keyframeIndex + 1} 详情`}
+                      onClick={() => {
+                        setPresetFrameDetail({
+                          clipId: clip.instanceId,
+                          keyframeIndex: node.keyframeIndex
+                        })
+                        onPreviewPresetFrame(clip.instanceId, node.keyframeIndex)
+                      }}
+                    >
+                      {preset == null
+                        ? <span className='avatar-animation-panel__keyframe-fallback' />
+                        : renderPresetPreview(preset, progress)}
+                      <span>{node.keyframeIndex + 1}</span>
+                    </button>
+                  )
+                })}
+              </div>
+            </section>
+            )
+          : null}
         <div className='avatar-animation-sidebar__settings'>
           {selectedKeyframeNode != null
             ? (
@@ -889,7 +1262,7 @@ export function AnimationSidebar({
                     </>
                     )
                   : null}
-                {(preset?.parameters ?? []).map(parameter => {
+                {(preset?.parameters ?? (clip.source.type === 'inline' ? clip.source.clip.parameters : undefined) ?? []).map(parameter => {
           const value = clip.parameterValues?.[parameter.id] ?? parameter.default
           const update = (nextValue: AvatarAnimationParameterValue) => onUpdateClip(clip.instanceId, {
             parameterValues: { ...clip.parameterValues, [parameter.id]: nextValue }
@@ -935,7 +1308,14 @@ export function AnimationSidebar({
             : null}
         </div>
         <div className='avatar-animation-sidebar__actions' data-has-repair={unavailable}>
-          {selectedKeyframeNode == null && unavailable
+          {presetDraft
+            ? (
+              <div className='avatar-animation-sidebar__draft-note' role='note'>
+                临时修改只会应用到下一次拖入时间线的片段，不会改写原始动画。
+              </div>
+              )
+            : null}
+          {!presetDraft && selectedKeyframeNode == null && unavailable
             ? (
               <label className='avatar-animation-sidebar__replace'>
                 <span className='avatar-animation-sidebar__action-label'>
@@ -951,20 +1331,36 @@ export function AnimationSidebar({
               </label>
             )
             : null}
-          {selectedKeyframeNode == null
-            ? (
-              <button type='button' data-danger onClick={() => onDeleteClip(clip.instanceId)}>
-                <MaterialIcon src={deleteIcon} /><span>删除片段</span>
-              </button>
-              )
-            : (
-              <button type='button' data-danger disabled={selectedKeyframeNode.canDelete === false}
-                title={selectedKeyframeNode.canDelete === false ? '该动画至少需要保留当前数量的关键帧' : undefined}
-                onClick={() => onDeleteKeyframe(clip.instanceId, selectedKeyframeNode.keyframeIndex)}>
-                <MaterialIcon src={deleteIcon} /><span>删除关键帧</span>
-              </button>
-              )}
+          {presetDraft
+            ? null
+            : selectedKeyframeNode == null
+              ? (
+                <button type='button' data-danger onClick={() => onDeleteClip(clip.instanceId)}>
+                  <MaterialIcon src={deleteIcon} /><span>删除片段</span>
+                </button>
+                )
+              : (
+                <button type='button' data-danger disabled={selectedKeyframeNode.canDelete === false}
+                  title={selectedKeyframeNode.canDelete === false ? '该动画至少需要保留当前数量的关键帧' : undefined}
+                  onClick={() => onDeleteKeyframe(clip.instanceId, selectedKeyframeNode.keyframeIndex)}>
+                  <MaterialIcon src={deleteIcon} /><span>删除关键帧</span>
+                </button>
+                )}
         </div>
+        </div>
+      </section>
+    )
+  }
+
+  if (mode === 'inspector') {
+    return (
+      <section
+        className='avatar-animation-sidebar avatar-animation-sidebar--inspector avatar-animation-sidebar--empty'
+        aria-label='Animation inspector'
+      >
+        <div className='avatar-animation-sidebar__empty-state' role='status'>
+          <MaterialIcon src={animationIcon} />
+          <span>选择时间线片段查看动画参数</span>
         </div>
       </section>
     )
@@ -973,18 +1369,54 @@ export function AnimationSidebar({
   return (
     <section className='avatar-animation-sidebar' aria-label='Animation library'>
       <div className='avatar-animation-sidebar__search-row'>
-        <input className='avatar-animation-sidebar__search' type='search' value={search} placeholder='搜索动画'
-          aria-label='Search animations' onChange={event => setSearch(event.currentTarget.value)} />
+        <label className='avatar-animation-sidebar__search-field'>
+          <MaterialIcon src={searchIcon} />
+          <input className='avatar-animation-sidebar__search' type='search' value={search} placeholder='搜索动画'
+            aria-label='Search animations' onChange={event => setSearch(event.currentTarget.value)} />
+        </label>
         <button type='button' aria-label='Create custom animation' title='自定义动画' onClick={onOpenCustomEditor}>
           <MaterialIcon src={addIcon} />
         </button>
       </div>
       <div className='avatar-animation-sidebar__library'>
+        {visibleSavedAnimations.length > 0
+          ? (
+            <>
+              <h3 className='avatar-animation-sidebar__group-title'>已保存动画</h3>
+              {visibleSavedAnimations.map(animation => {
+                const cover = animation.keyframes[animation.startFrameIndex]?.screenshot
+                return (
+                  <div key={animation.id} className='avatar-animation-sidebar__saved-asset'
+                    data-selected={selectedSavedAnimationId === animation.id}>
+                    <button type='button' className='avatar-animation-sidebar__asset'
+                      aria-label={animation.name} title={animation.name}
+                      onClick={() => onSelectSavedAnimation?.(animation)}>
+                      <span aria-hidden='true'>
+                        {cover == null
+                          ? <span className='avatar-animation-panel__keyframe-fallback' />
+                          : <img src={cover} alt='' draggable={false} />}
+                      </span>
+                    </button>
+                    <button type='button' className='avatar-animation-sidebar__saved-remove'
+                      aria-label={`删除已保存动画 ${animation.name}`}
+                      onClick={() => onRemoveSavedAnimation?.(animation)}>
+                      <MaterialIcon src={closeIcon} />
+                    </button>
+                  </div>
+                )
+              })}
+              <h3 className='avatar-animation-sidebar__group-title'>预设动画</h3>
+            </>
+            )
+          : null}
         {visiblePresets.map(preset => (
           <button key={preset.id} className='avatar-animation-sidebar__asset'
             data-selected={selectedPresetId === preset.id} draggable onDragStart={event => {
               event.dataTransfer.effectAllowed = 'copy'
               event.dataTransfer.setData(PRESET_DRAG_TYPE, preset.id)
+              if (selectedPresetDraft?.presetId === preset.id) {
+                event.dataTransfer.setData(PRESET_DRAFT_DRAG_TYPE, JSON.stringify(selectedPresetDraft))
+              }
             }} type='button' aria-label={preset.label} title={preset.label}
             onClick={() => onSelectPreset(preset.id)}>
             <span aria-hidden='true'>{renderPresetPreview(preset)}</span>
@@ -1015,10 +1447,12 @@ export function AnimationPanel({
   onSelectClip,
   onSeek,
   onSelectKeyframe,
+  onSaveProject,
   onTrackReorder,
   onTrackUpdate,
   onTrimClip,
   playbackSpeed,
+  projectSaveState,
   playheadStore,
   renderPresetPreview,
   resolveClipKeyframes,
@@ -1028,17 +1462,23 @@ export function AnimationPanel({
   timeline,
   unresolvedClipIds
 }: AnimationPanelProps) {
+  const { t } = useAvatarLocale()
   const playheadMs = useSyncExternalStore(playheadStore.subscribe, playheadStore.getSnapshot, playheadStore.getSnapshot)
   const [pixelsPerSecond, setPixelsPerSecond] = useState(DEFAULT_PIXELS_PER_SECOND)
   const [expandedTimelineFoldKeys, setExpandedTimelineFoldKeys] = useState<ReadonlySet<string>>(() => new Set())
   const [contextMenu, setContextMenu] = useState<AnimationTimelineContextMenu | null>(null)
   const [moreMenuOpen, setMoreMenuOpen] = useState(false)
   const [draggingClipId, setDraggingClipId] = useState<string | null>(null)
+  const [panelHeight, setPanelHeight] = useState<number | null>(null)
+  const [panelResizing, setPanelResizing] = useState(false)
   const [clipSwapPreview, setClipSwapPreview] = useState<AnimationTimelineClipSwapPreview | null>(null)
   const [dropPreview, setDropPreview] = useState<AnimationTimelineDropPreview | null>(null)
   const [trimPreview, setTrimPreview] = useState<AnimationTimelineTrimPreview | null>(null)
   const trimRef = useRef<AnimationTimelineClipTrim | null>(null)
   const trimCleanupRef = useRef<(() => void) | null>(null)
+  const panelRef = useRef<HTMLElement>(null)
+  const panelResizeRef = useRef<{ pointerId: number; startHeight: number; startY: number } | null>(null)
+  const panelResizeCleanupRef = useRef<(() => void) | null>(null)
   const clipMoveRef = useRef<AnimationTimelineClipMove | null>(null)
   const clipMoveCleanupRef = useRef<(() => void) | null>(null)
   const suppressClipClickRef = useRef<string | null>(null)
@@ -1118,7 +1558,55 @@ export function AnimationPanel({
     clipMoveCleanupRef.current = null
     trimCleanupRef.current?.()
     trimCleanupRef.current = null
+    panelResizeCleanupRef.current?.()
+    panelResizeCleanupRef.current = null
   }, [])
+  const clampPanelHeight = (height: number) => {
+    const viewportHeight = typeof window === 'undefined' ? 900 : window.innerHeight
+    const maxHeight = Math.max(MIN_TIMELINE_PANEL_HEIGHT, Math.floor(viewportHeight * MAX_TIMELINE_PANEL_VIEWPORT_RATIO))
+    return Math.min(Math.max(height, MIN_TIMELINE_PANEL_HEIGHT), maxHeight)
+  }
+  const resizePanelBy = (delta: number) => {
+    const currentHeight = panelHeight ?? panelRef.current?.getBoundingClientRect().height ?? MIN_TIMELINE_PANEL_HEIGHT
+    setPanelHeight(clampPanelHeight(currentHeight + delta))
+  }
+  const startPanelResize = (event: PointerEvent<HTMLElement>) => {
+    if (event.button !== 0) return
+    const target = event.target as Element
+    const startedFromGrip = target.closest('.avatar-animation-panel__resize-grip') != null
+    if (!startedFromGrip && target.closest('button, input, select, textarea, a, [role="menuitem"]') != null) return
+    const panel = panelRef.current
+    if (panel == null) return
+    event.preventDefault()
+    panelResizeCleanupRef.current?.()
+    panelResizeRef.current = {
+      pointerId: event.pointerId,
+      startHeight: panel.getBoundingClientRect().height,
+      startY: event.clientY
+    }
+    setPanelResizing(true)
+    const move = (nativeEvent: globalThis.PointerEvent) => {
+      const state = panelResizeRef.current
+      if (state == null || nativeEvent.pointerId !== state.pointerId) return
+      nativeEvent.preventDefault()
+      setPanelHeight(clampPanelHeight(state.startHeight + state.startY - nativeEvent.clientY))
+    }
+    const finish = (nativeEvent: globalThis.PointerEvent) => {
+      if (panelResizeRef.current?.pointerId !== nativeEvent.pointerId) return
+      panelResizeCleanupRef.current?.()
+      panelResizeCleanupRef.current = null
+      panelResizeRef.current = null
+      setPanelResizing(false)
+    }
+    window.addEventListener('pointermove', move, true)
+    window.addEventListener('pointerup', finish, true)
+    window.addEventListener('pointercancel', finish, true)
+    panelResizeCleanupRef.current = () => {
+      window.removeEventListener('pointermove', move, true)
+      window.removeEventListener('pointerup', finish, true)
+      window.removeEventListener('pointercancel', finish, true)
+    }
+  }
   const renderTrackPreviewStack = (clips: readonly AvatarAnimationTimelineClipInstance[]) => (
     <span className='avatar-animation-panel__preview-stack' aria-hidden='true'>
       {clips.slice(0, 4).map(clip => {
@@ -1151,7 +1639,19 @@ export function AnimationPanel({
     setDropPreview(null)
     setDraggingClipId(null)
     const presetId = event.dataTransfer.getData(PRESET_DRAG_TYPE)
-    if (presetId !== '') return onAddPreset(presetId, startMs, trackId)
+    if (presetId !== '') {
+      const serializedDraft = event.dataTransfer.getData(PRESET_DRAFT_DRAG_TYPE)
+      let draft: AnimationPresetDraft | undefined
+      if (serializedDraft !== '') {
+        try {
+          const candidate = JSON.parse(serializedDraft) as AnimationPresetDraft
+          if (candidate.presetId === presetId) draft = candidate
+        } catch {
+          draft = undefined
+        }
+      }
+      return onAddPreset(presetId, startMs, trackId, draft)
+    }
     const instanceId = event.dataTransfer.getData(CLIP_DRAG_TYPE)
     if (instanceId !== '' && trackId != null) onMoveClip(instanceId, startMs, trackId)
   }
@@ -1372,7 +1872,9 @@ export function AnimationPanel({
   }
 
   return (
-    <section id='avatar-animation-panel' className='avatar-animation-panel' aria-label='Animation timeline' tabIndex={0}
+    <section ref={panelRef} id='avatar-animation-panel' className='avatar-animation-panel'
+      aria-label='Animation timeline' tabIndex={0} data-resizing={panelResizing}
+      style={panelHeight == null ? undefined : { '--avatar-timeline-panel-height': `${panelHeight}px` } as CSSProperties}
       onPointerDownCapture={event => {
         if (contextMenu != null && !contextMenuRef.current?.contains(event.target as Node)) setContextMenu(null)
       }} onScrollCapture={() => setContextMenu(null)}
@@ -1388,7 +1890,15 @@ export function AnimationPanel({
           event.preventDefault(); onSeek(playheadMs + (event.key === 'ArrowLeft' ? -100 : 100))
         }
       }}>
-      <header className='avatar-animation-panel__transport'>
+      <header className='avatar-animation-panel__transport' onPointerDown={startPanelResize}>
+        <div className='avatar-animation-panel__resize-grip' role='separator' tabIndex={0}
+          aria-label='Resize animation timeline' aria-orientation='horizontal'
+          onKeyDown={event => {
+            if (event.key !== 'ArrowUp' && event.key !== 'ArrowDown') return
+            event.preventDefault()
+            event.stopPropagation()
+            resizePanelBy(event.key === 'ArrowUp' ? TIMELINE_PANEL_RESIZE_STEP : -TIMELINE_PANEL_RESIZE_STEP)
+          }} />
         <div className='avatar-animation-panel__transport-primary'>
           <button className='avatar-animation-panel__play' type='button'
             aria-label={isPlaying ? 'Pause timeline' : 'Play timeline'} onClick={onPlayPause}>
@@ -1420,21 +1930,27 @@ export function AnimationPanel({
             </button>
           </div>
           {interactionControls}
+          <button className='avatar-animation-panel__save-project' type='button'
+            aria-label='Save project' title='保存项目（⌘/Ctrl + S）'
+            data-state={projectSaveState} disabled={projectSaveState === 'saving'}
+            onClick={onSaveProject}>
+            <MaterialIcon src={saveIcon} />
+          </button>
           <div className='avatar-animation-panel__more' ref={moreMenuRef}>
-            <button type='button' aria-label='More timeline options' aria-expanded={moreMenuOpen}
-              aria-haspopup='menu' title='更多时间线操作'
+            <button type='button' aria-label={t('More timeline options')} aria-expanded={moreMenuOpen}
+              aria-haspopup='menu' title={t('More timeline options')}
               onClick={() => setMoreMenuOpen(current => !current)}>
               <MaterialIcon src={moreHorizIcon} />
             </button>
             {moreMenuOpen
               ? (
-                <div className='avatar-animation-panel__more-popover' role='menu' aria-label='Timeline options'>
+                <div className='avatar-animation-panel__more-popover' role='menu' aria-label={t('Timeline options')}>
                   <button type='button' role='menuitem' onClick={() => { onSeek(0); setMoreMenuOpen(false) }}>
-                    <MaterialIcon src={firstPageIcon} />播放头归零
+                    <MaterialIcon src={firstPageIcon} />{t('Reset playhead')}
                   </button>
                   <button type='button' role='menuitem'
                     onClick={() => { setPixelsPerSecond(DEFAULT_PIXELS_PER_SECOND); setMoreMenuOpen(false) }}>
-                    <MaterialIcon src={fitScreenIcon} />重置时间线缩放
+                    <MaterialIcon src={fitScreenIcon} />{t('Reset timeline zoom')}
                   </button>
                   <button type='button' role='menuitem' disabled={allDisplayFolds.length === 0}
                     onClick={() => {
@@ -1444,11 +1960,11 @@ export function AnimationPanel({
                       setMoreMenuOpen(false)
                     }}>
                     <MaterialIcon src={hasExpandedTimelineFolds ? unfoldLessIcon : unfoldMoreIcon} />
-                    {hasExpandedTimelineFolds ? '折叠所有循环组' : '展开所有循环组'}
+                    {t(hasExpandedTimelineFolds ? 'Collapse all loop groups' : 'Expand all loop groups')}
                   </button>
                   <button type='button' role='menuitemcheckbox' aria-checked={autoReplay}
                     onClick={() => onAutoReplayChange(!autoReplay)}>
-                    <MaterialIcon src={repeatIcon} />自动重播
+                    <MaterialIcon src={repeatIcon} />{t('Auto replay')}
                     <span className='avatar-animation-panel__menu-check' aria-hidden='true'>
                       {autoReplay ? '✓' : ''}
                     </span>
@@ -1460,11 +1976,11 @@ export function AnimationPanel({
                       onClearTrack(selectedTrackId)
                       setMoreMenuOpen(false)
                     }}>
-                    <MaterialIcon src={deleteSweepIcon} />清空选中轨道
+                    <MaterialIcon src={deleteSweepIcon} />{t('Clear selected track')}
                   </button>
                   <button type='button' role='menuitem' data-danger disabled={timeline.tracks.length === 0}
                     onClick={() => { onClearTimeline(); setMoreMenuOpen(false) }}>
-                    <MaterialIcon src={deleteIcon} />清空全部片段
+                    <MaterialIcon src={deleteIcon} />{t('Clear all clips')}
                   </button>
                 </div>
               )

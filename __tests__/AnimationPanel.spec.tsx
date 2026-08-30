@@ -11,12 +11,16 @@ import type { AvatarAnimationTimeline, AvatarAnimationTimelineClipInstance } fro
 import {
   AnimationPanel,
   AnimationSidebar,
+  CustomAnimationEditor,
   constrainAnimationTimelineClipStart,
   constrainAnimationTimelineClipTrim,
   planAnimationTimelineClipSwap
 } from '../src/AnimationPanel'
 import type { AnimationPlayheadStore } from '../src/AnimationPanel'
-import { AVATAR_ANIMATION_PRESETS } from '../src/avatarAnimations'
+import { AVATAR_ANIMATION_PRESETS, createAvatarAnimationKeyframe } from '../src/avatarAnimations'
+import { AvatarLocaleProvider } from '../src/avatarLocale'
+import { DEFAULT_AVATAR_VIEW_STATE } from '../src/InteractiveAvatar'
+import { DEFAULT_AVATAR_FACE_STYLE } from '../src/avatarGeometry'
 
 let host: HTMLDivElement
 let root: Root
@@ -87,6 +91,7 @@ const createPanelProps = (store = createPlayheadStore()): ComponentProps<typeof 
   onMoveClip: vi.fn(),
   onPlayPause: vi.fn(),
   onPlaybackSpeedChange: vi.fn(),
+  onSaveProject: vi.fn(),
   onSeek: vi.fn(),
   onSelectClip: vi.fn(),
   onSelectKeyframe: vi.fn(),
@@ -94,6 +99,7 @@ const createPanelProps = (store = createPlayheadStore()): ComponentProps<typeof 
   onTrackUpdate: vi.fn(),
   onTrimClip: vi.fn(),
   playbackSpeed: 1,
+  projectSaveState: 'idle',
   playheadStore: store,
   renderPresetPreview: preset => createElement('img', { alt: '', 'data-preset': preset.id }),
   renderClipPreview: candidate => createElement('img', { alt: '', 'data-clip': candidate.instanceId }),
@@ -108,7 +114,13 @@ const createPanelProps = (store = createPlayheadStore()): ComponentProps<typeof 
 })
 
 const renderPanel = (props = createPanelProps()) => {
-  act(() => root.render(createElement(AnimationPanel, props)))
+  act(() => root.render(
+    createElement(
+      AvatarLocaleProvider,
+      { initialLocale: 'zh-Hans', persist: false },
+      createElement(AnimationPanel, props)
+    )
+  ))
   return props
 }
 
@@ -153,13 +165,46 @@ describe('Animation timeline UI', () => {
     expect(zoom.value).toBe('96')
   })
 
+  it('resizes the docked timeline vertically from its transport while preserving button interactions', () => {
+    const props = renderPanel()
+    const panel = host.querySelector('.avatar-animation-panel') as HTMLElement
+    const transport = host.querySelector('.avatar-animation-panel__transport') as HTMLElement
+    vi.spyOn(panel, 'getBoundingClientRect').mockReturnValue({
+      bottom: 760, height: 280, left: 0, right: 900, top: 480, width: 900, x: 0, y: 480, toJSON: () => ({})
+    })
+    const pointer = (target: EventTarget, type: string, clientY: number, pointerId = 17) => {
+      const event = new Event(type, { bubbles: true, cancelable: true })
+      Object.defineProperties(event, {
+        button: { value: 0 }, clientY: { value: clientY }, pointerId: { value: pointerId }
+      })
+      act(() => target.dispatchEvent(event))
+    }
+
+    pointer(transport, 'pointerdown', 600)
+    pointer(window, 'pointermove', 520)
+    expect(panel.style.getPropertyValue('--avatar-timeline-panel-height')).toBe('360px')
+    pointer(window, 'pointerup', 520)
+
+    const play = host.querySelector('button[aria-label="Play timeline"]') as HTMLButtonElement
+    pointer(play, 'pointerdown', 600, 18)
+    pointer(window, 'pointermove', 500, 18)
+    pointer(window, 'pointerup', 500, 18)
+    expect(panel.style.getPropertyValue('--avatar-timeline-panel-height')).toBe('360px')
+    act(() => play.click())
+    expect(props.onPlayPause).toHaveBeenCalledOnce()
+
+    const grip = host.querySelector('[role="separator"][aria-label="Resize animation timeline"]') as HTMLElement
+    act(() => grip.dispatchEvent(new KeyboardEvent('keydown', { bubbles: true, key: 'ArrowDown' })))
+    expect(panel.style.getPropertyValue('--avatar-timeline-panel-height')).toBe('336px')
+  })
+
   it('groups timeline-wide playback, view, and clearing actions in the More menu', () => {
     const props = renderPanel({ ...createPanelProps(), selectedClipId: 'high-clip' })
-    const more = host.querySelector('button[aria-label="More timeline options"]') as HTMLButtonElement
+    const more = host.querySelector('button[aria-label="更多时间线操作"]') as HTMLButtonElement
     const openMenu = () => act(() => more.click())
 
     openMenu()
-    let menu = host.querySelector('[role="menu"][aria-label="Timeline options"]') as HTMLElement
+    let menu = host.querySelector('[role="menu"][aria-label="时间线操作"]') as HTMLElement
     expect(menu.textContent).toContain('播放头归零')
     expect(menu.textContent).toContain('重置时间线缩放')
     expect(menu.textContent).toContain('自动重播')
@@ -172,7 +217,7 @@ describe('Animation timeline UI', () => {
     expect(props.onClearTrack).toHaveBeenCalledWith('high')
 
     openMenu()
-    menu = host.querySelector('[role="menu"][aria-label="Timeline options"]') as HTMLElement
+    menu = host.querySelector('[role="menu"][aria-label="时间线操作"]') as HTMLElement
     act(() => ([...menu.querySelectorAll('button[data-danger]')].at(-1) as HTMLButtonElement).click())
     expect(props.onClearTimeline).toHaveBeenCalledOnce()
   })
@@ -488,6 +533,40 @@ describe('Animation timeline UI', () => {
     } })
     act(() => headers[0]!.dispatchEvent(trackDrop))
     expect(props.onTrackReorder).toHaveBeenCalledWith('low', 'high')
+  })
+
+  it('carries a selected preset draft into a newly dropped timeline clip', () => {
+    const props = renderPanel()
+    const lane = host.querySelectorAll('.avatar-animation-panel__lane')[1] as HTMLElement
+    vi.spyOn(lane, 'getBoundingClientRect').mockReturnValue({
+      bottom: 44, height: 44, left: 0, right: 600, top: 0, width: 600, x: 0, y: 0, toJSON: () => ({})
+    })
+    const draft = {
+      durationMs: 2400,
+      parameterValues: { orbColor: '#ff3366', orbPosition: 'upper-left' },
+      playback: 'loop' as const,
+      playbackRate: 1.5,
+      presetId: 'bear-notification-morph',
+      sourceOffsetMs: 120,
+      weight: .65
+    }
+    const drop = new Event('drop', { bubbles: true, cancelable: true })
+    Object.defineProperty(drop, 'clientX', { value: 96 })
+    Object.defineProperty(drop, 'dataTransfer', { value: {
+      getData: (type: string) => {
+        if (type.endsWith('preset-draft')) return JSON.stringify(draft)
+        if (type.endsWith('preset')) return draft.presetId
+        return ''
+      },
+      setData: vi.fn()
+    } })
+    act(() => lane.dispatchEvent(drop))
+    expect(props.onAddPreset).toHaveBeenCalledWith(
+      draft.presetId,
+      1000,
+      'middle',
+      draft
+    )
   })
 
   it('moves a clip like a range slider while preserving the grabbed point', () => {
@@ -807,6 +886,7 @@ describe('Animation sidebar', () => {
     onDeleteClip: vi.fn(),
     onDeleteKeyframe: vi.fn(),
     onOpenCustomEditor: vi.fn(),
+    onPreviewPresetFrame: vi.fn(),
     onReplaceClip: vi.fn(),
     onSelectClip: vi.fn(),
     onSelectPreset: vi.fn(),
@@ -843,6 +923,95 @@ describe('Animation sidebar', () => {
     expect(renderPresetPreview.mock.calls.every(call => call.length === 1)).toBe(true)
     expect(host.querySelector('.avatar-animation-sidebar__heading')).toBeNull()
     expect(host.querySelectorAll('article.avatar-animation-sidebar__asset')).toHaveLength(0)
+  })
+
+  it('shows editable preset configuration as a non-destructive temporary inspector', () => {
+    const notification = AVATAR_ANIMATION_PRESETS.find(preset => preset.id === 'bear-notification-morph')!
+    const draftClip = clip('library-draft', notification.id, 0, {
+      durationMs: notification.durationMs,
+      parameterValues: { orbColor: '#3b82f6', orbPosition: 'upper-right' }
+    })
+    const value: AvatarAnimationTimeline = {
+      durationMs: notification.durationMs,
+      tracks: [{ clips: [draftClip], name: notification.label, trackId: 'library-draft-track' }],
+      version: 1
+    }
+    const props = {
+      ...createSidebarProps(),
+      inspectorContext: 'preset-draft' as const,
+      mode: 'inspector' as const,
+      selectedClipId: draftClip.instanceId,
+      timeline: value
+    }
+    act(() => root.render(createElement(AnimationSidebar, props)))
+    expect(host.querySelector('[aria-label="Animation preset inspector"]')).not.toBeNull()
+    expect(host.querySelector('.avatar-animation-sidebar__heading')?.textContent).toContain('Preset Inspector')
+    expect(host.querySelector('button[aria-label="Back to animation library"]')).toBeNull()
+    expect(host.querySelector('[role="note"]')?.textContent).toContain('不会改写原始动画')
+    expect(host.textContent).not.toContain('删除片段')
+
+    const frameList = host.querySelector('[aria-label="Animation preset frame list"]')
+    expect(frameList?.textContent).toContain('2 帧')
+    const frameButtons = frameList?.querySelectorAll<HTMLButtonElement>('button') ?? []
+    expect(frameButtons).toHaveLength(2)
+    act(() => frameButtons[1]!.click())
+    expect(props.onPreviewPresetFrame).toHaveBeenCalledWith(draftClip.instanceId, 1)
+    expect(host.querySelector('[aria-label="Animation preset frame detail"]')).not.toBeNull()
+    expect(host.querySelector('.avatar-animation-sidebar__heading')?.textContent).toContain('动画帧 2')
+    expect(host.querySelector('.avatar-animation-sidebar__frame-detail-preview')).not.toBeNull()
+    expect(host.textContent).toContain('缓出')
+    const frameTime = host.querySelector<HTMLInputElement>('input[aria-label="动画帧时间"]')!
+    act(() => {
+      const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')?.set
+      setter?.call(frameTime, '.8')
+      frameTime.dispatchEvent(new Event('change', { bubbles: true }))
+    })
+    expect(props.onUpdateKeyframeTime).toHaveBeenCalledWith(draftClip.instanceId, 1, 800)
+    act(() => (host.querySelector<HTMLButtonElement>('[aria-label="动画帧缓动类型"] button[aria-label="缓入"]'))?.click())
+    expect(props.onUpdateKeyframeEasing).toHaveBeenCalledWith(draftClip.instanceId, 1, 'ease-in')
+    const backToPreset = host.querySelector('button[aria-label="Back to preset inspector"]') as HTMLButtonElement
+    expect(backToPreset).not.toBeNull()
+    act(() => backToPreset.click())
+    expect(props.onPreviewPresetFrame).toHaveBeenLastCalledWith(draftClip.instanceId, null)
+    expect(host.querySelector('[aria-label="Animation preset inspector"]')).not.toBeNull()
+
+    const color = host.querySelector<HTMLInputElement>('input[type="color"]')!
+    act(() => {
+      const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')?.set
+      setter?.call(color, '#ff3366')
+      color.dispatchEvent(new Event('change', { bubbles: true }))
+    })
+    expect(props.onUpdateClip).toHaveBeenCalledWith(draftClip.instanceId, {
+      parameterValues: { orbColor: '#ff3366', orbPosition: 'upper-right' }
+    })
+  })
+
+  it('shows saved animations in the library and exposes edit and remove actions', () => {
+    const frame = createAvatarAnimationKeyframe(DEFAULT_AVATAR_VIEW_STATE, DEFAULT_AVATAR_FACE_STYLE, 'data:image/png;base64,frame')
+    const savedAnimation = {
+      createdAt: 1,
+      id: 'saved-one',
+      keyframes: [frame, frame],
+      lockStartPosition: false,
+      name: 'My custom motion',
+      playbackMode: 'once' as const,
+      startFrameIndex: 0,
+      version: 3 as const
+    }
+    const props = {
+      ...createSidebarProps(),
+      onRemoveSavedAnimation: vi.fn(),
+      onSelectSavedAnimation: vi.fn(),
+      savedAnimations: [savedAnimation],
+      selectedSavedAnimationId: savedAnimation.id
+    }
+    act(() => root.render(createElement(AnimationSidebar, props)))
+    expect(host.textContent).toContain('已保存动画')
+    expect(host.querySelector('.avatar-animation-sidebar__saved-asset')?.getAttribute('data-selected')).toBe('true')
+    act(() => (host.querySelector('button[aria-label="My custom motion"]') as HTMLButtonElement).click())
+    expect(props.onSelectSavedAnimation).toHaveBeenCalledWith(savedAnimation)
+    act(() => (host.querySelector('button[aria-label="删除已保存动画 My custom motion"]') as HTMLButtonElement).click())
+    expect(props.onRemoveSavedAnimation).toHaveBeenCalledWith(savedAnimation)
   })
 
   it('shows clip-instance parameters and repair actions for version-incompatible sources', () => {
@@ -1066,5 +1235,77 @@ describe('Animation sidebar', () => {
     })
     expect(props.onSetClipDuration).toHaveBeenCalledWith('low-clip', 4625)
     expect(loopTimeline.tracks[0].clips[0].sourceOffsetMs).toBe(375)
+  })
+})
+
+describe('Custom animation editor', () => {
+  const frame = createAvatarAnimationKeyframe(
+    DEFAULT_AVATAR_VIEW_STATE,
+    DEFAULT_AVATAR_FACE_STYLE,
+    'data:image/png;base64,frame'
+  )
+  const createProps = (): ComponentProps<typeof CustomAnimationEditor> => ({
+    capturePending: false,
+    isPlaying: false,
+    keyframes: [frame],
+    lockStartPosition: false,
+    name: 'My animation',
+    onAddKeyframe: vi.fn(),
+    onBack: vi.fn(),
+    onDurationChange: vi.fn(),
+    onEasingChange: vi.fn(),
+    onLockStartPositionChange: vi.fn(),
+    onNameChange: vi.fn(),
+    onPlaybackModeChange: vi.fn(),
+    onPreview: vi.fn(),
+    onRemoveKeyframe: vi.fn(),
+    onSave: vi.fn(),
+    onSelectKeyframe: vi.fn(),
+    onStartFrameChange: vi.fn(),
+    playbackMode: 'once',
+    selectedKeyframe: 0,
+    startFrameIndex: 0
+  })
+  const renderEditor = (props: ComponentProps<typeof CustomAnimationEditor>) => {
+    act(() => root.render(createElement(
+      AvatarLocaleProvider,
+      { initialLocale: 'en', persist: false },
+      createElement(CustomAnimationEditor, props)
+    )))
+  }
+
+  it('keeps preview and save gated until two frames, while capture and return stay available', () => {
+    const props = createProps()
+    renderEditor(props)
+    expect(host.querySelector('section[aria-label="Custom animation editor"]')).not.toBeNull()
+    expect((host.querySelector('button[aria-label="Preview animation"]') as HTMLButtonElement).disabled).toBe(true)
+    expect(([...host.querySelectorAll('button')].find(button => button.textContent?.includes('Save animation')) as HTMLButtonElement).disabled).toBe(true)
+    act(() => ([...host.querySelectorAll('button')].find(button => button.textContent?.includes('Capture keyframe')) as HTMLButtonElement).click())
+    expect(props.onAddKeyframe).toHaveBeenCalledOnce()
+    act(() => (host.querySelector('button[aria-label="Back to animation library"]') as HTMLButtonElement).click())
+    expect(props.onBack).toHaveBeenCalledOnce()
+  })
+
+  it('edits selected-frame timing and enables preview and save for a complete draft', () => {
+    const props = { ...createProps(), keyframes: [frame, { ...frame, easing: 'ease-out' as const }] }
+    renderEditor(props)
+    const duration = host.querySelector('input[type="number"]') as HTMLInputElement
+    act(() => {
+      Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')?.set?.call(duration, '1250')
+      duration.dispatchEvent(new Event('input', { bubbles: true }))
+    })
+    expect(props.onDurationChange).toHaveBeenCalledWith(0, 1250)
+    const easing = host.querySelector('section[aria-label="Selected keyframe settings"] select') as HTMLSelectElement
+    act(() => {
+      easing.value = 'linear'
+      easing.dispatchEvent(new Event('change', { bubbles: true }))
+    })
+    expect(props.onEasingChange).toHaveBeenCalledWith(0, 'linear')
+    act(() => (host.querySelector('button[aria-label="Preview animation"]') as HTMLButtonElement).click())
+    expect(props.onPreview).toHaveBeenCalledOnce()
+    const save = [...host.querySelectorAll('button')].find(button => button.textContent?.includes('Save animation')) as HTMLButtonElement
+    expect(save.disabled).toBe(false)
+    act(() => save.click())
+    expect(props.onSave).toHaveBeenCalledOnce()
   })
 })

@@ -49,8 +49,10 @@ import type {
   AvatarSeedConfiguration
 } from '@oneworks/avatar'
 
-import { AnimationPanel, AnimationSidebar } from './AnimationPanel'
+import { AnimationPanel, AnimationSidebar, CustomAnimationEditor } from './AnimationPanel'
 import type {
+  AnimationPresetDraft,
+  AnimationPresetDraftKeyframe,
   AnimationPlayheadStore,
   AnimationTimelineClipPlacement,
   AnimationTimelineKeyframeSelection
@@ -75,6 +77,15 @@ import type {
 } from './InteractiveAvatar'
 import { LanguageSwitcher } from './LanguageSwitcher'
 import { getAvatarEffectStylePreset } from './avatarEffectStylePresets'
+import { WorkspaceSidebar } from './WorkspaceSidebar'
+import {
+  loadSavedAvatarProjects,
+  persistActiveAvatarProjectId,
+  persistSavedAvatarProjects,
+  readActiveAvatarProjectId,
+  upsertSavedAvatarProject
+} from './savedAvatarProjects'
+import type { SavedAvatarProject } from './savedAvatarProjects'
 import {
   AVATAR_ANIMATION_PRESETS,
   MIN_AVATAR_ANIMATION_FRAME_DURATION_MS,
@@ -158,6 +169,7 @@ import {
   BEAR_EAR_SCALE_RANGE,
   BEAR_HEAD_SCALE_RANGE,
   createAvatarEntityParts,
+  deserializeAvatarEntityGroups,
   deserializeAvatarEntityParts,
   getCatEarScale,
   getDogEarScale,
@@ -170,9 +182,10 @@ import {
   getAvatarEntityPresetScene,
   parseAvatarEntityPreset,
   resolveAvatarEntityPresetFaceStyle,
+  serializeAvatarEntityGroups,
   serializeAvatarEntityParts
 } from './avatarEntityPresets'
-import type { AvatarEntityPart, AvatarEntityPreset } from './avatarEntityPresets'
+import type { AvatarEntityGroup, AvatarEntityPart, AvatarEntityPreset } from './avatarEntityPresets'
 import { AVATAR_GRID_DENSITY, DEFAULT_AVATAR_FACE_SHADOW_STYLE, DEFAULT_AVATAR_FACE_STYLE } from './avatarGeometry'
 import type {
   AvatarEyeShape,
@@ -380,6 +393,7 @@ const DEFAULT_FRAME_SHADOW_STYLE: AvatarDropShadowStyle = {
   softness: 24
 }
 const DEFAULT_CONTROLS_WIDTH = 420
+const DEFAULT_RESOURCE_WIDTH = 300
 const SEEDED_VIEW_TRANSITION_MS = 220
 const SYSTEM_DARK_MEDIA_QUERY = '(prefers-color-scheme: dark)'
 const AVATAR_GITHUB_URL = 'https://github.com/oneworks-ai/avatar'
@@ -478,6 +492,24 @@ interface AvatarAnimationRuntimeTrack {
   elapsedMs: number
 }
 
+const applyAnimationPresetDraftKeyframes = (
+  clip: AvatarAnimationClip,
+  overrides: readonly AnimationPresetDraftKeyframe[] | undefined
+): AvatarAnimationClip => {
+  if (overrides == null || overrides.length === 0) return clip
+  const overrideByIndex = new Map(overrides.map(override => [override.keyframeIndex, override]))
+  let changed = false
+  const keyframes = clip.keyframes.map((frame, keyframeIndex) => {
+    const override = overrideByIndex.get(keyframeIndex)
+    if (override == null || (override.atMs === frame.atMs && override.easing === (frame.easing ?? 'linear'))) {
+      return frame
+    }
+    changed = true
+    return { ...frame, atMs: override.atMs, easing: override.easing }
+  })
+  return changed ? { ...clip, keyframes } : clip
+}
+
 interface AvatarQueryConfig {
   readonly animationOpen: boolean
   readonly animationSelectionKey: AvatarAnimationSelectionKey | null
@@ -517,6 +549,7 @@ interface AvatarQueryConfig {
   readonly bearHeadWidth: number | null
   readonly coatPattern: AvatarCoatPattern
   readonly controlsCollapsed: boolean
+  readonly entityGroups: readonly AvatarEntityGroup[]
   readonly entityParts: readonly AvatarEntityPart[]
   readonly entityPreset: AvatarEntityPreset
   readonly exportSize: ExportSize
@@ -833,6 +866,7 @@ const parseQueryConfig = (
     ? deserializeAvatarEntityParts(params.get('entityParts'), entityPreset)
     : defaultBearBreed?.entityParts ?? defaultAnimalBreed?.entityParts ??
       deserializeAvatarEntityParts(params.get('entityParts'), entityPreset)
+  const entityGroups = deserializeAvatarEntityGroups(params.get('entityGroups'))
   const catEarWidth = params.has('catEarWidth')
     ? parseRangeValue(params.get('catEarWidth'), 100, CAT_EAR_SCALE_RANGE.min, CAT_EAR_SCALE_RANGE.max)
     : null
@@ -1095,7 +1129,8 @@ const parseQueryConfig = (
     bearHeadHeight,
     bearHeadWidth,
     coatPattern,
-    controlsCollapsed: params.get('sidebar') === '0',
+    controlsCollapsed: params.get('sidebar') !== '1',
+    entityGroups,
     entityParts,
     entityPreset,
     exportSize: parseExportSize(params.get('size')),
@@ -1816,7 +1851,7 @@ const getInitialQueryConfig = (definition?: AvatarDefinition) => {
     dogBreedTemplateId: null,
     rabbitBreedTemplateId: null,
     bearBreedTemplateId: null,
-    controlsCollapsed: false,
+    controlsCollapsed: config.controlsCollapsed,
     entityParts: preset === 'cat'
       ? applyCatEarScale(
         createAvatarEntityParts(preset),
@@ -1909,10 +1944,21 @@ function App({
   theme = 'system'
 }: AppProps) {
   const { t } = useAvatarLocale()
+  const [initialSavedProject] = useState(() => {
+    const activeProjectId = readActiveAvatarProjectId()
+    return loadSavedAvatarProjects().find(project => project.id === activeProjectId) ?? null
+  })
   const [initialConfig] = useState(() => getInitialQueryConfig(definition))
-  const [activeTab, setActiveTab] = useState<AvatarControlTab>('build')
+  const [activeTab, setActiveTab] = useState<AvatarControlTab>(initialSavedProject?.activeTab ?? 'build')
+  const [projectSidebarOpen, setProjectSidebarOpen] = useState(false)
+  const [savedProjects, setSavedProjects] = useState<readonly SavedAvatarProject[]>(loadSavedAvatarProjects)
+  const [activeProjectId, setActiveProjectId] = useState<string | null>(() => readActiveAvatarProjectId())
+  const [projectName, setProjectName] = useState(initialSavedProject?.name ?? '')
+  const [projectSaveState, setProjectSaveState] = useState<'error' | 'idle' | 'saved' | 'saving'>('idle')
   const [controlsCollapsed, setControlsCollapsed] = useState(initialConfig.controlsCollapsed)
   const [controlsWidth, setControlsWidth] = useState(DEFAULT_CONTROLS_WIDTH)
+  const [resourcesCollapsed, setResourcesCollapsed] = useState(false)
+  const [resourcesWidth, setResourcesWidth] = useState(DEFAULT_RESOURCE_WIDTH)
   const [systemDark, setSystemDark] = useState(() => {
     return typeof window !== 'undefined' && window.matchMedia(SYSTEM_DARK_MEDIA_QUERY).matches
   })
@@ -1924,6 +1970,7 @@ function App({
   const [seededViewTransitionState, setSeededViewTransitionState] = useState<AvatarViewState | null>(null)
   const [bodyShape, setBodyShape] = useState<AvatarBodyShape>(initialConfig.bodyShape)
   const [bodyBottomTaper, setBodyBottomTaper] = useState(initialConfig.bodyBottomTaper)
+  const [entityGroups, setEntityGroups] = useState<readonly AvatarEntityGroup[]>(initialConfig.entityGroups)
   const [entityParts, setEntityParts] = useState<readonly AvatarEntityPart[]>(initialConfig.entityParts)
   const [entityPreset, setEntityPreset] = useState<AvatarEntityPreset>(initialConfig.entityPreset)
   const [animalBreedTemplateId, setAnimalBreedTemplateId] = useState<string | null>(
@@ -2020,6 +2067,7 @@ function App({
   const [savedPresets, setSavedPresets] = useState(loadSavedAvatarPresets)
   const [selectedSavedPresetId, setSelectedSavedPresetId] = useState<string | null>(null)
   const [animationOpen, setAnimationOpen] = useState(initialConfig.animationOpen)
+  const [customAnimationEditorOpen, setCustomAnimationEditorOpen] = useState(false)
   const [animationPlaybackMode, setAnimationPlaybackMode] = useState<AvatarAnimationPlaybackMode>('once')
   const [animationKeyframes, setAnimationKeyframes] = useState<readonly AvatarAnimationKeyframe[]>([])
   const [animationName, setAnimationName] = useState('Untitled animation')
@@ -2033,13 +2081,18 @@ function App({
   const [activeAnimationKeyframe, setActiveAnimationKeyframe] = useState<number | null>(null)
   const [selectedAnimationKeyframe, setSelectedAnimationKeyframe] = useState<number | null>(null)
   const [animationPlaying, setAnimationPlaying] = useState(false)
-  const [animationAutoReplay, setAnimationAutoReplay] = useState(false)
-  const [animationPlaybackSpeed, setAnimationPlaybackSpeed] = useState(1)
+  const [animationAutoReplay, setAnimationAutoReplay] = useState(initialSavedProject?.animationAutoReplay ?? false)
+  const [animationPlaybackSpeed, setAnimationPlaybackSpeed] = useState(initialSavedProject?.animationPlaybackSpeed ?? 1)
   const [animationTracks, setAnimationTracks] = useState<readonly AvatarAnimationEditorTrack[]>([])
   const [animationTimeline, setAnimationTimeline] = useState<AvatarAnimationTimeline>(loadAvatarAnimationTimeline)
   const [selectedTimelineClipId, setSelectedTimelineClipId] = useState<string | null>(null)
   const [selectedTimelineKeyframe, setSelectedTimelineKeyframe] = useState<AnimationTimelineKeyframeSelection | null>(null)
   const [selectedTimelinePresetId, setSelectedTimelinePresetId] = useState<string | null>(null)
+  const [animationLibraryPresetDraft, setAnimationLibraryPresetDraft] = useState<AvatarAnimationTimelineClipInstance | null>(null)
+  const [animationLibraryPresetKeyframes, setAnimationLibraryPresetKeyframes] = useState<
+    readonly AnimationPresetDraftKeyframe[]
+  >([])
+  const [animationLibraryPresetFrameIndex, setAnimationLibraryPresetFrameIndex] = useState<number | null>(null)
   const [timelineUnresolvedClipIds, setTimelineUnresolvedClipIds] = useState<readonly string[]>([])
   const [animationTrackResourceWeights, setAnimationTrackResourceWeights] = useState<
     Readonly<Record<string, Readonly<Record<string, number>>>>
@@ -2067,6 +2120,7 @@ function App({
   const [savedAnimations, setSavedAnimations] = useState(loadSavedAvatarAnimations)
   const avatarFrameRef = useRef<HTMLDivElement>(null)
   const stageRef = useRef<HTMLElement>(null)
+  const workspaceToggleRef = useRef<HTMLButtonElement>(null)
   const animationFrameRef = useRef<number>()
   const animationPlaybackClockRef = useRef({ elapsedMs: 0, lastNow: 0 })
   const animationPlaybackSpeedRef = useRef(1)
@@ -2530,9 +2584,13 @@ function App({
     params.set('gridDensity', String(gridDensity))
     if (entityPreset === 'custom') {
       params.delete('entity')
+      if (entityGroups.length === 0) params.delete('entityGroups')
+      else params.set('entityGroups', serializeAvatarEntityGroups(entityGroups))
       params.delete('entityParts')
     } else {
       params.set('entity', entityPreset)
+      if (entityGroups.length === 0) params.delete('entityGroups')
+      else params.set('entityGroups', serializeAvatarEntityGroups(entityGroups))
       params.set('entityParts', serializeAvatarEntityParts(entityParts))
       if (entityPreset === 'cat' && catBreedTemplateId != null) params.set('breed', catBreedTemplateId)
       if (entityPreset === 'dog' && dogBreedTemplateId != null) params.set('breed', dogBreedTemplateId)
@@ -2645,6 +2703,7 @@ function App({
     cameraMode,
     controlsCollapsed,
     embedded,
+    entityGroups,
     entityParts,
     entityPreset,
     exportSize,
@@ -2737,6 +2796,7 @@ function App({
       setCameraFrame(config.cameraFrame)
       setCameraMode(config.cameraMode)
       setControlsCollapsed(config.controlsCollapsed)
+      setEntityGroups(config.entityGroups)
       setEntityParts(config.entityParts)
       setEntityPreset(config.entityPreset)
       setAnimalBreedTemplateId(config.animalBreedTemplateId)
@@ -3128,7 +3188,9 @@ function App({
 
   const playAnimationTrackStack = (
     nextTracks: readonly AvatarAnimationEditorTrack[] = animationTracks,
-    preserveElapsed = false
+    preserveElapsed = false,
+    persistTracks = true,
+    forceLoop = false
   ) => {
     cancelSeededViewTransition()
     if (animationFrameRef.current != null) window.cancelAnimationFrame(animationFrameRef.current)
@@ -3136,10 +3198,16 @@ function App({
     const runtimeTracks = nextTracks.flatMap(config => {
       const previous = preserveElapsed ? previousById.get(config.trackId) : undefined
       const resolved = resolveAnimationRuntimeTrack(config, previous)
-      return resolved == null ? [] : [{ ...resolved, elapsedMs: previous?.elapsedMs ?? 0 }]
+      return resolved == null
+        ? []
+        : [{
+            ...resolved,
+            clip: forceLoop ? { ...resolved.clip, playback: 'loop' as const } : resolved.clip,
+            elapsedMs: previous?.elapsedMs ?? 0
+          }]
     })
     animationRuntimeTracksRef.current = runtimeTracks
-    setAnimationTracks(nextTracks)
+    if (persistTracks) setAnimationTracks(nextTracks)
     if (runtimeTracks.length === 0) {
       animationFrameRef.current = undefined
       animationTrackTickRef.current = undefined
@@ -3236,6 +3304,10 @@ function App({
     clip.source.type === 'inline' ? clip.source.clip : resolveTimelinePresetClip(clip.source, clip)
   )
 
+  const timelineGifAvailable = useMemo(() => animationTimeline.tracks.some(track => (
+    track.clips.some(clip => (resolveAnimationTimelineClipSource(clip)?.keyframes.length ?? 0) >= 2)
+  )), [animationTimeline, availableAnimationPresets, currentDefinition, entityParts, entityPreset])
+
   const resolveAnimationTimelineClipKeyframes = (clip: AvatarAnimationTimelineClipInstance) => {
     const sourceClip = resolveAnimationTimelineClipSource(clip)
     return sourceClip == null
@@ -3330,6 +3402,24 @@ function App({
     setAnimationPlaying(false)
   }
 
+  const restoreAnimationTimelineCanvas = () => {
+    cancelSeededViewTransition()
+    if (animationFrameRef.current != null) {
+      window.cancelAnimationFrame(animationFrameRef.current)
+      animationFrameRef.current = undefined
+    }
+    animationTrackTickRef.current = undefined
+    animationRuntimeTracksRef.current = []
+    setAnimationPlaying(false)
+    setAnimationInspectionViewState(null)
+    renderAnimationTimeline(animationTimelineTimeRef.current, animationTimelineRef.current)
+  }
+
+  const openAnimationTimeline = () => {
+    restoreAnimationTimelineCanvas()
+    setAnimationOpen(true)
+  }
+
   const seekAnimationTimeline = (timeMs: number) => {
     const timeline = animationTimelineRef.current
     renderAnimationTimeline(Math.min(Math.max(timeMs, 0), timeline.durationMs))
@@ -3415,7 +3505,32 @@ function App({
     animationFrameRef.current = window.requestAnimationFrame(tick)
   }
 
-  const addPresetToAnimationTimeline = (presetId: string, startMs: number, targetTrackId?: string) => {
+  const createAnimationLibraryPresetDraft = (
+    preset: AvatarAnimationPreset
+  ): AvatarAnimationTimelineClipInstance | null => {
+    const source: AvatarAnimationTimelinePresetSource = {
+      fallback: 'skip', presetId: preset.id, presetVersion: 1, type: 'preset'
+    }
+    const runtimeClip = resolveTimelinePresetClip(source)
+    if (runtimeClip == null) return null
+    return {
+      durationMs: runtimeClip.durationMs * getAvatarAnimationPresetDefaultTimelineIterations(preset),
+      instanceId: `library-draft-${Date.now().toString(36)}-${++animationTrackIdRef.current}`,
+      parameterValues: Object.fromEntries((preset.parameters ?? []).map(parameter => [parameter.id, parameter.default])),
+      playbackRate: 1,
+      source,
+      sourceOffsetMs: 0,
+      startMs: 0,
+      weight: 1
+    }
+  }
+
+  const addPresetToAnimationTimeline = (
+    presetId: string,
+    startMs: number,
+    targetTrackId?: string,
+    draft?: AnimationPresetDraft
+  ) => {
     const preset = availableAnimationPresets.find(candidate => candidate.id === presetId)
     if (preset == null) return
     const source: AvatarAnimationTimelinePresetSource = {
@@ -3423,17 +3538,38 @@ function App({
     }
     const runtimeClip = resolveTimelinePresetClip(source)
     if (runtimeClip == null) return
+    const draftMatchesPreset = draft?.presetId === presetId
+    const clipSource: AvatarAnimationTimelineClipInstance['source'] = draftMatchesPreset &&
+      (draft.keyframes?.length ?? 0) > 0
+      ? {
+          clip: {
+            ...applyAnimationPresetDraftKeyframes(runtimeClip, draft.keyframes),
+            ...(preset.parameters == null ? {} : { parameters: preset.parameters }),
+            ...(draft.parameterValues == null ? {} : { parameterValues: draft.parameterValues })
+          },
+          type: 'inline',
+          version: 1
+        }
+      : source
     const safeStartMs = Math.max(startMs, 0)
     const serial = ++animationTrackIdRef.current
     const clip: AvatarAnimationTimelineClipInstance = {
-      durationMs: runtimeClip.durationMs * getAvatarAnimationPresetDefaultTimelineIterations(preset),
+      durationMs: draftMatchesPreset
+        ? draft.durationMs
+        : runtimeClip.durationMs * getAvatarAnimationPresetDefaultTimelineIterations(preset),
+      ...(draftMatchesPreset && draft.frameSequence != null
+        ? { frameSequence: draft.frameSequence }
+        : {}),
       instanceId: `clip-${Date.now().toString(36)}-${serial}`,
-      parameterValues: Object.fromEntries((preset.parameters ?? []).map(parameter => [parameter.id, parameter.default])),
-      playbackRate: 1,
-      source,
-      sourceOffsetMs: 0,
+      parameterValues: draftMatchesPreset
+        ? draft.parameterValues
+        : Object.fromEntries((preset.parameters ?? []).map(parameter => [parameter.id, parameter.default])),
+      ...(draftMatchesPreset && draft.playback != null ? { playback: draft.playback } : {}),
+      playbackRate: draftMatchesPreset ? draft.playbackRate : 1,
+      source: clipSource,
+      sourceOffsetMs: draftMatchesPreset ? draft.sourceOffsetMs : 0,
       startMs: safeStartMs,
-      weight: 1
+      weight: draftMatchesPreset ? draft.weight : 1
     }
     const timeline = animationTimelineRef.current
     const requestedTrack = targetTrackId == null ? null : timeline.tracks.find(track => track.trackId === targetTrackId) ?? null
@@ -3455,6 +3591,7 @@ function App({
     const nextTimeline = normalizeAvatarAnimationTimeline({ ...timeline, tracks: nextTracks })
     setAnimationOpen(true)
     setActiveTab('animation')
+    setControlsCollapsed(false)
     setSelectedTimelineClipId(clip.instanceId)
     setSelectedTimelinePresetId(presetId)
     commitAnimationTimeline(nextTimeline)
@@ -3812,6 +3949,7 @@ function App({
     resetAnimalBreedState()
     setCatBreedTemplateId(null)
     setDogBreedTemplateId(null)
+    setEntityGroups([])
     setEntityParts(nextParts)
     setCatEarHeight(null)
     setCatEarWidth(null)
@@ -3906,6 +4044,7 @@ function App({
     setRabbitBreedTemplateId(null)
     setBearBreedTemplateId(null)
     setEntityPreset('cat')
+    setEntityGroups([])
     setEntityParts(resolved.entityParts)
     setCatEarHeight(resolved.catEarHeight)
     setCatEarWidth(resolved.catEarWidth)
@@ -3969,6 +4108,7 @@ function App({
     setRabbitBreedTemplateId(null)
     setBearBreedTemplateId(null)
     setEntityPreset('dog')
+    setEntityGroups([])
     setEntityParts(resolved.entityParts)
     setCatEarHeight(null)
     setCatEarWidth(null)
@@ -4032,6 +4172,7 @@ function App({
     setRabbitBreedTemplateId(profileId)
     setBearBreedTemplateId(null)
     setEntityPreset('rabbit')
+    setEntityGroups([])
     setEntityParts(resolved.entityParts)
     setCatEarHeight(null)
     setCatEarWidth(null)
@@ -4093,6 +4234,7 @@ function App({
     setRabbitBreedTemplateId(null)
     setBearBreedTemplateId(profileId)
     setEntityPreset('bear')
+    setEntityGroups([])
     setEntityParts(resolved.entityParts)
     setCatEarHeight(null)
     setCatEarWidth(null)
@@ -4161,6 +4303,7 @@ function App({
     setBearBreedTemplateId(null)
     setAnimalBreedTemplateId(profileId)
     setEntityPreset(species)
+    setEntityGroups([])
     setEntityParts(resolved.entityParts)
     if (resolved.surfaceDecals != null) setSurfaceDecals(resolved.surfaceDecals)
     setAnimalEarWidth(resolved.earWidth ?? null)
@@ -4910,6 +5053,7 @@ function App({
     setBackgroundStyle(config.backgroundStyle)
     setBodyShape(config.bodyShape)
     setBodyBottomTaper(config.bodyBottomTaper)
+    setEntityGroups(config.entityGroups)
     setEntityParts(config.entityParts)
     setEntityPreset(config.entityPreset)
     setAnimalBreedTemplateId(config.animalBreedTemplateId)
@@ -5269,19 +5413,161 @@ function App({
     setAnimationLockStartPosition(false)
     setAnimationPlaybackMode('once')
     setAnimationDraftSource(null)
+    setAnimationLibraryPresetDraft(null)
+    setAnimationLibraryPresetKeyframes([])
+    setAnimationLibraryPresetFrameIndex(null)
+    setSelectedTimelinePresetId(null)
   }
 
-  const createAnimationTrack = (preset: AvatarAnimationPreset): AvatarAnimationEditorTrack => ({
+  const createAnimationTrack = (
+    preset: AvatarAnimationPreset,
+    draft?: Pick<AvatarAnimationTimelineClipInstance, 'parameterValues' | 'playbackRate' | 'weight'>
+  ): AvatarAnimationEditorTrack => ({
     muted: false,
-    parameterValues: Object.fromEntries(
+    parameterValues: draft?.parameterValues ?? Object.fromEntries(
       (preset.parameters ?? []).map(parameter => [parameter.id, parameter.default])
     ) as AvatarAnimationParameterValues,
     presetId: preset.id,
     solo: false,
-    speed: 1,
+    speed: draft?.playbackRate ?? 1,
     trackId: `track-${Date.now().toString(36)}-${++animationTrackIdRef.current}`,
-    weight: 1
+    weight: draft?.weight ?? 1
   })
+
+  const getAnimationLibraryPresetDraftKeyframes = (
+    draft: AvatarAnimationTimelineClipInstance,
+    overrides: readonly AnimationPresetDraftKeyframe[] = animationLibraryPresetKeyframes
+  ): readonly AnimationPresetDraftKeyframe[] => {
+    const sourceClip = resolveAnimationTimelineClipSource(draft)
+    if (sourceClip == null) return []
+    const overrideByIndex = new Map(overrides.map(override => [override.keyframeIndex, override]))
+    return sourceClip.keyframes.map((frame, keyframeIndex) => {
+      const override = overrideByIndex.get(keyframeIndex)
+      return override ?? {
+        atMs: frame.atMs,
+        easing: frame.easing ?? 'linear',
+        keyframeIndex
+      }
+    })
+  }
+
+  const previewAnimationLibraryPresetDraft = (
+    draft: AvatarAnimationTimelineClipInstance,
+    keyframes: readonly AnimationPresetDraftKeyframe[] = animationLibraryPresetKeyframes
+  ) => {
+    const preset = availableAnimationPresets.find(candidate => (
+      draft.source.type === 'preset' && candidate.id === draft.source.presetId
+    ))
+    if (preset == null) return
+    stopAnimationPlayback()
+    playAnimationTrackStack([createAnimationTrack(preset, draft)], false, false, true)
+    if (keyframes.length === 0) return
+    const runtimeTracks = animationRuntimeTracksRef.current.map(track => ({
+      ...track,
+      clip: {
+        ...applyAnimationPresetDraftKeyframes(track.clip, keyframes),
+        playback: 'loop' as const
+      }
+    }))
+    animationRuntimeTracksRef.current = runtimeTracks
+    renderAnimationTrackStack(runtimeTracks)
+  }
+
+  const previewAnimationLibraryPresetFrame = (
+    instanceId: string,
+    keyframeIndex: number | null,
+    draft: AvatarAnimationTimelineClipInstance | null = animationLibraryPresetDraft,
+    keyframes: readonly AnimationPresetDraftKeyframe[] = animationLibraryPresetKeyframes
+  ) => {
+    if (draft?.instanceId !== instanceId || animationOpenRef.current) return
+    setAnimationLibraryPresetFrameIndex(keyframeIndex)
+    if (keyframeIndex == null) {
+      previewAnimationLibraryPresetDraft(draft, keyframes)
+      return
+    }
+    const preset = availableAnimationPresets.find(candidate => (
+      draft.source.type === 'preset' && candidate.id === draft.source.presetId
+    ))
+    if (preset == null) return
+    stopAnimationPlayback()
+    const config = { ...createAnimationTrack(preset, draft), speed: 1 }
+    const resolved = resolveAnimationRuntimeTrack(config)
+    if (resolved == null) return
+    const clip = applyAnimationPresetDraftKeyframes(resolved.clip, keyframes)
+    const frame = clip.keyframes[keyframeIndex]
+    if (frame == null) return
+    const runtimeTrack = { ...resolved, clip, elapsedMs: frame.atMs }
+    animationRuntimeTracksRef.current = [runtimeTrack]
+    renderAnimationTrackStack([runtimeTrack])
+  }
+
+  const updateAnimationLibraryPresetDraft = (
+    instanceId: string,
+    update: Partial<Pick<AvatarAnimationTimelineClipInstance,
+      'frameSequence' | 'parameterValues' | 'playback' | 'playbackRate' | 'sourceOffsetMs' | 'weight'>>
+  ) => {
+    if (animationLibraryPresetDraft?.instanceId !== instanceId) return
+    const nextDraft = { ...animationLibraryPresetDraft, ...update }
+    setAnimationLibraryPresetDraft(nextDraft)
+    if (!animationOpenRef.current) {
+      if (animationLibraryPresetFrameIndex == null) previewAnimationLibraryPresetDraft(nextDraft)
+      else previewAnimationLibraryPresetFrame(instanceId, animationLibraryPresetFrameIndex, nextDraft)
+    }
+  }
+
+  const setAnimationLibraryPresetDraftDuration = (instanceId: string, durationMs: number) => {
+    if (animationLibraryPresetDraft?.instanceId !== instanceId) return
+    setAnimationLibraryPresetDraft({
+      ...animationLibraryPresetDraft,
+      durationMs: Math.max(durationMs, 50)
+    })
+  }
+
+  const updateAnimationLibraryPresetKeyframeTime = (
+    instanceId: string,
+    keyframeIndex: number,
+    requestedAtMs: number
+  ) => {
+    const draft = animationLibraryPresetDraft
+    if (draft?.instanceId !== instanceId || !Number.isFinite(requestedAtMs)) return
+    const sourceClip = resolveAnimationTimelineClipSource(draft)
+    if (sourceClip?.keyframes[keyframeIndex] == null) return
+    const keyframes = getAnimationLibraryPresetDraftKeyframes(draft)
+    const previous = keyframes[keyframeIndex - 1]
+    const next = keyframes[keyframeIndex + 1]
+    const minimum = previous == null ? 0 : previous.atMs + AVATAR_ANIMATION_MIN_SEGMENT_MS
+    const maximum = next == null
+      ? (sourceClip.playback === 'loop'
+          ? sourceClip.durationMs - AVATAR_ANIMATION_MIN_SEGMENT_MS
+          : sourceClip.durationMs)
+      : next.atMs - AVATAR_ANIMATION_MIN_SEGMENT_MS
+    let atMs = Math.min(Math.max(Math.round(requestedAtMs), minimum), Math.max(maximum, minimum))
+    if (
+      next == null && sourceClip.playback === 'once' && atMs !== sourceClip.durationMs &&
+      sourceClip.durationMs - atMs < AVATAR_ANIMATION_MIN_SEGMENT_MS
+    ) atMs = sourceClip.durationMs
+    const updated = keyframes.map(keyframe => keyframe.keyframeIndex === keyframeIndex
+      ? { ...keyframe, atMs }
+      : keyframe)
+    setAnimationLibraryPresetKeyframes(updated)
+    previewAnimationLibraryPresetFrame(instanceId, keyframeIndex, draft, updated)
+  }
+
+  const updateAnimationLibraryPresetKeyframeEasing = (
+    instanceId: string,
+    keyframeIndex: number,
+    easing: AvatarAnimationEasing
+  ) => {
+    const draft = animationLibraryPresetDraft
+    if (draft?.instanceId !== instanceId) return
+    const keyframes = getAnimationLibraryPresetDraftKeyframes(draft)
+    if (keyframes[keyframeIndex] == null) return
+    const updated = keyframes.map(keyframe => keyframe.keyframeIndex === keyframeIndex
+      ? { ...keyframe, easing }
+      : keyframe)
+    setAnimationLibraryPresetKeyframes(updated)
+    previewAnimationLibraryPresetFrame(instanceId, keyframeIndex, draft, updated)
+  }
 
   const handleAnimationTrackAdd = (presetId: AvatarAnimationPreset['id']) => {
     const preset = availableAnimationPresets.find(candidate => candidate.id === presetId)
@@ -5354,6 +5640,7 @@ function App({
       entityParts
     )
     setAnimationOpen(true)
+    setControlsCollapsed(false)
     const playbackMode = preset.playbackMode ?? 'once'
     setAnimationPlaybackMode(playbackMode)
     setAnimationKeyframes(resolvedPreset.keyframes)
@@ -5367,6 +5654,23 @@ function App({
     setAnimationDraftSource('builtin')
     playAnimationTrackStack([createAnimationTrack(preset)])
     return true
+  }
+
+  const handleAnimationLibraryPresetSelect = (presetId: string) => {
+    const preset = availableAnimationPresets.find(candidate => candidate.id === presetId)
+    if (preset == null) return
+    if (preset.requiredEntityPreset != null && preset.requiredEntityPreset !== entityPreset) return
+    if (preset.requiresEntityParts === true && entityParts.length === 0) return
+    const draft = createAnimationLibraryPresetDraft(preset)
+    if (draft == null) return
+    setSelectedTimelinePresetId(presetId)
+    setAnimationLibraryPresetDraft(draft)
+    setAnimationLibraryPresetKeyframes([])
+    setAnimationLibraryPresetFrameIndex(null)
+    setActiveTab('animation')
+    setControlsCollapsed(false)
+    if (animationOpenRef.current) return
+    previewAnimationLibraryPresetDraft(draft)
   }
 
   const restoredInitialAnimationSelectionRef = useRef(false)
@@ -5519,11 +5823,13 @@ function App({
     return <span className='avatar-animation-panel__keyframe-fallback' aria-hidden='true' />
   }, [animationStaticPreviewScreenshot])
 
-  const renderAnimationPresetPreview = useCallback((preset: AvatarAnimationPreset, _progress?: number) => {
-    const coverUrl = getAvatarAnimationPresetCoverUrl(preset.id)
-    return coverUrl == null
+  const renderAnimationPresetPreview = useCallback((preset: AvatarAnimationPreset, progress?: number) => {
+    const previewUrl = progress == null
+      ? getAvatarAnimationPresetCoverUrl(preset.id)
+      : getAvatarAnimationPresetTimelineFrameUrl(preset.id, progress)
+    return previewUrl == null
       ? <span className='avatar-animation-panel__keyframe-fallback' aria-hidden='true' />
-      : <img src={coverUrl} alt='' draggable={false} />
+      : <img src={previewUrl} alt='' draggable={false} />
   }, [])
 
   const renderAnimationTimelineClipPreview = useCallback((
@@ -5539,6 +5845,88 @@ function App({
       ? <span className='avatar-animation-panel__keyframe-fallback' aria-hidden='true' />
       : <img src={animationStaticPreviewScreenshot} alt='' draggable={false} />
   }, [animationStaticPreviewScreenshot])
+
+  const saveAvatarProject = useCallback((saveAs = false) => {
+    if (typeof window === 'undefined') return
+    setProjectSaveState('saving')
+    try {
+      const now = Date.now()
+      const current = saveAs
+        ? null
+        : savedProjects.find(project => project.id === activeProjectId) ?? null
+      const id = current?.id ?? (
+        typeof window.crypto?.randomUUID === 'function'
+          ? window.crypto.randomUUID()
+          : `avatar-project-${now}`
+      )
+      const fallbackName = `${t('Untitled project')} ${savedProjects.length + 1}`
+      const project: SavedAvatarProject = {
+        activeTab,
+        animationAutoReplay,
+        animationPlaybackSpeed,
+        createdAt: current?.createdAt ?? now,
+        id,
+        name: projectName.trim() || fallbackName,
+        query: window.location.search,
+        timeline: animationTimeline,
+        updatedAt: now
+      }
+      const nextProjects = upsertSavedAvatarProject(savedProjects, project)
+      persistSavedAvatarProjects(nextProjects)
+      persistActiveAvatarProjectId(id)
+      setSavedProjects(nextProjects)
+      setActiveProjectId(id)
+      setProjectName(project.name)
+      setProjectSaveState('saved')
+    } catch {
+      setProjectSaveState('error')
+    }
+  }, [
+    activeProjectId,
+    activeTab,
+    animationAutoReplay,
+    animationPlaybackSpeed,
+    animationTimeline,
+    projectName,
+    savedProjects,
+    t
+  ])
+
+  const loadAvatarProject = useCallback((projectId: string) => {
+    if (typeof window === 'undefined') return
+    const project = savedProjects.find(candidate => candidate.id === projectId)
+    if (project == null) return
+    window.localStorage.setItem(AVATAR_ANIMATION_TIMELINE_STORAGE_KEY, JSON.stringify(project.timeline))
+    persistActiveAvatarProjectId(project.id)
+    const nextUrl = new URL(window.location.href)
+    nextUrl.search = project.query
+    window.location.assign(nextUrl.toString())
+  }, [savedProjects])
+
+  const deleteAvatarProject = useCallback((projectId: string) => {
+    const nextProjects = savedProjects.filter(project => project.id !== projectId)
+    persistSavedAvatarProjects(nextProjects)
+    setSavedProjects(nextProjects)
+    if (activeProjectId !== projectId) return
+    persistActiveAvatarProjectId(null)
+    setActiveProjectId(null)
+    setProjectName('')
+    setProjectSaveState('idle')
+  }, [activeProjectId, savedProjects])
+
+  useEffect(() => {
+    const handleProjectSaveShortcut = (event: KeyboardEvent) => {
+      if (!(event.metaKey || event.ctrlKey) || event.key.toLowerCase() !== 's') return
+      event.preventDefault()
+      saveAvatarProject(false)
+    }
+    window.addEventListener('keydown', handleProjectSaveShortcut)
+    return () => window.removeEventListener('keydown', handleProjectSaveShortcut)
+  }, [saveAvatarProject])
+
+  useEffect(() => {
+    setProjectSaveState(state => state === 'saved' ? 'idle' : state)
+  }, [animationTimeline])
 
   const renderSavePreset = () => (
     <button
@@ -5572,9 +5960,9 @@ function App({
       className='avatar-app__camera-toggle'
       type='button'
       aria-controls='avatar-camera-frame'
-      aria-label={cameraMode ? 'Exit camera mode' : 'Enter camera mode'}
+      aria-label={t(cameraMode ? 'Exit camera mode' : 'Enter camera mode')}
       aria-pressed={cameraMode}
-      title={cameraMode ? 'Exit camera mode' : 'Enter camera mode'}
+      title={t(cameraMode ? 'Exit camera mode' : 'Enter camera mode')}
       onClick={() => setCameraMode(value => !value)}
     >
       <svg viewBox='0 0 20 20' aria-hidden='true'>
@@ -5582,6 +5970,22 @@ function App({
         <circle cx='10' cy='11.2' r='3' />
       </svg>
     </button>
+  )
+
+  const renderExportToolbar = () => (
+    <ExportToolbar
+      copyState={copyState}
+      exportSize={exportSize}
+      gifAvailable={timelineGifAvailable || animationTracks.length > 0 || animationKeyframes.length >= 2}
+      gifExportState={gifExportState}
+      onCopy={() => {
+        void handleCopy()
+      }}
+      onDownload={handleDownload}
+      onDownloadGif={handleGifDownload}
+      onDownloadPng={handlePngDownload}
+      onSizeChange={setExportSize}
+    />
   )
 
   const renderInteractionModeControls = (docked = false) => (
@@ -5661,6 +6065,202 @@ function App({
     </>
   )
 
+  const renderWorkspaceToggle = () => (
+    <button
+      ref={workspaceToggleRef}
+      className='avatar-app__workspace-toggle'
+      type='button'
+      aria-controls='avatar-workspace-sidebar'
+      aria-expanded={projectSidebarOpen}
+      aria-label={t('Open project menu')}
+      title={t('Project')}
+      onClick={() => setProjectSidebarOpen(open => !open)}
+    >
+      <img src='/favicon.svg' alt='' />
+    </button>
+  )
+
+  const renderResourcesToggle = () => (
+    <button
+      className='avatar-app__resources-toggle'
+      type='button'
+      aria-controls='avatar-controls-library'
+      aria-expanded='false'
+      aria-label={t('Show resources sidebar')}
+      title={t('Show resources')}
+      onClick={() => setResourcesCollapsed(false)}
+    >
+      <svg viewBox='0 0 20 20' aria-hidden='true'>
+        <rect x='2.5' y='3' width='15' height='14' rx='1.5' />
+        <path d='M7 3v14M10.5 7.2 13.3 10l-2.8 2.8' />
+      </svg>
+    </button>
+  )
+
+  const renderAnimationSidebar = (mode: 'inspector' | 'library') => {
+    if (mode === 'library' && customAnimationEditorOpen) {
+      return (
+        <CustomAnimationEditor
+          capturePending={keyframeCapturePending}
+          isPlaying={animationPlaying}
+          keyframes={animationKeyframes}
+          lockStartPosition={animationLockStartPosition}
+          name={animationName}
+          playbackMode={animationPlaybackMode}
+          selectedKeyframe={selectedAnimationKeyframe}
+          startFrameIndex={animationStartFrameIndex}
+          onAddKeyframe={handleAddAnimationKeyframe}
+          onBack={() => {
+            stopAnimationPlayback()
+            setCustomAnimationEditorOpen(false)
+          }}
+          onDurationChange={handleAnimationKeyframeDurationChange}
+          onEasingChange={handleAnimationKeyframeEasingChange}
+          onLockStartPositionChange={handleAnimationLockStartPositionChange}
+          onNameChange={setAnimationName}
+          onPlaybackModeChange={handleAnimationPlaybackModeChange}
+          onPreview={() => {
+            if (animationPlaying) {
+              stopAnimationPlayback()
+              return
+            }
+            playAnimation(animationKeyframes, {
+              lockStartPosition: animationLockStartPosition,
+              mode: animationPlaybackMode,
+              startFrameIndex: animationStartFrameIndex
+            })
+          }}
+          onRemoveKeyframe={handleRemoveAnimationKeyframe}
+          onSave={() => {
+            handleSaveAnimation()
+            setCustomAnimationEditorOpen(false)
+          }}
+          onSelectKeyframe={handleAnimationKeyframeSelect}
+          onStartFrameChange={handleAnimationStartFrameChange}
+        />
+      )
+    }
+
+    const draftSource = animationLibraryPresetDraft?.source.type === 'preset'
+      ? animationLibraryPresetDraft.source
+      : null
+    const selectedPresetDraft: AnimationPresetDraft | null = animationLibraryPresetDraft == null || draftSource == null
+      ? null
+      : {
+          durationMs: animationLibraryPresetDraft.durationMs,
+          ...(animationLibraryPresetDraft.frameSequence == null
+            ? {}
+            : { frameSequence: animationLibraryPresetDraft.frameSequence }),
+          ...(animationLibraryPresetKeyframes.length === 0
+            ? {}
+            : { keyframes: animationLibraryPresetKeyframes }),
+          parameterValues: animationLibraryPresetDraft.parameterValues,
+          ...(animationLibraryPresetDraft.playback == null
+            ? {}
+            : { playback: animationLibraryPresetDraft.playback }),
+          playbackRate: animationLibraryPresetDraft.playbackRate,
+          presetId: draftSource.presetId,
+          sourceOffsetMs: animationLibraryPresetDraft.sourceOffsetMs,
+          weight: animationLibraryPresetDraft.weight
+        }
+    const inspectingPresetDraft = mode === 'inspector' && !animationOpen && animationLibraryPresetDraft != null
+    const draftPreset = draftSource == null
+      ? null
+      : availableAnimationPresets.find(candidate => candidate.id === draftSource.presetId) ?? null
+    const sidebarTimeline: AvatarAnimationTimeline = inspectingPresetDraft
+      ? {
+          durationMs: animationLibraryPresetDraft.durationMs,
+          tracks: [{
+            clips: [animationLibraryPresetDraft],
+            name: draftPreset?.label ?? draftSource?.presetId ?? 'Animation preset',
+            trackId: 'animation-library-draft-track'
+          }],
+          version: 1
+        }
+      : animationTimeline
+    const sidebarSelectedClipId = inspectingPresetDraft
+      ? animationLibraryPresetDraft.instanceId
+      : selectedTimelineClipId
+    const resolveSidebarClipKeyframes = inspectingPresetDraft
+      ? (clip: AvatarAnimationTimelineClipInstance) => {
+          const keyframeByIndex = new Map(
+            animationLibraryPresetKeyframes.map(keyframe => [keyframe.keyframeIndex, keyframe])
+          )
+          return resolveAnimationTimelineClipKeyframes(clip).map(node => {
+            const keyframe = keyframeByIndex.get(node.keyframeIndex)
+            return keyframe == null
+              ? node
+              : { ...node, atMs: keyframe.atMs, easing: keyframe.easing }
+          })
+        }
+      : resolveAnimationTimelineClipKeyframes
+
+    return (
+      <AnimationSidebar
+        animationPresets={availableAnimationPresets}
+        inspectorContext={inspectingPresetDraft ? 'preset-draft' : 'timeline'}
+        mode={mode}
+        timeline={sidebarTimeline}
+        unresolvedClipIds={inspectingPresetDraft ? [] : timelineUnresolvedClipIds}
+        savedAnimations={mode === 'library' ? savedAnimations : []}
+        selectedClipId={sidebarSelectedClipId}
+        selectedKeyframe={inspectingPresetDraft ? null : selectedTimelineKeyframe}
+        selectedPresetId={selectedTimelinePresetId}
+        selectedPresetDraft={selectedPresetDraft}
+        selectedSavedAnimationId={editingSavedAnimationId}
+        renderPresetPreview={renderAnimationPresetPreview}
+        resolveClipKeyframes={resolveSidebarClipKeyframes}
+        onDeleteClip={inspectingPresetDraft ? () => {} : deleteAnimationTimelineClip}
+        onDeleteKeyframe={deleteAnimationTimelineKeyframe}
+        onOpenCustomEditor={() => {
+          setSelectedTimelineClipId(null)
+          setSelectedTimelineKeyframe(null)
+          handleAnimationLibraryDeselect()
+          setAnimationDraftSource('custom')
+          setCustomAnimationEditorOpen(true)
+          setActiveTab('animation')
+          setControlsCollapsed(false)
+        }}
+        onRemoveSavedAnimation={handleSavedAnimationRemove}
+        onReplaceClip={inspectingPresetDraft ? () => {} : replaceAnimationTimelineClip}
+        onSelectClip={instanceId => {
+          if (inspectingPresetDraft) {
+            if (instanceId == null) {
+              stopAnimationPlayback()
+              setAnimationLibraryPresetDraft(null)
+              setAnimationLibraryPresetKeyframes([])
+              setAnimationLibraryPresetFrameIndex(null)
+              setSelectedTimelinePresetId(null)
+            }
+            return
+          }
+          if (instanceId !== selectedTimelineClipId) setSelectedTimelineKeyframe(null)
+          setSelectedTimelineClipId(instanceId)
+        }}
+        onSelectPreset={handleAnimationLibraryPresetSelect}
+        onSelectSavedAnimation={animation => {
+          handleSavedAnimationSelect(animation)
+          setCustomAnimationEditorOpen(true)
+          setActiveTab('animation')
+          setControlsCollapsed(false)
+        }}
+        onSetClipDuration={inspectingPresetDraft
+          ? setAnimationLibraryPresetDraftDuration
+          : setAnimationTimelineClipDuration}
+        onPreviewPresetFrame={inspectingPresetDraft ? previewAnimationLibraryPresetFrame : undefined}
+        onUpdateClip={inspectingPresetDraft
+          ? updateAnimationLibraryPresetDraft
+          : updateAnimationTimelineClip}
+        onUpdateKeyframeEasing={inspectingPresetDraft
+          ? updateAnimationLibraryPresetKeyframeEasing
+          : updateAnimationTimelineKeyframeEasing}
+        onUpdateKeyframeTime={inspectingPresetDraft
+          ? updateAnimationLibraryPresetKeyframeTime
+          : updateAnimationTimelineKeyframeTime}
+      />
+    )
+  }
+
   return (
     <main
       className={`avatar-app${embedded && resolvedTheme === 'dark' ? ' dark' : ''}`}
@@ -5670,8 +6270,33 @@ function App({
         className='avatar-app__workspace'
         data-animation-open={animationOpen}
         data-controls-collapsed={controlsCollapsed}
-        style={{ '--avatar-controls-width': `${controlsWidth}px` } as CSSProperties}
+        data-resources-collapsed={resourcesCollapsed}
+        style={{
+          '--avatar-controls-width': `${controlsWidth}px`,
+          '--avatar-left-controls-width': `${resourcesWidth}px`
+        } as CSSProperties}
       >
+        {projectSidebarOpen
+          ? (
+            <WorkspaceSidebar
+              activeProjectId={activeProjectId}
+              anchorRef={workspaceToggleRef}
+              projectName={projectName}
+              projects={savedProjects}
+              saveState={projectSaveState}
+              onClose={() => setProjectSidebarOpen(false)}
+              onDeleteProject={deleteAvatarProject}
+              onHome={onHome}
+              onLoadProject={loadAvatarProject}
+              onProjectNameChange={name => {
+                setProjectName(name)
+                setProjectSaveState('idle')
+              }}
+              onSaveAsProject={() => saveAvatarProject(true)}
+              onSaveProject={() => saveAvatarProject(false)}
+            />
+          )
+          : null}
         <section
           ref={stageRef}
           className='avatar-app__stage'
@@ -5684,44 +6309,17 @@ function App({
             '--avatar-frame-shadow': frameShadow
           } as CSSProperties}
         >
-          {onHome != null || !stageNarrow || controlsCollapsed
+          {!stageNarrow || controlsCollapsed || resourcesCollapsed
             ? (
               <div className='avatar-app__camera-tools'>
-                {onHome == null
-                  ? null
-                  : (
-                    <button
-                      className='avatar-app__home-link'
-                      type='button'
-                      aria-label='Home'
-                      title='Home'
-                      onClick={onHome}
-                    >
-                      <img src='/favicon.svg' alt='' aria-hidden='true' />
-                    </button>
-                  )}
+                {resourcesCollapsed ? renderWorkspaceToggle() : null}
+                {resourcesCollapsed ? renderResourcesToggle() : null}
                 {!stageNarrow || controlsCollapsed ? renderCameraToggle() : null}
               </div>
             )
             : null}
           <div className='avatar-app__stage-actions'>
-            {cameraMode
-              ? (
-                <ExportToolbar
-                  copyState={copyState}
-                  exportSize={exportSize}
-                  gifAvailable={animationKeyframes.length >= 2}
-                  gifExportState={gifExportState}
-                  onCopy={() => {
-                    void handleCopy()
-                  }}
-                  onDownload={handleDownload}
-                  onDownloadGif={handleGifDownload}
-                  onDownloadPng={handlePngDownload}
-                  onSizeChange={setExportSize}
-                />
-              )
-              : !stageNarrow || controlsCollapsed
+            {!cameraMode && (!stageNarrow || controlsCollapsed)
               ? renderSavePreset()
               : null}
             {controlsCollapsed ? renderGlobalHeaderActions() : null}
@@ -5732,8 +6330,8 @@ function App({
                   type='button'
                   aria-controls='avatar-controls'
                   aria-expanded='false'
-                  aria-label='Show controls sidebar'
-                  title='Show controls'
+                  aria-label={t('Show controls sidebar')}
+                  title={t('Show controls')}
                   onClick={() => setControlsCollapsed(false)}
                 >
                   <svg viewBox='0 0 20 20' aria-hidden='true'>
@@ -5787,6 +6385,8 @@ function App({
                 onEntityPartSelect={partId => {
                   if (animationRenderKeyframe?.auxiliaryParts?.some(item => item.part.id === partId)) return
                   setSelectedEntityPartId(partId)
+                  setActiveTab('body')
+                  setControlsCollapsed(false)
                 }}
                 onInteractionStart={cancelSeededViewTransition}
                 onViewStateChange={nextState => {
@@ -5831,7 +6431,7 @@ function App({
                 aria-expanded='false'
                 aria-label={t('Open animation editor')}
                 title='Animation'
-                onClick={() => setAnimationOpen(true)}
+                onClick={openAnimationTimeline}
               >
                 <svg viewBox='0 0 20 20' aria-hidden='true'>
                   <path d='M3 5.5h14v9H3Z' />
@@ -5873,35 +6473,8 @@ function App({
 
         <AvatarControls
           activeTab={activeTab}
-          animationContent={
-            <AnimationSidebar
-              animationPresets={availableAnimationPresets}
-              timeline={animationTimeline}
-              unresolvedClipIds={timelineUnresolvedClipIds}
-              selectedClipId={selectedTimelineClipId}
-              selectedKeyframe={selectedTimelineKeyframe}
-              selectedPresetId={selectedTimelinePresetId}
-              renderPresetPreview={renderAnimationPresetPreview}
-              resolveClipKeyframes={resolveAnimationTimelineClipKeyframes}
-              onDeleteClip={deleteAnimationTimelineClip}
-              onDeleteKeyframe={deleteAnimationTimelineKeyframe}
-              onOpenCustomEditor={() => {
-                setSelectedTimelineClipId(null)
-                setSelectedTimelineKeyframe(null)
-                setAnimationDraftSource('custom')
-              }}
-              onReplaceClip={replaceAnimationTimelineClip}
-              onSelectClip={instanceId => {
-                if (instanceId !== selectedTimelineClipId) setSelectedTimelineKeyframe(null)
-                setSelectedTimelineClipId(instanceId)
-              }}
-              onSelectPreset={setSelectedTimelinePresetId}
-              onSetClipDuration={setAnimationTimelineClipDuration}
-              onUpdateClip={updateAnimationTimelineClip}
-              onUpdateKeyframeEasing={updateAnimationTimelineKeyframeEasing}
-              onUpdateKeyframeTime={updateAnimationTimelineKeyframeTime}
-            />
-          }
+          animationContent={renderAnimationSidebar('library')}
+          animationInspectorContent={renderAnimationSidebar('inspector')}
           avatarOutlineStyle={avatarOutlineStyle}
           avatarShadowStyle={avatarShadowStyle}
           backgroundStyle={backgroundStyle}
@@ -5935,6 +6508,8 @@ function App({
           bearHeadWidth={resolvedBearHeadWidth}
           coatPattern={coatPattern}
           controlsWidth={controlsWidth}
+          leftControlsWidth={resourcesWidth}
+          entityGroups={entityGroups}
           entityParts={entityParts}
           entityPreset={entityPreset}
           faceStyle={resolvedFaceStyle}
@@ -5943,11 +6518,13 @@ function App({
           gridDensity={gridDensity}
           headerActions={
             <>
+              {renderExportToolbar()}
               {stageNarrow && !cameraMode ? renderSavePreset() : null}
               {stageNarrow ? renderCameraToggle() : null}
               {renderGlobalHeaderActions()}
             </>
           }
+          workspaceAction={resourcesCollapsed ? undefined : renderWorkspaceToggle()}
           hiddenPaletteCount={hiddenPaletteCount}
           lightAzimuth={lightAzimuth}
           lightDistance={lightDistance}
@@ -5996,6 +6573,7 @@ function App({
             )
             setBodyShape(shape)
             setBodyBottomTaper(0)
+            setEntityGroups([])
             setEntityParts([])
             setEntityPreset('custom')
             resetAnimalBreedState()
@@ -6223,8 +6801,10 @@ function App({
             setSelectedSurfaceDecalId(null)
             setCopyState('idle')
           }}
-          onCollapse={() => setControlsCollapsed(true)}
+          onCollapseLeft={() => setResourcesCollapsed(true)}
+          onCollapseRight={() => setControlsCollapsed(true)}
           onControlsWidthChange={setControlsWidth}
+          onLeftControlsWidthChange={setResourcesWidth}
           onFaceStyleChange={(nextStyle, mode = 'merge') => {
             markSeedFieldsManual(AVATAR_SEED_FIELD.facePreset)
             stopAnimationPlayback()
@@ -6300,6 +6880,37 @@ function App({
               ...current.filter(field => !AVATAR_SEED_FIELDS.includes(field as AvatarSeedField))
             ])
             handleEntityPresetChange(preset)
+          }}
+          onSelectEntityPart={partId => {
+            setSelectedEntityPartId(partId)
+            setControlsCollapsed(false)
+          }}
+          onEntityGroupAdd={(group) => {
+            setEntityGroups(currentGroups => [...currentGroups, group])
+            setCopyState('idle')
+          }}
+          onEntityGroupChange={(id, nextGroup) => {
+            setEntityGroups(currentGroups => currentGroups.map(group => (
+              group.id === id ? { ...group, ...nextGroup } : group
+            )))
+            setCopyState('idle')
+          }}
+          onEntityGroupDelete={(id) => {
+            setEntityGroups(currentGroups => currentGroups.filter(group => group.id !== id))
+            setCopyState('idle')
+          }}
+          onEntityPartAdd={(part) => {
+            markSeedFieldsManual(AVATAR_SEED_FIELD.entityPreset)
+            setEntityParts(currentParts => [...currentParts, part])
+            setSelectedEntityPartId(part.id)
+            setCopyState('idle')
+          }}
+          onEntityPartDelete={(id) => {
+            markSeedFieldsManual(AVATAR_SEED_FIELD.entityPreset)
+            setEntityParts(currentParts => currentParts.filter(part => part.id !== id))
+            setSurfaceDecals(currentDecals => currentDecals.filter(decal => decal.targetPartId !== id))
+            setSelectedEntityPartId(currentId => currentId === id ? null : currentId)
+            setCopyState('idle')
           }}
           onEntityPartChange={(id, nextPart) => {
             markSeedFieldsManual(AVATAR_SEED_FIELD.entityPreset)
@@ -6455,7 +7066,6 @@ function App({
           onShowMorePalettesChange={() => setShowMorePalettes(value => !value)}
           onTabChange={tab => {
             setActiveTab(tab)
-            if (tab === 'animation') setAnimationOpen(true)
           }}
           onToggleLight={() => setShowLight(value => !value)}
           onToggleOutline={() => {
@@ -6532,13 +7142,18 @@ function App({
               onSelectClip={instanceId => {
                 if (instanceId !== selectedTimelineClipId) setSelectedTimelineKeyframe(null)
                 setSelectedTimelineClipId(instanceId)
-                if (instanceId != null) setActiveTab('animation')
+                if (instanceId != null) {
+                  setActiveTab('animation')
+                  setControlsCollapsed(false)
+                }
               }}
               onSelectKeyframe={setSelectedTimelineKeyframe}
+              onSaveProject={() => saveAvatarProject(false)}
               onSeek={seekAnimationTimeline}
               onTrackReorder={reorderAnimationTimeline}
               onTrackUpdate={updateAnimationTimelineTrack}
               onTrimClip={trimAnimationTimelineClip}
+              projectSaveState={projectSaveState}
               onClose={() => {
                 pauseAnimationTimeline()
                 setAnimationOpen(false)

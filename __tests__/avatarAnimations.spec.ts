@@ -314,7 +314,8 @@ describe('avatar animation keyframes', () => {
       const resolved = resolveAvatarAnimationPreset(preset, view, face, parts)
       const transformedFrames = resolved.keyframes.filter(frame => frame.partTransforms != null)
 
-      expect(preset.requiredEntityPreset).toBe('bear')
+      expect(preset.requiredEntityPreset).toBeUndefined()
+      expect(preset.requiresEntityParts).toBe(true)
       expect(transformedFrames.length).toBe(resolved.keyframes.length)
       expect(transformedFrames.every(frame => (
         Object.keys(frame.partTransforms ?? {}).sort().join(',') === 'ear-left,ear-right,primary'
@@ -416,19 +417,19 @@ describe('avatar animation keyframes', () => {
     }
   })
 
-  it('keeps the two user-approved bear morph presets byte-for-byte frozen', () => {
+  it('keeps the two user-approved bear morph frame sequences byte-for-byte frozen', () => {
     const parts = createAvatarEntityParts('bear')
     const face = getAvatarEntityPresetFaceStyle('bear')!
     const view = { pitch: 0, positionX: 0, positionY: 0, scale: 1, yaw: 0 }
     const expected = {
-      'bear-alert-morph': 'b703a4e815946f62665977959a05d0577254789e08894eb8d1bc280efde2388d',
-      'bear-loading-morph': '5b00ffa7a145dc85850ad520fa5a0cb7193119e85de1ac0f167e5a535f45b9f6'
+      'bear-alert-morph': 'f306cd35454c1aa0b88ad8615dd4a8d81f9c04459478792f3d1d43af86d6e071',
+      'bear-loading-morph': 'bf78764401d4a6cd3229b7690777290e0d79e93ec47568b27ca1b764a8bf15c4'
     } as const
 
     for (const [id, fingerprint] of Object.entries(expected)) {
       const preset = AVATAR_ANIMATION_PRESETS.find(candidate => candidate.id === id)!
       const resolved = resolveAvatarAnimationPreset(preset, view, face, parts)
-      const digest = createHash('sha256').update(JSON.stringify(resolved)).digest('hex')
+      const digest = createHash('sha256').update(JSON.stringify(resolved.keyframes)).digest('hex')
       expect(digest, `${id} changed after it was approved`).toBe(fingerprint)
     }
   })
@@ -651,9 +652,87 @@ describe('avatar animation keyframes', () => {
     }
   })
 
+  it('adapts exclamation and three-ball loading to every representative animal topology', () => {
+    const fixtures = ['cat', 'owl', 'deer', 'cow', 'lion', 'hedgehog', 'squirrel', 'pig'] as const
+    const view = { pitch: -.19, positionX: 24, positionY: -11, scale: 1.28, yaw: .57 }
+
+    for (const entityPreset of fixtures) {
+      const parts = createAvatarEntityParts(entityPreset)
+      const before = JSON.stringify(parts)
+      const face = getAvatarEntityPresetFaceStyle(entityPreset)!
+      const head = parts.find(part => part.face)!
+      const expectedIds = parts.map(part => part.id).sort()
+
+      for (const id of ['bear-alert-morph', 'bear-loading-morph'] as const) {
+        const preset = AVATAR_ANIMATION_PRESETS.find(candidate => candidate.id === id)!
+        const resolved = resolveAvatarAnimationPreset(preset, view, face, parts)
+        const fullyMorphed = resolved.keyframes.filter(frame => frame.partShapeMorphs?.[head.id]?.progress === 1)
+
+        expect(preset.requiredEntityPreset, `${entityPreset}/${id}`).toBeUndefined()
+        expect(preset.requiresEntityParts, `${entityPreset}/${id}`).toBe(true)
+        expect(JSON.stringify(parts), `${entityPreset}/${id}`).toBe(before)
+        expect(resolved.keyframes.every(frame => (
+          Object.keys(frame.partTransforms ?? {}).sort().join(',') === expectedIds.join(',')
+        )), `${entityPreset}/${id}`).toBe(true)
+        expect(resolved.keyframes[0]?.partTransforms).toEqual(resolved.keyframes.at(-1)?.partTransforms)
+        expect(resolved.keyframes[0]?.partShapeMorphs?.[head.id]).toEqual({
+          fromShape: head.shape,
+          progress: 0,
+          toShape: 'sphere'
+        })
+        expect(resolved.keyframes.at(-1)?.partShapeMorphs?.[head.id])
+          .toEqual(resolved.keyframes[0]?.partShapeMorphs?.[head.id])
+        expect(fullyMorphed.length, `${entityPreset}/${id}`).toBeGreaterThan(2)
+        expect(fullyMorphed.every(frame => parts.filter(part => part.id !== head.id).every(part => (
+          (frame.partTransforms?.[part.id]?.scaleX ?? 1) <= .011 &&
+          (frame.partTransforms?.[part.id]?.scaleY ?? 1) <= .011
+        ))), `${entityPreset}/${id}`).toBe(true)
+        expect(Object.values(resolved.keyframes.flatMap(frame => [
+          ...Object.values(frame.partTransforms ?? {}),
+          ...(frame.auxiliaryParts ?? []).map(item => item.transform ?? {})
+        ])).flatMap(transform => Object.values(transform)).every(value => Number.isFinite(value))).toBe(true)
+
+        if (id === 'bear-alert-morph') {
+          const stems = resolved.keyframes.map(frame => frame.auxiliaryParts?.[0])
+          expect(stems.every(stem => (
+            stem?.part.id === 'alert-stem' &&
+            stem.part.shape === 'teardrop' &&
+            stem.part.face === false &&
+            stem.composition === 'independent-depth' &&
+            stem.part.baseColor === head.baseColor
+          )), entityPreset).toBe(true)
+          expect(stems[0]?.opacity).toBe(0)
+          expect(stems.at(-1)?.opacity).toBe(0)
+          expect(Math.max(...stems.map(stem => stem?.opacity ?? 0))).toBe(100)
+          expect(resolved.keyframes.some(frame => frame.partShapeMorphs?.['alert-stem']?.progress === 1)).toBe(true)
+          continue
+        }
+
+        const loadingBalls = resolved.keyframes.map(frame => frame.auxiliaryParts ?? [])
+        expect(loadingBalls.every(items => (
+          items.length === 2 &&
+          items[0]?.part.id === 'loading-ball-left' &&
+          items[1]?.part.id === 'loading-ball-right' &&
+          items.every(item => (
+            item.composition === 'independent-depth' &&
+            item.part.shape === 'sphere' &&
+            item.part.face === false &&
+            item.part.baseColor === head.baseColor &&
+            item.transform?.scaleX === item.transform?.scaleY &&
+            item.transform?.scaleY === item.transform?.scaleZ
+          ))
+        )), entityPreset).toBe(true)
+        expect(loadingBalls[0]?.every(item => item.opacity === 0)).toBe(true)
+        expect(loadingBalls.at(-1)?.every(item => item.opacity === 0)).toBe(true)
+        expect(Math.max(...loadingBalls.flatMap(items => items.map(item => item.opacity ?? 0)))).toBe(100)
+      }
+    }
+  })
+
   it('gathers every real bear part into one breathing sleep ball and unfolds exactly', () => {
     const parts = createAvatarEntityParts('bear')
     const face = getAvatarEntityPresetFaceStyle('bear')!
+    const primary = parts.find(part => part.id === 'primary')!
     const preset = AVATAR_ANIMATION_PRESETS.find(candidate => candidate.id === 'bear-sleep-morph')!
     const resolved = resolveAvatarAnimationPreset(
       preset,
@@ -667,8 +746,12 @@ describe('avatar animation keyframes', () => {
     expect(ballFrames.length).toBeGreaterThanOrEqual(4)
     expect(new Set(ballFrames.map(frame => frame.partTransforms?.primary?.y)).size).toBeGreaterThan(1)
     expect(ballFrames.every(frame => {
-      const primary = frame.partTransforms?.primary
-      return primary?.scaleZ === Math.min(primary?.scaleX ?? 0, primary?.scaleY ?? 0)
+      const transform = frame.partTransforms?.primary
+      const projectedDepth = (transform?.scaleZ ?? 0) * (transform?.scaleX ?? 0) / primary.scaleX
+      return (
+        Math.abs((transform?.scaleX ?? 0) - (transform?.scaleY ?? 0)) < 1e-10 &&
+        Math.abs(projectedDepth - (transform?.scaleX ?? 0)) < 1e-10
+      )
     })).toBe(true)
     expect(ballFrames.every(frame => (
       frame.partTransforms?.['ear-left']?.x === frame.partTransforms?.primary?.x &&
@@ -711,6 +794,14 @@ describe('avatar animation keyframes', () => {
     expect(new Set(particles.map(item => item.transform?.scaleX)).size).toBe(3)
     expect(averageRadius(orbitFrames[0]!)).toBeGreaterThan(averageRadius(orbitFrames.at(-1)!))
     expect(orbitFrames.every(frame => frame.partShapeMorphs?.primary?.progress === 1)).toBe(true)
+    expect(orbitFrames.every(frame => {
+      const transform = frame.partTransforms?.primary
+      const projectedDepth = (transform?.scaleZ ?? 0) * (transform?.scaleX ?? 0) / primary.scaleX
+      return (
+        Math.abs((transform?.scaleX ?? 0) - (transform?.scaleY ?? 0)) < 1e-10 &&
+        Math.abs(projectedDepth - (transform?.scaleX ?? 0)) < 1e-10
+      )
+    })).toBe(true)
     const firstVisible = resolved.keyframes.find(frame => frame.auxiliaryParts?.some(item => (item.opacity ?? 0) > 0))!
     expect(firstVisible.auxiliaryParts?.every(item => (item.opacity ?? 0) <= 25)).toBe(true)
     expect(averageRadius(firstVisible)).toBeGreaterThan(100)

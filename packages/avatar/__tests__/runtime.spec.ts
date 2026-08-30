@@ -52,6 +52,11 @@ const supportLibrary: AvatarAnimationLibrary = {
 }
 
 describe('OneWorks Avatar public runtime contract', () => {
+  it('keeps public palette ids unique', () => {
+    const paletteIds = AVATAR_PALETTES.map(palette => palette.id)
+    expect(new Set(paletteIds).size).toBe(paletteIds.length)
+  })
+
   it('supports bounded optional ellipse taper on both standalone bodies and entity parts', () => {
     const definition = createDefaultAvatarDefinition()
     const tapered = {

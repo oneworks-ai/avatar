@@ -1,0 +1,57 @@
+@mixin surface($width: 208px) {
+  display: grid;
+  box-sizing: border-box;
+  width: $width;
+  padding: 6px;
+  gap: 2px;
+  border: 1px solid color-mix(in srgb, currentColor 13%, transparent);
+  border-radius: 10px;
+  color: var(--avatar-text, var(--text-color));
+  background: var(--avatar-surface, var(--bg-color, #fff));
+  box-shadow: 0 14px 36px color-mix(in srgb, black 24%, transparent);
+  font-family: inherit;
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 1.3;
+}
+
+@mixin item {
+  display: flex;
+  box-sizing: border-box;
+  width: 100%;
+  min-height: 34px;
+  height: auto;
+  padding: 7px 9px;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 8px;
+  border: 0;
+  border-radius: 7px;
+  color: inherit;
+  background: transparent;
+  box-shadow: none;
+  cursor: pointer;
+  font: inherit;
+  line-height: 1.3;
+  text-align: start;
+
+  &:hover,
+  &:focus-visible {
+    background: color-mix(in srgb, currentColor 7%, transparent);
+    outline: none;
+  }
+
+  &:disabled { cursor: default; opacity: .38; }
+  &[data-danger] { color: var(--primary-color, #c53a22); }
+
+  &[data-danger]:hover:not(:disabled),
+  &[data-danger]:focus-visible:not(:disabled) {
+    background: var(--primary-soft-bg, #ffe6df);
+  }
+}
+
+@mixin separator {
+  height: 1px;
+  margin: 4px 5px;
+  background: color-mix(in srgb, currentColor 12%, transparent);
+}

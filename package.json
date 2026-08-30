@@ -21,6 +21,8 @@
     "snapshots:pixel": "node scripts/generate-avatar-pixel-style-snapshots.mjs",
     "smoke:sdk": "node scripts/smoke-sdk-packages.mjs",
     "test": "node scripts/run-vitest-groups.mjs",
+    "test:timeline:e2e": "node scripts/verify-avatar-timeline-e2e.mjs",
+    "test:timeline:performance": "node scripts/verify-avatar-timeline-performance.mjs",
     "typecheck": "tsc -p tsconfig.app-source.json --noEmit --pretty false",
     "typecheck:npm": "tsc -p tsconfig.json --noEmit --pretty false",
     "typecheck:sdk": "pnpm build:sdk && pnpm --filter './packages/*' typecheck"
