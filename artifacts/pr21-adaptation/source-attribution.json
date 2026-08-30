@@ -1,10 +1,12 @@
 {
   "author": {
     "email": "exedev@xxwork.exe.xyz",
+    "githubLinkedEmail": "37948597+xxchan@users.noreply.github.com",
     "name": "exe.dev user",
     "username": "@xxchan"
   },
-  "coAuthoredBy": "Co-authored-by: exe.dev user <exedev@xxwork.exe.xyz>",
+  "coAuthoredBy": "Co-authored-by: xxchan <37948597+xxchan@users.noreply.github.com>",
+  "originalCoAuthoredBy": "Co-authored-by: exe.dev user <exedev@xxwork.exe.xyz>",
   "commits": [
     "d7003970e703a93892050999718cc705fe8bdad4",
     "e211c42b82c1194eff310c594997763637ae1095",

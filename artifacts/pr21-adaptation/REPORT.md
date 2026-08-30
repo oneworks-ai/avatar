@@ -5,8 +5,8 @@
 - Source PR: `oneworks-ai/avatar#21`, branch source `xxchan/avatar:otter-preset`.
 - Source head: `04693016c1e1bb9b2f592cf857450f8412e8de93`.
 - Source commits: `d700397`, `e211c42`, `ce45579`, `aba646d`, `7344d2a`, `0469301`.
-- Author credit: `@xxchan`, `exe.dev user <exedev@xxwork.exe.xyz>`.
-- If this local adaptation is later committed, retain: `Co-authored-by: exe.dev user <exedev@xxwork.exe.xyz>`.
+- Author credit: `@xxchan`, original commit identity `exe.dev user <exedev@xxwork.exe.xyz>`.
+- GitHub does not associate the original email with `@xxchan`; integration commits must use the linked trailer `Co-authored-by: xxchan <37948597+xxchan@users.noreply.github.com>` while retaining the original identity above as provenance.
 
 ## Adopted
 
