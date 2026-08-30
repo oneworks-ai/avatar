@@ -48,11 +48,11 @@ vi.mock('../../../src/InteractiveAvatar', async () => {
 })
 
 import { createDefaultAvatarDefinition } from '@oneworks/avatar'
-import type { AvatarAnimationClip } from '@oneworks/avatar'
+import type { AvatarAnimationClip, AvatarAnimationTimeline } from '@oneworks/avatar'
 
 import { AvatarLocaleProvider, useAvatarLocale } from '../../../src/avatarLocale'
 import { createAvatarEntityParts } from '../../../src/avatarEntityPresets'
-import { Avatar, AvatarEditor } from '../src'
+import { Avatar, AvatarAnimationPicker, AvatarEditor, AvatarPresetPicker } from '../src'
 import type { AvatarEditorHandle, AvatarHandle } from '../src'
 
 let root: Root | null = null
@@ -101,6 +101,62 @@ afterEach(() => {
 })
 
 describe('OneWorks Avatar React lifecycle', () => {
+  it('exposes a searchable animation picker with selection and drag hooks', () => {
+    const onChange = vi.fn()
+    const onOptionDragStart = vi.fn()
+    const clip: AvatarAnimationClip = {
+      anchor: 'absolute',
+      durationMs: 1000,
+      keyframes: [],
+      playback: 'loop'
+    }
+    act(() => root?.render(createElement(AvatarAnimationPicker, {
+      draggable: true,
+      onChange,
+      onOptionDragStart,
+      options: [
+        { animation: clip, id: 'idle', keywords: ['calm'], label: 'Idle', previewUrl: '/idle.png' },
+        { animation: clip, id: 'wave', keywords: ['hello'], label: 'Wave', previewUrl: '/wave.png' }
+      ],
+      value: 'wave'
+    })))
+
+    expect(host?.querySelector('[aria-label="Wave"]')?.getAttribute('aria-selected')).toBe('true')
+    act(() => {
+      const search = host?.querySelector<HTMLInputElement>('input[type="search"]')
+      if (search == null) throw new Error('Animation search was not rendered')
+      const setValue = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')?.set
+      setValue?.call(search, 'calm')
+      search.dispatchEvent(new Event('input', { bubbles: true }))
+    })
+    expect(host?.querySelector('[aria-label="Idle"]')).not.toBeNull()
+    expect(host?.querySelector('[aria-label="Wave"]')).toBeNull()
+
+    const idle = host?.querySelector<HTMLButtonElement>('[aria-label="Idle"]')
+    act(() => idle?.click())
+    expect(onChange).toHaveBeenCalledWith(expect.objectContaining({ id: 'idle' }))
+    act(() => idle?.dispatchEvent(new Event('dragstart', { bubbles: true })))
+    expect(onOptionDragStart).toHaveBeenCalledWith(
+      expect.objectContaining({ id: 'idle' }),
+      expect.objectContaining({ type: 'dragstart' })
+    )
+  })
+
+  it('exposes an avatar preset picker that returns the selected definition', () => {
+    const definition = createDefaultAvatarDefinition()
+    const onChange = vi.fn()
+    act(() => root?.render(createElement(AvatarPresetPicker, {
+      onChange,
+      options: [{ definition, id: 'dog', label: 'Dog', previewUrl: '/dog.png' }],
+      value: 'dog'
+    })))
+
+    const dog = host?.querySelector<HTMLButtonElement>('[aria-label="Dog"]')
+    expect(dog?.getAttribute('aria-selected')).toBe('true')
+    act(() => dog?.click())
+    expect(onChange).toHaveBeenCalledWith(expect.objectContaining({ definition, id: 'dog' }))
+  })
+
   it('renders with the system theme when matchMedia is unavailable', () => {
     vi.stubGlobal('matchMedia', undefined)
     const definition = createDefaultAvatarDefinition()
@@ -245,6 +301,97 @@ describe('OneWorks Avatar React lifecycle', () => {
     expect(host?.querySelector('[data-testid="view-change"]')?.getAttribute('data-auxiliary-shapes')).toBeNull()
     expect(host?.querySelector('[data-testid="view-change"]')?.getAttribute('data-part-shape-morphs')).toBeNull()
     expect(host?.querySelector('[data-testid="view-change"]')?.getAttribute('data-part-transforms')).toBeNull()
+  })
+
+  it('renders the configured timeline frame and resolves preset-backed clips', () => {
+    const definition = createDefaultAvatarDefinition()
+    const clip: AvatarAnimationClip = {
+      anchor: 'absolute',
+      durationMs: 1000,
+      keyframes: [
+        { atMs: 0, patch: { view: { yaw: 0 } } },
+        { atMs: 1000, easing: 'linear', patch: { view: { yaw: 1 } } }
+      ],
+      playback: 'once'
+    }
+    const timeline: AvatarAnimationTimeline = {
+      durationMs: 1000,
+      tracks: [{
+        clips: [{
+          durationMs: 1000,
+          instanceId: 'entrance-1',
+          playbackRate: 1,
+          source: {
+            fallback: 'skip',
+            presetId: 'entrance',
+            presetVersion: 1,
+            type: 'preset'
+          },
+          sourceOffsetMs: 0,
+          startMs: 0,
+          weight: 1
+        }],
+        trackId: 'motion'
+      }],
+      version: 1
+    }
+    const resolveTimelinePreset = vi.fn(() => clip)
+
+    act(() => root?.render(createElement(Avatar, {
+      definition,
+      resolveTimelinePreset,
+      timeline,
+      timelineTimeMs: 500
+    })))
+
+    expect(resolveTimelinePreset).toHaveBeenCalled()
+    expect(host?.querySelector('[data-testid="view-change"]')?.getAttribute('data-view-yaw')).toBe('0.5')
+    expect(animationFrames.size).toBe(0)
+  })
+
+  it('controls a configured timeline through the public handle', () => {
+    const definition = createDefaultAvatarDefinition()
+    const timeline: AvatarAnimationTimeline = {
+      durationMs: 1000,
+      tracks: [{
+        clips: [{
+          durationMs: 1000,
+          instanceId: 'move-1',
+          playbackRate: 1,
+          source: {
+            clip: {
+              anchor: 'absolute',
+              durationMs: 1000,
+              keyframes: [
+                { atMs: 0, patch: { view: { yaw: 0 } } },
+                { atMs: 1000, easing: 'linear', patch: { view: { yaw: .8 } } }
+              ],
+              playback: 'once'
+            },
+            type: 'inline',
+            version: 1
+          },
+          sourceOffsetMs: 0,
+          startMs: 0,
+          weight: 1
+        }],
+        trackId: 'motion'
+      }],
+      version: 1
+    }
+    const ref = createRef<AvatarHandle>()
+    act(() => root?.render(createElement(Avatar, { definition, ref })))
+
+    act(() => ref.current?.setTimeline(timeline, { playing: false, timeMs: 250 }))
+    expect(host?.querySelector('[data-testid="view-change"]')?.getAttribute('data-view-yaw')).toBe('0.2')
+    act(() => ref.current?.seek(750))
+    expect(host?.querySelector('[data-testid="view-change"]')?.getAttribute('data-view-yaw')).toBe('0.6000000000000001')
+    act(() => ref.current?.resume())
+    expect(animationFrames.size).toBe(1)
+    act(() => ref.current?.pause())
+    expect(animationFrames.size).toBe(0)
+    act(() => ref.current?.stop())
+    expect(host?.querySelector('[data-testid="view-change"]')?.getAttribute('data-view-yaw')).toBe('0')
   })
 
   it('does not restart autoplay after an interactive view change', () => {

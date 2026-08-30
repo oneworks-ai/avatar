@@ -9,14 +9,24 @@ import type {
   AvatarAnimationClip,
   AvatarAnimationLibrary,
   AvatarAnimationRef,
+  AvatarAnimationTimeline,
+  AvatarAnimationTimelinePresetResolver,
   AvatarDefinition
 } from '@oneworks/avatar'
-import { Avatar, AvatarEditor } from '@oneworks/avatar-react'
+import {
+  Avatar,
+  AvatarAnimationPicker,
+  AvatarEditor,
+  AvatarPresetPicker
+} from '@oneworks/avatar-react'
 import type {
+  AvatarAnimationPickerOption,
   AvatarCaptureOptions,
   AvatarEditorHandle,
   AvatarHandle,
   AvatarPlayOptions,
+  AvatarPresetPickerOption,
+  AvatarTimelineOptions,
   AvatarTrackInput,
   AvatarTrackUpdate,
   AvatarTheme
@@ -28,11 +38,18 @@ export type {
   AvatarAnimationKeyframe,
   AvatarAnimationLibrary,
   AvatarAnimationRef,
+  AvatarAnimationTimeline,
+  AvatarAnimationTimelineClipInstance,
+  AvatarAnimationTimelinePresetResolver,
+  AvatarAnimationTimelineTrack,
   AvatarDefinition
 } from '@oneworks/avatar'
 export type {
   AvatarCaptureOptions,
+  AvatarAnimationPickerOption,
   AvatarPlayOptions,
+  AvatarPresetPickerOption,
+  AvatarTimelineOptions,
   AvatarTheme,
   AvatarTrackInput,
   AvatarTrackUpdate
@@ -44,7 +61,12 @@ export interface AvatarMountOptions {
   readonly autoplay?: boolean
   readonly definition?: AvatarDefinition
   readonly interactive?: boolean
+  readonly resolveTimelinePreset?: AvatarAnimationTimelinePresetResolver
   readonly theme?: AvatarTheme
+  readonly timeline?: AvatarAnimationTimeline | null
+  readonly timelineLoop?: boolean
+  readonly timelineSpeed?: number
+  readonly timelineTimeMs?: number
 }
 
 export interface AvatarEditorMountOptions {
@@ -64,6 +86,29 @@ export interface AvatarEditorMount extends AvatarEditorHandle {
   readonly ready: Promise<void>
   destroy(): void
   update(options: Partial<AvatarEditorMountOptions>): void
+}
+
+export interface AvatarAnimationPickerMountOptions {
+  readonly draggable?: boolean
+  readonly emptyLabel?: string
+  readonly options: readonly AvatarAnimationPickerOption[]
+  readonly placeholder?: string
+  readonly searchable?: boolean
+  readonly value?: string | null
+}
+
+export interface AvatarPresetPickerMountOptions {
+  readonly emptyLabel?: string
+  readonly options: readonly AvatarPresetPickerOption[]
+  readonly placeholder?: string
+  readonly searchable?: boolean
+  readonly theme?: AvatarTheme
+  readonly value?: string | null
+}
+
+export interface AvatarPickerMount<TOptions> {
+  destroy(): void
+  update(options: Partial<TOptions>): void
 }
 
 const dispatch = <T>(element: HTMLElement, type: string, detail?: T) => {
@@ -135,6 +180,7 @@ export const createAvatar = (
       if (handle == null) render()
       else handle.setDefinition(definition)
     },
+    setTimeline: (timeline, timelineOptions) => requireHandle().setTimeline(timeline, timelineOptions),
     setTracks: async tracks => {
       await ready
       return requireHandle().setTracks(tracks)
@@ -197,6 +243,75 @@ export const createAvatarEditor = (
       options = { ...options, definition }
       if (handle == null) render()
       else handle.setDefinition(definition)
+    },
+    update: nextOptions => {
+      options = { ...options, ...nextOptions }
+      render()
+    }
+  }
+}
+
+export const createAvatarAnimationPicker = (
+  element: HTMLElement,
+  initialOptions: AvatarAnimationPickerMountOptions
+): AvatarPickerMount<AvatarAnimationPickerMountOptions> => {
+  let options = initialOptions
+  let destroyed = false
+  const root = createRoot(element)
+  const render = () => {
+    if (destroyed) return
+    root.render(createElement(AvatarAnimationPicker, {
+      ...options,
+      onChange: option => dispatch(element, 'animationchange', {
+        animation: option.animation,
+        option
+      }),
+      onOptionDragStart: (option, event) => {
+        event.dataTransfer.setData(
+          'application/vnd.oneworks.avatar-animation+json',
+          JSON.stringify({ id: option.id, label: option.label })
+        )
+        dispatch(element, 'animationdragstart', { option })
+      }
+    }))
+  }
+  render()
+  return {
+    destroy: () => {
+      if (destroyed) return
+      destroyed = true
+      root.unmount()
+    },
+    update: nextOptions => {
+      options = { ...options, ...nextOptions }
+      render()
+    }
+  }
+}
+
+export const createAvatarPresetPicker = (
+  element: HTMLElement,
+  initialOptions: AvatarPresetPickerMountOptions
+): AvatarPickerMount<AvatarPresetPickerMountOptions> => {
+  let options = initialOptions
+  let destroyed = false
+  const root = createRoot(element)
+  const render = () => {
+    if (destroyed) return
+    root.render(createElement(AvatarPresetPicker, {
+      ...options,
+      onChange: option => dispatch(element, 'avatarpresetchange', {
+        definition: option.definition,
+        option
+      })
+    }))
+  }
+  render()
+  return {
+    destroy: () => {
+      if (destroyed) return
+      destroyed = true
+      root.unmount()
     },
     update: nextOptions => {
       options = { ...options, ...nextOptions }

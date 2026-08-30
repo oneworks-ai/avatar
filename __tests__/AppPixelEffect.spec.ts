@@ -17,7 +17,7 @@ const flushEffects = () => act(async () => {
 })
 
 const openPixelControls = () => {
-  const effectsTab = host.querySelector<HTMLButtonElement>('#avatar-controls-tab-effects')
+  const effectsTab = host.querySelector<HTMLButtonElement>('#avatar-controls-right-tab-effects')
   act(() => effectsTab?.click())
   return host.querySelector<HTMLButtonElement>('[role="switch"][aria-label="Pixel style"]')
 }

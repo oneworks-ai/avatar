@@ -516,11 +516,13 @@ const CONTROL_TABS: readonly { id: AvatarControlTab; label: string }[] = [
   { id: 'animation', label: 'Animation' }
 ]
 
-const LEFT_CONTROL_TABS = CONTROL_TABS.filter(tab => (
-  tab.id === 'build' || tab.id === 'body' || tab.id === 'animation'
-))
+const LEFT_CONTROL_TABS: readonly { id: AvatarControlTab; label: string }[] = [
+  { id: 'build', label: 'Build' },
+  { id: 'animation', label: 'Animation' },
+  { id: 'body', label: 'Body' }
+]
 const RIGHT_CONTROL_TABS = CONTROL_TABS.filter(tab => (
-  tab.id === 'body' || tab.id === 'style' || tab.id === 'decals' || tab.id === 'effects' || tab.id === 'animation'
+  tab.id === 'body' || tab.id === 'style' || tab.id === 'effects' || tab.id === 'animation'
 ))
 
 type AvatarTreeSelection =
@@ -1226,6 +1228,8 @@ export function AvatarControls({
   const [buildDetailPage, setBuildDetailPage] = useState<AvatarBuildDetailPage | null>(null)
   const [effectDetailPage, setEffectDetailPage] = useState<AvatarEffectDetailPage | null>(null)
   const [styleDetailPage, setStyleDetailPage] = useState<AvatarStyleDetailPage | null>(null)
+  const [surfaceDecalDetailId, setSurfaceDecalDetailId] = useState<string | null>(null)
+  const surfaceDecalDetailOpen = surfaceDecalDetailId != null
   const [faceAdvancedOpen, setFaceAdvancedOpen] = useState(false)
   const [highlightAdvancedOpen, setHighlightAdvancedOpen] = useState(false)
   const [avatarTreeContextMenu, setAvatarTreeContextMenu] = useState<AvatarTreeContextMenu | null>(null)
@@ -1259,8 +1263,11 @@ export function AvatarControls({
   useEffect(() => setSeedDraft(seed), [seed])
 
   useEffect(() => {
-    if (activeTab === 'build' || activeTab === 'body') setLeftActiveTab(activeTab)
-    if (activeTab === 'body' || activeTab === 'style' || activeTab === 'decals' || activeTab === 'effects' || activeTab === 'animation') {
+    if (activeTab === 'build' || activeTab === 'body' || activeTab === 'animation') {
+      setLeftActiveTab(activeTab)
+    }
+    if (activeTab === 'decals') setRightActiveTab('style')
+    if (activeTab === 'body' || activeTab === 'style' || activeTab === 'effects' || activeTab === 'animation') {
       setRightActiveTab(activeTab)
       if (activeTab !== 'effects') setEffectDetailPage(null)
     }
@@ -1292,18 +1299,28 @@ export function AvatarControls({
   }, [avatarTreeContextMenu])
 
   useEffect(() => {
-    if (buildDetailPage == null && effectDetailPage == null && styleDetailPage == null && !faceAdvancedOpen) return
+    if (
+      buildDetailPage == null && effectDetailPage == null && styleDetailPage == null &&
+      !surfaceDecalDetailOpen && !faceAdvancedOpen
+    ) return
     const handleKeyDown = (event: globalThis.KeyboardEvent) => {
       if (event.key !== 'Escape') return
       setBuildDetailPage(null)
       setEffectDetailPage(null)
       setPresetBrowser(null)
       setStyleDetailPage(null)
+      setSurfaceDecalDetailId(null)
       setFaceAdvancedOpen(false)
     }
     document.addEventListener('keydown', handleKeyDown)
     return () => document.removeEventListener('keydown', handleKeyDown)
-  }, [buildDetailPage, effectDetailPage, faceAdvancedOpen, styleDetailPage])
+  }, [buildDetailPage, effectDetailPage, faceAdvancedOpen, styleDetailPage, surfaceDecalDetailOpen])
+
+  useEffect(() => {
+    if (surfaceDecalDetailId == null) return
+    const selectedDecalExists = surfaceDecals.some(decal => decal.id === surfaceDecalDetailId)
+    if (coatPattern.enabled || !selectedDecalExists) setSurfaceDecalDetailId(null)
+  }, [coatPattern.enabled, surfaceDecalDetailId, surfaceDecals])
 
   useEffect(() => {
     if (!rightHeaderActionsOpen) return
@@ -1796,7 +1813,9 @@ export function AvatarControls({
   const selectedAvatarTreePart = avatarTreeSelection.kind === 'part'
     ? entityParts.find(part => part.id === avatarTreeSelection.id) ?? null
     : null
-  const editingSurfaceDecal = surfaceDecals.find(decal => decal.id === selectedSurfaceDecalId) ?? null
+  const editingSurfaceDecal = surfaceDecals.find(
+    decal => decal.id === (surfaceDecalDetailId ?? selectedSurfaceDecalId)
+  ) ?? null
   const pendingPalette = AVATAR_PALETTES.find(palette => palette.id === pendingPaletteId) ?? null
   const showOverallStyleControls = selectedEntityPart == null || selectedEntityPart.face
   const supportsCoatPattern = entityPreset === 'cat' || entityPreset === 'dog' || entityPreset === 'rabbit' ||
@@ -2508,7 +2527,10 @@ export function AvatarControls({
         aria-label={t('Shape node tree')}
         onContextMenu={event => openAvatarTreeContextMenu(event, { kind: 'root' })}
       >
-        <div className='avatar-controls__node-tree-row avatar-controls__node-tree-row--root'>
+        <div
+          className='avatar-controls__node-tree-row avatar-controls__node-tree-row--root'
+          data-selected={avatarTreeSelection.kind === 'root'}
+        >
           <button
             type='button'
             role='treeitem'
@@ -2528,6 +2550,7 @@ export function AvatarControls({
             <div key={group.id} className='avatar-controls__node-tree-group' role='group'>
               <div
                 className='avatar-controls__node-tree-row avatar-controls__node-tree-row--group'
+                data-selected={avatarTreeSelection.kind === 'group' && avatarTreeSelection.id === group.id}
                 onContextMenu={event => openAvatarTreeContextMenu(event, groupSelection)}
               >
                 <button
@@ -2564,6 +2587,7 @@ export function AvatarControls({
                       <div
                         key={part.id}
                         className='avatar-controls__node-tree-row avatar-controls__node-tree-row--part'
+                        data-selected={avatarTreeSelection.kind === 'part' && avatarTreeSelection.id === part.id}
                         onContextMenu={event => openAvatarTreeContextMenu(event, partSelection)}
                       >
                         <button
@@ -2998,6 +3022,7 @@ export function AvatarControls({
       else {
         setRightActiveTab(tab)
         setEffectDetailPage(null)
+        setSurfaceDecalDetailId(null)
         setRightHeaderActionsOpen(false)
       }
       onTabChange(tab)
@@ -3045,8 +3070,12 @@ export function AvatarControls({
             </svg>
           </button>
         )}
-        <div className='avatar-controls__tabs' role='tablist'
-          aria-label={t(side === 'left' ? 'Avatar resources' : 'Avatar details')}>
+        <div
+          className='avatar-controls__tabs'
+          role='tablist'
+          aria-label={t(side === 'left' ? 'Avatar resources' : 'Avatar details')}
+          style={{ '--avatar-control-tab-count': tabs.length } as CSSProperties}
+        >
           {tabs.map(tab => (
             <button
               key={tab.id}
@@ -3370,6 +3399,7 @@ export function AvatarControls({
                                 if (event.key === 'Enter') event.currentTarget.blur()
                                 if (event.key === 'Escape') {
                                   event.preventDefault()
+                                  event.stopPropagation()
                                   setSeedDraft(seed)
                                 }
                               }}
@@ -4205,23 +4235,60 @@ export function AvatarControls({
           )
           : null}
 
-        {panelTab === 'decals'
+        {panelTab === 'style' && styleDetailPage == null
           ? (
             <>
-              <div className='avatar-controls__field-group'>
-                <div className='avatar-controls__field-header'>
-                  <span className='avatar-controls__label'>{t('Surface decals')}</span>
-                  <div className='avatar-controls__field-actions'>
-                    {coatPattern.enabled
-                      ? null
-                      : (
-                        <button className='avatar-controls__inline-action' type='button' onClick={onAddSurfaceDecal}>
-                          {t('Add decal')}
-                        </button>
-                      )}
-                  </div>
-                </div>
-                {coatPattern.enabled || surfaceDecals.length === 0
+              <section
+                className={surfaceDecalDetailOpen
+                  ? 'avatar-controls__build-detail avatar-controls__style-detail'
+                  : 'avatar-controls__field-group avatar-controls__overview-card'}
+                aria-label={t('Surface decals')}
+              >
+                {surfaceDecalDetailOpen
+                  ? (
+                    <header className='avatar-controls__build-detail-header'>
+                      <button
+                        type='button'
+                        aria-label={t('Back to Style overview')}
+                        title={t('Back to Style overview')}
+                        onClick={() => setSurfaceDecalDetailId(null)}
+                      >
+                        <svg viewBox='0 0 20 20' aria-hidden='true'>
+                          <path d='m12.5 4.5-5.5 5.5 5.5 5.5M7 10h8' />
+                        </svg>
+                      </button>
+                      <div>
+                        <strong>{t(editingSurfaceDecal?.label ?? 'Surface decal')}</strong>
+                        <span>{t('Advanced options')}</span>
+                      </div>
+                    </header>
+                    )
+                  : (
+                    <div className='avatar-controls__field-header'>
+                      <span className='avatar-controls__label'>
+                        <ControlIcon name='decals' />
+                        {t('Surface decals')}
+                      </span>
+                      <div className='avatar-controls__field-actions'>
+                        {coatPattern.enabled
+                          ? null
+                          : (
+                            <button
+                              className='avatar-controls__inline-action avatar-controls__inline-action--icon'
+                              type='button'
+                              aria-label={t('Add decal')}
+                              title={t('Add decal')}
+                              onClick={onAddSurfaceDecal}
+                            >
+                              <svg viewBox='0 0 20 20' aria-hidden='true'>
+                                <path d='M10 4v12M4 10h12' />
+                              </svg>
+                            </button>
+                          )}
+                      </div>
+                    </div>
+                    )}
+                {surfaceDecalDetailOpen || coatPattern.enabled || surfaceDecals.length === 0
                   ? null
                   : (
                     <div className='avatar-controls__decal-list' role='listbox' aria-label={t('Surface decals')}>
@@ -4236,29 +4303,25 @@ export function AvatarControls({
                             type='button'
                             role='option'
                             aria-selected={decal.id === selectedSurfaceDecalId}
-                            onClick={() => onSelectSurfaceDecal(decal.id)}
+                            onClick={() => {
+                              onSelectSurfaceDecal(decal.id)
+                              setSurfaceDecalDetailId(decal.id)
+                            }}
                           >
                             <span style={{ background: decal.color }} />
                             <span className='avatar-controls__decal-label'>{t(decal.label)}</span>
-                          </button>
-                          <button
-                            className='avatar-controls__decal-remove'
-                            type='button'
-                            aria-label={`${t('Delete decal')}: ${t(decal.label)}`}
-                            title={t('Delete decal')}
-                            onClick={() => onDeleteSurfaceDecal(decal.id)}
-                          >
-                            <svg viewBox='0 0 16 16' aria-hidden='true'>
-                              <path d='m4.5 4.5 7 7m0-7-7 7' />
+                            <svg className='avatar-controls__decal-option-arrow' viewBox='0 0 16 16' aria-hidden='true'>
+                              <path d='m6 3.5 4.5 4.5L6 12.5' />
                             </svg>
                           </button>
                         </div>
                       ))}
                     </div>
                   )}
-                {editingSurfaceDecal == null || coatPattern.enabled
+                {!surfaceDecalDetailOpen || editingSurfaceDecal == null || coatPattern.enabled
                   ? null
                   : (
+                    <div className='avatar-controls__build-detail-body avatar-controls__style-detail-body'>
                     <div className='avatar-controls__decal-editor'>
                       <label className='avatar-controls__select-field'>
                         <span>{t('Target part')}</span>
@@ -4397,18 +4460,22 @@ export function AvatarControls({
                       <button
                         className='avatar-controls__danger-action'
                         type='button'
-                        onClick={() => onDeleteSurfaceDecal(editingSurfaceDecal.id)}
+                        onClick={() => {
+                          setSurfaceDecalDetailId(null)
+                          onDeleteSurfaceDecal(editingSurfaceDecal.id)
+                        }}
                       >
                         {t('Delete decal')}
                       </button>
                     </div>
+                    </div>
                   )}
-              </div>
+              </section>
             </>
           )
           : null}
 
-        {panelTab === 'style'
+        {panelTab === 'style' && !surfaceDecalDetailOpen
           ? styleDetailPage == null
             ? (
               <>

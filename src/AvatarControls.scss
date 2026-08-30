@@ -234,18 +234,13 @@
   &__tabs {
     display: grid;
     min-width: 0;
-    grid-template-columns: repeat(3, minmax(0, 1fr));
+    grid-template-columns: repeat(var(--avatar-control-tab-count, 1), minmax(0, 1fr));
     flex: 1 1 auto;
     overflow: hidden;
     border: 1px solid var(--border-color);
     border-radius: 8px;
     padding: 3px;
     background: var(--bg-color);
-  }
-
-  &--right &__tabs {
-    flex: 1 1 auto;
-    grid-template-columns: repeat(5, minmax(34px, 1fr));
   }
 
   &__context-title {
@@ -1432,6 +1427,23 @@
 
   &__inline-action {
     color: var(--primary-text-color);
+
+    &--icon {
+      display: grid;
+      width: 25px;
+      height: 25px;
+      place-items: center;
+      padding: 0;
+
+      svg {
+        width: 13px;
+        height: 13px;
+        fill: none;
+        stroke: currentColor;
+        stroke-linecap: round;
+        stroke-width: 1.4;
+      }
+    }
   }
 
   &__danger-action {
@@ -1448,14 +1460,11 @@
 
   &__decal-list {
     display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-template-columns: minmax(0, 1fr);
     gap: 6px;
-    margin-right: 6px;
   }
 
   &__decal-item {
-    display: grid;
-    grid-template-columns: minmax(0, 1fr) 30px;
     min-width: 0;
     overflow: hidden;
     border: 1px solid var(--border-color);
@@ -1480,6 +1489,8 @@
 
   &__decal-option {
     display: flex;
+    width: 100%;
+    min-height: 42px;
     align-items: center;
     gap: 8px;
     padding: 8px;
@@ -1501,9 +1512,21 @@
 
   &__decal-label {
     min-width: 0;
+    flex: 1 1 auto;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
+  }
+
+  &__decal-option-arrow {
+    width: 16px;
+    height: 16px;
+    flex: 0 0 auto;
+    fill: none;
+    stroke: currentColor;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+    stroke-width: 1.5;
   }
 
   &__decal-remove {
@@ -1821,6 +1844,30 @@
       }
     }
 
+    &[data-selected='true'] {
+      background: var(--primary-soft-bg);
+      color: var(--primary-text-color);
+
+      > button[role='treeitem'],
+      > .avatar-controls__node-tree-disclosure,
+      > .avatar-controls__node-tree-more {
+        color: inherit;
+      }
+
+      > button[role='treeitem'][aria-selected='true'] {
+        background: transparent;
+
+        &:hover {
+          background: transparent;
+        }
+
+        &:focus-visible {
+          background: transparent;
+          box-shadow: inset 0 0 0 1px color-mix(in srgb, currentColor 40%, transparent);
+        }
+      }
+    }
+
     &--group {
       grid-template-columns: 22px minmax(0, 1fr) 28px;
       margin-top: 3px;
@@ -1871,6 +1918,8 @@
     stroke-width: 1.6;
     transition: transform .14s ease;
   }
+
+  &__node-tree-more svg { fill: currentColor; }
 
   &__node-tree-disclosure[data-expanded='true'] svg { transform: rotate(90deg); }
 
@@ -2374,12 +2423,18 @@
     justify-content: space-between;
     gap: 0;
     overflow: hidden;
+
+    > button {
+      width: 32px;
+      height: 32px;
+      flex: 0 0 32px;
+    }
   }
 
   &__style-more {
-    width: 42px;
-    height: 42px;
-    flex: 0 0 42px;
+    width: 32px;
+    height: 32px;
+    flex: 0 0 32px;
   }
 
   &__swatch {
@@ -2791,9 +2846,9 @@
     overflow: hidden;
 
     > button {
-      width: 42px;
-      height: 42px;
-      flex: 0 0 42px;
+      width: 32px;
+      height: 32px;
+      flex: 0 0 32px;
     }
   }
 
@@ -2844,8 +2899,8 @@
 
 @container avatar-controls-right (max-width: 440px) {
   .avatar-controls__tabs {
-    flex: 0 0 auto;
-    grid-template-columns: repeat(5, 34px);
+    flex: 1 1 auto;
+    grid-template-columns: repeat(var(--avatar-control-tab-count, 1), minmax(34px, 1fr));
   }
 
   .avatar-controls__header-actions-toggle {

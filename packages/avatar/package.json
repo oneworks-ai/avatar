@@ -1,6 +1,6 @@
 {
   "name": "@oneworks/avatar",
-  "version": "1.0.0-rc.7",
+  "version": "1.0.0-rc.8",
   "description": "Framework-neutral OneWorks 3D Avatar definitions, catalog, and animation runtime",
   "type": "module",
   "license": "MIT",

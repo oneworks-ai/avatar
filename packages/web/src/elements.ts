@@ -3,6 +3,8 @@ import type {
   AvatarAnimationClip,
   AvatarAnimationLibrary,
   AvatarAnimationRef,
+  AvatarAnimationTimeline,
+  AvatarAnimationTimelinePresetResolver,
   AvatarDefinition
 } from '@oneworks/avatar'
 
@@ -19,6 +21,11 @@ export class OneWorksAvatarElement extends HTMLElementBase {
   #animationLibraries: readonly AvatarAnimationLibrary[] = []
   #definition: AvatarDefinition = createDefaultAvatarDefinition()
   #mount: AvatarMount | null = null
+  #resolveTimelinePreset: AvatarAnimationTimelinePresetResolver | undefined
+  #timeline: AvatarAnimationTimeline | null = null
+  #timelineLoop = false
+  #timelineSpeed = 1
+  #timelineTimeMs = 0
 
   get animation() {
     return this.#animation
@@ -33,6 +40,46 @@ export class OneWorksAvatarElement extends HTMLElementBase {
   }
   set animationLibraries(value) {
     this.#animationLibraries = value
+    this.#update()
+  }
+
+  get timeline() {
+    return this.#timeline
+  }
+  set timeline(value) {
+    this.#timeline = value
+    this.#update()
+  }
+
+  get resolveTimelinePreset() {
+    return this.#resolveTimelinePreset
+  }
+  set resolveTimelinePreset(value) {
+    this.#resolveTimelinePreset = value
+    this.#update()
+  }
+
+  get timelineLoop() {
+    return this.#timelineLoop
+  }
+  set timelineLoop(value) {
+    this.#timelineLoop = value
+    this.#update()
+  }
+
+  get timelineSpeed() {
+    return this.#timelineSpeed
+  }
+  set timelineSpeed(value) {
+    this.#timelineSpeed = value
+    this.#update()
+  }
+
+  get timelineTimeMs() {
+    return this.#timelineTimeMs
+  }
+  set timelineTimeMs(value) {
+    this.#timelineTimeMs = value
     this.#update()
   }
 
@@ -80,6 +127,17 @@ export class OneWorksAvatarElement extends HTMLElementBase {
   setTracks(tracks: Parameters<AvatarMount['setTracks']>[0]) {
     return this.#requireMount().setTracks(tracks)
   }
+  setTimeline(
+    timeline: Parameters<AvatarMount['setTimeline']>[0],
+    options?: Parameters<AvatarMount['setTimeline']>[1]
+  ) {
+    this.#timeline = timeline
+    if (options?.loop != null) this.#timelineLoop = options.loop
+    if (options?.resolvePreset != null) this.#resolveTimelinePreset = options.resolvePreset
+    if (options?.speed != null) this.#timelineSpeed = options.speed
+    if (options?.timeMs != null) this.#timelineTimeMs = options.timeMs
+    return this.#requireMount().setTimeline(timeline, options)
+  }
   stop(options?: Parameters<AvatarMount['stop']>[0]) {
     this.#requireMount().stop(options)
   }
@@ -95,7 +153,12 @@ export class OneWorksAvatarElement extends HTMLElementBase {
       autoplay: readBooleanAttribute(this, 'autoplay'),
       definition: this.#definition,
       interactive: readBooleanAttribute(this, 'interactive'),
-      theme: theme === 'dark' || theme === 'light' ? theme : 'system'
+      resolveTimelinePreset: this.#resolveTimelinePreset,
+      theme: theme === 'dark' || theme === 'light' ? theme : 'system',
+      timeline: this.#timeline,
+      timelineLoop: this.#timelineLoop,
+      timelineSpeed: this.#timelineSpeed,
+      timelineTimeMs: this.#timelineTimeMs
     }
   }
 

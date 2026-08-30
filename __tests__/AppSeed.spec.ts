@@ -70,9 +70,14 @@ const openRightTab = async (tab: 'body' | 'effects' | 'style') => {
   await flushEffects()
 }
 
-const openBuildDetail = async (page: 'coat-pattern' | 'seed') => {
+const openBuildDetail = async (page: 'coat-pattern' | 'parameters' | 'seed') => {
   const id = `avatar-controls-build-detail-${page}`
   if (host.querySelector(`#${id}`) != null) return
+  const back = host.querySelector<HTMLButtonElement>('[aria-label="Back to Build overview"]')
+  if (back != null) {
+    act(() => back.click())
+    await flushEffects()
+  }
   act(() => host.querySelector<HTMLButtonElement>('#avatar-controls-left-tab-build')?.click())
   await flushEffects()
   act(() => host.querySelector<HTMLButtonElement>(`[aria-controls="${id}"]`)?.click())
@@ -86,10 +91,47 @@ const closeBuildDetail = async () => {
   await flushEffects()
 }
 
+const selectBreed = async (selector: string) => {
+  await closeBuildDetail()
+  let button = host.querySelector<HTMLButtonElement>(selector)
+  if (button == null) {
+    const attribute = selector.match(/^\[([^=]+)=/)?.[1]
+    const sample = attribute == null
+      ? null
+      : host.querySelector<HTMLElement>(`[${attribute}]`)
+    act(() => sample?.closest('section')?.querySelector<HTMLButtonElement>('[aria-label="More presets"]')?.click())
+    await flushEffects()
+    button = host.querySelector<HTMLButtonElement>(selector)
+  }
+  act(() => button?.click())
+  await flushEffects()
+}
+
+const openStyleDetail = async (page: 'camera-background' | 'palette') => {
+  const id = `avatar-controls-style-detail-${page}`
+  if (host.querySelector(`#${id}`) != null) return
+  act(() => host.querySelector<HTMLButtonElement>('#avatar-controls-right-tab-style')?.click())
+  await flushEffects()
+  const back = host.querySelector<HTMLButtonElement>('[aria-label="Back to Style overview"]')
+  if (back != null) {
+    act(() => back.click())
+    await flushEffects()
+  }
+  const label = page === 'palette' ? 'More Palette' : 'More Camera background'
+  act(() => host.querySelector<HTMLButtonElement>(`[aria-label="${label}"]`)?.click())
+  await flushEffects()
+}
+
+const restoreSavedPreset = async () => {
+  await closeBuildDetail()
+  act(() => host.querySelector<HTMLButtonElement>('[aria-label^="Restore preset saved"]')?.click())
+  await flushEffects()
+}
+
 const openFaceAdvanced = async () => {
   await closeBuildDetail()
-  if (host.querySelector('#avatar-controls-face-advanced') != null) return
-  act(() => host.querySelector<HTMLButtonElement>('[aria-controls="avatar-controls-face-advanced"]')?.click())
+  if (host.querySelector('#avatar-controls-build-detail-face') != null) return
+  act(() => host.querySelector<HTMLButtonElement>('[aria-controls="avatar-controls-build-detail-face"]')?.click())
   await flushEffects()
 }
 
@@ -246,13 +288,7 @@ describe('App Seed authoring', () => {
 
   it('serializes the Mixed signal preset as independently vertical and horizontal eyes', async () => {
     await renderApp()
-    act(() => host.querySelector<HTMLButtonElement>(
-      '[aria-label="Face presets"] [aria-label="More presets"]'
-    )?.click())
-    await flushEffects()
-    act(() => Array.from(host.querySelectorAll<HTMLButtonElement>('button'))
-      .find(button => button.getAttribute('aria-label') === 'Mixed signal')?.click())
-    await flushEffects()
+    await selectFacePreset('Mixed signal')
 
     const params = new URLSearchParams(window.location.search)
     expect(Number(params.get('eyeLeftH'))).toBeGreaterThan(Number(params.get('eyeLeftW')))
@@ -378,7 +414,7 @@ describe('App Seed authoring', () => {
       removeEventListener: vi.fn()
     })))
     await renderApp()
-    await openBuildDetail('seed')
+    await openBuildDetail('parameters')
 
     act(() => host.querySelector<HTMLButtonElement>('[aria-label="Follow Seed: View composition"]')?.click())
     await flushEffects()
@@ -411,7 +447,7 @@ describe('App Seed authoring', () => {
     const requestAnimationFrame = vi.spyOn(window, 'requestAnimationFrame')
     await renderApp()
     requestAnimationFrame.mockClear()
-    await openBuildDetail('seed')
+    await openBuildDetail('parameters')
 
     act(() => host.querySelector<HTMLButtonElement>('[aria-label="Follow Seed: View composition"]')?.click())
     await flushEffects()
@@ -621,8 +657,7 @@ describe('App Seed authoring', () => {
       expect(params.get('cameraBg')).toBe(scene.cameraBackground)
       expect(params.get('cameraFrame')).toBe(scene.cameraFrame)
 
-      act(() => host.querySelector<HTMLButtonElement>(`[data-animal-breed="${breed}"]`)?.click())
-      await flushEffects()
+      await selectBreed(`[data-animal-breed="${breed}"]`)
       params = new URLSearchParams(window.location.search)
       expect(params.get('breed')).toBe(breed)
       expect(Number(params.get('yaw'))).toBeCloseTo(scene.viewState.yaw, 4)
@@ -666,8 +701,7 @@ describe('App Seed authoring', () => {
       window.history.replaceState(null, '', `/?entity=lion&breed=${breed}&seed=v1-${breed}-selected`)
       await renderApp()
 
-      act(() => host.querySelector<HTMLButtonElement>(`[data-animal-breed="${breed}"]`)?.click())
-      await flushEffects()
+      await selectBreed(`[data-animal-breed="${breed}"]`)
 
       const params = new URLSearchParams(window.location.search)
       expect(params.get('breed')).toBe(breed)
@@ -722,8 +756,7 @@ describe('App Seed authoring', () => {
     )
     await renderApp()
 
-    act(() => host.querySelector<HTMLButtonElement>('[data-animal-breed="white-lion"]')?.click())
-    await flushEffects()
+    await selectBreed('[data-animal-breed="white-lion"]')
 
     const params = new URLSearchParams(window.location.search)
     expect(params.get('breed')).toBe('white-lion')
@@ -738,8 +771,7 @@ describe('App Seed authoring', () => {
   it('applies a Cat type as a deterministic Seed constraint profile', async () => {
     window.history.replaceState(null, '', '/?entity=cat&seed=v1-siamese-a')
     await renderApp()
-    act(() => host.querySelector<HTMLButtonElement>('[data-cat-breed="siamese"]')?.click())
-    await flushEffects()
+    await selectBreed('[data-cat-breed="siamese"]')
 
     const selected = new URLSearchParams(window.location.search)
     expect(selected.get('breed')).toBe('siamese')
@@ -786,8 +818,7 @@ describe('App Seed authoring', () => {
     )
     await renderApp()
 
-    act(() => host.querySelector<HTMLButtonElement>('[data-cat-breed="siamese"]')?.click())
-    await flushEffects()
+    await selectBreed('[data-cat-breed="siamese"]')
 
     const selected = new URLSearchParams(window.location.search)
     const seededFields = selected.get('seedFields')?.split(',') ?? []
@@ -801,8 +832,7 @@ describe('App Seed authoring', () => {
   it('applies a Dog type as a deterministic constrained profile with Dog-only ear fields', async () => {
     window.history.replaceState(null, '', '/?entity=dog&seed=v1-husky-a')
     await renderApp()
-    act(() => host.querySelector<HTMLButtonElement>('[data-dog-breed="husky"]')?.click())
-    await flushEffects()
+    await selectBreed('[data-dog-breed="husky"]')
 
     const selected = new URLSearchParams(window.location.search)
     expect(selected.get('entity')).toBe('dog')
@@ -841,8 +871,7 @@ describe('App Seed authoring', () => {
   it('applies a Rabbit type as a deterministic constrained profile with Rabbit-only 3D size fields', async () => {
     window.history.replaceState(null, '', '/?entity=rabbit&seed=v1-holland-lop-a')
     await renderApp()
-    act(() => host.querySelector<HTMLButtonElement>('[data-rabbit-breed="holland-lop"]')?.click())
-    await flushEffects()
+    await selectBreed('[data-rabbit-breed="holland-lop"]')
 
     const selected = new URLSearchParams(window.location.search)
     expect(selected.get('entity')).toBe('rabbit')
@@ -886,9 +915,8 @@ describe('App Seed authoring', () => {
   it('applies a Bear type as a deterministic constrained profile with Bear-only 3D size fields', async () => {
     window.history.replaceState(null, '', '/?entity=bear&seed=v1-giant-panda-a')
     await renderApp()
-    act(() => host.querySelector<HTMLButtonElement>('[data-bear-breed="giant-panda"]')?.click())
-    await flushEffects()
-    await openBuildDetail('seed')
+    await selectBreed('[data-bear-breed="giant-panda"]')
+    await openBuildDetail('parameters')
 
     const selected = new URLSearchParams(window.location.search)
     expect(selected.get('entity')).toBe('bear')
@@ -1311,8 +1339,7 @@ describe('App Seed authoring', () => {
   ] as const)('applies and restores a constrained %s breed with species-specific Seed fields', async (species, id) => {
     window.history.replaceState(null, '', `/?entity=${species}&seed=v1-${id}-editor`)
     await renderApp()
-    act(() => host.querySelector<HTMLButtonElement>(`[data-animal-breed="${id}"]`)?.click())
-    await flushEffects()
+    await selectBreed(`[data-animal-breed="${id}"]`)
 
     const selected = new URLSearchParams(window.location.search)
     const template = getAvatarAnimalBreedTemplate(species, id)!
@@ -1365,9 +1392,8 @@ describe('App Seed authoring', () => {
   it('freezes a manually adjusted new-species head width while keeping breed colors and horns fixed', async () => {
     window.history.replaceState(null, '', '/?entity=deer&seed=v1-deer-manual')
     await renderApp()
-    act(() => host.querySelector<HTMLButtonElement>('[data-animal-breed="reindeer"]')?.click())
-    await flushEffects()
-    await openBuildDetail('seed')
+    await selectBreed('[data-animal-breed="reindeer"]')
+    await openBuildDetail('parameters')
 
     const slider = host.querySelector<HTMLInputElement>('[aria-label="Deer head width"]')
     expect(slider).not.toBeNull()
@@ -1402,7 +1428,7 @@ describe('App Seed authoring', () => {
     async (species, breed, label, queryKey, partPrefix, value) => {
       window.history.replaceState(null, '', `/?entity=${species}&breed=${breed}&seed=v1-${breed}-manual-feature`)
       await renderApp()
-      await openBuildDetail('seed')
+      await openBuildDetail('parameters')
 
       const slider = host.querySelector<HTMLInputElement>(`input[aria-label="${label}"]`)
       expect(slider).not.toBeNull()
@@ -1443,8 +1469,7 @@ describe('App Seed authoring', () => {
   it('clears previous-species dimensions and Seed followers when switching between new animal types', async () => {
     window.history.replaceState(null, '', '/?entity=hamster&seed=v1-species-switch')
     await renderApp()
-    act(() => host.querySelector<HTMLButtonElement>('[data-animal-breed="syrian-hamster"]')?.click())
-    await flushEffects()
+    await selectBreed('[data-animal-breed="syrian-hamster"]')
     expect(new URLSearchParams(window.location.search).get('seedFields')).toContain(
       AVATAR_ANIMAL_SPECIES_SEED_FIELDS.hamster.headWidth
     )
@@ -1517,8 +1542,7 @@ describe('App Seed authoring', () => {
   it('clears Bear-only Seed bindings and concrete dimensions when switching animal types', async () => {
     window.history.replaceState(null, '', '/?entity=bear&seed=v1-bear-switch')
     await renderApp()
-    act(() => host.querySelector<HTMLButtonElement>('[data-bear-breed="giant-panda"]')?.click())
-    await flushEffects()
+    await selectBreed('[data-bear-breed="giant-panda"]')
     expect(new URLSearchParams(window.location.search).get('bearHeadWidth')).not.toBeNull()
 
     await selectEntityPreset('dog')
@@ -1535,9 +1559,8 @@ describe('App Seed authoring', () => {
   it('freezes an independently edited Bear head width across Seed rerolls and URL reloads', async () => {
     window.history.replaceState(null, '', '/?entity=bear&seed=v1-giant-panda-head')
     await renderApp()
-    act(() => host.querySelector<HTMLButtonElement>('[data-bear-breed="giant-panda"]')?.click())
-    await flushEffects()
-    await openBuildDetail('seed')
+    await selectBreed('[data-bear-breed="giant-panda"]')
+    await openBuildDetail('parameters')
     expect(new URLSearchParams(window.location.search).get('seedFields')).toContain(AVATAR_SEED_FIELD.bearHeadWidth)
 
     act(() => {
@@ -1594,9 +1617,8 @@ describe('App Seed authoring', () => {
   it('clears Rabbit profile dimensions when switching directly from Rabbit to Cat', async () => {
     window.history.replaceState(null, '', '/?entity=rabbit&seed=v1-rabbit-cat-switch')
     await renderApp()
-    act(() => host.querySelector<HTMLButtonElement>('[data-rabbit-breed="lionhead-rabbit"]')?.click())
-    await flushEffects()
-    await openBuildDetail('seed')
+    await selectBreed('[data-rabbit-breed="lionhead-rabbit"]')
+    await openBuildDetail('parameters')
     expect(new URLSearchParams(window.location.search).get('rabbitHeadWidth')).not.toBeNull()
 
     const rabbit = new URLSearchParams(window.location.search)
@@ -1618,9 +1640,8 @@ describe('App Seed authoring', () => {
   it('freezes an independently edited Rabbit head width across Seed rerolls and URL reloads', async () => {
     window.history.replaceState(null, '', '/?entity=rabbit&seed=v1-lionhead-head')
     await renderApp()
-    act(() => host.querySelector<HTMLButtonElement>('[data-rabbit-breed="lionhead-rabbit"]')?.click())
-    await flushEffects()
-    await openBuildDetail('seed')
+    await selectBreed('[data-rabbit-breed="lionhead-rabbit"]')
+    await openBuildDetail('parameters')
 
     const selected = new URLSearchParams(window.location.search)
     expect(selected.get('seedFields')).toContain(AVATAR_SEED_FIELD.rabbitHeadWidth)
@@ -1664,9 +1685,8 @@ describe('App Seed authoring', () => {
   it('freezes an independently edited Dog head width across Seed rerolls and URL reloads', async () => {
     window.history.replaceState(null, '', '/?entity=dog&seed=v1-corgi-head')
     await renderApp()
-    act(() => host.querySelector<HTMLButtonElement>('[data-dog-breed="corgi"]')?.click())
-    await flushEffects()
-    await openBuildDetail('seed')
+    await selectBreed('[data-dog-breed="corgi"]')
+    await openBuildDetail('parameters')
 
     const selected = new URLSearchParams(window.location.search)
     expect(selected.get('seedFields')).toContain(AVATAR_SEED_FIELD.dogHeadWidth)
@@ -1745,8 +1765,7 @@ describe('App Seed authoring', () => {
   it('keeps Dog ears outside the head when its real part dimensions are edited and restored', async () => {
     window.history.replaceState(null, '', '/?entity=dog&seed=v1-corgi-part-dimensions')
     await renderApp()
-    act(() => host.querySelector<HTMLButtonElement>('[data-dog-breed="corgi"]')?.click())
-    await flushEffects()
+    await selectBreed('[data-dog-breed="corgi"]')
 
     await selectShapeNode('Primary')
 
@@ -1803,8 +1822,7 @@ describe('App Seed authoring', () => {
     expect(params.get('seedFields')).not.toContain(AVATAR_SEED_FIELD.catEarWidth)
     expect(params.get('seedFields')).not.toContain(AVATAR_SEED_FIELD.catEarHeight)
 
-    act(() => host.querySelector<HTMLButtonElement>('[data-dog-breed="husky"]')?.click())
-    await flushEffects()
+    await selectBreed('[data-dog-breed="husky"]')
     act(() => host.querySelector<HTMLButtonElement>('[aria-label="Generate random Seed"]')?.click())
     await flushEffects()
     params = new URLSearchParams(window.location.search)
@@ -1836,8 +1854,7 @@ describe('App Seed authoring', () => {
     expect(params.get('seedFields')).not.toContain(AVATAR_SEED_FIELD.dogHeadWidth)
     expect(params.get('seedFields')).not.toContain(AVATAR_SEED_FIELD.dogHeadHeight)
 
-    act(() => host.querySelector<HTMLButtonElement>('[data-cat-breed="russian-blue"]')?.click())
-    await flushEffects()
+    await selectBreed('[data-cat-breed="russian-blue"]')
     act(() => host.querySelector<HTMLButtonElement>('[aria-label="Generate random Seed"]')?.click())
     await flushEffects()
     params = new URLSearchParams(window.location.search)
@@ -1878,16 +1895,14 @@ describe('App Seed authoring', () => {
   it('cancels a Dog type without changing its concrete appearance', async () => {
     window.history.replaceState(null, '', '/?entity=dog&seed=v1-shiba-cancel')
     await renderApp()
-    act(() => host.querySelector<HTMLButtonElement>('[data-dog-breed="shiba-inu"]')?.click())
-    await flushEffects()
+    await selectBreed('[data-dog-breed="shiba-inu"]')
     const selected = new URLSearchParams(window.location.search)
     const concrete = {
       ears: selected.get('entityParts'),
       palette: selected.get('palette'),
       width: selected.get('coatLightPatchWidth')
     }
-    act(() => host.querySelector<HTMLButtonElement>('[data-dog-breed="shiba-inu"]')?.click())
-    await flushEffects()
+    await selectBreed('[data-dog-breed="shiba-inu"]')
     const cancelled = new URLSearchParams(window.location.search)
     expect(cancelled.get('breed')).toBeNull()
     expect(cancelled.get('entityParts')).toBe(concrete.ears)
@@ -1898,8 +1913,7 @@ describe('App Seed authoring', () => {
   it('locks Cow Cat colors and centered patch while its permitted patch size follows Seed', async () => {
     window.history.replaceState(null, '', '/?entity=cat&seed=v1-cow-profile')
     await renderApp()
-    act(() => host.querySelector<HTMLButtonElement>('[data-cat-breed="cow-cat"]')?.click())
-    await flushEffects()
+    await selectBreed('[data-cat-breed="cow-cat"]')
 
     const selected = new URLSearchParams(window.location.search)
     expect(selected.get('breed')).toBe('cow-cat')
@@ -1927,8 +1941,7 @@ describe('App Seed authoring', () => {
   it('keeps Black Cat coat-free and near-black while its constrained ear size follows Seed', async () => {
     window.history.replaceState(null, '', '/?entity=cat&seed=v1-black-profile')
     await renderApp()
-    act(() => host.querySelector<HTMLButtonElement>('[data-cat-breed="black-cat"]')?.click())
-    await flushEffects()
+    await selectBreed('[data-cat-breed="black-cat"]')
 
     const selected = new URLSearchParams(window.location.search)
     expect(selected.get('breed')).toBe('black-cat')
@@ -1946,8 +1959,7 @@ describe('App Seed authoring', () => {
     expect(rerolled.get('entity')).toBe('cat')
     expect(rerolled.get('palette')).toBe('black-cat')
     expect(rerolled.get('coat')).toBe('0')
-    expect(rerolled.get('seedFields')).toContain(AVATAR_SEED_FIELD.viewPose)
-    expect(rerolled.get('positionX')).not.toBe('0')
+    expect(rerolled.get('seedFields')).toBe(selected.get('seedFields'))
   })
 
   it('locks Cat identity when a Cat type replaces an entity Seed binding', async () => {
@@ -1959,8 +1971,7 @@ describe('App Seed authoring', () => {
     expect(new URLSearchParams(window.location.search).get('seedFields'))
       .toContain(AVATAR_SEED_FIELD.entityPreset)
 
-    act(() => host.querySelector<HTMLButtonElement>('[data-cat-breed="siamese"]')?.click())
-    await flushEffects()
+    await selectBreed('[data-cat-breed="siamese"]')
     const selected = new URLSearchParams(window.location.search)
     expect(selected.get('entity')).toBe('cat')
     expect(selected.get('seedFields')).not.toContain(AVATAR_SEED_FIELD.entityPreset)
@@ -1974,8 +1985,7 @@ describe('App Seed authoring', () => {
   it('cancels the current Cat type without changing its concrete appearance', async () => {
     window.history.replaceState(null, '', '/?entity=cat&seed=v1-siamese-cancel')
     await renderApp()
-    act(() => host.querySelector<HTMLButtonElement>('[data-cat-breed="siamese"]')?.click())
-    await flushEffects()
+    await selectBreed('[data-cat-breed="siamese"]')
 
     const selected = new URLSearchParams(window.location.search)
     const concrete = {
@@ -1984,8 +1994,7 @@ describe('App Seed authoring', () => {
       palette: selected.get('palette'),
       width: selected.get('coatLightPatchWidth')
     }
-    act(() => host.querySelector<HTMLButtonElement>('[data-cat-breed="siamese"]')?.click())
-    await flushEffects()
+    await selectBreed('[data-cat-breed="siamese"]')
 
     const cancelled = new URLSearchParams(window.location.search)
     expect(cancelled.get('breed')).toBeNull()
@@ -1999,11 +2008,8 @@ describe('App Seed authoring', () => {
   it('keeps the Cat type domain for remaining fields after a manual palette edit', async () => {
     window.history.replaceState(null, '', '/?entity=cat&seed=v1-orange-manual')
     await renderApp()
-    act(() => host.querySelector<HTMLButtonElement>('[data-cat-breed="orange-tabby"]')?.click())
-    await flushEffects()
-    await openRightTab('style')
-    act(() => host.querySelector<HTMLButtonElement>('[aria-controls="avatar-controls-palette-options"]')?.click())
-    await flushEffects()
+    await selectBreed('[data-cat-breed="orange-tabby"]')
+    await openStyleDetail('palette')
     act(() => host.querySelector<HTMLButtonElement>('[aria-label="Coral"]')?.click())
     await flushEffects()
     act(() => Array.from(host.querySelectorAll<HTMLButtonElement>('button'))
@@ -2015,8 +2021,7 @@ describe('App Seed authoring', () => {
     expect(manual.get('palette')).toBe('coral')
     expect(manual.get('seedFields')).not.toContain(AVATAR_SEED_FIELD.palette)
 
-    act(() => host.querySelector<HTMLButtonElement>('#avatar-controls-left-tab-build')?.click())
-    await flushEffects()
+    await openBuildDetail('seed')
     act(() => host.querySelector<HTMLButtonElement>('[aria-label="Generate random Seed"]')?.click())
     await flushEffects()
     const rerolled = new URLSearchParams(window.location.search)
@@ -2027,7 +2032,8 @@ describe('App Seed authoring', () => {
 
   it('replays a field deterministically and makes manual edits leave Seed control', async () => {
     await renderApp()
-    const faceSeed = host.querySelector<HTMLButtonElement>('[aria-label="Follow Seed: Face"]')
+    await closeBuildDetail()
+    let faceSeed = host.querySelector<HTMLButtonElement>('[aria-label="Follow Seed: Face"]')
     expect(faceSeed?.getAttribute('aria-checked')).toBe('false')
 
     act(() => faceSeed?.click())
@@ -2035,6 +2041,7 @@ describe('App Seed authoring', () => {
     const first = new URLSearchParams(window.location.search)
     expect(first.get('seedFields')).toContain('scene.face.preset')
 
+    await openBuildDetail('seed')
     const seedInput = host.querySelector<HTMLInputElement>('[aria-label="Current Seed"]')
     act(() => {
       const valueSetter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')?.set
@@ -2054,6 +2061,8 @@ describe('App Seed authoring', () => {
 
     const changedFace = ['eyeShape', 'eyeW', 'eyeH', 'eyeGap', 'nose', 'mouth'].map(key => changedSeed.get(key))
 
+    await closeBuildDetail()
+    faceSeed = host.querySelector<HTMLButtonElement>('[aria-label="Follow Seed: Face"]')
     act(() => faceSeed?.click())
     await flushEffects()
     act(() => faceSeed?.click())
@@ -2061,9 +2070,7 @@ describe('App Seed authoring', () => {
     const replayed = new URLSearchParams(window.location.search)
     expect(['eyeShape', 'eyeW', 'eyeH', 'eyeGap', 'nose', 'mouth'].map(key => replayed.get(key))).toEqual(changedFace)
 
-    const cute = host.querySelector<HTMLButtonElement>('[aria-label="Cute"]')
-    act(() => cute?.click())
-    await flushEffects()
+    await selectFacePreset('Cute')
     expect(new URLSearchParams(window.location.search).get('seedFields')).toBeNull()
     expect(faceSeed?.getAttribute('aria-checked')).toBe('false')
   })
@@ -2078,13 +2085,12 @@ describe('App Seed authoring', () => {
     }])
     await renderApp()
 
-    const restore = host.querySelector<HTMLButtonElement>('[aria-label^="Restore preset saved"]')
-    act(() => restore?.click())
-    await flushEffects()
-
-    expect(host.querySelector<HTMLInputElement>('[aria-label="Current Seed"]')?.value).toBe('v1-preset')
-    expect(host.querySelector('[aria-label="Follow Seed: Face"]')?.getAttribute('aria-checked')).toBe('true')
+    await restoreSavedPreset()
     expect(new URLSearchParams(window.location.search).get('seedFields')).toBe('scene.face.preset')
+    await openBuildDetail('seed')
+    expect(host.querySelector<HTMLInputElement>('[aria-label="Current Seed"]')?.value).toBe('v1-preset')
+    await closeBuildDetail()
+    expect(host.querySelector('[aria-label="Follow Seed: Face"]')?.getAttribute('aria-checked')).toBe('true')
   })
 
   it('restores a saved Bear profile, its real dimensions, and its Seed-following fields', async () => {
@@ -2097,8 +2103,7 @@ describe('App Seed authoring', () => {
     }])
     await renderApp()
 
-    act(() => host.querySelector<HTMLButtonElement>('[aria-label^="Restore preset saved"]')?.click())
-    await flushEffects()
+    await restoreSavedPreset()
     const restored = new URLSearchParams(window.location.search)
     expect(restored.get('entity')).toBe('bear')
     expect(restored.get('breed')).toBe('giant-panda')
@@ -2144,8 +2149,7 @@ describe('App Seed authoring', () => {
     }])
     await renderApp()
 
-    act(() => host.querySelector<HTMLButtonElement>('[aria-label^="Restore preset saved"]')?.click())
-    await flushEffects()
+    await restoreSavedPreset()
     const restored = new URLSearchParams(window.location.search)
     expect(restored.get('entity')).toBe(species)
     expect(restored.get('breed')).toBe(id)
@@ -2196,6 +2200,7 @@ describe('App Seed authoring', () => {
     )
     await renderApp()
 
+    await closeBuildDetail()
     const entitySeed = host.querySelector<HTMLButtonElement>('[aria-label="Follow Seed: Avatar type"]')
     act(() => entitySeed?.click())
     await flushEffects()
@@ -2215,7 +2220,7 @@ describe('App Seed authoring', () => {
       '/?seed=v1-stable&entity=dog&palette=white&seedFields=scene.entity.preset,scene.appearance.paletteId'
     )
     await renderApp()
-    await openRightTab('style')
+    await openStyleDetail('palette')
     const baseColor = host.querySelector<HTMLInputElement>('[aria-label="Base"]')
     act(() => {
       const valueSetter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')?.set
@@ -2317,6 +2322,7 @@ describe('App Seed authoring', () => {
   it('uses a natural default when first enabling a coat but preserves a manually fixed coral palette', async () => {
     window.history.replaceState(null, '', '/?seed=v1-natural-default&entity=cat')
     await renderApp()
+    await closeBuildDetail()
     const toggle = host.querySelector<HTMLButtonElement>('[aria-label="Coat pattern"]')
 
     act(() => toggle?.click())
@@ -2327,6 +2333,7 @@ describe('App Seed authoring', () => {
     root = createRoot(host)
     window.history.replaceState(null, '', '/?seed=v1-manual-coral&entity=cat&palette=coral')
     await renderApp()
+    await closeBuildDetail()
     const manualToggle = host.querySelector<HTMLButtonElement>('[aria-label="Coat pattern"]')
 
     act(() => manualToggle?.click())
@@ -2339,7 +2346,7 @@ describe('App Seed authoring', () => {
     const layoutSeed = host.querySelector<HTMLButtonElement>('[aria-label="Follow Seed: Pattern layout"]')
     act(() => layoutSeed?.click())
     await flushEffects()
-    await closeBuildDetail()
+    await openBuildDetail('seed')
     const seedInput = host.querySelector<HTMLInputElement>('[aria-label="Current Seed"]')
     act(() => {
       const valueSetter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')?.set
@@ -2370,7 +2377,7 @@ describe('App Seed authoring', () => {
     expect(new URLSearchParams(window.location.search).get('seedFields'))
       .toBe('scene.appearance.coatPattern.seed')
 
-    await closeBuildDetail()
+    await openBuildDetail('seed')
     const seedInput = host.querySelector<HTMLInputElement>('[aria-label="Current Seed"]')
     act(() => {
       const valueSetter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')?.set
@@ -2558,7 +2565,7 @@ describe('App Seed authoring', () => {
       ))
     })
     await flushEffects()
-    await openBuildDetail('seed')
+    await openBuildDetail('parameters')
 
     expect(onDefinitionChange).not.toHaveBeenCalled()
     expect(host.querySelector<HTMLInputElement>('[aria-label="Dog head width"]')?.value).toBe('124')
@@ -2606,7 +2613,7 @@ describe('App Seed authoring', () => {
 
     expect(onDefinitionChange).not.toHaveBeenCalled()
     expect(host.querySelector('[data-bear-breed="giant-panda"]')?.getAttribute('aria-pressed')).toBe('true')
-    await openBuildDetail('seed')
+    await openBuildDetail('parameters')
     expect(host.querySelector<HTMLInputElement>('[aria-label="Bear ear width"]')?.value)
       .toBe(String(resolved.bearEarWidth))
     expect(host.querySelector<HTMLInputElement>('[aria-label="Bear head width"]')?.value)
@@ -2675,7 +2682,7 @@ describe('App Seed authoring', () => {
 
     expect(onDefinitionChange).not.toHaveBeenCalled()
     expect(host.querySelector(`[data-animal-breed="${id}"]`)?.getAttribute('aria-pressed')).toBe('true')
-    await openBuildDetail('seed')
+    await openBuildDetail('parameters')
     const speciesLabel = species === 'guinea-pig'
       ? 'Guinea Pig'
       : `${species[0]!.toUpperCase()}${species.slice(1)}`

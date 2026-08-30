@@ -1,7 +1,7 @@
 import './style.scss'
 
 import { forwardRef, useCallback, useEffect, useImperativeHandle, useMemo, useRef, useState } from 'react'
-import type { CSSProperties, HTMLAttributes } from 'react'
+import type { CSSProperties, DragEvent, HTMLAttributes } from 'react'
 
 import {
   anchorAvatarAnimationClip,
@@ -12,14 +12,18 @@ import {
   resolveAvatarAnimationClip,
   resolveAvatarCoatPatternDecals,
   resolveAvatarAnimationFrame,
+  resolveAvatarAnimationTimelineFrame,
   resolveAvatarAnimationTracks,
-  resolveAvatarPaletteFromEntityParts
+  resolveAvatarPaletteFromEntityParts,
+  validateAvatarAnimationTimeline
 } from '@oneworks/avatar'
 import type {
   AvatarAnimationClip,
   AvatarAnimationLibrary,
   AvatarAnimationParameterValues,
   AvatarAnimationRef,
+  AvatarAnimationTimeline,
+  AvatarAnimationTimelinePresetResolver,
   AvatarDefinition
 } from '@oneworks/avatar'
 
@@ -36,6 +40,10 @@ export type {
   AvatarAnimationKeyframe,
   AvatarAnimationLibrary,
   AvatarAnimationRef,
+  AvatarAnimationTimeline,
+  AvatarAnimationTimelineClipInstance,
+  AvatarAnimationTimelinePresetResolver,
+  AvatarAnimationTimelineTrack,
   AvatarDefinition
 } from '@oneworks/avatar'
 
@@ -75,6 +83,14 @@ export interface AvatarTrackUpdate {
   readonly weight?: number
 }
 
+export interface AvatarTimelineOptions {
+  readonly loop?: boolean
+  readonly playing?: boolean
+  readonly resolvePreset?: AvatarAnimationTimelinePresetResolver
+  readonly speed?: number
+  readonly timeMs?: number
+}
+
 interface AvatarRuntimeTrack {
   readonly clip: AvatarAnimationClip
   elapsedBeforeStart: number
@@ -89,6 +105,17 @@ interface AvatarRuntimeTrack {
   weight: number
 }
 
+interface AvatarRuntimeTimeline {
+  elapsedBeforeStart: number
+  lastLoop: number
+  loop: boolean
+  playing: boolean
+  readonly resolvePreset?: AvatarAnimationTimelinePresetResolver
+  speed: number
+  startedAt: number
+  readonly timeline: AvatarAnimationTimeline
+}
+
 export interface AvatarHandle {
   capture(options: AvatarCaptureOptions): Promise<Blob>
   getDefinition(): AvatarDefinition
@@ -98,6 +125,7 @@ export interface AvatarHandle {
   resume(trackId?: string): void
   seek(timeMs: number, trackId?: string): void
   setDefinition(definition: AvatarDefinition): void
+  setTimeline(timeline: AvatarAnimationTimeline | null, options?: AvatarTimelineOptions): void
   setTracks(tracks: readonly AvatarTrackInput[]): Promise<void>
   stop(options?: { readonly reset?: boolean; readonly trackId?: string }): void
   updateTrack(trackId: string, update: AvatarTrackUpdate): void
@@ -114,7 +142,12 @@ export interface AvatarProps extends Omit<HTMLAttributes<HTMLDivElement>, 'child
   readonly onAnimationStart?: () => void
   readonly onDefinitionChange?: (definition: AvatarDefinition) => void
   readonly onError?: (error: Error) => void
+  readonly resolveTimelinePreset?: AvatarAnimationTimelinePresetResolver
   readonly theme?: AvatarTheme
+  readonly timeline?: AvatarAnimationTimeline | null
+  readonly timelineLoop?: boolean
+  readonly timelineSpeed?: number
+  readonly timelineTimeMs?: number
 }
 
 const resolveSystemTheme = () => (
@@ -142,8 +175,13 @@ export const Avatar = forwardRef<AvatarHandle, AvatarProps>(function Avatar({
   onAnimationStart,
   onDefinitionChange,
   onError,
+  resolveTimelinePreset,
   style,
   theme = 'system',
+  timeline = null,
+  timelineLoop = false,
+  timelineSpeed = 1,
+  timelineTimeMs = 0,
   ...divProps
 }, ref) {
   const defaultDefinitionRef = useRef<AvatarDefinition>()
@@ -161,6 +199,7 @@ export const Avatar = forwardRef<AvatarHandle, AvatarProps>(function Avatar({
   const containerRef = useRef<HTMLDivElement>(null)
   const frameRef = useRef<number>()
   const animationTracksRef = useRef<AvatarRuntimeTrack[]>([])
+  const animationTimelineRef = useRef<AvatarRuntimeTimeline | null>(null)
   const callbacksRef = useRef({ onAnimationEnd, onAnimationLoop, onAnimationStart, onError })
   callbacksRef.current = { onAnimationEnd, onAnimationLoop, onAnimationStart, onError }
   const libraries = useMemo(() =>
@@ -173,6 +212,7 @@ export const Avatar = forwardRef<AvatarHandle, AvatarProps>(function Avatar({
     if (frameRef.current != null) cancelAnimationFrame(frameRef.current)
     frameRef.current = undefined
     animationTracksRef.current = []
+    animationTimelineRef.current = null
     setCurrentDefinition(definition)
     setRenderFrame({ definition })
   }, [definition])
@@ -210,6 +250,20 @@ export const Avatar = forwardRef<AvatarHandle, AvatarProps>(function Avatar({
     track.elapsedBeforeStart + (track.playing ? (now - track.startedAt) * track.speed : 0)
   )
 
+  const resolveTimelineElapsed = (runtime: AvatarRuntimeTimeline, now: number) => (
+    runtime.elapsedBeforeStart + (runtime.playing ? (now - runtime.startedAt) * runtime.speed : 0)
+  )
+
+  const commitResolvedFrame = useCallback((frame: ReturnType<typeof resolveAvatarAnimationFrame>) => {
+    setRenderFrame({
+      auxiliaryParts: frame.auxiliaryParts,
+      auxiliaryShapes: frame.auxiliaryShapes,
+      definition: { ...currentDefinition, scene: frame.scene },
+      partShapeMorphs: frame.partShapeMorphs,
+      partTransforms: frame.partTransforms
+    })
+  }, [currentDefinition])
+
   const composeAndCommit = useCallback((now: number) => {
     const frame = resolveAvatarAnimationTracks(
       currentDefinition,
@@ -224,17 +278,49 @@ export const Avatar = forwardRef<AvatarHandle, AvatarProps>(function Avatar({
         weight: track.weight
       }))
     )
-    setRenderFrame({
-      auxiliaryParts: frame.auxiliaryParts,
-      auxiliaryShapes: frame.auxiliaryShapes,
-      definition: { ...currentDefinition, scene: frame.scene },
-      partShapeMorphs: frame.partShapeMorphs,
-      partTransforms: frame.partTransforms
-    })
+    commitResolvedFrame(frame)
     return frame
-  }, [currentDefinition])
+  }, [commitResolvedFrame, currentDefinition])
+
+  const composeTimelineAndCommit = useCallback((runtime: AvatarRuntimeTimeline, now: number) => {
+    const elapsedMs = resolveTimelineElapsed(runtime, now)
+    const timeMs = runtime.loop && runtime.timeline.durationMs > 0
+      ? elapsedMs % runtime.timeline.durationMs
+      : Math.min(elapsedMs, runtime.timeline.durationMs)
+    const frame = resolveAvatarAnimationTimelineFrame(
+      currentDefinition,
+      runtime.timeline,
+      timeMs,
+      runtime.resolvePreset
+    )
+    commitResolvedFrame(frame)
+    return { elapsedMs, frame }
+  }, [commitResolvedFrame, currentDefinition])
 
   const tick = useCallback((now: number) => {
+    const timelineRuntime = animationTimelineRef.current
+    if (timelineRuntime != null) {
+      if (!timelineRuntime.playing) {
+        frameRef.current = undefined
+        return
+      }
+      const { elapsedMs } = composeTimelineAndCommit(timelineRuntime, now)
+      const loop = timelineRuntime.timeline.durationMs > 0
+        ? Math.floor(elapsedMs / timelineRuntime.timeline.durationMs)
+        : 0
+      if (timelineRuntime.loop && loop > timelineRuntime.lastLoop) {
+        timelineRuntime.lastLoop = loop
+        callbacksRef.current.onAnimationLoop?.()
+      }
+      if (!timelineRuntime.loop && elapsedMs >= timelineRuntime.timeline.durationMs) {
+        timelineRuntime.elapsedBeforeStart = timelineRuntime.timeline.durationMs
+        timelineRuntime.playing = false
+        callbacksRef.current.onAnimationEnd?.()
+      }
+      if (timelineRuntime.playing) frameRef.current = requestAnimationFrame(tick)
+      else frameRef.current = undefined
+      return
+    }
     const tracks = animationTracksRef.current
     if (!tracks.some(track => track.playing)) {
       frameRef.current = undefined
@@ -257,15 +343,19 @@ export const Avatar = forwardRef<AvatarHandle, AvatarProps>(function Avatar({
     composeAndCommit(now)
     if (tracks.some(track => track.playing)) frameRef.current = requestAnimationFrame(tick)
     else frameRef.current = undefined
-  }, [composeAndCommit])
+  }, [composeAndCommit, composeTimelineAndCommit])
 
   const ensureFrame = useCallback(() => {
-    if (frameRef.current == null && animationTracksRef.current.some(track => track.playing)) {
+    if (
+      frameRef.current == null &&
+      (animationTimelineRef.current?.playing === true || animationTracksRef.current.some(track => track.playing))
+    ) {
       frameRef.current = requestAnimationFrame(tick)
     }
   }, [tick])
 
   const setTracks = useCallback(async (inputs: readonly AvatarTrackInput[]) => {
+    animationTimelineRef.current = null
     const now = performance.now()
     const previous = new Map(animationTracksRef.current.map(track => [track.trackId, track]))
     const resolved = inputs.map(input => {
@@ -315,6 +405,7 @@ export const Avatar = forwardRef<AvatarHandle, AvatarProps>(function Avatar({
         typeof window.matchMedia === 'function' &&
         window.matchMedia('(prefers-reduced-motion: reduce)').matches
       const now = performance.now()
+      animationTimelineRef.current = null
       const nextTrack: AvatarRuntimeTrack = {
         clip,
         elapsedBeforeStart: reducedMotion
@@ -346,6 +437,62 @@ export const Avatar = forwardRef<AvatarHandle, AvatarProps>(function Avatar({
   const playRef = useRef(play)
   playRef.current = play
 
+  const setTimeline = useCallback((
+    nextTimeline: AvatarAnimationTimeline | null,
+    options: AvatarTimelineOptions = {}
+  ) => {
+    stopFrame()
+    animationTracksRef.current = []
+    if (nextTimeline == null) {
+      animationTimelineRef.current = null
+      setRenderFrame({ definition: currentDefinition })
+      return
+    }
+    try {
+      validateAvatarAnimationTimeline(nextTimeline)
+      const speed = options.speed ?? 1
+      if (!Number.isFinite(speed) || speed <= 0) {
+        throw new TypeError('Avatar animation timeline speed must be a finite number greater than 0')
+      }
+      const requestedOptionTimeMs = options.timeMs ?? 0
+      if (!Number.isFinite(requestedOptionTimeMs)) {
+        throw new TypeError('Avatar animation timeline time must be a finite number')
+      }
+      const reducedMotion = typeof window !== 'undefined' &&
+        typeof window.matchMedia === 'function' &&
+        window.matchMedia('(prefers-reduced-motion: reduce)').matches
+      const requestedTimeMs = Math.min(Math.max(requestedOptionTimeMs, 0), nextTimeline.durationMs)
+      const playing = (options.playing ?? true) && !reducedMotion
+      const timeMs = reducedMotion && options.playing !== false
+        ? nextTimeline.durationMs / 2
+        : requestedTimeMs
+      const now = performance.now()
+      const runtime: AvatarRuntimeTimeline = {
+        elapsedBeforeStart: timeMs,
+        lastLoop: nextTimeline.durationMs > 0 ? Math.floor(timeMs / nextTimeline.durationMs) : 0,
+        loop: options.loop ?? false,
+        playing,
+        resolvePreset: options.resolvePreset,
+        speed,
+        startedAt: now,
+        timeline: nextTimeline
+      }
+      animationTimelineRef.current = runtime
+      composeTimelineAndCommit(runtime, now)
+      if (options.playing !== false) callbacksRef.current.onAnimationStart?.()
+      if (reducedMotion && options.playing !== false) callbacksRef.current.onAnimationEnd?.()
+      else ensureFrame()
+    } catch (error) {
+      const resolved = error instanceof Error
+        ? error
+        : new Error('Unable to configure OneWorks Avatar animation timeline')
+      callbacksRef.current.onError?.(resolved)
+      throw resolved
+    }
+  }, [composeTimelineAndCommit, currentDefinition, ensureFrame, stopFrame])
+  const setTimelineRef = useRef(setTimeline)
+  setTimelineRef.current = setTimeline
+
   const removeTrack = useCallback((trackId: string) => {
     const now = performance.now()
     animationTracksRef.current = animationTracksRef.current.filter(track => track.trackId !== trackId)
@@ -362,6 +509,7 @@ export const Avatar = forwardRef<AvatarHandle, AvatarProps>(function Avatar({
       return
     }
     stopFrame()
+    animationTimelineRef.current = null
     animationTracksRef.current = []
     if (options.reset !== false) setRenderFrame({ definition: currentDefinition })
   }, [composeAndCommit, currentDefinition, stopFrame])
@@ -390,6 +538,14 @@ export const Avatar = forwardRef<AvatarHandle, AvatarProps>(function Avatar({
     getDefinition: () => currentDefinition,
     pause: trackId => {
       const now = performance.now()
+      const timelineRuntime = animationTimelineRef.current
+      if (timelineRuntime != null && trackId == null) {
+        timelineRuntime.elapsedBeforeStart = resolveTimelineElapsed(timelineRuntime, now)
+        timelineRuntime.playing = false
+        composeTimelineAndCommit(timelineRuntime, now)
+        stopFrame()
+        return
+      }
       animationTracksRef.current.forEach(track => {
         if (!track.playing || trackId != null && track.trackId !== trackId) return
         track.elapsedBeforeStart = resolveTrackElapsed(track, now)
@@ -402,6 +558,15 @@ export const Avatar = forwardRef<AvatarHandle, AvatarProps>(function Avatar({
     removeTrack,
     resume: trackId => {
       const now = performance.now()
+      const timelineRuntime = animationTimelineRef.current
+      if (timelineRuntime != null && trackId == null) {
+        if (!timelineRuntime.playing) {
+          timelineRuntime.playing = true
+          timelineRuntime.startedAt = now
+        }
+        ensureFrame()
+        return
+      }
       animationTracksRef.current.forEach(track => {
         if (track.playing || trackId != null && track.trackId !== trackId) return
         track.playing = true
@@ -411,6 +576,13 @@ export const Avatar = forwardRef<AvatarHandle, AvatarProps>(function Avatar({
     },
     seek: (timeMs, trackId) => {
       const now = performance.now()
+      const timelineRuntime = animationTimelineRef.current
+      if (timelineRuntime != null && trackId == null) {
+        timelineRuntime.elapsedBeforeStart = Math.min(Math.max(timeMs, 0), timelineRuntime.timeline.durationMs)
+        timelineRuntime.startedAt = now
+        composeTimelineAndCommit(timelineRuntime, now)
+        return
+      }
       animationTracksRef.current.forEach(track => {
         if (trackId != null && track.trackId !== trackId) return
         track.elapsedBeforeStart = Math.max(timeMs, 0)
@@ -419,6 +591,7 @@ export const Avatar = forwardRef<AvatarHandle, AvatarProps>(function Avatar({
       composeAndCommit(now)
     },
     setDefinition: commitDefinition,
+    setTimeline,
     setTracks,
     stop,
     updateTrack: (trackId, update) => {
@@ -443,15 +616,33 @@ export const Avatar = forwardRef<AvatarHandle, AvatarProps>(function Avatar({
     removeTrack,
     renderFrame.definition,
     setTracks,
+    setTimeline,
     stop,
     stopFrame
   ])
 
   useEffect(() => () => stopFrame(), [stopFrame])
   useEffect(() => {
-    if (autoplay && animation != null) void playRef.current(animation)
+    if (timeline != null) {
+      setTimelineRef.current(timeline, {
+        loop: timelineLoop,
+        playing: autoplay,
+        resolvePreset: resolveTimelinePreset,
+        speed: timelineSpeed,
+        timeMs: timelineTimeMs
+      })
+    } else if (autoplay && animation != null) void playRef.current(animation)
     return () => stopFrame()
-  }, [animation, autoplay, stopFrame])
+  }, [
+    animation,
+    autoplay,
+    resolveTimelinePreset,
+    stopFrame,
+    timeline,
+    timelineLoop,
+    timelineSpeed,
+    timelineTimeMs
+  ])
 
   const scene = renderFrame.definition.scene
   const renderEntityParts = renderFrame.partTransforms == null
@@ -540,6 +731,190 @@ export const Avatar = forwardRef<AvatarHandle, AvatarProps>(function Avatar({
     </div>
   )
 })
+
+export interface AvatarAnimationPickerOption {
+  readonly animation: AvatarAnimationClip | AvatarAnimationRef
+  readonly description?: string
+  readonly disabled?: boolean
+  readonly id: string
+  readonly keywords?: readonly string[]
+  readonly label: string
+  readonly previewUrl?: string
+}
+
+export interface AvatarAnimationPickerProps extends Omit<
+  HTMLAttributes<HTMLDivElement>,
+  'children' | 'onChange' | 'onDragStart'
+> {
+  readonly draggable?: boolean
+  readonly emptyLabel?: string
+  readonly onChange?: (option: AvatarAnimationPickerOption) => void
+  readonly onOptionDragStart?: (
+    option: AvatarAnimationPickerOption,
+    event: DragEvent<HTMLButtonElement>
+  ) => void
+  readonly options: readonly AvatarAnimationPickerOption[]
+  readonly placeholder?: string
+  readonly searchable?: boolean
+  readonly value?: string | null
+}
+
+export interface AvatarPresetPickerOption {
+  readonly definition: AvatarDefinition
+  readonly disabled?: boolean
+  readonly id: string
+  readonly keywords?: readonly string[]
+  readonly label: string
+  readonly previewUrl?: string
+}
+
+export interface AvatarPresetPickerProps extends Omit<HTMLAttributes<HTMLDivElement>, 'children' | 'onChange'> {
+  readonly emptyLabel?: string
+  readonly onChange?: (option: AvatarPresetPickerOption) => void
+  readonly options: readonly AvatarPresetPickerOption[]
+  readonly placeholder?: string
+  readonly searchable?: boolean
+  readonly theme?: AvatarTheme
+  readonly value?: string | null
+}
+
+const matchesPickerQuery = (
+  option: Pick<AvatarAnimationPickerOption, 'description' | 'id' | 'keywords' | 'label'>,
+  query: string
+) => {
+  const normalized = query.trim().toLocaleLowerCase()
+  return normalized === '' || [
+    option.id,
+    option.label,
+    option.description ?? '',
+    ...(option.keywords ?? [])
+  ].some(value => value.toLocaleLowerCase().includes(normalized))
+}
+
+export function AvatarAnimationPicker({
+  className,
+  draggable = false,
+  emptyLabel = 'No animations found',
+  onChange,
+  onOptionDragStart,
+  options,
+  placeholder = 'Search animations',
+  searchable = true,
+  value,
+  ...divProps
+}: AvatarAnimationPickerProps) {
+  const [query, setQuery] = useState('')
+  const visibleOptions = useMemo(
+    () => options.filter(option => matchesPickerQuery(option, query)),
+    [options, query]
+  )
+  return (
+    <div
+      {...divProps}
+      className={`oneworks-avatar-picker oneworks-avatar-animation-picker${className == null ? '' : ` ${className}`}`}
+    >
+      {searchable
+        ? <input
+            aria-label={placeholder}
+            className='oneworks-avatar-picker__search'
+            onChange={event => setQuery(event.currentTarget.value)}
+            placeholder={placeholder}
+            type='search'
+            value={query}
+          />
+        : null}
+      <div className='oneworks-avatar-picker__grid' role='listbox' aria-label='Animations'>
+        {visibleOptions.map(option => (
+          <button
+            aria-label={option.label}
+            aria-selected={option.id === value}
+            className='oneworks-avatar-picker__option'
+            data-selected={option.id === value}
+            disabled={option.disabled}
+            draggable={draggable && !option.disabled}
+            key={option.id}
+            onClick={() => onChange?.(option)}
+            onDragStart={event => onOptionDragStart?.(option, event)}
+            role='option'
+            title={option.description ?? option.label}
+            type='button'
+          >
+            {option.previewUrl == null
+              ? <span className='oneworks-avatar-picker__fallback' aria-hidden='true'>▶</span>
+              : <img alt='' aria-hidden='true' draggable={false} src={option.previewUrl} />}
+          </button>
+        ))}
+        {visibleOptions.length === 0
+          ? <span className='oneworks-avatar-picker__empty' role='status'>{emptyLabel}</span>
+          : null}
+      </div>
+    </div>
+  )
+}
+
+export function AvatarPresetPicker({
+  className,
+  emptyLabel = 'No avatars found',
+  onChange,
+  options,
+  placeholder = 'Search avatars',
+  searchable = false,
+  theme = 'system',
+  value,
+  ...divProps
+}: AvatarPresetPickerProps) {
+  const [query, setQuery] = useState('')
+  const visibleOptions = useMemo(
+    () => options.filter(option => matchesPickerQuery(option, query)),
+    [options, query]
+  )
+  return (
+    <div
+      {...divProps}
+      className={`oneworks-avatar-picker oneworks-avatar-preset-picker${className == null ? '' : ` ${className}`}`}
+    >
+      {searchable
+        ? <input
+            aria-label={placeholder}
+            className='oneworks-avatar-picker__search'
+            onChange={event => setQuery(event.currentTarget.value)}
+            placeholder={placeholder}
+            type='search'
+            value={query}
+          />
+        : null}
+      <div className='oneworks-avatar-picker__grid' role='listbox' aria-label='Avatars'>
+        {visibleOptions.map(option => (
+          <button
+            aria-label={option.label}
+            aria-selected={option.id === value}
+            className='oneworks-avatar-picker__option'
+            data-selected={option.id === value}
+            disabled={option.disabled}
+            key={option.id}
+            onClick={() => onChange?.(option)}
+            role='option'
+            title={option.label}
+            type='button'
+          >
+            {option.previewUrl == null
+              ? <Avatar
+                  aria-hidden='true'
+                  className='oneworks-avatar-picker__avatar-preview'
+                  definition={option.definition}
+                  interactive={false}
+                  theme={theme}
+                />
+              : <img alt='' aria-hidden='true' draggable={false} src={option.previewUrl} />}
+          </button>
+        ))}
+        {visibleOptions.length === 0
+          ? <span className='oneworks-avatar-picker__empty' role='status'>{emptyLabel}</span>
+          : null}
+      </div>
+    </div>
+  )
+}
 
 export interface AvatarEditorHandle {
   focus(): void

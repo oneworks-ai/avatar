@@ -224,14 +224,20 @@ describe('AvatarControls Seed authoring', () => {
     const detailTabs = host.querySelector('[role="tablist"][aria-label="Avatar details"]') as HTMLElement
     const leftTabs = resourceTabs.querySelectorAll<HTMLButtonElement>('[role="tab"]')
     const rightTabs = detailTabs.querySelectorAll<HTMLButtonElement>('[role="tab"]')
-    expect([...leftTabs].map(tab => tab.getAttribute('aria-label'))).toEqual(['Build', 'Body', 'Animation'])
-    expect([...rightTabs].map(tab => tab.getAttribute('aria-label'))).toEqual([
-      'Body', 'Style', 'Surface decals', 'Effects', 'Animation'
+    expect([...leftTabs].map(tab => tab.getAttribute('aria-label'))).toEqual([
+      'Build', 'Animation', 'Body'
     ])
+    expect([...rightTabs].map(tab => tab.getAttribute('aria-label'))).toEqual([
+      'Body', 'Style', 'Effects', 'Animation'
+    ])
+    expect(resourceTabs.style.getPropertyValue('--avatar-control-tab-count')).toBe('3')
+    expect(detailTabs.style.getPropertyValue('--avatar-control-tab-count')).toBe('4')
     expect(rightTabs[1]?.getAttribute('aria-selected')).toBe('true')
+    expect(host.querySelector('[role="tab"][aria-label="Surface decals"]')).toBeNull()
+    expect(host.querySelector('#avatar-controls-right-panel-style [aria-label="Surface decals"]')).not.toBeNull()
     act(() => leftTabs[1]?.click())
     expect(leftTabs[1]?.getAttribute('aria-selected')).toBe('true')
-    act(() => rightTabs[3]?.click())
+    act(() => rightTabs[2]?.click())
     expect(props.onTabChange).toHaveBeenCalledWith('effects')
     expect(leftTabs[1]?.getAttribute('aria-selected')).toBe('true')
 
@@ -241,7 +247,7 @@ describe('AvatarControls Seed authoring', () => {
       createElement(AvatarControls, { ...props, activeTab: 'animation' })
     )))
     expect(leftTabs[1]?.getAttribute('aria-selected')).toBe('true')
-    expect(rightTabs[4]?.getAttribute('aria-selected')).toBe('true')
+    expect(rightTabs[3]?.getAttribute('aria-selected')).toBe('true')
   })
 
   it('uses a shape node tree on the left and edits the selected leaf on the right', () => {
@@ -260,6 +266,7 @@ describe('AvatarControls Seed authoring', () => {
     const tree = host.querySelector<HTMLElement>('[role="tree"][aria-label="Shape node tree"]')
     const leaf = tree?.querySelector<HTMLButtonElement>('.avatar-controls__node-tree-row--part [role="treeitem"]')
     expect(tree).not.toBeNull()
+    expect(tree?.querySelector('.avatar-controls__node-tree-row--root')?.getAttribute('data-selected')).toBe('true')
     expect(host.querySelector('#avatar-controls-left-panel-body .avatar-controls__parameter-controls')).toBeNull()
 
     act(() => leaf?.click())
@@ -442,7 +449,7 @@ describe('AvatarControls Seed authoring', () => {
   })
 
   it('marks selecting a complete face preset as a replace operation', () => {
-    const props = { ...createProps(), activeTab: 'decals' as const }
+    const props = { ...createProps(), activeTab: 'build' as const }
     act(() => root.render(createElement(AvatarLocaleProvider, { initialLocale: 'en', persist: false }, createElement(AvatarControls, props))))
     act(() => host.querySelector<HTMLElement>('[aria-label="Face presets"]')
       ?.querySelector<HTMLButtonElement>('[aria-label="More presets"]')?.click())
@@ -1231,8 +1238,8 @@ describe('AvatarControls natural animal breeds', () => {
 })
 
 describe('AvatarControls surface decals', () => {
-  it('keeps row selection and deletion as independent actions', () => {
-    const props = { ...createProps(), activeTab: 'decals' as const }
+  it('opens each decal in a secondary settings page and deletes it there', () => {
+    const props = { ...createProps(), activeTab: 'style' as const }
     act(() => {
       root.render(createElement(
         AvatarLocaleProvider,
@@ -1242,23 +1249,30 @@ describe('AvatarControls surface decals', () => {
     })
 
     const options = host.querySelectorAll<HTMLButtonElement>('[role="option"]')
-    const deleteButtons = host.querySelectorAll<HTMLButtonElement>('.avatar-controls__decal-remove')
+    const addButton = host.querySelector<HTMLButtonElement>('button[aria-label="Add decal"]')
     expect(options).toHaveLength(2)
-    expect(deleteButtons).toHaveLength(2)
-    expect(deleteButtons[0]?.getAttribute('aria-label')).toBe('Delete decal: Left blush')
-
-    act(() => deleteButtons[0]?.click())
-    expect(props.onDeleteSurfaceDecal).toHaveBeenCalledWith('left')
-    expect(props.onSelectSurfaceDecal).not.toHaveBeenCalled()
+    expect(addButton?.textContent?.trim()).toBe('')
+    expect(addButton?.querySelector('svg')).not.toBeNull()
+    expect(host.querySelector(
+      '[aria-label="Surface decals"] .avatar-controls__field-header .avatar-controls__label .avatar-controls__icon'
+    )).not.toBeNull()
+    expect(host.querySelector('.avatar-controls__decal-editor')).toBeNull()
+    expect(host.querySelector('.avatar-controls__decal-remove')).toBeNull()
 
     act(() => options[1]?.click())
     expect(props.onSelectSurfaceDecal).toHaveBeenCalledWith('right')
+    expect(host.querySelector('.avatar-controls__decal-editor')).not.toBeNull()
+    expect(host.querySelector('.avatar-controls__style-detail strong')?.textContent).toBe('Right blush')
+
+    act(() => host.querySelector<HTMLButtonElement>('.avatar-controls__danger-action')?.click())
+    expect(props.onDeleteSurfaceDecal).toHaveBeenCalledWith('right')
+    expect(host.querySelector('.avatar-controls__decal-editor')).toBeNull()
   })
 
   it('offers the smooth face mask as an icon-backed decal shape', () => {
     const props = {
       ...createProps(),
-      activeTab: 'decals' as const,
+      activeTab: 'style' as const,
       surfaceDecals: [{
         ...createAvatarSurfaceDecal('left', null),
         label: 'Face mask',
@@ -1272,6 +1286,8 @@ describe('AvatarControls surface decals', () => {
         createElement(AvatarControls, props)
       ))
     })
+
+    act(() => host.querySelector<HTMLButtonElement>('[role="option"]')?.click())
 
     const faceMask = [...host.querySelectorAll<HTMLButtonElement>('[aria-label="Surface decal shape"] [role="radio"]')]
       .find(button => button.textContent === 'Face mask')

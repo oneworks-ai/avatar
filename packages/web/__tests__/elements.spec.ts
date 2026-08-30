@@ -18,6 +18,7 @@ const mounts = vi.hoisted(() => {
       setDefinition: (next: unknown) => {
         definition = next
       },
+      setTimeline: vi.fn(),
       setTracks: vi.fn(),
       stop: vi.fn(),
       update: vi.fn((next: { definition?: unknown }) => {
@@ -107,5 +108,33 @@ describe('OneWorks Avatar custom elements', () => {
     expect(mount.setTracks).toHaveBeenCalledWith(tracks)
     expect(mount.updateTrack).toHaveBeenCalledWith('idle', { weight: .5 })
     expect(mount.removeTrack).toHaveBeenCalledWith('idle')
+  })
+
+  it('forwards the latest timeline configuration through the custom element', () => {
+    registerAvatarElements()
+    const avatar = document.createElement('oneworks-avatar')
+    mounted.push(avatar)
+    document.body.append(avatar)
+    const mount = mounts.createAvatar.mock.results.at(-1)?.value
+    const timeline = { durationMs: 0, tracks: [], version: 1 as const }
+
+    avatar.timeline = timeline
+    avatar.timelineLoop = true
+    avatar.timelineSpeed = 1.5
+    avatar.timelineTimeMs = 240
+    avatar.setTimeline(timeline, { loop: true, playing: false, speed: 1.5, timeMs: 240 })
+
+    expect(mount.setTimeline).toHaveBeenCalledWith(timeline, {
+      loop: true,
+      playing: false,
+      speed: 1.5,
+      timeMs: 240
+    })
+    expect(mount.update).toHaveBeenLastCalledWith(expect.objectContaining({
+      timeline,
+      timelineLoop: true,
+      timelineSpeed: 1.5,
+      timelineTimeMs: 240
+    }))
   })
 })

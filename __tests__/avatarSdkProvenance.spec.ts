@@ -5,12 +5,12 @@ import { describe, expect, it } from 'vitest'
 import { verifyAvatarSdkAttestations } from '../scripts/avatar-sdk-provenance.mjs'
 
 const name = '@oneworks/avatar'
-const version = '1.0.0-rc.7'
+const version = '1.0.0-rc.8'
 const sourceSha = '0998f9d6266d71c757ab8956b8fba0b92c3226e2'
 const bytes = Buffer.from('approved avatar sdk tarball')
 const integrity = `sha512-${createHash('sha512').update(bytes).digest('base64')}`
 const digest = createHash('sha512').update(bytes).digest('hex')
-const subject = [{ name: 'pkg:npm/%40oneworks/avatar@1.0.0-rc.7', digest: { sha512: digest } }]
+const subject = [{ name: 'pkg:npm/%40oneworks/avatar@1.0.0-rc.8', digest: { sha512: digest } }]
 
 const encode = (payload: unknown) => Buffer.from(JSON.stringify(payload)).toString('base64')
 

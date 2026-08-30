@@ -98,7 +98,7 @@ describe('static animation preset covers', () => {
     const animationFrameSpy = vi.spyOn(window, 'requestAnimationFrame')
     animationFrameSpy.mockClear()
 
-    act(() => host.querySelector<HTMLButtonElement>('#avatar-controls-tab-animation')?.click())
+    act(() => host.querySelector<HTMLButtonElement>('#avatar-controls-left-tab-animation')?.click())
     await flushEffects()
 
     const library = host.querySelector<HTMLElement>('[aria-label="Animation library"]')
