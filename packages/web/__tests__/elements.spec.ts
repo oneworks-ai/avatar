@@ -12,15 +12,19 @@ const mounts = vi.hoisted(() => {
       pause: vi.fn(),
       play: vi.fn(),
       ready: Promise.resolve(),
+      removeTrack: vi.fn(),
       resume: vi.fn(),
       seek: vi.fn(),
       setDefinition: (next: unknown) => {
         definition = next
       },
+      setTimeline: vi.fn(),
+      setTracks: vi.fn(),
       stop: vi.fn(),
       update: vi.fn((next: { definition?: unknown }) => {
         if (next.definition != null) definition = next.definition
-      })
+      }),
+      updateTrack: vi.fn()
     }
   })
   const createAvatarEditor = vi.fn((_element: HTMLElement, options: { definition: unknown }) => {
@@ -87,5 +91,50 @@ describe('OneWorks Avatar custom elements', () => {
 
     expect(mounts.createAvatar.mock.calls.at(-1)?.[1].definition).toEqual(definition)
     expect(mounts.createAvatarEditor.mock.calls.at(-1)?.[1].definition).toEqual(definition)
+  })
+
+  it('forwards ordered track stack operations through the custom element', () => {
+    registerAvatarElements()
+    const avatar = document.createElement('oneworks-avatar')
+    mounted.push(avatar)
+    document.body.append(avatar)
+    const mount = mounts.createAvatar.mock.results.at(-1)?.value
+    const tracks = [{ animation: { anchor: 'absolute', durationMs: 1000, keyframes: [], playback: 'loop' }, trackId: 'idle' }]
+
+    avatar.setTracks(tracks as never)
+    avatar.updateTrack('idle', { weight: .5 })
+    avatar.removeTrack('idle')
+
+    expect(mount.setTracks).toHaveBeenCalledWith(tracks)
+    expect(mount.updateTrack).toHaveBeenCalledWith('idle', { weight: .5 })
+    expect(mount.removeTrack).toHaveBeenCalledWith('idle')
+  })
+
+  it('forwards the latest timeline configuration through the custom element', () => {
+    registerAvatarElements()
+    const avatar = document.createElement('oneworks-avatar')
+    mounted.push(avatar)
+    document.body.append(avatar)
+    const mount = mounts.createAvatar.mock.results.at(-1)?.value
+    const timeline = { durationMs: 0, tracks: [], version: 1 as const }
+
+    avatar.timeline = timeline
+    avatar.timelineLoop = true
+    avatar.timelineSpeed = 1.5
+    avatar.timelineTimeMs = 240
+    avatar.setTimeline(timeline, { loop: true, playing: false, speed: 1.5, timeMs: 240 })
+
+    expect(mount.setTimeline).toHaveBeenCalledWith(timeline, {
+      loop: true,
+      playing: false,
+      speed: 1.5,
+      timeMs: 240
+    })
+    expect(mount.update).toHaveBeenLastCalledWith(expect.objectContaining({
+      timeline,
+      timelineLoop: true,
+      timelineSpeed: 1.5,
+      timelineTimeMs: 240
+    }))
   })
 })

@@ -646,4 +646,53 @@ describe('Avatar editor public definition bridge', () => {
     expect(saved.keyframes[1]?.yaw).toBeCloseTo(-.3)
     expect(saved.keyframes[2]?.yaw).toBeCloseTo(.1)
   })
+
+  it('resolves cumulative public clip state and preserves auxiliary geometry, transforms, morphs, and release', () => {
+    const base = createDefaultAvatarDefinition()
+    const parts = createAvatarEntityParts('bear')
+    const primary = parts.find(part => part.id === 'primary')!
+    const scene = { ...base.scene, entity: { parts, preset: 'bear' as const } }
+    const orb = {
+      ...primary,
+      face: false,
+      id: 'bridge-orb',
+      label: 'Bridge orb',
+      scaleX: .15,
+      scaleY: .15,
+      scaleZ: .15,
+      shape: 'sphere' as const
+    }
+    const saved = avatarAnimationClipToSavedAnimation('cumulative', {
+      anchor: 'absolute',
+      durationMs: 1000,
+      keyframes: [
+        {
+          atMs: 0,
+          patch: {
+            auxiliaryParts: [{ composition: 'independent-depth', opacity: 100, part: orb }],
+            partShapeMorphs: {
+              primary: { fromShape: primary.shape, progress: .4, toShape: 'sphere' }
+            },
+            partTransforms: { primary: { x: primary.x + 24 } }
+          }
+        },
+        { atMs: 500, patch: { view: { yaw: .2 } } },
+        {
+          atMs: 1000,
+          patch: { release: ['aux:bridge-orb', 'part:primary.shapeMorph', 'part:primary.transform.x'] }
+        }
+      ],
+      playback: 'once'
+    }, scene)
+
+    expect(saved.keyframes[1]).toMatchObject({
+      auxiliaryParts: [{ part: { id: 'bridge-orb' } }],
+      partShapeMorphs: { primary: { progress: .4 } },
+      partTransforms: { primary: { x: primary.x + 24 } },
+      yaw: .2
+    })
+    expect(saved.keyframes[2]?.auxiliaryParts).toBeUndefined()
+    expect(saved.keyframes[2]?.partShapeMorphs).toBeUndefined()
+    expect(saved.keyframes[2]?.partTransforms).toBeUndefined()
+  })
 })

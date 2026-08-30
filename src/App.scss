@@ -1,4 +1,11 @@
 .avatar-app {
+  --avatar-shell-gap: 8px;
+  --avatar-shell-padding: 16px;
+  --avatar-glass-bg: color-mix(in srgb, var(--bg-color) 88%, transparent);
+  --avatar-glass-border: color-mix(in srgb, var(--border-color) 86%, white 14%);
+  --avatar-glass-shadow: 0 18px 44px color-mix(in srgb, black 18%, transparent);
+  --avatar-glass-filter: blur(24px) saturate(145%);
+
   min-height: 100vh;
   background: linear-gradient(
     180deg,
@@ -7,11 +14,15 @@
   );
 
   &__workspace {
+    --avatar-left-controls-width: 300px;
+
+    position: relative;
     display: grid;
     min-height: 100vh;
     grid-template-columns:
+      min(var(--avatar-left-controls-width), calc(100vw - 320px))
       minmax(0, 1fr)
-      min(var(--avatar-controls-width, 420px), calc(100vw - 160px));
+      min(var(--avatar-controls-width, 420px), calc(100vw - 320px));
     grid-template-rows: minmax(0, 1fr);
   }
 
@@ -23,15 +34,43 @@
   }
 
   &__workspace[data-controls-collapsed='true'] {
-    grid-template-columns: minmax(0, 1fr);
+    grid-template-columns:
+      min(var(--avatar-left-controls-width), calc(100vw - 320px))
+      minmax(0, 1fr);
   }
 
-  &__workspace[data-controls-collapsed='true'] > .avatar-controls {
+  &__workspace[data-controls-collapsed='true'] > .avatar-controls--right {
     display: none;
   }
 
   &__workspace[data-controls-collapsed='true'] &__stage {
-    grid-column: 1 / -1;
+    grid-column: 2;
+  }
+
+  &__workspace[data-resources-collapsed='true'] {
+    grid-template-columns:
+      minmax(0, 1fr)
+      min(var(--avatar-controls-width, 420px), calc(100vw - 320px));
+  }
+
+  &__workspace[data-resources-collapsed='true'] > .avatar-controls--left {
+    display: none;
+  }
+
+  &__workspace[data-resources-collapsed='true'] &__stage {
+    grid-column: 1;
+  }
+
+  &__workspace[data-resources-collapsed='true'] > .avatar-controls--right {
+    grid-column: 2;
+  }
+
+  &__workspace[data-controls-collapsed='true'][data-resources-collapsed='true'] {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  &__workspace[data-controls-collapsed='true'][data-resources-collapsed='true'] &__stage {
+    grid-column: 1;
   }
 
   &__preset-capture {
@@ -53,16 +92,22 @@
     position: relative;
     display: grid;
     container: avatar-stage / inline-size;
-    grid-column: 1;
+    grid-column: 2;
     grid-row: 1;
     min-width: 0;
     min-height: 100vh;
     grid-template-rows: minmax(0, 1fr);
-    padding: clamp(20px, 4vw, 48px);
+    padding: var(--avatar-shell-padding);
   }
 
-  &__workspace > .avatar-controls {
-    grid-column: 2;
+  &__workspace > .avatar-controls--left {
+    grid-column: 1;
+    grid-row: 1;
+    min-width: 0;
+  }
+
+  &__workspace > .avatar-controls--right {
+    grid-column: 3;
     grid-row: 1;
     min-width: 0;
   }
@@ -83,7 +128,7 @@
     left: 16px;
     display: flex;
     align-items: center;
-    gap: 8px;
+    gap: var(--avatar-shell-gap);
   }
 
   &__stage-actions {
@@ -94,11 +139,13 @@
     display: flex;
     align-items: center;
     justify-content: flex-end;
-    gap: 8px;
+    gap: var(--avatar-shell-gap);
   }
 
   &__camera-toggle,
   &__home-link,
+  &__workspace-toggle,
+  &__resources-toggle,
   &__controls-toggle,
   &__github-link,
   &__language-toggle,
@@ -109,11 +156,13 @@
     width: 42px;
     height: 42px;
     place-items: center;
-    border: 1px solid var(--border-color);
+    border: 1px solid var(--avatar-glass-border);
     border-radius: 8px;
-    background: color-mix(in srgb, var(--bg-color) 90%, transparent);
+    background: var(--avatar-glass-bg);
     color: var(--sub-text-color);
-    backdrop-filter: blur(12px);
+    box-shadow: 0 8px 22px color-mix(in srgb, black 10%, transparent);
+    backdrop-filter: var(--avatar-glass-filter);
+    -webkit-backdrop-filter: var(--avatar-glass-filter);
     cursor: pointer;
 
     svg {
@@ -165,6 +214,24 @@
 
   &__home-link {
     text-decoration: none;
+
+    img {
+      display: block;
+      width: 22px;
+      height: 22px;
+    }
+  }
+
+  &__workspace-toggle[aria-expanded='true'] {
+    border-color: var(--primary-color);
+    background: var(--primary-soft-bg);
+    color: var(--primary-text-color);
+  }
+
+  &__workspace-toggle img {
+    display: block;
+    width: 22px;
+    height: 22px;
   }
 
   &__animation-toggle {
@@ -573,18 +640,19 @@
   .avatar-app {
     &__workspace {
       grid-template-columns: 1fr;
-      grid-template-rows: auto auto;
+      grid-template-rows: auto auto auto;
     }
 
     &__workspace[data-animation-open='true'] {
       height: auto;
       min-height: 100vh;
-      grid-template-rows: auto auto auto;
+      grid-template-rows: auto auto auto auto;
       overflow: visible;
     }
 
-    &__workspace[data-controls-collapsed='true'][data-animation-open='true'] {
-      grid-template-rows: auto auto;
+    &__workspace[data-controls-collapsed='true'][data-animation-open='true'],
+    &__workspace[data-resources-collapsed='true'][data-animation-open='true'] {
+      grid-template-rows: auto auto auto;
     }
 
     &__stage {
@@ -594,8 +662,35 @@
       grid-template-rows: auto;
     }
 
-    &__workspace > .avatar-controls {
+    &__workspace > .avatar-controls--left {
       grid-column: 1;
+      grid-row: 2;
+    }
+
+    &__workspace > .avatar-controls--right {
+      grid-column: 1;
+      grid-row: 3;
+    }
+
+    &__workspace[data-resources-collapsed='true'] > .avatar-controls--right {
+      grid-column: 1;
+      grid-row: 2;
+    }
+
+    &__workspace[data-controls-collapsed='true'] > .avatar-controls--left {
+      grid-row: 2;
+    }
+
+    &__workspace[data-animation-open='true'] > .avatar-animation-panel {
+      grid-row: 4;
+    }
+
+    &__workspace[data-animation-open='true'][data-controls-collapsed='true'] > .avatar-animation-panel,
+    &__workspace[data-animation-open='true'][data-resources-collapsed='true'] > .avatar-animation-panel {
+      grid-row: 3;
+    }
+
+    &__workspace[data-animation-open='true'][data-controls-collapsed='true'][data-resources-collapsed='true'] > .avatar-animation-panel {
       grid-row: 2;
     }
 
@@ -612,7 +707,7 @@
 @media (max-width: 520px) {
   .avatar-app {
     &__stage {
-      padding: 16px;
+      padding: var(--avatar-shell-padding);
     }
   }
 }

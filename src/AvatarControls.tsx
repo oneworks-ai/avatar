@@ -24,7 +24,8 @@ import type {
   AvatarPixelSampling
 } from '@oneworks/avatar'
 import { memo, useEffect, useId, useRef, useState } from 'react'
-import type { CSSProperties, KeyboardEvent, PointerEvent, ReactNode } from 'react'
+import type { CSSProperties, KeyboardEvent, MouseEvent, PointerEvent, ReactNode } from 'react'
+import { createPortal } from 'react-dom'
 
 import { AVATAR_BODY_SHAPES, EntityPresetPreview } from './InteractiveAvatar'
 import type { AvatarBodyShape, AvatarDropShadowStyle, AvatarOutlineStyle } from './InteractiveAvatar'
@@ -40,7 +41,7 @@ import {
   hasMultipleAvatarEntityMaterials,
   resolveAvatarEntityPartScaleZ
 } from './avatarEntityPresets'
-import type { AvatarEntityPart, AvatarEntityPreset } from './avatarEntityPresets'
+import type { AvatarEntityGroup, AvatarEntityPart, AvatarEntityPreset } from './avatarEntityPresets'
 import { AVATAR_FACE_PRESETS, DEFAULT_AVATAR_FACE_PRESET, isAvatarFacePresetSelected } from './avatarFacePresets'
 import type { AvatarFacePreset } from './avatarFacePresets'
 import { DEFAULT_AVATAR_FACE_STYLE, projectDefaultFace } from './avatarGeometry'
@@ -95,10 +96,28 @@ import {
 import type { AvatarSurfaceDecal, AvatarSurfaceDecalShape } from './avatarSurfaceDecals'
 import type { SavedAvatarPreset } from './savedAvatarPresets'
 
-export type AvatarControlTab = 'body' | 'build' | 'effects' | 'style'
+export type AvatarControlTab = 'animation' | 'body' | 'build' | 'decals' | 'effects' | 'style'
 export type AvatarCameraFrame = 'circle' | 'rounded' | 'square'
 type AvatarFacePart = 'eyes' | 'mouth' | 'nose'
-type AvatarPresetBrowser = 'entities' | 'faces' | 'saved'
+type AvatarEffectDetailPage =
+  | 'avatar-outline'
+  | 'avatar-shadow'
+  | 'face-shadow'
+  | 'frame-shadow'
+  | 'light'
+  | 'pixel'
+type AvatarPresetBrowser = 'breeds' | 'entities' | 'faces' | 'saved'
+type AvatarBuildDetailPage = 'coat-pattern' | 'parameters' | 'presets' | 'seed'
+type AvatarStyleDetailPage = 'camera-background' | 'palette'
+type AvatarBreedPresetKind = 'animal' | 'bear' | 'cat' | 'dog' | 'rabbit'
+interface AvatarBreedPresetItem {
+  readonly id: string
+  readonly kind: AvatarBreedPresetKind
+  readonly label: string
+  readonly onSelect: () => void
+  readonly renderPreview: (eager?: boolean) => ReactNode
+  readonly selected: boolean
+}
 type AvatarSavedPresetItem =
   | {
     readonly createdAt: number
@@ -336,6 +355,8 @@ const DeferredEntityPresetPreview = memo(function DeferredEntityPresetPreview({
 
 interface AvatarControlsProps {
   readonly activeTab: AvatarControlTab
+  readonly animationContent?: ReactNode
+  readonly animationInspectorContent?: ReactNode
   readonly animalBreedTemplateId?: string | null
   readonly animalEarHeight?: number
   readonly animalEarWidth?: number
@@ -359,6 +380,7 @@ interface AvatarControlsProps {
   readonly catEarWidth: number
   readonly coatPattern: AvatarCoatPattern
   readonly controlsWidth: number
+  readonly entityGroups: readonly AvatarEntityGroup[]
   readonly entityParts: readonly AvatarEntityPart[]
   readonly entityPreset: AvatarEntityPreset
   readonly dogBreedTemplateId: AvatarDogBreedTemplateId | null
@@ -380,6 +402,7 @@ interface AvatarControlsProps {
   readonly lightAzimuth: number
   readonly lightDistance: number
   readonly lightElevation: number
+  readonly leftControlsWidth: number
   readonly onBackgroundStyleChange: (style: AvatarBackgroundStyle) => void
   readonly onAnimalBreedTemplateChange?: (id: string | null) => void
   readonly onAnimalEarHeightChange?: (value: number) => void
@@ -413,8 +436,10 @@ interface AvatarControlsProps {
   readonly onRabbitHeadWidthChange: (value: number) => void
   readonly onCoatPatternChange: (pattern: Partial<AvatarCoatPattern>, manualField?: AvatarSeedField) => void
   readonly onConvertCoatPatternToDecals: () => void
-  readonly onCollapse: () => void
+  readonly onCollapseLeft: () => void
+  readonly onCollapseRight: () => void
   readonly onControlsWidthChange: (width: number) => void
+  readonly onLeftControlsWidthChange: (width: number) => void
   readonly onFaceStyleChange: (style: Partial<AvatarFaceStyle>, mode?: 'merge' | 'replace') => void
   readonly onFaceShadowStyleChange: (style: Partial<AvatarFaceShadowStyle>) => void
   readonly onFrameShadowStyleChange: (style: Partial<AvatarDropShadowStyle>) => void
@@ -425,7 +450,13 @@ interface AvatarControlsProps {
   readonly onPaletteChange: (paletteId: string) => void
   readonly onPixelEffectChange: (effect: Partial<AvatarPixelEffect>) => void
   readonly onEntityPresetChange: (preset: AvatarEntityPreset) => void
+  readonly onEntityGroupAdd: (group: AvatarEntityGroup) => void
+  readonly onEntityGroupChange: (id: string, group: Partial<AvatarEntityGroup>) => void
+  readonly onEntityGroupDelete: (id: string) => void
+  readonly onEntityPartAdd: (part: AvatarEntityPart) => void
   readonly onEntityPartChange: (id: string, part: Partial<AvatarEntityPart>) => void
+  readonly onEntityPartDelete: (id: string) => void
+  readonly onSelectEntityPart: (id: string | null) => void
   readonly onResetFace: () => void
   readonly onAddSurfaceDecal: () => void
   readonly onDeleteSurfaceDecal: (id: string) => void
@@ -454,15 +485,18 @@ interface AvatarControlsProps {
   readonly showOutline: boolean
   readonly showFrameShadow: boolean
   readonly showMorePalettes: boolean
+  readonly showTabs?: boolean
   readonly showShadow: boolean
   readonly surfaceDecals: readonly AvatarSurfaceDecal[]
   readonly visiblePalettes: readonly AvatarPalette[]
+  readonly workspaceAction?: ReactNode
   readonly onRandomSeed: () => void
   readonly onSeedChange: (seed: string) => void
   readonly onSeedFieldToggle: (field: AvatarSeedField, enabled: boolean) => void
 }
 
 const DEFAULT_CONTROLS_WIDTH = 420
+const DEFAULT_RESOURCE_WIDTH = 300
 const MIN_CONTROLS_WIDTH = 300
 const MIN_STAGE_WIDTH = 160
 
@@ -477,8 +511,36 @@ const CONTROL_TABS: readonly { id: AvatarControlTab; label: string }[] = [
   { id: 'build', label: 'Build' },
   { id: 'body', label: 'Body' },
   { id: 'style', label: 'Style' },
-  { id: 'effects', label: 'Effects' }
+  { id: 'decals', label: 'Surface decals' },
+  { id: 'effects', label: 'Effects' },
+  { id: 'animation', label: 'Animation' }
 ]
+
+const LEFT_CONTROL_TABS: readonly { id: AvatarControlTab; label: string }[] = [
+  { id: 'build', label: 'Build' },
+  { id: 'animation', label: 'Animation' },
+  { id: 'body', label: 'Body' }
+]
+const RIGHT_CONTROL_TABS = CONTROL_TABS.filter(tab => (
+  tab.id === 'body' || tab.id === 'style' || tab.id === 'effects' || tab.id === 'animation'
+))
+
+type AvatarTreeSelection =
+  | { readonly kind: 'root' }
+  | { readonly kind: 'group'; readonly id: string }
+  | { readonly kind: 'part'; readonly id: string }
+
+type AvatarTreeContextMenu = {
+  readonly clientX: number
+  readonly clientY: number
+  readonly target: AvatarTreeSelection
+}
+
+const DEFAULT_FACE_GROUP_ID = 'face'
+const DEFAULT_PARTS_GROUP_ID = 'parts'
+const resolveAvatarPartGroupId = (part: AvatarEntityPart) => (
+  part.groupId ?? (part.face ? DEFAULT_FACE_GROUP_ID : DEFAULT_PARTS_GROUP_ID)
+)
 
 const COAT_PATTERN_ALGORITHMS: readonly { id: AvatarCoatPatternAlgorithm; label: string }[] = [
   { id: 'random', label: 'Random' },
@@ -664,6 +726,22 @@ function ControlIcon({ name }: { readonly name: ControlIconName }) {
         : null}
       {name === 'effects'
         ? <path d='m10 2 1.3 4.2L15.5 7.5l-4.2 1.3L10 13l-1.3-4.2-4.2-1.3 4.2-1.3L10 2Zm5.2 10 .7 2.1 2.1.7-2.1.7-.7 2.1-.7-2.1-2.1-.7 2.1-.7.7-2.1Z' />
+        : null}
+      {name === 'decals'
+        ? (
+          <>
+            <path d='M4 3.5h8.5L16.5 7v9.5H4Z' />
+            <path d='M12.5 3.5V7h4M7 11h6M7 14h4' />
+          </>
+        )
+        : null}
+      {name === 'animation'
+        ? (
+          <>
+            <rect x='2.8' y='4' width='14.4' height='12' rx='2' />
+            <path d='m8 7 5 3-5 3Z' />
+          </>
+        )
         : null}
       {name === 'eyes'
         ? (
@@ -859,29 +937,37 @@ function GeometricShapePicker<T extends string>({ ariaLabel, onChange, options, 
   )
 }
 
-function ToggleRow({ checked, icon, label, onChange }: {
+function ToggleRow({ action, checked, hideActionUntilHover = false, icon, label, onChange }: {
+  readonly action?: ReactNode
   readonly checked: boolean
+  readonly hideActionUntilHover?: boolean
   readonly icon: ControlIconName
   readonly label: string
   readonly onChange: () => void
 }) {
   const { t } = useAvatarLocale()
   return (
-    <div className='avatar-controls__toggle-row'>
+    <div
+      className='avatar-controls__toggle-row'
+      data-hide-action-until-hover={hideActionUntilHover ? 'true' : undefined}
+    >
       <span className='avatar-controls__toggle-label'>
         <ControlIcon name={icon} />
         {t(label)}
       </span>
-      <button
-        className='avatar-controls__switch'
-        type='button'
-        role='switch'
-        aria-label={t(label)}
-        aria-checked={checked}
-        onClick={onChange}
-      >
-        <span />
-      </button>
+      <span className='avatar-controls__toggle-actions'>
+        <button
+          className='avatar-controls__switch'
+          type='button'
+          role='switch'
+          aria-label={t(label)}
+          aria-checked={checked}
+          onClick={onChange}
+        >
+          <span />
+        </button>
+        {action}
+      </span>
     </div>
   )
 }
@@ -907,7 +993,6 @@ function SeedFieldToggle({ enabled, label, onChange }: {
         <path d='M10 3v14M4.5 6.2 10 10l5.5-3.8M4.5 13.8 10 10l5.5 3.8' />
         <circle cx='10' cy='10' r='2.2' />
       </svg>
-      <span>{t('Seed')}</span>
     </button>
   )
 }
@@ -992,6 +1077,8 @@ function NumberField({ ariaLabel, label, onChange, suffix = '', value }: {
 
 export function AvatarControls({
   activeTab,
+  animationContent,
+  animationInspectorContent,
   animalBreedTemplateId = null,
   animalEarHeight = 100,
   animalEarWidth = 100,
@@ -1015,6 +1102,7 @@ export function AvatarControls({
   catEarWidth,
   coatPattern,
   controlsWidth,
+  entityGroups,
   entityParts,
   entityPreset,
   dogBreedTemplateId,
@@ -1032,10 +1120,10 @@ export function AvatarControls({
   frameShadowStyle,
   gridDensity,
   headerActions,
-  hiddenPaletteCount,
   lightAzimuth,
   lightDistance,
   lightElevation,
+  leftControlsWidth,
   pixelEffect,
   onAnimalBreedTemplateChange,
   onAnimalEarHeightChange,
@@ -1070,8 +1158,10 @@ export function AvatarControls({
   onRabbitHeadWidthChange,
   onCoatPatternChange,
   onConvertCoatPatternToDecals,
-  onCollapse,
+  onCollapseLeft,
+  onCollapseRight,
   onControlsWidthChange,
+  onLeftControlsWidthChange,
   onFaceStyleChange,
   onFaceShadowStyleChange,
   onFrameShadowStyleChange,
@@ -1085,7 +1175,13 @@ export function AvatarControls({
   onSeedChange,
   onSeedFieldToggle,
   onEntityPresetChange,
+  onEntityGroupAdd,
+  onEntityGroupChange,
+  onEntityGroupDelete,
+  onEntityPartAdd,
   onEntityPartChange,
+  onEntityPartDelete,
+  onSelectEntityPart,
   onAddSurfaceDecal,
   onDeleteSurfaceDecal,
   onSelectSurfaceDecal,
@@ -1093,7 +1189,6 @@ export function AvatarControls({
   onResetFace,
   onSavedPresetSelect,
   onSavedPresetRemove,
-  onShowMorePalettesChange,
   onTabChange,
   onToggleLight,
   onToggleOutline,
@@ -1112,24 +1207,48 @@ export function AvatarControls({
   showOutline,
   showAvatarShadow,
   showFrameShadow,
-  showMorePalettes,
   showShadow,
   surfaceDecals,
-  visiblePalettes
+  workspaceAction
 }: AvatarControlsProps) {
   const { t } = useAvatarLocale()
   const [activeFacePart, setActiveFacePart] = useState<AvatarFacePart>('eyes')
+  const [leftActiveTab, setLeftActiveTab] = useState<AvatarControlTab>(
+    LEFT_CONTROL_TABS.some(tab => tab.id === activeTab) ? activeTab : 'build'
+  )
   const [pendingPaletteId, setPendingPaletteId] = useState<string | null>(null)
   const [presetBrowser, setPresetBrowser] = useState<AvatarPresetBrowser | null>(null)
   const [presetSearch, setPresetSearch] = useState('')
   const [presetUsage, setPresetUsage] = useState(loadAvatarPresetUsage)
-  const [resizing, setResizing] = useState(false)
-  const [seedSettingsOpen, setSeedSettingsOpen] = useState(false)
+  const [resizingSide, setResizingSide] = useState<'left' | 'right' | null>(null)
+  const [rightActiveTab, setRightActiveTab] = useState<AvatarControlTab>(
+    RIGHT_CONTROL_TABS.some(tab => tab.id === activeTab) ? activeTab : 'style'
+  )
+  const [rightHeaderActionsOpen, setRightHeaderActionsOpen] = useState(false)
+  const [buildDetailPage, setBuildDetailPage] = useState<AvatarBuildDetailPage | null>(null)
+  const [effectDetailPage, setEffectDetailPage] = useState<AvatarEffectDetailPage | null>(null)
+  const [styleDetailPage, setStyleDetailPage] = useState<AvatarStyleDetailPage | null>(null)
+  const [surfaceDecalDetailId, setSurfaceDecalDetailId] = useState<string | null>(null)
+  const surfaceDecalDetailOpen = surfaceDecalDetailId != null
+  const [faceAdvancedOpen, setFaceAdvancedOpen] = useState(false)
+  const [highlightAdvancedOpen, setHighlightAdvancedOpen] = useState(false)
+  const [avatarTreeContextMenu, setAvatarTreeContextMenu] = useState<AvatarTreeContextMenu | null>(null)
+  const [avatarTreeExpandedGroups, setAvatarTreeExpandedGroups] = useState<readonly string[]>([
+    DEFAULT_FACE_GROUP_ID,
+    DEFAULT_PARTS_GROUP_ID
+  ])
+  const [avatarTreeGroupMotion, setAvatarTreeGroupMotion] = useState<Readonly<Record<string, {
+    readonly x: number
+    readonly y: number
+    readonly z: number
+  }>>>({})
+  const [avatarTreeSelection, setAvatarTreeSelection] = useState<AvatarTreeSelection>({ kind: 'root' })
   const [seedDraft, setSeedDraft] = useState(seed)
-  const seedSettingsId = useId()
   const paletteConfirmActionRef = useRef<HTMLButtonElement>(null)
   const presetSearchRef = useRef<HTMLInputElement>(null)
-  const resizeStartRef = useRef<{ pointerX: number; width: number } | null>(null)
+  const rightHeaderActionsRef = useRef<HTMLDivElement>(null)
+  const avatarTreeContextMenuRef = useRef<HTMLDivElement>(null)
+  const resizeStartRef = useRef<{ pointerX: number; side: 'left' | 'right'; width: number } | null>(null)
   const previewSchedulerRef = useRef<AvatarPreviewScheduler | null>(null)
   if (previewSchedulerRef.current == null) previewSchedulerRef.current = createAvatarPreviewScheduler()
   const previewScheduler = previewSchedulerRef.current
@@ -1143,6 +1262,84 @@ export function AvatarControls({
 
   useEffect(() => setSeedDraft(seed), [seed])
 
+  useEffect(() => {
+    if (activeTab === 'build' || activeTab === 'body' || activeTab === 'animation') {
+      setLeftActiveTab(activeTab)
+    }
+    if (activeTab === 'decals') setRightActiveTab('style')
+    if (activeTab === 'body' || activeTab === 'style' || activeTab === 'effects' || activeTab === 'animation') {
+      setRightActiveTab(activeTab)
+      if (activeTab !== 'effects') setEffectDetailPage(null)
+    }
+  }, [activeTab])
+
+  useEffect(() => {
+    if (selectedEntityPartId == null) return
+    if (!entityParts.some(part => part.id === selectedEntityPartId)) return
+    setAvatarTreeSelection({ kind: 'part', id: selectedEntityPartId })
+    setRightActiveTab('body')
+  }, [entityParts, selectedEntityPartId])
+
+  useEffect(() => {
+    if (avatarTreeContextMenu == null) return
+    const handlePointerDown = (event: globalThis.PointerEvent) => {
+      if (!avatarTreeContextMenuRef.current?.contains(event.target as Node)) {
+        setAvatarTreeContextMenu(null)
+      }
+    }
+    const handleKeyDown = (event: globalThis.KeyboardEvent) => {
+      if (event.key === 'Escape') setAvatarTreeContextMenu(null)
+    }
+    document.addEventListener('pointerdown', handlePointerDown)
+    document.addEventListener('keydown', handleKeyDown)
+    return () => {
+      document.removeEventListener('pointerdown', handlePointerDown)
+      document.removeEventListener('keydown', handleKeyDown)
+    }
+  }, [avatarTreeContextMenu])
+
+  useEffect(() => {
+    if (
+      buildDetailPage == null && effectDetailPage == null && styleDetailPage == null &&
+      !surfaceDecalDetailOpen && !faceAdvancedOpen
+    ) return
+    const handleKeyDown = (event: globalThis.KeyboardEvent) => {
+      if (event.key !== 'Escape') return
+      setBuildDetailPage(null)
+      setEffectDetailPage(null)
+      setPresetBrowser(null)
+      setStyleDetailPage(null)
+      setSurfaceDecalDetailId(null)
+      setFaceAdvancedOpen(false)
+    }
+    document.addEventListener('keydown', handleKeyDown)
+    return () => document.removeEventListener('keydown', handleKeyDown)
+  }, [buildDetailPage, effectDetailPage, faceAdvancedOpen, styleDetailPage, surfaceDecalDetailOpen])
+
+  useEffect(() => {
+    if (surfaceDecalDetailId == null) return
+    const selectedDecalExists = surfaceDecals.some(decal => decal.id === surfaceDecalDetailId)
+    if (coatPattern.enabled || !selectedDecalExists) setSurfaceDecalDetailId(null)
+  }, [coatPattern.enabled, surfaceDecalDetailId, surfaceDecals])
+
+  useEffect(() => {
+    if (!rightHeaderActionsOpen) return
+    const handlePointerDown = (event: globalThis.PointerEvent) => {
+      if (!rightHeaderActionsRef.current?.contains(event.target as Node)) {
+        setRightHeaderActionsOpen(false)
+      }
+    }
+    const handleKeyDown = (event: globalThis.KeyboardEvent) => {
+      if (event.key === 'Escape') setRightHeaderActionsOpen(false)
+    }
+    document.addEventListener('pointerdown', handlePointerDown)
+    document.addEventListener('keydown', handleKeyDown)
+    return () => {
+      document.removeEventListener('pointerdown', handlePointerDown)
+      document.removeEventListener('keydown', handleKeyDown)
+    }
+  }, [rightHeaderActionsOpen])
+
   const commitSeedDraft = () => {
     const nextSeed = seedDraft.trim()
     if (nextSeed === '') {
@@ -1152,21 +1349,441 @@ export function AvatarControls({
     onSeedChange(nextSeed)
   }
 
+  const renderAdvancedToggle = (
+    expanded: boolean,
+    controls: string,
+    onToggle: () => void
+  ) => (
+    <button
+      className='avatar-controls__advanced-toggle'
+      type='button'
+      aria-label={t('Advanced options')}
+      aria-controls={controls}
+      aria-expanded={expanded}
+      title={t('Advanced options')}
+      onClick={onToggle}
+    >
+      <ControlIcon name='build' />
+    </button>
+  )
+
+  const effectDetailLabels: Readonly<Record<AvatarEffectDetailPage, string>> = {
+    'avatar-outline': 'Avatar outline',
+    'avatar-shadow': 'Avatar shadow',
+    'face-shadow': 'Face shadow',
+    'frame-shadow': 'Frame shadow',
+    light: 'Light source',
+    pixel: 'Pixel style'
+  }
+
+  const renderEffectSwitch = (
+    page: AvatarEffectDetailPage,
+    checked: boolean,
+    onChange: () => void
+  ) => (
+    <button
+      className='avatar-controls__switch'
+      type='button'
+      role='switch'
+      aria-label={t(effectDetailLabels[page])}
+      aria-checked={checked}
+      onClick={onChange}
+    >
+      <span />
+    </button>
+  )
+
+  const effectOverviewSummary = (page: AvatarEffectDetailPage) => {
+    if (page === 'pixel') return `${pixelEffect.blockSize}px · ${pixelEffect.paletteSize} ${t('Colors')}`
+    if (page === 'light') return `${lightAzimuth}° · ${lightDistance}%`
+    if (page === 'avatar-shadow') return `${avatarShadowStyle.distance}px · ${avatarShadowStyle.opacity}%`
+    if (page === 'avatar-outline') {
+      return `${avatarOutlineStyle.color.toUpperCase()} · ${avatarOutlineStyle.width}px · ${avatarOutlineStyle.opacity}%`
+    }
+    if (page === 'face-shadow') return `${faceShadowStyle.distance}px · ${faceShadowStyle.opacity}%`
+    return `${frameShadowStyle.distance}px · ${frameShadowStyle.opacity}%`
+  }
+
+  const renderEffectOverviewItem = (
+    page: AvatarEffectDetailPage,
+    checked: boolean,
+    icon: ControlIconName,
+    onChange: () => void
+  ) => (
+    <div className='avatar-controls__effect-entry' data-active={checked ? 'true' : undefined}>
+      <button
+        className='avatar-controls__effect-entry-main'
+        type='button'
+        role='switch'
+        aria-label={t(effectDetailLabels[page])}
+        aria-checked={checked}
+        onClick={onChange}
+      >
+        <span className='avatar-controls__effect-entry-icon'>
+          <ControlIcon name={icon} />
+        </span>
+        <span className='avatar-controls__effect-entry-copy'>
+          <strong>{t(effectDetailLabels[page])}</strong>
+          <span>{checked ? effectOverviewSummary(page) : t('Off')}</span>
+        </span>
+      </button>
+      <span className='avatar-controls__effect-entry-actions'>
+        {renderAdvancedToggle(
+          effectDetailPage === page,
+          `avatar-controls-effects-detail-${page}`,
+          () => setEffectDetailPage(page)
+        )}
+      </span>
+    </div>
+  )
+
+  const renderEffectDetailParameters = (page: AvatarEffectDetailPage) => {
+    if (page === 'pixel') {
+      if (!pixelEffect.enabled) return null
+      return (
+        <div className='avatar-controls__parameter-controls avatar-controls__pixel-controls'>
+          <ValueSlider
+            ariaLabel='Pixel size'
+            label='Pixel size'
+            min={AVATAR_PIXEL_EFFECT_RANGES.blockSize.min}
+            max={AVATAR_PIXEL_EFFECT_RANGES.blockSize.max}
+            suffix='px'
+            value={pixelEffect.blockSize}
+            onChange={blockSize => onPixelEffectChange({ blockSize })}
+          />
+          <div className='avatar-controls__pixel-control'>
+            <span>{t('Sampling')}</span>
+            <div
+              className='avatar-controls__segments avatar-controls__pixel-sampling'
+              role='radiogroup'
+              aria-label={t('Pixel sampling')}
+            >
+              {([
+                ['center', 'Center'],
+                ['dominant', 'Dominant'],
+                ['median', 'Median'],
+                ['slic', 'SLIC']
+              ] as const).map(([sampling, label]) => (
+                <button
+                  key={sampling}
+                  className='avatar-controls__segment'
+                  type='button'
+                  role='radio'
+                  aria-checked={pixelEffect.sampling === sampling}
+                  aria-pressed={pixelEffect.sampling === sampling}
+                  onClick={() => onPixelEffectChange({ sampling })}
+                >
+                  <PixelSamplingIcon sampling={sampling} />
+                  <span>{t(label)}</span>
+                </button>
+              ))}
+            </div>
+          </div>
+          <div className='avatar-controls__pixel-control'>
+            <span>{t('Colors')}</span>
+            <div
+              className='avatar-controls__segments avatar-controls__pixel-palette'
+              role='radiogroup'
+              aria-label={t('Pixel color count')}
+            >
+              {AVATAR_PIXEL_EFFECT_RANGES.paletteSizes.map(paletteSize => (
+                <button
+                  key={paletteSize}
+                  className='avatar-controls__segment'
+                  type='button'
+                  role='radio'
+                  aria-checked={pixelEffect.paletteSize === paletteSize}
+                  aria-pressed={pixelEffect.paletteSize === paletteSize}
+                  onClick={() => onPixelEffectChange({ paletteSize })}
+                >
+                  {paletteSize}
+                </button>
+              ))}
+            </div>
+          </div>
+          <div className='avatar-controls__pixel-control'>
+            <span>{t('Dithering')}</span>
+            <div className='avatar-controls__segments' role='radiogroup' aria-label={t('Pixel dithering')}>
+              {([
+                ['none', 'Off'],
+                ['ordered', 'Ordered']
+              ] as const).map(([dithering, label]) => (
+                <button
+                  key={dithering}
+                  className='avatar-controls__segment'
+                  type='button'
+                  role='radio'
+                  aria-checked={pixelEffect.dithering === dithering}
+                  aria-pressed={pixelEffect.dithering === dithering}
+                  onClick={() => onPixelEffectChange({ dithering })}
+                >
+                  {t(label)}
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+      )
+    }
+
+    if (page === 'light') {
+      if (!showLight) return null
+      return (
+        <div className='avatar-controls__parameter-controls'>
+          <ValueSlider
+            ariaLabel='Light direction'
+            label='Direction'
+            min={AVATAR_LIGHTING_RANGES.azimuth.min}
+            max={AVATAR_LIGHTING_RANGES.azimuth.max}
+            suffix='°'
+            value={lightAzimuth}
+            onChange={onLightAzimuthChange}
+          />
+          <ValueSlider
+            ariaLabel='Light angle'
+            label='Angle'
+            min={AVATAR_LIGHTING_RANGES.elevation.min}
+            max={AVATAR_LIGHTING_RANGES.elevation.max}
+            suffix='°'
+            value={lightElevation}
+            onChange={onLightElevationChange}
+          />
+          <div>
+            <ValueSlider
+              ariaLabel='Light distance'
+              label='Distance'
+              min={AVATAR_LIGHTING_RANGES.distance.min}
+              max={AVATAR_LIGHTING_RANGES.distance.max}
+              suffix='%'
+              value={lightDistance}
+              onChange={onLightDistanceChange}
+            />
+            <div className='avatar-controls__value-scale' aria-hidden='true'>
+              <span>{t('Near')}</span>
+              <span>{t('Far')}</span>
+            </div>
+          </div>
+          <div>
+            <ValueSlider
+              ariaLabel='Surface grid density'
+              label='Grid density'
+              min={AVATAR_LIGHTING_RANGES.gridDensity.min}
+              max={AVATAR_LIGHTING_RANGES.gridDensity.max}
+              suffix='%'
+              value={gridDensity}
+              onChange={onGridDensityChange}
+            />
+            <div className='avatar-controls__value-scale' aria-hidden='true'>
+              <span>{t('Low')}</span>
+              <span>{t('High')}</span>
+            </div>
+          </div>
+        </div>
+      )
+    }
+
+    if (page === 'avatar-shadow') {
+      if (!showAvatarShadow) return null
+      return (
+        <div className='avatar-controls__parameter-controls'>
+          <label className='avatar-controls__color-control'>
+            <span>{t('Color')}</span>
+            <span>
+              <input
+                type='color'
+                aria-label='Avatar shadow color'
+                value={avatarShadowStyle.color ?? '#000000'}
+                onChange={event => onAvatarShadowStyleChange({ color: event.currentTarget.value })}
+              />
+              <output>{(avatarShadowStyle.color ?? '#000000').toUpperCase()}</output>
+            </span>
+          </label>
+          <ValueSlider
+            ariaLabel='Avatar shadow direction'
+            label='Direction'
+            min={AVATAR_SHADOW_RANGES.avatar.direction.min}
+            max={AVATAR_SHADOW_RANGES.avatar.direction.max}
+            suffix='°'
+            value={avatarShadowStyle.direction}
+            onChange={direction => onAvatarShadowStyleChange({ direction })}
+          />
+          <ValueSlider
+            ariaLabel='Avatar shadow distance'
+            label='Distance'
+            min={AVATAR_SHADOW_RANGES.avatar.distance.min}
+            max={AVATAR_SHADOW_RANGES.avatar.distance.max}
+            suffix='px'
+            value={avatarShadowStyle.distance}
+            onChange={distance => onAvatarShadowStyleChange({ distance })}
+          />
+          <ValueSlider
+            ariaLabel='Avatar shadow softness'
+            label='Softness'
+            min={AVATAR_SHADOW_RANGES.avatar.softness.min}
+            max={AVATAR_SHADOW_RANGES.avatar.softness.max}
+            suffix='px'
+            value={avatarShadowStyle.softness}
+            onChange={softness => onAvatarShadowStyleChange({ softness })}
+          />
+          <ValueSlider
+            ariaLabel='Avatar shadow opacity'
+            label='Opacity'
+            min={AVATAR_SHADOW_RANGES.avatar.opacity.min}
+            max={AVATAR_SHADOW_RANGES.avatar.opacity.max}
+            suffix='%'
+            value={avatarShadowStyle.opacity}
+            onChange={opacity => onAvatarShadowStyleChange({ opacity })}
+          />
+        </div>
+      )
+    }
+
+    if (page === 'avatar-outline') {
+      if (!showOutline) return null
+      return (
+        <div className='avatar-controls__parameter-controls'>
+          <label className='avatar-controls__color-control'>
+            <span>{t('Color')}</span>
+            <span>
+              <input
+                type='color'
+                aria-label='Avatar outline color'
+                value={avatarOutlineStyle.color}
+                onChange={event => onAvatarOutlineStyleChange({ color: event.currentTarget.value })}
+              />
+              <output>{avatarOutlineStyle.color.toUpperCase()}</output>
+            </span>
+          </label>
+          <ValueSlider
+            ariaLabel='Avatar outline width'
+            label='Width'
+            min={AVATAR_OUTLINE_RANGES.width.min}
+            max={AVATAR_OUTLINE_RANGES.width.max}
+            suffix='px'
+            value={avatarOutlineStyle.width}
+            onChange={width => onAvatarOutlineStyleChange({ width })}
+          />
+          <ValueSlider
+            ariaLabel='Avatar outline opacity'
+            label='Opacity'
+            min={AVATAR_OUTLINE_RANGES.opacity.min}
+            max={AVATAR_OUTLINE_RANGES.opacity.max}
+            suffix='%'
+            value={avatarOutlineStyle.opacity}
+            onChange={opacity => onAvatarOutlineStyleChange({ opacity })}
+          />
+        </div>
+      )
+    }
+
+    if (page === 'face-shadow') {
+      if (!showShadow) return null
+      return (
+        <div className='avatar-controls__parameter-controls'>
+          <ValueSlider
+            ariaLabel='Face shadow direction'
+            label='Direction'
+            min={AVATAR_SHADOW_RANGES.face.direction.min}
+            max={AVATAR_SHADOW_RANGES.face.direction.max}
+            suffix='°'
+            value={faceShadowStyle.direction}
+            onChange={direction => onFaceShadowStyleChange({ direction })}
+          />
+          <ValueSlider
+            ariaLabel='Face shadow distance'
+            label='Distance'
+            min={AVATAR_SHADOW_RANGES.face.distance.min}
+            max={AVATAR_SHADOW_RANGES.face.distance.max}
+            suffix='px'
+            value={faceShadowStyle.distance}
+            onChange={distance => onFaceShadowStyleChange({ distance })}
+          />
+          <ValueSlider
+            ariaLabel='Face shadow softness'
+            label='Softness'
+            min={AVATAR_SHADOW_RANGES.face.softness.min}
+            max={AVATAR_SHADOW_RANGES.face.softness.max}
+            suffix='px'
+            value={faceShadowStyle.softness}
+            onChange={softness => onFaceShadowStyleChange({ softness })}
+          />
+          <ValueSlider
+            ariaLabel='Face shadow opacity'
+            label='Opacity'
+            min={AVATAR_SHADOW_RANGES.face.opacity.min}
+            max={AVATAR_SHADOW_RANGES.face.opacity.max}
+            suffix='%'
+            value={faceShadowStyle.opacity}
+            onChange={opacity => onFaceShadowStyleChange({ opacity })}
+          />
+        </div>
+      )
+    }
+
+    if (!showFrameShadow) return null
+    return (
+      <div className='avatar-controls__parameter-controls'>
+        <ValueSlider
+          ariaLabel='Frame shadow direction'
+          label='Direction'
+          min={AVATAR_SHADOW_RANGES.frame.direction.min}
+          max={AVATAR_SHADOW_RANGES.frame.direction.max}
+          suffix='°'
+          value={frameShadowStyle.direction}
+          onChange={direction => onFrameShadowStyleChange({ direction })}
+        />
+        <ValueSlider
+          ariaLabel='Frame shadow distance'
+          label='Distance'
+          min={AVATAR_SHADOW_RANGES.frame.distance.min}
+          max={AVATAR_SHADOW_RANGES.frame.distance.max}
+          suffix='px'
+          value={frameShadowStyle.distance}
+          onChange={distance => onFrameShadowStyleChange({ distance })}
+        />
+        <ValueSlider
+          ariaLabel='Frame shadow softness'
+          label='Softness'
+          min={AVATAR_SHADOW_RANGES.frame.softness.min}
+          max={AVATAR_SHADOW_RANGES.frame.softness.max}
+          suffix='px'
+          value={frameShadowStyle.softness}
+          onChange={softness => onFrameShadowStyleChange({ softness })}
+        />
+        <ValueSlider
+          ariaLabel='Frame shadow opacity'
+          label='Opacity'
+          min={AVATAR_SHADOW_RANGES.frame.opacity.min}
+          max={AVATAR_SHADOW_RANGES.frame.opacity.max}
+          suffix='%'
+          value={frameShadowStyle.opacity}
+          onChange={opacity => onFrameShadowStyleChange({ opacity })}
+        />
+      </div>
+    )
+  }
+
   const renderSeedFieldHeader = (
     icon: ControlIconName,
     label: string,
-    field: AvatarSeedField
+    field: AvatarSeedField,
+    advanced?: { readonly controls: string; readonly expanded: boolean; readonly onToggle: () => void }
   ) => (
     <div className='avatar-controls__field-header'>
       <span className='avatar-controls__label'>
         <ControlIcon name={icon} />
         {t(label)}
       </span>
-      <SeedFieldToggle
-        enabled={seededFields.includes(field)}
-        label={label}
-        onChange={() => onSeedFieldToggle(field, !seededFields.includes(field))}
-      />
+      <span className='avatar-controls__field-actions'>
+        <SeedFieldToggle
+          enabled={seededFields.includes(field)}
+          label={label}
+          onChange={() => onSeedFieldToggle(field, !seededFields.includes(field))}
+        />
+        {advanced == null
+          ? null
+          : renderAdvancedToggle(advanced.expanded, advanced.controls, advanced.onToggle)}
+      </span>
     </div>
   )
 
@@ -1175,10 +1792,35 @@ export function AvatarControls({
   })
   const selectedEntityPart = entityParts.find(part => part.id === selectedEntityPartId)
   const editingEntityPart = selectedEntityPart ?? entityParts.find(part => part.face)
-  const editingSurfaceDecal = surfaceDecals.find(decal => decal.id === selectedSurfaceDecalId) ?? null
-  const pendingPalette = visiblePalettes.find(palette => palette.id === pendingPaletteId) ?? null
+  const avatarTreeGroups = [...new Set([
+    ...entityParts.map(resolveAvatarPartGroupId),
+    ...entityGroups.map(group => group.id)
+  ])].map(id => {
+    const parts = entityParts.filter(part => resolveAvatarPartGroupId(part) === id)
+    const fallbackLabel = id === DEFAULT_FACE_GROUP_ID
+      ? t('Face parts')
+      : id === DEFAULT_PARTS_GROUP_ID ? t('Shape parts') : t('Group')
+    return {
+      id,
+      label: entityGroups.find(group => group.id === id)?.label ??
+        parts.find(part => part.groupLabel != null)?.groupLabel ?? fallbackLabel,
+      parts
+    }
+  })
+  const selectedAvatarTreeGroup = avatarTreeSelection.kind === 'group'
+    ? avatarTreeGroups.find(group => group.id === avatarTreeSelection.id) ?? null
+    : null
+  const selectedAvatarTreePart = avatarTreeSelection.kind === 'part'
+    ? entityParts.find(part => part.id === avatarTreeSelection.id) ?? null
+    : null
+  const editingSurfaceDecal = surfaceDecals.find(
+    decal => decal.id === (surfaceDecalDetailId ?? selectedSurfaceDecalId)
+  ) ?? null
+  const pendingPalette = AVATAR_PALETTES.find(palette => palette.id === pendingPaletteId) ?? null
   const showOverallStyleControls = selectedEntityPart == null || selectedEntityPart.face
-  const compactPresetCapacity = Math.max(8, Math.floor((controlsWidth - 32) / 64) * 2)
+  const supportsCoatPattern = entityPreset === 'cat' || entityPreset === 'dog' || entityPreset === 'rabbit' ||
+    (entityPreset === 'bear' && bearBreedTemplateId != null) || isAvatarAnimalSpeciesId(entityPreset)
+  const compactResourceRowCapacity = Math.max(2, Math.floor((leftControlsWidth - 90) / 40))
   const facePresets = sortAvatarPresetItems(
     [DEFAULT_AVATAR_FACE_PRESET, ...AVATAR_FACE_PRESETS],
     preset => `face:${preset.id}`,
@@ -1205,23 +1847,113 @@ export function AvatarControls({
     presetUsage,
     item => item.createdAt
   )
-  const compactFacePresets = facePresets.length > compactPresetCapacity
-    ? facePresets.slice(0, compactPresetCapacity - 1)
+  const compactFacePresets = facePresets.length > compactResourceRowCapacity
+    ? facePresets.slice(0, compactResourceRowCapacity - 1)
     : facePresets
-  const compactSavedPresetItems = savedPresetItems.length > compactPresetCapacity
-    ? savedPresetItems.slice(0, compactPresetCapacity - 1)
+  const compactSavedPresetItems = savedPresetItems.length > compactResourceRowCapacity
+    ? savedPresetItems.slice(0, compactResourceRowCapacity - 1)
     : savedPresetItems
-  const compactEntityPresetItems = entityPresetItems.length > compactPresetCapacity
-    ? entityPresetItems.slice(0, compactPresetCapacity - 1)
+  const compactEntityPresetItems = entityPresetItems.length > compactResourceRowCapacity
+    ? entityPresetItems.slice(0, compactResourceRowCapacity - 1)
     : entityPresetItems
+  const compactPaletteRowCapacity = Math.max(2, Math.floor((controlsWidth - 90) / 50))
+  const orderedPaletteItems = [
+    selectedPalette,
+    ...AVATAR_PALETTES.filter(palette => palette.id !== selectedPalette.id)
+  ]
+  const compactPaletteItems = orderedPaletteItems.slice(0, compactPaletteRowCapacity - 1)
+  const orderedCameraBackgrounds = cameraBackground === 'transparent'
+    ? AVATAR_CAMERA_BACKGROUND_PRESETS
+    : [cameraBackground, ...AVATAR_CAMERA_BACKGROUND_PRESETS.filter(color => color !== cameraBackground)]
+  const compactCameraBackgrounds = orderedCameraBackgrounds.slice(0, compactPaletteRowCapacity - 1)
+
+  const activateAvatarTreeSelection = (selection: AvatarTreeSelection) => {
+    setAvatarTreeSelection(selection)
+    onSelectEntityPart(selection.kind === 'part' ? selection.id : null)
+    setRightActiveTab('body')
+    setRightHeaderActionsOpen(false)
+    onTabChange('body')
+  }
+
+  const createAvatarTreePart = (groupId?: string) => {
+    const referencePart = selectedAvatarTreePart ?? selectedAvatarTreeGroup?.parts[0] ?? editingEntityPart
+    const id = `shape-${Date.now().toString(36)}`
+    const group = groupId == null ? null : avatarTreeGroups.find(candidate => candidate.id === groupId) ?? null
+    const part: AvatarEntityPart = {
+      baseColor: referencePart?.baseColor ?? selectedPalette.background,
+      face: false,
+      foregroundColor: referencePart?.foregroundColor ?? selectedPalette.foreground,
+      ...(group == null
+        ? {}
+        : {
+            groupId: group.id,
+            ...(group.id === DEFAULT_FACE_GROUP_ID || group.id === DEFAULT_PARTS_GROUP_ID
+              ? {}
+              : { groupLabel: group.label })
+          }),
+      highlightColor: referencePart?.highlightColor ?? selectedPalette.gradient[0],
+      id,
+      label: `${t('Shape')} ${entityParts.length + 1}`,
+      scaleX: .5,
+      scaleY: .5,
+      scaleZ: .5,
+      shadowColor: referencePart?.shadowColor ?? selectedPalette.gradient[1],
+      shape: 'sphere',
+      x: 0,
+      y: 0,
+      z: 0
+    }
+    onEntityPartAdd(part)
+    activateAvatarTreeSelection({ kind: 'part', id })
+    setAvatarTreeContextMenu(null)
+  }
+
+  const createAvatarTreeGroup = () => {
+    const id = `group-${Date.now().toString(36)}`
+    onEntityGroupAdd({ id, label: `${t('Group')} ${avatarTreeGroups.length + 1}` })
+    setAvatarTreeExpandedGroups(groups => [...groups, id])
+    activateAvatarTreeSelection({ kind: 'group', id })
+    setAvatarTreeContextMenu(null)
+  }
+
+  const openAvatarTreeContextMenu = (event: MouseEvent, target: AvatarTreeSelection) => {
+    event.preventDefault()
+    event.stopPropagation()
+    setAvatarTreeContextMenu({ clientX: event.clientX, clientY: event.clientY, target })
+  }
+
+  const updateAvatarTreeGroup = (groupId: string, patch: Partial<AvatarEntityPart>) => {
+    entityParts
+      .filter(part => resolveAvatarPartGroupId(part) === groupId)
+      .forEach(part => onEntityPartChange(part.id, patch))
+  }
+
+  const renameAvatarTreeGroup = (groupId: string, label: string) => {
+    onEntityGroupChange(groupId, { label })
+    updateAvatarTreeGroup(groupId, { groupId, groupLabel: label })
+  }
+
+  const updateAvatarTreeGroupMotion = (groupId: string, axis: 'x' | 'y' | 'z', value: number) => {
+    const currentMotion = avatarTreeGroupMotion[groupId] ?? { x: 0, y: 0, z: 0 }
+    const delta = value - currentMotion[axis]
+    if (delta !== 0) {
+      entityParts
+        .filter(part => resolveAvatarPartGroupId(part) === groupId)
+        .forEach(part => onEntityPartChange(part.id, { [axis]: part[axis] + delta }))
+    }
+    setAvatarTreeGroupMotion(motion => ({
+      ...motion,
+      [groupId]: { ...(motion[groupId] ?? { x: 0, y: 0, z: 0 }), [axis]: value }
+    }))
+  }
 
   useEffect(() => {
     if (pendingPalette != null) paletteConfirmActionRef.current?.focus()
   }, [pendingPalette])
 
   useEffect(() => {
-    if (presetBrowser != null) presetSearchRef.current?.focus()
-  }, [presetBrowser])
+    if (buildDetailPage === 'presets' && presetBrowser != null) presetSearchRef.current?.focus()
+  }, [buildDetailPage, presetBrowser])
 
   useEffect(() => {
     if (lightAzimuth !== DEFAULT_AVATAR_PREVIEW_LIGHT.azimuth ||
@@ -1457,17 +2189,107 @@ export function AvatarControls({
     )
   }
 
-  const handleResizeStart = (event: PointerEvent<HTMLDivElement>) => {
+  const currentBreedPresetItems: readonly AvatarBreedPresetItem[] = entityPreset === 'cat'
+    ? AVATAR_CAT_BREED_TEMPLATES.map(template => ({
+      id: template.id,
+      kind: 'cat',
+      label: template.label,
+      onSelect: () => onCatBreedTemplateChange(catBreedTemplateId === template.id ? null : template.id),
+      renderPreview: (eager = false) => renderCatBreedPreview(template, eager),
+      selected: catBreedTemplateId === template.id
+    }))
+    : entityPreset === 'dog'
+      ? AVATAR_DOG_BREED_TEMPLATES.map(template => ({
+        id: template.id,
+        kind: 'dog',
+        label: template.label,
+        onSelect: () => onDogBreedTemplateChange(dogBreedTemplateId === template.id ? null : template.id),
+        renderPreview: (eager = false) => renderDogBreedPreview(template, eager),
+        selected: dogBreedTemplateId === template.id
+      }))
+      : entityPreset === 'rabbit'
+        ? AVATAR_RABBIT_BREED_TEMPLATES.map(template => ({
+          id: template.id,
+          kind: 'rabbit',
+          label: template.label,
+          onSelect: () => onRabbitBreedTemplateChange(rabbitBreedTemplateId === template.id ? null : template.id),
+          renderPreview: (eager = false) => renderRabbitBreedPreview(template, eager),
+          selected: rabbitBreedTemplateId === template.id
+        }))
+        : entityPreset === 'bear'
+          ? AVATAR_BEAR_BREED_TEMPLATES.map(template => ({
+            id: template.id,
+            kind: 'bear',
+            label: template.label,
+            onSelect: () => onBearBreedTemplateChange(bearBreedTemplateId === template.id ? null : template.id),
+            renderPreview: (eager = false) => renderBearBreedPreview(template, eager),
+            selected: bearBreedTemplateId === template.id
+          }))
+          : animalSpecies == null
+            ? []
+            : getAvatarAnimalBreedTemplates(animalSpecies).map(template => ({
+              id: template.id,
+              kind: 'animal',
+              label: template.label,
+              onSelect: () => onAnimalBreedTemplateChange?.(template.id),
+              renderPreview: (eager = false) => renderAnimalBreedPreview(template, eager),
+              selected: animalBreedTemplateId === template.id
+            }))
+  const currentBreedLabel = entityPreset === 'custom'
+    ? 'Breed presets'
+    : `${ENTITY_PRESET_LABELS[entityPreset]} types`
+  const selectedBreedPresetItem = currentBreedPresetItems.find(item => item.selected)
+  const orderedBreedPresetItems = selectedBreedPresetItem == null
+    ? currentBreedPresetItems
+    : [selectedBreedPresetItem, ...currentBreedPresetItems.filter(item => item !== selectedBreedPresetItem)]
+  const compactBreedPresetItems = orderedBreedPresetItems.length > compactResourceRowCapacity
+    ? orderedBreedPresetItems.slice(0, compactResourceRowCapacity - 1)
+    : orderedBreedPresetItems
+
+  const renderBreedPresetItem = (
+    item: AvatarBreedPresetItem,
+    { closeBrowser = false, eager = false } = {}
+  ) => {
+    const dataAttribute = item.kind === 'animal'
+      ? { 'data-animal-breed': item.id }
+      : { [`data-${item.kind}-breed`]: item.id }
+    return (
+      <button
+        key={`${item.kind}:${item.id}`}
+        className={`avatar-controls__saved-preset avatar-controls__saved-preset--entity-preset avatar-controls__${item.kind}-breed-preset`}
+        type='button'
+        aria-label={t(item.label)}
+        aria-pressed={item.selected}
+        title={t(item.label)}
+        {...dataAttribute}
+        onClick={() => {
+          if (closeBrowser) closePresetBrowser()
+          item.onSelect()
+        }}
+      >
+        {item.renderPreview(eager)}
+      </button>
+    )
+  }
+
+  const handleResizeStart = (side: 'left' | 'right', event: PointerEvent<HTMLDivElement>) => {
     if (event.button !== 0) return
-    resizeStartRef.current = { pointerX: event.clientX, width: controlsWidth }
+    resizeStartRef.current = {
+      pointerX: event.clientX,
+      side,
+      width: side === 'left' ? leftControlsWidth : controlsWidth
+    }
     event.currentTarget.setPointerCapture(event.pointerId)
-    setResizing(true)
+    setResizingSide(side)
   }
 
   const handleResizeMove = (event: PointerEvent<HTMLDivElement>) => {
     const start = resizeStartRef.current
     if (start == null) return
-    onControlsWidthChange(clampControlsWidth(start.width + start.pointerX - event.clientX))
+    const delta = event.clientX - start.pointerX
+    const nextWidth = clampControlsWidth(start.width + (start.side === 'left' ? delta : -delta))
+    if (start.side === 'left') onLeftControlsWidthChange(nextWidth)
+    else onControlsWidthChange(nextWidth)
   }
 
   const handleResizeEnd = (event: PointerEvent<HTMLDivElement>) => {
@@ -1475,13 +2297,15 @@ export function AvatarControls({
     if (event.currentTarget.hasPointerCapture(event.pointerId)) {
       event.currentTarget.releasePointerCapture(event.pointerId)
     }
-    setResizing(false)
+    setResizingSide(null)
   }
 
-  const handleResizeKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
+  const handleResizeKeyDown = (side: 'left' | 'right', event: KeyboardEvent<HTMLDivElement>) => {
     if (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight') return
     event.preventDefault()
-    onControlsWidthChange(clampControlsWidth(controlsWidth + (event.key === 'ArrowLeft' ? 16 : -16)))
+    const direction = event.key === 'ArrowRight' ? 1 : -1
+    if (side === 'left') onLeftControlsWidthChange(clampControlsWidth(leftControlsWidth + direction * 16))
+    else onControlsWidthChange(clampControlsWidth(controlsWidth - direction * 16))
   }
 
   const handlePaletteSelect = (paletteId: string) => {
@@ -1509,11 +2333,17 @@ export function AvatarControls({
   const openPresetBrowser = (browser: AvatarPresetBrowser) => {
     setPresetSearch('')
     setPresetBrowser(browser)
+    setBuildDetailPage('presets')
+  }
+
+  const closePresetBrowser = () => {
+    setPresetBrowser(null)
+    setBuildDetailPage(null)
   }
 
   const selectFacePreset = (preset: AvatarFacePreset) => {
     markPresetUsed(`face:${preset.id}`)
-    setPresetBrowser(null)
+    closePresetBrowser()
     if (preset.id === DEFAULT_AVATAR_FACE_PRESET.id) {
       onResetFace()
       return
@@ -1523,7 +2353,7 @@ export function AvatarControls({
 
   const selectSavedPreset = (item: AvatarSavedPresetItem) => {
     markPresetUsed(item.key)
-    setPresetBrowser(null)
+    closePresetBrowser()
     if (item.kind === 'entity') {
       onEntityPresetChange(item.preset)
       return
@@ -1609,6 +2439,40 @@ export function AvatarControls({
     </button>
   )
 
+  const renderStyleMoreButton = (page: AvatarStyleDetailPage, label: string) => (
+    <button
+      className='avatar-controls__preset-more avatar-controls__style-more'
+      type='button'
+      aria-label={`${t('More')} ${t(label)}`}
+      title={`${t('More')} ${t(label)}`}
+      onClick={() => setStyleDetailPage(page)}
+    >
+      <svg viewBox='0 0 24 24' aria-hidden='true'>
+        <circle cx='5' cy='12' r='1.7' />
+        <circle cx='12' cy='12' r='1.7' />
+        <circle cx='19' cy='12' r='1.7' />
+      </svg>
+    </button>
+  )
+
+  const renderPaletteSwatch = (palette: AvatarPalette) => (
+    <button
+      key={palette.id}
+      className='avatar-controls__swatch'
+      type='button'
+      aria-label={palette.name}
+      aria-pressed={palette.id === selectedPalette.id}
+      style={{
+        '--avatar-bg': palette.background,
+        '--avatar-bg-end': palette.gradient[1],
+        '--avatar-fg': palette.foreground
+      } as CSSProperties}
+      onClick={() => handlePaletteSelect(palette.id)}
+    >
+      <span />
+    </button>
+  )
+
   const normalizedPresetSearch = presetSearch.trim().toLocaleLowerCase()
   const searchedFacePresets = facePresets.filter(preset => (
     normalizedPresetSearch === '' || t(preset.label).toLocaleLowerCase().includes(normalizedPresetSearch)
@@ -1626,310 +2490,775 @@ export function AvatarControls({
       t(ENTITY_PRESET_LABELS[item.preset]).toLocaleLowerCase().includes(normalizedPresetSearch)
     )
   ))
+  const searchedBreedPresetItems = currentBreedPresetItems.filter(item => (
+    normalizedPresetSearch === '' || t(item.label).toLocaleLowerCase().includes(normalizedPresetSearch)
+  ))
   const searchedPresetCount = presetBrowser === 'faces'
     ? searchedFacePresets.length
-    : presetBrowser === 'entities' ? searchedEntityPresetItems.length : searchedSavedPresetItems.length
+    : presetBrowser === 'entities'
+      ? searchedEntityPresetItems.length
+      : presetBrowser === 'breeds' ? searchedBreedPresetItems.length : searchedSavedPresetItems.length
 
-  return (
-    <aside id='avatar-controls' className='avatar-controls' aria-label={t('Avatar controls')} data-resizing={resizing}>
+  const renderAvatarTreeMenuButton = (target: AvatarTreeSelection) => (
+    <button
+      className='avatar-controls__node-tree-more'
+      type='button'
+      aria-label={t('Node actions')}
+      aria-haspopup='menu'
+      onClick={event => {
+        event.stopPropagation()
+        const bounds = event.currentTarget.getBoundingClientRect()
+        setAvatarTreeContextMenu({ clientX: bounds.right - 168, clientY: bounds.bottom + 4, target })
+      }}
+    >
+      <svg viewBox='0 0 18 18' aria-hidden='true'>
+        <circle cx='4' cy='9' r='1.2' />
+        <circle cx='9' cy='9' r='1.2' />
+        <circle cx='14' cy='9' r='1.2' />
+      </svg>
+    </button>
+  )
+
+  const renderAvatarNodeTree = () => (
+    <>
       <div
-        className='avatar-controls__resize-handle'
+        className='avatar-controls__node-tree'
+        role='tree'
+        aria-label={t('Shape node tree')}
+        onContextMenu={event => openAvatarTreeContextMenu(event, { kind: 'root' })}
+      >
+        <div
+          className='avatar-controls__node-tree-row avatar-controls__node-tree-row--root'
+          data-selected={avatarTreeSelection.kind === 'root'}
+        >
+          <button
+            type='button'
+            role='treeitem'
+            aria-level={1}
+            aria-selected={avatarTreeSelection.kind === 'root'}
+            onClick={() => activateAvatarTreeSelection({ kind: 'root' })}
+          >
+            <ControlIcon name='body' />
+            <span>{t('Avatar root')}</span>
+          </button>
+          {renderAvatarTreeMenuButton({ kind: 'root' })}
+        </div>
+        {avatarTreeGroups.map(group => {
+          const expanded = avatarTreeExpandedGroups.includes(group.id)
+          const groupSelection = { kind: 'group', id: group.id } as const
+          return (
+            <div key={group.id} className='avatar-controls__node-tree-group' role='group'>
+              <div
+                className='avatar-controls__node-tree-row avatar-controls__node-tree-row--group'
+                data-selected={avatarTreeSelection.kind === 'group' && avatarTreeSelection.id === group.id}
+                onContextMenu={event => openAvatarTreeContextMenu(event, groupSelection)}
+              >
+                <button
+                  className='avatar-controls__node-tree-disclosure'
+                  type='button'
+                  data-expanded={expanded}
+                  aria-label={t(expanded ? 'Collapse group' : 'Expand group')}
+                  onClick={() => setAvatarTreeExpandedGroups(groups => expanded
+                    ? groups.filter(id => id !== group.id)
+                    : [...groups, group.id])}
+                >
+                  <svg viewBox='0 0 16 16' aria-hidden='true'><path d='m5 3 5 5-5 5' /></svg>
+                </button>
+                <button
+                  type='button'
+                  role='treeitem'
+                  aria-level={2}
+                  aria-expanded={expanded}
+                  aria-selected={avatarTreeSelection.kind === 'group' && avatarTreeSelection.id === group.id}
+                  onClick={() => activateAvatarTreeSelection(groupSelection)}
+                >
+                  <svg className='avatar-controls__node-tree-folder' viewBox='0 0 20 20' aria-hidden='true'>
+                    <path d='M2.5 5.5h5l1.7 2h8.3v8.5h-15z' />
+                  </svg>
+                  <span>{group.label}</span>
+                  <small>{group.parts.length}</small>
+                </button>
+                {renderAvatarTreeMenuButton(groupSelection)}
+              </div>
+              {expanded
+                ? group.parts.map(part => {
+                    const partSelection = { kind: 'part', id: part.id } as const
+                    return (
+                      <div
+                        key={part.id}
+                        className='avatar-controls__node-tree-row avatar-controls__node-tree-row--part'
+                        data-selected={avatarTreeSelection.kind === 'part' && avatarTreeSelection.id === part.id}
+                        onContextMenu={event => openAvatarTreeContextMenu(event, partSelection)}
+                      >
+                        <button
+                          type='button'
+                          role='treeitem'
+                          aria-level={3}
+                          aria-selected={avatarTreeSelection.kind === 'part' && avatarTreeSelection.id === part.id}
+                          onClick={() => activateAvatarTreeSelection(partSelection)}
+                        >
+                          <BodyShapeIcon shape={part.shape} />
+                          <span>{t(part.label)}</span>
+                          <small>{t(BODY_SHAPE_LABELS[part.shape])}</small>
+                        </button>
+                        {renderAvatarTreeMenuButton(partSelection)}
+                      </div>
+                    )
+                  })
+                : null}
+            </div>
+          )
+        })}
+        <button
+          className='avatar-controls__node-tree-blank'
+          type='button'
+          onClick={() => activateAvatarTreeSelection({ kind: 'root' })}
+          onContextMenu={event => openAvatarTreeContextMenu(event, { kind: 'root' })}
+        >
+          {t('Right click to add a shape or group')}
+        </button>
+      </div>
+      {avatarTreeContextMenu == null || typeof document === 'undefined'
+        ? null
+        : createPortal(
+          <div
+            ref={avatarTreeContextMenuRef}
+            className='avatar-controls__node-tree-menu'
+            role='menu'
+            aria-label={t('Node actions')}
+            style={{ left: avatarTreeContextMenu.clientX, top: avatarTreeContextMenu.clientY }}
+          >
+            {avatarTreeContextMenu.target.kind === 'part'
+              ? (
+                <>
+                  <button type='button' role='menuitem' onClick={() => {
+                    const targetId = avatarTreeContextMenu.target.kind === 'part'
+                      ? avatarTreeContextMenu.target.id
+                      : ''
+                    const part = entityParts.find(candidate => candidate.id === targetId)
+                    if (part == null) return
+                    const duplicate = {
+                      ...part,
+                      id: `shape-${Date.now().toString(36)}`,
+                      label: `${part.label} ${t('Copy')}`,
+                      x: part.x + 8,
+                      y: part.y + 8
+                    }
+                    onEntityPartAdd(duplicate)
+                    activateAvatarTreeSelection({ kind: 'part', id: duplicate.id })
+                    setAvatarTreeContextMenu(null)
+                  }}>{t('Duplicate shape')}</button>
+                  <button type='button' role='menuitem' data-danger onClick={() => {
+                    const targetId = avatarTreeContextMenu.target.kind === 'part'
+                      ? avatarTreeContextMenu.target.id
+                      : ''
+                    onEntityPartDelete(targetId)
+                    activateAvatarTreeSelection({ kind: 'root' })
+                    setAvatarTreeContextMenu(null)
+                  }}>{t('Delete shape')}</button>
+                </>
+                )
+              : (
+                <>
+                  <button type='button' role='menuitem' onClick={() => createAvatarTreePart(
+                    avatarTreeContextMenu.target.kind === 'group' ? avatarTreeContextMenu.target.id : undefined
+                  )}>{t('New shape')}</button>
+                  <button type='button' role='menuitem' onClick={createAvatarTreeGroup}>{t('New group')}</button>
+                  {avatarTreeContextMenu.target.kind === 'group'
+                    ? <button type='button' role='menuitem' data-danger onClick={() => {
+                        const groupId = avatarTreeContextMenu.target.kind === 'group'
+                          ? avatarTreeContextMenu.target.id
+                          : ''
+                        entityParts
+                          .filter(part => resolveAvatarPartGroupId(part) === groupId)
+                          .forEach(part => onEntityPartChange(part.id, {
+                            groupId: part.face ? DEFAULT_FACE_GROUP_ID : DEFAULT_PARTS_GROUP_ID,
+                            groupLabel: undefined
+                          }))
+                        onEntityGroupDelete(groupId)
+                        activateAvatarTreeSelection({ kind: 'root' })
+                        setAvatarTreeContextMenu(null)
+                      }}>{t('Remove group')}</button>
+                    : null}
+                </>
+                )}
+          </div>,
+          document.body
+          )}
+    </>
+  )
+
+  const renderAvatarPartMaterial = (
+    part: AvatarEntityPart,
+    onChange: (patch: Partial<AvatarEntityPart>) => void
+  ) => (
+    <div className='avatar-controls__field-group'>
+      <span className='avatar-controls__label'>{t('Part material')}</span>
+      <div className='avatar-controls__entity-colors'>
+        {([
+          ['baseColor', 'Base'],
+          ['highlightColor', 'Highlight'],
+          ['shadowColor', 'Shadow'],
+          ['foregroundColor', 'Face']
+        ] as const).map(([key, label]) => (
+          <label key={key} className='avatar-controls__entity-color'>
+            <span>{t(label)}</span>
+            <input
+              type='color'
+              aria-label={t(label)}
+              value={part[key]}
+              onChange={event => onChange({ [key]: event.currentTarget.value })}
+            />
+          </label>
+        ))}
+      </div>
+    </div>
+  )
+
+  const renderAvatarPartGeometry = (part: AvatarEntityPart) => (
+    <>
+      <div className='avatar-controls__body-grid' aria-label={t('Shape type')}>
+        {AVATAR_BODY_SHAPES.map(shape => (
+          <button
+            key={shape}
+            className='avatar-controls__body-option'
+            type='button'
+            aria-label={t(BODY_SHAPE_LABELS[shape])}
+            aria-pressed={part.shape === shape}
+            title={t(BODY_SHAPE_LABELS[shape])}
+            onClick={() => onEntityPartChange(part.id, { shape })}
+          ><BodyShapeIcon shape={shape} /></button>
+        ))}
+      </div>
+      <div className='avatar-controls__parameter-controls'>
+        <NumberField ariaLabel='Part position X' label='Position X' value={part.x}
+          onChange={x => onEntityPartChange(part.id, { x })} />
+        <NumberField ariaLabel='Part position Y' label='Position Y' value={part.y}
+          onChange={y => onEntityPartChange(part.id, { y })} />
+        <NumberField ariaLabel='Part position Z' label='Position Z' value={part.z}
+          onChange={z => onEntityPartChange(part.id, { z })} />
+        <ValueSlider ariaLabel='Part width' label='Width' min={AVATAR_ENTITY_RANGES.scaleX.min * 100}
+          max={AVATAR_ENTITY_RANGES.scaleX.max * 100} suffix='%' value={part.scaleX * 100}
+          onChange={value => onEntityPartChange(part.id, { scaleX: value / 100 })} />
+        <ValueSlider ariaLabel='Part height' label='Height' min={AVATAR_ENTITY_RANGES.scaleY.min * 100}
+          max={AVATAR_ENTITY_RANGES.scaleY.max * 100} suffix='%' value={part.scaleY * 100}
+          onChange={value => onEntityPartChange(part.id, { scaleY: value / 100 })} />
+        <ValueSlider ariaLabel='Part depth' label='Depth' min={AVATAR_ENTITY_RANGES.scaleZ.min * 100}
+          max={AVATAR_ENTITY_RANGES.scaleZ.max * 100} suffix='%'
+          value={resolveAvatarEntityPartScaleZ(part) * 100}
+          onChange={value => onEntityPartChange(part.id, { scaleZ: value / 100 })} />
+        {part.shape === 'ellipse'
+          ? <ValueSlider ariaLabel='Part bottom taper' label='Bottom taper'
+              min={AVATAR_ENTITY_RANGES.bottomTaper.min} max={AVATAR_ENTITY_RANGES.bottomTaper.max}
+              suffix='%' value={part.bottomTaper ?? 0}
+              onChange={bottomTaper => onEntityPartChange(part.id, { bottomTaper })} />
+          : null}
+        <NumberField ariaLabel='Part rotation X' label='Rotation X' suffix='°' value={part.rotationX ?? 0}
+          onChange={rotationX => onEntityPartChange(part.id, { rotationX })} />
+        <NumberField ariaLabel='Part rotation Y' label='Rotation Y' suffix='°' value={part.rotationY ?? 0}
+          onChange={rotationY => onEntityPartChange(part.id, { rotationY })} />
+        <NumberField ariaLabel='Part rotation Z' label='Rotation Z' suffix='°' value={part.rotationZ ?? 0}
+          onChange={rotationZ => onEntityPartChange(part.id, { rotationZ })} />
+        {part.shape === 'cone' || part.shape === 'frustum' || part.shape === 'half-cone'
+          ? (
+            <>
+              <ValueSlider ariaLabel='Part cone roundness' label='Cone roundness'
+                min={AVATAR_ENTITY_RANGES.roundness.min} max={AVATAR_ENTITY_RANGES.roundness.max}
+                suffix='%' value={part.roundness ?? 24}
+                onChange={roundness => onEntityPartChange(part.id, { roundness })} />
+              <NumberField ariaLabel='Part cut direction' label='Cut direction' suffix='°'
+                value={part.cutAngle ?? 0} onChange={cutAngle => onEntityPartChange(part.id, { cutAngle })} />
+              <ToggleRow checked={part.hollow ?? false} icon='body' label='Hollow'
+                onChange={() => onEntityPartChange(part.id, { hollow: !(part.hollow ?? false) })} />
+            </>
+            )
+          : null}
+        {part.shape === 'trapezoid'
+          ? <ValueSlider ariaLabel='Part corner roundness' label='Corner roundness'
+              min={AVATAR_ENTITY_RANGES.roundness.min} max={AVATAR_ENTITY_RANGES.roundness.max}
+              suffix='%' value={part.roundness ?? 72}
+              onChange={roundness => onEntityPartChange(part.id, { roundness })} />
+          : null}
+      </div>
+    </>
+  )
+
+  const renderAvatarNodeInspector = () => {
+    if (selectedAvatarTreeGroup != null) {
+      const materialPart = selectedAvatarTreeGroup.parts[0]
+      const motion = avatarTreeGroupMotion[selectedAvatarTreeGroup.id] ?? { x: 0, y: 0, z: 0 }
+      return (
+        <div className='avatar-controls__node-inspector'>
+          <label className='avatar-controls__node-name'>
+            <span>{t('Group name')}</span>
+            <input aria-label={t('Group name')} value={selectedAvatarTreeGroup.label}
+              onChange={event => renameAvatarTreeGroup(selectedAvatarTreeGroup.id, event.currentTarget.value)} />
+          </label>
+          <div className='avatar-controls__node-summary'>
+            <ControlIcon name='body' />
+            <span>{t('Group selection')}</span>
+            <small>{selectedAvatarTreeGroup.parts.length} {t('shapes')}</small>
+          </div>
+          <div className='avatar-controls__field-group'>
+            <span className='avatar-controls__label'>{t('Group motion')}</span>
+            <div className='avatar-controls__parameter-controls'>
+              <NumberField ariaLabel='Group offset X' label='Offset X' value={motion.x}
+                onChange={value => updateAvatarTreeGroupMotion(selectedAvatarTreeGroup.id, 'x', value)} />
+              <NumberField ariaLabel='Group offset Y' label='Offset Y' value={motion.y}
+                onChange={value => updateAvatarTreeGroupMotion(selectedAvatarTreeGroup.id, 'y', value)} />
+              <NumberField ariaLabel='Group offset Z' label='Offset Z' value={motion.z}
+                onChange={value => updateAvatarTreeGroupMotion(selectedAvatarTreeGroup.id, 'z', value)} />
+            </div>
+            <button className='avatar-controls__secondary-action' type='button' onClick={() => {
+              setRightActiveTab('animation')
+              onTabChange('animation')
+            }}>{t('Open animation editor')}</button>
+          </div>
+          {materialPart == null
+            ? <p className='avatar-controls__node-empty'>{t('Add a shape to configure this group.')}</p>
+            : renderAvatarPartMaterial(materialPart, patch => updateAvatarTreeGroup(selectedAvatarTreeGroup.id, patch))}
+        </div>
+      )
+    }
+    if (selectedAvatarTreePart != null) {
+      return (
+        <div className='avatar-controls__node-inspector'>
+          <label className='avatar-controls__node-name'>
+            <span>{t('Shape name')}</span>
+            <input aria-label={t('Shape name')} value={selectedAvatarTreePart.label}
+              onChange={event => onEntityPartChange(selectedAvatarTreePart.id, { label: event.currentTarget.value })} />
+          </label>
+          {renderAvatarPartGeometry(selectedAvatarTreePart)}
+          {renderAvatarPartMaterial(selectedAvatarTreePart, patch => onEntityPartChange(selectedAvatarTreePart.id, patch))}
+          <button className='avatar-controls__danger-action' type='button' onClick={() => {
+            onEntityPartDelete(selectedAvatarTreePart.id)
+            activateAvatarTreeSelection({ kind: 'root' })
+          }}>{t('Delete shape')}</button>
+        </div>
+      )
+    }
+    return (
+      <div className='avatar-controls__node-inspector'>
+        <div className='avatar-controls__node-summary'>
+          <ControlIcon name='body' />
+          <span>{t('Avatar root')}</span>
+          <small>{entityParts.length} {t('shapes')}</small>
+        </div>
+        <div className='avatar-controls__body-grid' aria-label={t('Shape type')}>
+          {AVATAR_BODY_SHAPES.map(shape => (
+            <button key={shape} className='avatar-controls__body-option' type='button'
+              aria-label={t(BODY_SHAPE_LABELS[shape])} aria-pressed={bodyShape === shape}
+              title={t(BODY_SHAPE_LABELS[shape])} onClick={() => onBodyShapeChange(shape)}>
+              <BodyShapeIcon shape={shape} />
+            </button>
+          ))}
+        </div>
+        {bodyShape === 'ellipse'
+          ? <div className='avatar-controls__parameter-controls'>
+              <ValueSlider ariaLabel='Body bottom taper' label='Bottom taper'
+                min={AVATAR_ENTITY_RANGES.bottomTaper.min} max={AVATAR_ENTITY_RANGES.bottomTaper.max}
+                suffix='%' value={bodyBottomTaper} onChange={onBodyBottomTaperChange} />
+            </div>
+          : null}
+      </div>
+    )
+  }
+
+  const renderCoatPatternEditor = () => (
+    <section className='avatar-controls__field-group avatar-controls__coat-pattern' data-enabled={coatPattern.enabled}>
+      <div className='avatar-controls__field-header'>
+        <span className='avatar-controls__label'>{t('Coat pattern')}</span>
+        <button
+          className='avatar-controls__switch'
+          type='button'
+          role='switch'
+          aria-checked={coatPattern.enabled}
+          aria-label={t('Coat pattern')}
+          onClick={onToggleCoatPattern}
+        ><span /></button>
+      </div>
+      {coatPattern.enabled
+        ? (
+          <div className='avatar-controls__coat-content'>
+            <div className='avatar-controls__coat-row'>
+              <div className='avatar-controls__coat-row-header'>
+                <span>{t('Pattern algorithm')}</span>
+                <SeedFieldToggle
+                  enabled={seededFields.includes(AVATAR_SEED_FIELD.coatPatternAlgorithm)}
+                  label='Pattern algorithm'
+                  onChange={() => onSeedFieldToggle(
+                    AVATAR_SEED_FIELD.coatPatternAlgorithm,
+                    !seededFields.includes(AVATAR_SEED_FIELD.coatPatternAlgorithm)
+                  )}
+                />
+              </div>
+              <div className='avatar-controls__coat-algorithms' role='radiogroup' aria-label={t('Pattern algorithm')}>
+                {COAT_PATTERN_ALGORITHMS.map(option => (
+                  <button
+                    key={option.id}
+                    type='button'
+                    role='radio'
+                    aria-checked={coatPattern.algorithm === option.id}
+                    data-active={coatPattern.algorithm === option.id}
+                    onClick={() => onCoatPatternChange(
+                      { algorithm: option.id },
+                      AVATAR_SEED_FIELD.coatPatternAlgorithm
+                    )}
+                  >
+                    <CoatPatternIcon algorithm={option.id} />
+                    <span>{t(option.label)}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+            <div className='avatar-controls__coat-row'>
+              <div className='avatar-controls__coat-row-header'>
+                <span>{t('Pattern layout')}</span>
+                <SeedFieldToggle
+                  enabled={seededFields.includes(AVATAR_SEED_FIELD.coatPatternSeed)}
+                  label='Pattern layout'
+                  onChange={() => onSeedFieldToggle(
+                    AVATAR_SEED_FIELD.coatPatternSeed,
+                    !seededFields.includes(AVATAR_SEED_FIELD.coatPatternSeed)
+                  )}
+                />
+              </div>
+            </div>
+            <div className='avatar-controls__coat-row avatar-controls__coat-light-patch'>
+              <div className='avatar-controls__coat-row-header'>
+                <span>{t('Light coat patch')}</span>
+              </div>
+              <div className='avatar-controls__coat-row-header'>
+                <span>{t('Shape')}</span>
+                <SeedFieldToggle
+                  enabled={seededFields.includes(AVATAR_SEED_FIELD.coatPatternLightPatchShape)}
+                  label='Light coat patch shape'
+                  onChange={() => onSeedFieldToggle(
+                    AVATAR_SEED_FIELD.coatPatternLightPatchShape,
+                    !seededFields.includes(AVATAR_SEED_FIELD.coatPatternLightPatchShape)
+                  )}
+                />
+              </div>
+              <GeometricShapePicker
+                ariaLabel='Light coat patch shape'
+                options={COAT_LIGHT_PATCH_SHAPES}
+                value={coatPattern.lightPatchShape ?? 'face-mask'}
+                onChange={lightPatchShape => onCoatPatternChange(
+                  { lightPatchShape },
+                  AVATAR_SEED_FIELD.coatPatternLightPatchShape
+                )}
+              />
+              {([
+                ['lightPatchLength', 'Length', AVATAR_SEED_FIELD.coatPatternLightPatchLength, AVATAR_COAT_PATTERN_RANGES.lightPatchLength],
+                ['lightPatchOffsetY', 'Vertical position', AVATAR_SEED_FIELD.coatPatternLightPatchOffsetY, AVATAR_COAT_PATTERN_RANGES.lightPatchOffsetY],
+                ['lightPatchWidth', 'Width', AVATAR_SEED_FIELD.coatPatternLightPatchWidth, AVATAR_COAT_PATTERN_RANGES.lightPatchWidth]
+              ] as const).map(([key, label, field, range]) => (
+                <div className='avatar-controls__coat-row' key={key}>
+                  <div className='avatar-controls__coat-row-header'>
+                    <span>{t(label)}</span>
+                    <SeedFieldToggle
+                      enabled={seededFields.includes(field)}
+                      label={label}
+                      onChange={() => onSeedFieldToggle(field, !seededFields.includes(field))}
+                    />
+                  </div>
+                  <ValueSlider
+                    ariaLabel={label}
+                    label={label}
+                    min={range.min}
+                    max={range.max}
+                    suffix={key === 'lightPatchOffsetY' ? '' : '%'}
+                    value={key === 'lightPatchOffsetY'
+                      ? coatPattern.lightPatchOffsetY ?? 0
+                      : coatPattern[key] ?? 100}
+                    onChange={value => onCoatPatternChange({ [key]: value }, field)}
+                  />
+                </div>
+              ))}
+            </div>
+            {([
+              ['density', 'Density', AVATAR_SEED_FIELD.coatPatternDensity, AVATAR_COAT_PATTERN_RANGES.density],
+              ['jitter', 'Jitter', AVATAR_SEED_FIELD.coatPatternJitter, AVATAR_COAT_PATTERN_RANGES.jitter],
+              ['thickness', 'Thickness', AVATAR_SEED_FIELD.coatPatternThickness, AVATAR_COAT_PATTERN_RANGES.thickness],
+              ['symmetry', 'Symmetry', AVATAR_SEED_FIELD.coatPatternSymmetry, AVATAR_COAT_PATTERN_RANGES.symmetry],
+              ['contrast', 'Contrast', AVATAR_SEED_FIELD.coatPatternContrast, AVATAR_COAT_PATTERN_RANGES.contrast],
+              ['breakup', 'Breakup', AVATAR_SEED_FIELD.coatPatternBreakup, AVATAR_COAT_PATTERN_RANGES.breakup]
+            ] as const).map(([key, label, field, range]) => (
+              <div className='avatar-controls__coat-row' key={key}>
+                <div className='avatar-controls__coat-row-header'>
+                  <span>{t(label)}</span>
+                  <SeedFieldToggle
+                    enabled={seededFields.includes(field)}
+                    label={label}
+                    onChange={() => onSeedFieldToggle(field, !seededFields.includes(field))}
+                  />
+                </div>
+                <ValueSlider
+                  ariaLabel={label}
+                  label={label}
+                  min={range.min}
+                  max={range.max}
+                  suffix='%'
+                  value={coatPattern[key]}
+                  onChange={value => onCoatPatternChange({ [key]: value }, field)}
+                />
+              </div>
+            ))}
+            <div className='avatar-controls__coat-actions'>
+              <button type='button' className='avatar-controls__inline-action' onClick={onConvertCoatPatternToDecals}>
+                {t('Convert to editable decals')}
+              </button>
+            </div>
+          </div>
+        )
+        : null}
+    </section>
+  )
+
+  const renderControlsPanel = (panelTab: AvatarControlTab, side: 'left' | 'right') => {
+    const tabs = side === 'left' ? LEFT_CONTROL_TABS : RIGHT_CONTROL_TABS
+    const selectTab = (tab: AvatarControlTab) => {
+      if (side === 'left') setLeftActiveTab(tab)
+      else {
+        setRightActiveTab(tab)
+        setEffectDetailPage(null)
+        setSurfaceDecalDetailId(null)
+        setRightHeaderActionsOpen(false)
+      }
+      onTabChange(tab)
+    }
+
+    return (
+      <aside
+      id={side === 'right' ? 'avatar-controls' : 'avatar-controls-library'}
+      className={`avatar-controls avatar-controls--${side}`}
+      aria-label={t(side === 'right' ? 'Avatar controls' : 'Avatar resources')}
+      data-resizing={resizingSide === side ? 'true' : undefined}
+    >
+      <div
+        className={`avatar-controls__resize-handle avatar-controls__resize-handle--${side}`}
         role='separator'
-        aria-label='Resize avatar controls'
+        aria-label={t(side === 'left' ? 'Resize avatar resources' : 'Resize avatar controls')}
         aria-orientation='vertical'
         aria-valuemin={MIN_CONTROLS_WIDTH}
         aria-valuemax={clampControlsWidth(Number.POSITIVE_INFINITY)}
-        aria-valuenow={controlsWidth}
+        aria-valuenow={side === 'left' ? leftControlsWidth : controlsWidth}
         tabIndex={0}
-        onDoubleClick={() => onControlsWidthChange(DEFAULT_CONTROLS_WIDTH)}
-        onKeyDown={handleResizeKeyDown}
+        onDoubleClick={() => side === 'left'
+          ? onLeftControlsWidthChange(DEFAULT_RESOURCE_WIDTH)
+          : onControlsWidthChange(DEFAULT_CONTROLS_WIDTH)}
+        onKeyDown={event => handleResizeKeyDown(side, event)}
         onPointerCancel={handleResizeEnd}
-        onPointerDown={handleResizeStart}
+        onPointerDown={event => handleResizeStart(side, event)}
         onPointerMove={handleResizeMove}
         onPointerUp={handleResizeEnd}
       />
       <div className='avatar-controls__header'>
-        <button
-          className='avatar-controls__collapse'
-          type='button'
-          aria-controls='avatar-controls'
-          aria-expanded='true'
-          aria-label={t('Hide controls sidebar')}
-          title={t('Hide controls')}
-          onClick={onCollapse}
+        {side === 'left' ? workspaceAction : (
+          <button
+            className='avatar-controls__collapse'
+            type='button'
+            aria-controls='avatar-controls'
+            aria-expanded='true'
+            aria-label={t('Hide controls sidebar')}
+            title={t('Hide controls')}
+            onClick={onCollapseRight}
+          >
+            <svg viewBox='0 0 20 20' aria-hidden='true'>
+              <rect x='2.5' y='3' width='15' height='14' rx='1.5' />
+              <path d='M13 3v14M6.7 7.2 9.5 10l-2.8 2.8' />
+            </svg>
+          </button>
+        )}
+        <div
+          className='avatar-controls__tabs'
+          role='tablist'
+          aria-label={t(side === 'left' ? 'Avatar resources' : 'Avatar details')}
+          style={{ '--avatar-control-tab-count': tabs.length } as CSSProperties}
         >
-          <svg viewBox='0 0 20 20' aria-hidden='true'>
-            <rect x='2.5' y='3' width='15' height='14' rx='1.5' />
-            <path d='M13 3v14M6.7 7.2 9.5 10l-2.8 2.8' />
-          </svg>
-        </button>
-        <div className='avatar-controls__tabs' role='tablist' aria-label={t('Avatar settings')}>
-          {CONTROL_TABS.map(tab => (
+          {tabs.map(tab => (
             <button
               key={tab.id}
-              id={`avatar-controls-tab-${tab.id}`}
+              id={`avatar-controls-${side}-tab-${tab.id}`}
               className='avatar-controls__tab'
               type='button'
               role='tab'
-              aria-controls={`avatar-controls-panel-${tab.id}`}
-              aria-selected={activeTab === tab.id}
+              aria-controls={`avatar-controls-${side}-panel-${tab.id}`}
+              aria-selected={panelTab === tab.id}
               aria-label={t(tab.label)}
               title={t(tab.label)}
-              onClick={() => onTabChange(tab.id)}
+              onClick={() => selectTab(tab.id)}
             >
               <ControlIcon name={tab.id} />
               <span className='avatar-controls__tab-label'>{t(tab.label)}</span>
             </button>
           ))}
         </div>
-        <div className='avatar-controls__header-actions'>
-          {headerActions}
-        </div>
+        {side === 'right'
+          ? (
+            <div
+              ref={rightHeaderActionsRef}
+              className='avatar-controls__header-actions'
+              data-open={rightHeaderActionsOpen ? 'true' : 'false'}
+            >
+              <button
+                className='avatar-controls__header-actions-toggle'
+                type='button'
+                aria-label={t('More panel actions')}
+                aria-haspopup='menu'
+                aria-controls='avatar-controls-header-actions-menu'
+                aria-expanded={rightHeaderActionsOpen}
+                title={t('More panel actions')}
+                onClick={() => setRightHeaderActionsOpen(open => !open)}
+              >
+                <svg viewBox='0 0 20 20' aria-hidden='true'>
+                  <circle cx='4' cy='10' r='1.2' />
+                  <circle cx='10' cy='10' r='1.2' />
+                  <circle cx='16' cy='10' r='1.2' />
+                </svg>
+              </button>
+              <div
+                id='avatar-controls-header-actions-menu'
+                className='avatar-controls__header-actions-items'
+                role='menu'
+                aria-label={t('Panel actions')}
+                onClickCapture={event => {
+                  const action = (event.target as Element).closest('button, a')
+                  if (action?.getAttribute('aria-haspopup') == null) setRightHeaderActionsOpen(false)
+                }}
+              >
+                {headerActions}
+              </div>
+            </div>
+            )
+          : (
+            <button
+              className='avatar-controls__collapse avatar-controls__collapse--left'
+              type='button'
+              aria-controls='avatar-controls-library'
+              aria-expanded='true'
+              aria-label={t('Hide resources sidebar')}
+              title={t('Hide resources')}
+              onClick={onCollapseLeft}
+            >
+              <svg viewBox='0 0 20 20' aria-hidden='true'>
+                <rect x='2.5' y='3' width='15' height='14' rx='1.5' />
+                <path d='M7 3v14M13.3 7.2 10.5 10l2.8 2.8' />
+              </svg>
+            </button>
+            )}
       </div>
 
       <div
-        id={`avatar-controls-panel-${activeTab}`}
+        id={`avatar-controls-${side}-panel-${panelTab}`}
         className='avatar-controls__panel'
+        data-panel-tab={panelTab}
         role='tabpanel'
-        aria-labelledby={`avatar-controls-tab-${activeTab}`}
+        aria-labelledby={`avatar-controls-${side}-tab-${panelTab}`}
       >
-        {activeTab === 'build'
+        {panelTab === 'animation'
+          ? side === 'left' ? animationContent : animationInspectorContent
+          : null}
+        {panelTab === 'build'
           ? (
             <>
+              {buildDetailPage == null && !faceAdvancedOpen
+                ? (
+                  <>
+              {supportsCoatPattern
+                ? (
+                  <div className='avatar-controls__field-group avatar-controls__status-entry avatar-controls__coat-pattern-entry' data-enabled={coatPattern.enabled}>
+                    <button
+                      className='avatar-controls__status-toggle avatar-controls__coat-pattern-toggle'
+                      type='button'
+                      role='switch'
+                      aria-checked={coatPattern.enabled}
+                      aria-label={t('Coat pattern')}
+                      onClick={onToggleCoatPattern}
+                    >
+                      <span className='avatar-controls__status-toggle-icon'>
+                        <ControlIcon name='palette' />
+                      </span>
+                      <span className='avatar-controls__status-toggle-copy'>
+                        <strong>{t('Coat pattern')}</strong>
+                        <span>
+                          {coatPattern.enabled
+                            ? t(COAT_PATTERN_ALGORITHMS.find(option => option.id === coatPattern.algorithm)?.label ?? 'Random')
+                            : t('Off')}
+                        </span>
+                      </span>
+                    </button>
+                    {renderAdvancedToggle(
+                      buildDetailPage === 'coat-pattern',
+                      'avatar-controls-build-detail-coat-pattern',
+                      () => setBuildDetailPage('coat-pattern')
+                    )}
+                  </div>
+                )
+                : null}
+
               <section
-                className='avatar-controls__seed-settings'
-                aria-labelledby={`${seedSettingsId}-trigger`}
+                className='avatar-controls__seed-settings avatar-controls__status-entry'
               >
                 <button
-                  id={`${seedSettingsId}-trigger`}
-                  className='avatar-controls__seed-disclosure'
+                  className='avatar-controls__seed-disclosure avatar-controls__status-toggle'
                   type='button'
-                  aria-controls={`${seedSettingsId}-content`}
-                  aria-expanded={seedSettingsOpen}
+                  data-active={seededFields.length > 0}
+                  aria-controls='avatar-controls-build-detail-seed'
+                  aria-expanded={false}
                   aria-label={t('Seed settings')}
-                  onClick={() => setSeedSettingsOpen(open => !open)}
+                  onClick={() => setBuildDetailPage('seed')}
                 >
-                  <span className='avatar-controls__label'>
+                  <span className='avatar-controls__status-toggle-icon'>
                     <ControlIcon name='build' />
-                    {t('Seed')}
                   </span>
-                  <span className='avatar-controls__seed-summary'>
-                    <span className='avatar-controls__seed-count'>
+                  <span className='avatar-controls__status-toggle-copy'>
+                    <strong>{t('Seed')}</strong>
+                    <span>
                       {t('Seeded fields')}: {seededFields.length}
                     </span>
-                    <svg viewBox='0 0 16 16' aria-hidden='true'>
-                      <path d='m4.5 6 3.5 4 3.5-4' />
-                    </svg>
                   </span>
                 </button>
-                {seedSettingsOpen
-                  ? (
-                    <div
-                      id={`${seedSettingsId}-content`}
-                      className='avatar-controls__seed-input'
-                      aria-labelledby={`${seedSettingsId}-trigger`}
-                    >
-                      <input
-                        type='text'
-                        aria-label={t('Current Seed')}
-                        autoCapitalize='off'
-                        autoComplete='off'
-                        spellCheck='false'
-                        value={seedDraft}
-                        onBlur={commitSeedDraft}
-                        onChange={event => setSeedDraft(event.currentTarget.value)}
-                        onKeyDown={event => {
-                          if (event.key === 'Enter') event.currentTarget.blur()
-                          if (event.key === 'Escape') {
-                            event.preventDefault()
-                            setSeedDraft(seed)
-                          }
-                        }}
-                      />
-                      <button
-                        type='button'
-                        aria-label={t('Generate random Seed')}
-                        title={t('Generate random Seed')}
-                        onClick={onRandomSeed}
-                      >
-                        <svg viewBox='0 0 20 20' aria-hidden='true'>
-                          <rect x='3' y='3' width='14' height='14' rx='4' />
-                          <circle cx='7' cy='7' r='1' />
-                          <circle cx='13' cy='7' r='1' />
-                          <circle cx='10' cy='10' r='1' />
-                          <circle cx='7' cy='13' r='1' />
-                          <circle cx='13' cy='13' r='1' />
-                        </svg>
-                      </button>
-                    </div>
-                  )
-                  : null}
+                {renderAdvancedToggle(
+                  buildDetailPage === 'seed',
+                  'avatar-controls-build-detail-seed',
+                  () => setBuildDetailPage('seed')
+                )}
               </section>
 
-              <section className='avatar-controls__field-group' aria-label={t('View composition')}>
-                {renderSeedFieldHeader('build', 'View composition', AVATAR_SEED_FIELD.viewPose)}
-              </section>
-
-              <section className='avatar-controls__field-group' aria-label={t('Avatar type')}>
-                {renderSeedFieldHeader('build', 'Avatar type', AVATAR_SEED_FIELD.entityPreset)}
-                <div className='avatar-controls__saved-preset-list'>
+              <div className='avatar-controls__overview-stack'>
+              <section className='avatar-controls__field-group avatar-controls__overview-card' aria-label={t('Avatar type')}>
+                {renderSeedFieldHeader('build', 'Avatar type', AVATAR_SEED_FIELD.entityPreset, {
+                  controls: 'avatar-controls-build-detail-parameters',
+                  expanded: buildDetailPage === 'parameters',
+                  onToggle: () => setBuildDetailPage('parameters')
+                })}
+                <div className='avatar-controls__saved-preset-list avatar-controls__resource-preset-list'>
                   {compactEntityPresetItems.map(item => renderSavedPresetItem(item, true))}
-                  {entityPresetItems.length > compactPresetCapacity
+                  {entityPresetItems.length > compactResourceRowCapacity
                     ? renderMorePresetButton('entities')
                     : null}
                 </div>
               </section>
 
-              {entityPreset === 'cat'
-                ? (
-                  <section className='avatar-controls__field-group' aria-label={t('Cat types')}>
-                    <div className='avatar-controls__field-header'>
-                      <span className='avatar-controls__label'>
-                        <ControlIcon name='style' />
-                        {t('Cat types')}
-                      </span>
-                    </div>
-                    <div className='avatar-controls__saved-preset-list avatar-controls__cat-breed-list'>
-                      {AVATAR_CAT_BREED_TEMPLATES.map(template => (
-                        <button
-                          key={template.id}
-                          className='avatar-controls__saved-preset avatar-controls__saved-preset--entity-preset avatar-controls__cat-breed-preset'
-                          type='button'
-                          aria-label={t(template.label)}
-                          aria-pressed={catBreedTemplateId === template.id}
-                          data-cat-breed={template.id}
-                          title={t(template.label)}
-                          onClick={() => onCatBreedTemplateChange(
-                            catBreedTemplateId === template.id ? null : template.id
-                          )}
-                        >
-                          {renderCatBreedPreview(template)}
-                        </button>
-                      ))}
-                    </div>
-                  </section>
-                )
-                : null}
-
-              {entityPreset === 'dog'
-                ? (
-                  <section className='avatar-controls__field-group' aria-label={t('Dog types')}>
-                    <div className='avatar-controls__field-header'>
-                      <span className='avatar-controls__label'>
-                        <ControlIcon name='style' />
-                        {t('Dog types')}
-                      </span>
-                    </div>
-                    <div className='avatar-controls__saved-preset-list avatar-controls__dog-breed-list'>
-                      {AVATAR_DOG_BREED_TEMPLATES.map(template => (
-                        <button
-                          key={template.id}
-                          className='avatar-controls__saved-preset avatar-controls__saved-preset--entity-preset avatar-controls__dog-breed-preset'
-                          type='button'
-                          aria-label={t(template.label)}
-                          aria-pressed={dogBreedTemplateId === template.id}
-                          data-dog-breed={template.id}
-                          title={t(template.label)}
-                          onClick={() => onDogBreedTemplateChange(
-                            dogBreedTemplateId === template.id ? null : template.id
-                          )}
-                        >
-                          {renderDogBreedPreview(template)}
-                        </button>
-                      ))}
-                    </div>
-                  </section>
-                )
-                : null}
-
-              {entityPreset === 'rabbit'
-                ? (
-                  <section className='avatar-controls__field-group' aria-label={t('Rabbit types')}>
-                    <div className='avatar-controls__field-header'>
-                      <span className='avatar-controls__label'>
-                        <ControlIcon name='style' />
-                        {t('Rabbit types')}
-                      </span>
-                    </div>
-                    <div className='avatar-controls__saved-preset-list avatar-controls__rabbit-breed-list'>
-                      {AVATAR_RABBIT_BREED_TEMPLATES.map(template => (
-                        <button
-                          key={template.id}
-                          className='avatar-controls__saved-preset avatar-controls__saved-preset--entity-preset avatar-controls__rabbit-breed-preset'
-                          type='button'
-                          aria-label={t(template.label)}
-                          aria-pressed={rabbitBreedTemplateId === template.id}
-                          data-rabbit-breed={template.id}
-                          title={t(template.label)}
-                          onClick={() => onRabbitBreedTemplateChange(
-                            rabbitBreedTemplateId === template.id ? null : template.id
-                          )}
-                        >
-                          {renderRabbitBreedPreview(template)}
-                        </button>
-                      ))}
-                    </div>
-                  </section>
-                )
-                : null}
-
-              {entityPreset === 'bear'
-                ? (
-                  <section className='avatar-controls__field-group' aria-label={t('Bear types')}>
-                    <div className='avatar-controls__field-header'>
-                      <span className='avatar-controls__label'>
-                        <ControlIcon name='style' />
-                        {t('Bear types')}
-                      </span>
-                    </div>
-                    <div className='avatar-controls__saved-preset-list avatar-controls__bear-breed-list'>
-                      {AVATAR_BEAR_BREED_TEMPLATES.map(template => (
-                        <button
-                          key={template.id}
-                          className='avatar-controls__saved-preset avatar-controls__saved-preset--entity-preset avatar-controls__bear-breed-preset'
-                          type='button'
-                          aria-label={t(template.label)}
-                          aria-pressed={bearBreedTemplateId === template.id}
-                          data-bear-breed={template.id}
-                          title={t(template.label)}
-                          onClick={() => onBearBreedTemplateChange(bearBreedTemplateId === template.id ? null : template.id)}
-                        >
-                          {renderBearBreedPreview(template)}
-                        </button>
-                      ))}
-                    </div>
-                  </section>
-                )
-                : null}
-
-              {animalSpecies == null
+              {currentBreedPresetItems.length === 0
                 ? null
                 : (
                   <section
-                    className='avatar-controls__field-group'
-                    aria-label={t(`${ENTITY_PRESET_LABELS[animalSpecies]} types`)}
+                    className='avatar-controls__field-group avatar-controls__overview-card'
+                    aria-label={t(currentBreedLabel)}
                   >
                     <div className='avatar-controls__field-header'>
                       <span className='avatar-controls__label'>
                         <ControlIcon name='style' />
-                        {t(`${ENTITY_PRESET_LABELS[animalSpecies]} types`)}
+                        {t(currentBreedLabel)}
                       </span>
                     </div>
-                    <div className='avatar-controls__saved-preset-list avatar-controls__animal-breed-list'>
-                      {getAvatarAnimalBreedTemplates(animalSpecies).map(template => (
-                        <button
-                          key={template.id}
-                          className='avatar-controls__saved-preset avatar-controls__saved-preset--entity-preset avatar-controls__animal-breed-preset'
-                          type='button'
-                          aria-label={t(template.label)}
-                          aria-pressed={animalBreedTemplateId === template.id}
-                          data-animal-breed={template.id}
-                          title={t(template.label)}
-                          onClick={() => onAnimalBreedTemplateChange?.(template.id)}
-                        >
-                          {renderAnimalBreedPreview(template)}
-                        </button>
-                      ))}
+                    <div className={`avatar-controls__saved-preset-list avatar-controls__resource-preset-list avatar-controls__${currentBreedPresetItems[0]!.kind}-breed-list`}>
+                      {compactBreedPresetItems.map(item => renderBreedPresetItem(item))}
+                      {currentBreedPresetItems.length > compactResourceRowCapacity
+                        ? renderMorePresetButton('breeds')
+                        : null}
                     </div>
                   </section>
                 )}
@@ -1937,20 +3266,170 @@ export function AvatarControls({
               {savedPresetItems.length === 0
                 ? null
                 : (
-                  <section className='avatar-controls__saved-presets' aria-label={t('Saved looks')}>
+                  <section className='avatar-controls__saved-presets avatar-controls__overview-card' aria-label={t('Saved looks')}>
                     <span className='avatar-controls__label'>
                       <ControlIcon name='history' />
                       {t('Saved looks')}
                     </span>
-                    <div className='avatar-controls__saved-preset-list'>
+                    <div className='avatar-controls__saved-preset-list avatar-controls__resource-preset-list'>
                       {compactSavedPresetItems.map(item => renderSavedPresetItem(item))}
-                      {savedPresetItems.length > compactPresetCapacity
+                      {savedPresetItems.length > compactResourceRowCapacity
                         ? renderMorePresetButton('saved')
                         : null}
                     </div>
                   </section>
                 )}
+              </div>
 
+                  </>
+                  )
+                : null}
+
+              {buildDetailPage != null
+                ? (
+              <section
+                id={`avatar-controls-build-detail-${buildDetailPage}`}
+                className='avatar-controls__build-detail'
+                aria-labelledby='avatar-controls-build-detail-title'
+              >
+                <header className='avatar-controls__build-detail-header'>
+                  <button
+                    type='button'
+                    aria-label={t('Back to Build overview')}
+                    title={t('Back to Build overview')}
+                    onClick={() => {
+                      setBuildDetailPage(null)
+                      setPresetBrowser(null)
+                    }}
+                  >
+                    <svg viewBox='0 0 20 20' aria-hidden='true'>
+                      <path d='m12.5 4.5-5.5 5.5 5.5 5.5M7 10h8' />
+                    </svg>
+                  </button>
+                  <div>
+                    <strong id='avatar-controls-build-detail-title'>
+                      {buildDetailPage === 'coat-pattern'
+                        ? t('Coat pattern')
+                        : buildDetailPage === 'parameters'
+                          ? t('Avatar parameters')
+                        : buildDetailPage === 'seed'
+                          ? t('Seed')
+                          : t(presetBrowser === 'faces'
+                            ? 'Face presets'
+                            : presetBrowser === 'entities'
+                              ? 'Avatar templates'
+                              : presetBrowser === 'breeds' ? currentBreedLabel : 'Saved presets')}
+                    </strong>
+                    <span>{t('Advanced options')}</span>
+                  </div>
+                </header>
+                <div className='avatar-controls__build-detail-body'>
+                  {buildDetailPage === 'presets' && presetBrowser != null
+                    ? (
+                      <div className='avatar-controls__preset-detail'>
+                        <label className='avatar-controls__preset-browser-search'>
+                          <svg viewBox='0 0 20 20' aria-hidden='true'>
+                            <circle cx='8.5' cy='8.5' r='5.5' />
+                            <path d='m12.5 12.5 4 4' />
+                          </svg>
+                          <input
+                            ref={presetSearchRef}
+                            type='search'
+                            aria-label={t('Search presets')}
+                            placeholder={t('Search presets')}
+                            value={presetSearch}
+                            onChange={event => setPresetSearch(event.currentTarget.value)}
+                          />
+                        </label>
+                        {searchedPresetCount === 0
+                          ? <p className='avatar-controls__preset-browser-empty'>{t('No presets found')}</p>
+                          : (
+                            <div
+                              className='avatar-controls__preset-browser-grid'
+                              role='group'
+                              aria-label={t(presetBrowser === 'faces'
+                                ? 'Face presets'
+                                : presetBrowser === 'entities'
+                                  ? 'Avatar templates'
+                                  : presetBrowser === 'breeds' ? currentBreedLabel : 'Saved presets')}
+                            >
+                              {presetBrowser === 'faces'
+                                ? searchedFacePresets.map(renderFacePresetButton)
+                                : presetBrowser === 'entities'
+                                  ? searchedEntityPresetItems.map(item => renderSavedPresetItem(item, false))
+                                  : presetBrowser === 'breeds'
+                                    ? searchedBreedPresetItems.map(item => renderBreedPresetItem(item, {
+                                      closeBrowser: true,
+                                      eager: true
+                                    }))
+                                    : searchedSavedPresetItems.map(item => renderSavedPresetItem(item))}
+                            </div>
+                            )}
+                      </div>
+                      )
+                    : null}
+                  {buildDetailPage === 'seed'
+                    ? (
+                      <section
+                        className='avatar-controls__seed-detail'
+                        aria-label={t('Seed settings')}
+                      >
+                        <div className='avatar-controls__seed-detail-summary'>
+                          <span className='avatar-controls__status-toggle-icon'>
+                            <ControlIcon name='build' />
+                          </span>
+                          <span>
+                            <strong>{t('Seeded fields')}: {seededFields.length}</strong>
+                            <small>{t('Only linked fields change when the Seed changes.')}</small>
+                          </span>
+                        </div>
+                        <label className='avatar-controls__seed-detail-field'>
+                          <span>{t('Current Seed')}</span>
+                          <span className='avatar-controls__seed-input'>
+                            <input
+                              type='text'
+                              aria-label={t('Current Seed')}
+                              autoCapitalize='off'
+                              autoComplete='off'
+                              spellCheck='false'
+                              value={seedDraft}
+                              onBlur={commitSeedDraft}
+                              onChange={event => setSeedDraft(event.currentTarget.value)}
+                              onKeyDown={event => {
+                                if (event.key === 'Enter') event.currentTarget.blur()
+                                if (event.key === 'Escape') {
+                                  event.preventDefault()
+                                  event.stopPropagation()
+                                  setSeedDraft(seed)
+                                }
+                              }}
+                            />
+                            <button
+                              type='button'
+                              aria-label={t('Generate random Seed')}
+                              title={t('Generate random Seed')}
+                              onClick={onRandomSeed}
+                            >
+                              <svg viewBox='0 0 20 20' aria-hidden='true'>
+                                <rect x='3' y='3' width='14' height='14' rx='4' />
+                                <circle cx='7' cy='7' r='1' />
+                                <circle cx='13' cy='7' r='1' />
+                                <circle cx='10' cy='10' r='1' />
+                                <circle cx='7' cy='13' r='1' />
+                                <circle cx='13' cy='13' r='1' />
+                              </svg>
+                            </button>
+                          </span>
+                        </label>
+                      </section>
+                      )
+                    : null}
+                  {buildDetailPage === 'parameters'
+                    ? (
+                      <>
+                        <section className='avatar-controls__field-group' aria-label={t('View composition')}>
+                          {renderSeedFieldHeader('build', 'View composition', AVATAR_SEED_FIELD.viewPose)}
+                        </section>
               {entityPreset === 'cat'
                 ? (
                   <section className='avatar-controls__field-group avatar-controls__cat-ear-size' aria-label={t('Cat ear size')}>
@@ -2359,15 +3838,62 @@ export function AvatarControls({
                       : null}
                   </>
                 )}
-
-              <div className='avatar-controls__field-group'>
-                {renderSeedFieldHeader('eyes', 'Face', AVATAR_SEED_FIELD.facePreset)}
-                <div className='avatar-controls__face-presets' role='group' aria-label={t('Face presets')}>
-                  {compactFacePresets.map(renderFacePresetButton)}
-                  {facePresets.length > compactPresetCapacity
-                    ? renderMorePresetButton('faces')
+                      </>
+                      )
+                    : null}
+                  {buildDetailPage === 'coat-pattern' && supportsCoatPattern
+                    ? renderCoatPatternEditor()
                     : null}
                 </div>
+              </section>
+                )
+                : null}
+
+              {buildDetailPage == null
+                ? (
+              <div
+                id={faceAdvancedOpen ? 'avatar-controls-build-detail-face' : undefined}
+                className={faceAdvancedOpen
+                  ? 'avatar-controls__build-detail avatar-controls__face-detail'
+                  : 'avatar-controls__field-group avatar-controls__overview-card'}
+              >
+                {!faceAdvancedOpen
+                  ? (
+                    <>
+                      {renderSeedFieldHeader('eyes', 'Face', AVATAR_SEED_FIELD.facePreset, {
+                        controls: 'avatar-controls-build-detail-face',
+                        expanded: false,
+                        onToggle: () => setFaceAdvancedOpen(true)
+                      })}
+                      <div className='avatar-controls__face-presets avatar-controls__face-presets--compact' role='group' aria-label={t('Face presets')}>
+                        {compactFacePresets.map(renderFacePresetButton)}
+                        {facePresets.length > compactResourceRowCapacity
+                          ? renderMorePresetButton('faces')
+                          : null}
+                      </div>
+                    </>
+                    )
+                  : null}
+                {faceAdvancedOpen
+                  ? (
+                    <>
+                  <header className='avatar-controls__build-detail-header'>
+                    <button
+                      type='button'
+                      aria-label={t('Back to Build overview')}
+                      title={t('Back to Build overview')}
+                      onClick={() => setFaceAdvancedOpen(false)}
+                    >
+                      <svg viewBox='0 0 20 20' aria-hidden='true'>
+                        <path d='m12.5 4.5-5.5 5.5 5.5 5.5M7 10h8' />
+                      </svg>
+                    </button>
+                    <div>
+                      <strong id='avatar-controls-face-detail-title'>{t('Face')}</strong>
+                      <span>{t('Advanced options')}</span>
+                    </div>
+                  </header>
+                  <div className='avatar-controls__build-detail-body avatar-controls__face-detail-body'>
                 <div
                   className='avatar-controls__segments avatar-controls__face-tabs'
                   role='tablist'
@@ -2396,7 +3922,9 @@ export function AvatarControls({
                         value={faceStyle.eyeShape}
                         onChange={eyeShape => onFaceStyleChange({ eyeShape })}
                       />
-                      <div className='avatar-controls__parameter-controls'>
+                      <div
+                        className='avatar-controls__parameter-controls'
+                      >
                         {faceStyle.eyeShape === 'rounded'
                           ? (
                             <ValueSlider
@@ -2463,6 +3991,13 @@ export function AvatarControls({
                         />
                       </div>
                       <ToggleRow
+                        action={faceStyle.eyeHighlight.enabled
+                          ? renderAdvancedToggle(
+                            highlightAdvancedOpen,
+                            'avatar-controls-highlight-advanced',
+                            () => setHighlightAdvancedOpen(open => !open)
+                          )
+                          : null}
                         checked={faceStyle.eyeHighlight.enabled}
                         icon='eyes'
                         label='Eye highlights'
@@ -2476,7 +4011,11 @@ export function AvatarControls({
                       />
                       {faceStyle.eyeHighlight.enabled
                         ? (
-                          <div className='avatar-controls__parameter-controls'>
+                          <div
+                            id='avatar-controls-highlight-advanced'
+                            className='avatar-controls__parameter-controls'
+                            hidden={!highlightAdvancedOpen}
+                          >
                             <label className='avatar-controls__entity-color'>
                               <span>{t('Highlight color')}</span>
                               <input
@@ -2561,7 +4100,9 @@ export function AvatarControls({
                               value={faceStyle.noseShape}
                               onChange={noseShape => onFaceStyleChange({ noseShape })}
                             />
-                            <div className='avatar-controls__parameter-controls'>
+                            <div
+                              className='avatar-controls__parameter-controls'
+                            >
                               <ValueSlider
                                 ariaLabel='Nose width'
                                 label='Width'
@@ -2620,7 +4161,9 @@ export function AvatarControls({
                               value={faceStyle.mouthShape}
                               onChange={mouthShape => onFaceStyleChange({ mouthShape })}
                             />
-                            <div className='avatar-controls__parameter-controls'>
+                            <div
+                              className='avatar-controls__parameter-controls'
+                            >
                               <ValueSlider
                                 ariaLabel='Mouth width'
                                 label='Width'
@@ -2681,174 +4224,71 @@ export function AvatarControls({
                     </>
                   )
                   : null}
+                  </div>
+                    </>
+                  )
+                  : null}
               </div>
-              {entityPreset === 'cat' || entityPreset === 'dog' || entityPreset === 'rabbit' ||
-                (entityPreset === 'bear' && bearBreedTemplateId != null) || isAvatarAnimalSpeciesId(entityPreset)
-                ? (
-                  <div className='avatar-controls__field-group avatar-controls__coat-pattern' data-enabled={coatPattern.enabled}>
-                    <div className='avatar-controls__field-header'>
-                      <span className='avatar-controls__label'>{t('Coat pattern')}</span>
-                      <button
-                        className='avatar-controls__switch'
-                        type='button'
-                        role='switch'
-                        aria-checked={coatPattern.enabled}
-                        aria-label={t('Coat pattern')}
-                        onClick={onToggleCoatPattern}
-                      ><span /></button>
-                    </div>
-                    {coatPattern.enabled
-                      ? (
-                        <div className='avatar-controls__coat-content'>
-                          <div className='avatar-controls__coat-row'>
-                            <div className='avatar-controls__coat-row-header'>
-                              <span>{t('Pattern algorithm')}</span>
-                              <SeedFieldToggle
-                                enabled={seededFields.includes(AVATAR_SEED_FIELD.coatPatternAlgorithm)}
-                                label='Pattern algorithm'
-                                onChange={() => onSeedFieldToggle(
-                                  AVATAR_SEED_FIELD.coatPatternAlgorithm,
-                                  !seededFields.includes(AVATAR_SEED_FIELD.coatPatternAlgorithm)
-                                )}
-                              />
-                            </div>
-                            <div className='avatar-controls__coat-algorithms' role='radiogroup' aria-label={t('Pattern algorithm')}>
-                              {COAT_PATTERN_ALGORITHMS.map(option => (
-                                <button
-                                  key={option.id}
-                                  type='button'
-                                  role='radio'
-                                  aria-checked={coatPattern.algorithm === option.id}
-                                  data-active={coatPattern.algorithm === option.id}
-                                  onClick={() => onCoatPatternChange(
-                                    { algorithm: option.id },
-                                    AVATAR_SEED_FIELD.coatPatternAlgorithm
-                                  )}
-                                >
-                                  <CoatPatternIcon algorithm={option.id} />
-                                  <span>{t(option.label)}</span>
-                                </button>
-                              ))}
-                            </div>
-                          </div>
-                          <div className='avatar-controls__coat-row'>
-                            <div className='avatar-controls__coat-row-header'>
-                              <span>{t('Pattern layout')}</span>
-                              <SeedFieldToggle
-                                enabled={seededFields.includes(AVATAR_SEED_FIELD.coatPatternSeed)}
-                                label='Pattern layout'
-                                onChange={() => onSeedFieldToggle(
-                                  AVATAR_SEED_FIELD.coatPatternSeed,
-                                  !seededFields.includes(AVATAR_SEED_FIELD.coatPatternSeed)
-                                )}
-                              />
-                            </div>
-                          </div>
-                          <div className='avatar-controls__coat-row avatar-controls__coat-light-patch'>
-                            <div className='avatar-controls__coat-row-header'>
-                              <span>{t('Light coat patch')}</span>
-                            </div>
-                            <div className='avatar-controls__coat-row-header'>
-                              <span>{t('Shape')}</span>
-                              <SeedFieldToggle
-                                enabled={seededFields.includes(AVATAR_SEED_FIELD.coatPatternLightPatchShape)}
-                                label='Light coat patch shape'
-                                onChange={() => onSeedFieldToggle(
-                                  AVATAR_SEED_FIELD.coatPatternLightPatchShape,
-                                  !seededFields.includes(AVATAR_SEED_FIELD.coatPatternLightPatchShape)
-                                )}
-                              />
-                            </div>
-                            <GeometricShapePicker
-                              ariaLabel='Light coat patch shape'
-                              options={COAT_LIGHT_PATCH_SHAPES}
-                              value={coatPattern.lightPatchShape ?? 'face-mask'}
-                              onChange={lightPatchShape => onCoatPatternChange(
-                                { lightPatchShape },
-                                AVATAR_SEED_FIELD.coatPatternLightPatchShape
-                              )}
-                            />
-                            {([
-                              ['lightPatchLength', 'Length', AVATAR_SEED_FIELD.coatPatternLightPatchLength, AVATAR_COAT_PATTERN_RANGES.lightPatchLength],
-                              ['lightPatchOffsetY', 'Vertical position', AVATAR_SEED_FIELD.coatPatternLightPatchOffsetY, AVATAR_COAT_PATTERN_RANGES.lightPatchOffsetY],
-                              ['lightPatchWidth', 'Width', AVATAR_SEED_FIELD.coatPatternLightPatchWidth, AVATAR_COAT_PATTERN_RANGES.lightPatchWidth]
-                            ] as const).map(([key, label, field, range]) => (
-                              <div className='avatar-controls__coat-row' key={key}>
-                                <div className='avatar-controls__coat-row-header'>
-                                  <span>{t(label)}</span>
-                                  <SeedFieldToggle
-                                    enabled={seededFields.includes(field)}
-                                    label={label}
-                                    onChange={() => onSeedFieldToggle(field, !seededFields.includes(field))}
-                                  />
-                                </div>
-                                <ValueSlider
-                                  ariaLabel={label}
-                                  label={label}
-                                  min={range.min}
-                                  max={range.max}
-                                  suffix={key === 'lightPatchOffsetY' ? '' : '%'}
-                                  value={key === 'lightPatchOffsetY'
-                                    ? coatPattern.lightPatchOffsetY ?? 0
-                                    : coatPattern[key] ?? 100}
-                                  onChange={value => onCoatPatternChange({ [key]: value }, field)}
-                                />
-                              </div>
-                            ))}
-                          </div>
-                          {([
-                            ['density', 'Density', AVATAR_SEED_FIELD.coatPatternDensity, AVATAR_COAT_PATTERN_RANGES.density],
-                            ['jitter', 'Jitter', AVATAR_SEED_FIELD.coatPatternJitter, AVATAR_COAT_PATTERN_RANGES.jitter],
-                            ['thickness', 'Thickness', AVATAR_SEED_FIELD.coatPatternThickness, AVATAR_COAT_PATTERN_RANGES.thickness],
-                            ['symmetry', 'Symmetry', AVATAR_SEED_FIELD.coatPatternSymmetry, AVATAR_COAT_PATTERN_RANGES.symmetry],
-                            ['contrast', 'Contrast', AVATAR_SEED_FIELD.coatPatternContrast, AVATAR_COAT_PATTERN_RANGES.contrast],
-                            ['breakup', 'Breakup', AVATAR_SEED_FIELD.coatPatternBreakup, AVATAR_COAT_PATTERN_RANGES.breakup]
-                          ] as const).map(([key, label, field, range]) => (
-                            <div className='avatar-controls__coat-row' key={key}>
-                              <div className='avatar-controls__coat-row-header'>
-                                <span>{t(label)}</span>
-                                <SeedFieldToggle
-                                  enabled={seededFields.includes(field)}
-                                  label={label}
-                                  onChange={() => onSeedFieldToggle(field, !seededFields.includes(field))}
-                                />
-                              </div>
-                              <ValueSlider
-                                ariaLabel={label}
-                                label={label}
-                                min={range.min}
-                                max={range.max}
-                                suffix='%'
-                                value={coatPattern[key]}
-                                onChange={value => onCoatPatternChange({ [key]: value }, field)}
-                              />
-                            </div>
-                          ))}
-                          <div className='avatar-controls__coat-actions'>
-                            <button type='button' className='avatar-controls__inline-action' onClick={onConvertCoatPatternToDecals}>
-                              {t('Convert to editable decals')}
-                            </button>
-                          </div>
-                        </div>
-                      )
-                      : null}
-                  </div>
-                )
+                  )
                 : null}
-              <div className='avatar-controls__field-group'>
-                <div className='avatar-controls__field-header'>
-                  <span className='avatar-controls__label'>{t('Surface decals')}</span>
-                  <div className='avatar-controls__field-actions'>
-                    {coatPattern.enabled
-                      ? null
-                      : (
-                        <button className='avatar-controls__inline-action' type='button' onClick={onAddSurfaceDecal}>
-                          {t('Add decal')}
-                        </button>
-                      )}
-                  </div>
-                </div>
-                {coatPattern.enabled || surfaceDecals.length === 0
+            </>
+          )
+          : null}
+
+        {panelTab === 'style' && styleDetailPage == null
+          ? (
+            <>
+              <section
+                className={surfaceDecalDetailOpen
+                  ? 'avatar-controls__build-detail avatar-controls__style-detail'
+                  : 'avatar-controls__field-group avatar-controls__overview-card'}
+                aria-label={t('Surface decals')}
+              >
+                {surfaceDecalDetailOpen
+                  ? (
+                    <header className='avatar-controls__build-detail-header'>
+                      <button
+                        type='button'
+                        aria-label={t('Back to Style overview')}
+                        title={t('Back to Style overview')}
+                        onClick={() => setSurfaceDecalDetailId(null)}
+                      >
+                        <svg viewBox='0 0 20 20' aria-hidden='true'>
+                          <path d='m12.5 4.5-5.5 5.5 5.5 5.5M7 10h8' />
+                        </svg>
+                      </button>
+                      <div>
+                        <strong>{t(editingSurfaceDecal?.label ?? 'Surface decal')}</strong>
+                        <span>{t('Advanced options')}</span>
+                      </div>
+                    </header>
+                    )
+                  : (
+                    <div className='avatar-controls__field-header'>
+                      <span className='avatar-controls__label'>
+                        <ControlIcon name='decals' />
+                        {t('Surface decals')}
+                      </span>
+                      <div className='avatar-controls__field-actions'>
+                        {coatPattern.enabled
+                          ? null
+                          : (
+                            <button
+                              className='avatar-controls__inline-action avatar-controls__inline-action--icon'
+                              type='button'
+                              aria-label={t('Add decal')}
+                              title={t('Add decal')}
+                              onClick={onAddSurfaceDecal}
+                            >
+                              <svg viewBox='0 0 20 20' aria-hidden='true'>
+                                <path d='M10 4v12M4 10h12' />
+                              </svg>
+                            </button>
+                          )}
+                      </div>
+                    </div>
+                    )}
+                {surfaceDecalDetailOpen || coatPattern.enabled || surfaceDecals.length === 0
                   ? null
                   : (
                     <div className='avatar-controls__decal-list' role='listbox' aria-label={t('Surface decals')}>
@@ -2863,29 +4303,25 @@ export function AvatarControls({
                             type='button'
                             role='option'
                             aria-selected={decal.id === selectedSurfaceDecalId}
-                            onClick={() => onSelectSurfaceDecal(decal.id)}
+                            onClick={() => {
+                              onSelectSurfaceDecal(decal.id)
+                              setSurfaceDecalDetailId(decal.id)
+                            }}
                           >
                             <span style={{ background: decal.color }} />
                             <span className='avatar-controls__decal-label'>{t(decal.label)}</span>
-                          </button>
-                          <button
-                            className='avatar-controls__decal-remove'
-                            type='button'
-                            aria-label={`${t('Delete decal')}: ${t(decal.label)}`}
-                            title={t('Delete decal')}
-                            onClick={() => onDeleteSurfaceDecal(decal.id)}
-                          >
-                            <svg viewBox='0 0 16 16' aria-hidden='true'>
-                              <path d='m4.5 4.5 7 7m0-7-7 7' />
+                            <svg className='avatar-controls__decal-option-arrow' viewBox='0 0 16 16' aria-hidden='true'>
+                              <path d='m6 3.5 4.5 4.5L6 12.5' />
                             </svg>
                           </button>
                         </div>
                       ))}
                     </div>
                   )}
-                {editingSurfaceDecal == null || coatPattern.enabled
+                {!surfaceDecalDetailOpen || editingSurfaceDecal == null || coatPattern.enabled
                   ? null
                   : (
+                    <div className='avatar-controls__build-detail-body avatar-controls__style-detail-body'>
                     <div className='avatar-controls__decal-editor'>
                       <label className='avatar-controls__select-field'>
                         <span>{t('Target part')}</span>
@@ -3024,780 +4460,321 @@ export function AvatarControls({
                       <button
                         className='avatar-controls__danger-action'
                         type='button'
-                        onClick={() => onDeleteSurfaceDecal(editingSurfaceDecal.id)}
+                        onClick={() => {
+                          setSurfaceDecalDetailId(null)
+                          onDeleteSurfaceDecal(editingSurfaceDecal.id)
+                        }}
                       >
                         {t('Delete decal')}
                       </button>
                     </div>
+                    </div>
                   )}
-              </div>
+              </section>
             </>
           )
           : null}
 
-        {activeTab === 'style'
-          ? (
-            <>
-              {editingEntityPart == null
-                ? null
-                : (
-                  <div className='avatar-controls__field-group'>
-                    <span className='avatar-controls__label'>{t('Part material')}</span>
-                    <div className='avatar-controls__entity-colors'>
-                      {([
-                        ['baseColor', 'Base'],
-                        ['highlightColor', 'Highlight'],
-                        ['shadowColor', 'Shadow'],
-                        ['foregroundColor', 'Face']
-                      ] as const).map(([key, label]) => (
-                        <label key={key} className='avatar-controls__entity-color'>
-                          <span>{t(label)}</span>
-                          <input
-                            type='color'
-                            aria-label={t(label)}
-                            value={editingEntityPart[key]}
-                            onChange={event =>
-                              onEntityPartChange(editingEntityPart.id, {
-                                [key]: event.currentTarget.value
-                              })}
-                          />
-                        </label>
-                      ))}
-                    </div>
-                  </div>
-                )}
-              <div className='avatar-controls__field-group'>
-                {renderSeedFieldHeader('palette', 'Palette', AVATAR_SEED_FIELD.palette)}
-                <div className='avatar-controls__swatches'>
-                  {visiblePalettes.map((palette) => (
-                    <button
-                      key={palette.id}
-                      className='avatar-controls__swatch'
-                      type='button'
-                      aria-label={palette.name}
-                      aria-pressed={palette.id === selectedPalette.id}
-                      style={{
-                        '--avatar-bg': palette.background,
-                        '--avatar-bg-end': palette.gradient[1],
-                        '--avatar-fg': palette.foreground
-                      } as CSSProperties}
-                      onClick={() => handlePaletteSelect(palette.id)}
-                    >
-                      <span />
-                    </button>
-                  ))}
-                </div>
-                {hiddenPaletteCount > 0
-                  ? (
-                    <button
-                      className='avatar-controls__palette-more'
-                      type='button'
-                      aria-expanded={showMorePalettes}
-                      onClick={onShowMorePalettesChange}
-                    >
-                      {showMorePalettes ? t('Less') : `${t('More')} ${hiddenPaletteCount}`}
-                    </button>
-                  )
-                  : null}
-              </div>
-
-              {showOverallStyleControls
-                ? (
-                  <>
-                    <div className='avatar-controls__field-group'>
-                      {renderSeedFieldHeader(
-                        'background',
-                        'Background',
-                        AVATAR_SEED_FIELD.backgroundStyle
-                      )}
-                      <div className='avatar-controls__segments'>
-                        {(['solid', 'gradient'] satisfies AvatarBackgroundStyle[]).map(style => (
-                          <button
-                            key={style}
-                            className='avatar-controls__segment'
-                            type='button'
-                            aria-pressed={style === backgroundStyle}
-                            onClick={() => onBackgroundStyleChange(style)}
-                          >
-                            <ControlIcon name={style} />
-                            {t(style === 'solid' ? 'Solid' : 'Gradient')}
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-
-                    <div className='avatar-controls__field-group'>
-                      <span className='avatar-controls__label'>
-                        <ControlIcon name='camera' />
-                        {t('Camera frame')}
-                      </span>
-                      <GeometricShapePicker
-                        ariaLabel='Camera frame shape'
-                        options={CAMERA_FRAME_OPTIONS}
-                        value={cameraFrame}
-                        onChange={onCameraFrameChange}
+        {panelTab === 'style' && !surfaceDecalDetailOpen
+          ? styleDetailPage == null
+            ? (
+              <>
+                <section className='avatar-controls__field-group avatar-controls__overview-card' aria-label={t('Palette')}>
+                  <div className='avatar-controls__field-header'>
+                    <span className='avatar-controls__label'>
+                      <ControlIcon name='palette' />
+                      {t('Palette')}
+                    </span>
+                    <span className='avatar-controls__field-actions'>
+                      <SeedFieldToggle
+                        enabled={seededFields.includes(AVATAR_SEED_FIELD.palette)}
+                        label='Palette'
+                        onChange={() => onSeedFieldToggle(
+                          AVATAR_SEED_FIELD.palette,
+                          !seededFields.includes(AVATAR_SEED_FIELD.palette)
+                        )}
                       />
-                    </div>
+                    </span>
+                  </div>
+                  <div className='avatar-controls__swatches avatar-controls__swatches--compact'>
+                    {compactPaletteItems.map(renderPaletteSwatch)}
+                    {renderStyleMoreButton('palette', 'Palette')}
+                  </div>
+                </section>
 
-                    <div className='avatar-controls__field-group'>
+                {showOverallStyleControls
+                  ? (
+                    <section className='avatar-controls__field-group avatar-controls__overview-card' aria-label={t('Camera background')}>
                       {renderSeedFieldHeader(
                         'background',
                         'Camera background',
                         AVATAR_SEED_FIELD.cameraBackground
                       )}
-                      <div className='avatar-controls__segments'>
-                        <button
-                          className='avatar-controls__segment'
-                          type='button'
-                          aria-pressed={cameraBackground !== 'transparent'}
-                          onClick={() => onCameraBackgroundChange(lastCameraColorRef.current)}
-                        >
-                          <ControlIcon name='solid' />
-                          {t('Color')}
-                        </button>
-                        <button
-                          className='avatar-controls__segment'
-                          type='button'
-                          aria-pressed={cameraBackground === 'transparent'}
-                          onClick={() => onCameraBackgroundChange('transparent')}
-                        >
-                          <ControlIcon name='transparent' />
-                          {t('Transparent')}
-                        </button>
+                      <div className='avatar-controls__camera-presets avatar-controls__camera-presets--compact'>
+                        {compactCameraBackgrounds.map(color => (
+                          <button
+                            key={color}
+                            type='button'
+                            aria-label={`Set camera background to ${color}`}
+                            aria-pressed={cameraBackground === color}
+                            style={{ '--camera-preset': color } as CSSProperties}
+                            onClick={() => onCameraBackgroundChange(color)}
+                          />
+                        ))}
+                        {renderStyleMoreButton('camera-background', 'Camera background')}
                       </div>
-                      {cameraBackground === 'transparent'
-                        ? null
-                        : (
-                          <div className='avatar-controls__camera-background'>
-                            <label className='avatar-controls__color-input'>
-                              <input
-                                type='color'
-                                aria-label='Camera background color'
-                                value={cameraBackground}
-                                onChange={event => onCameraBackgroundChange(event.currentTarget.value)}
-                              />
-                              <output>{cameraBackground.toUpperCase()}</output>
-                            </label>
-                            <div className='avatar-controls__camera-presets' aria-label='Camera background presets'>
-                              {AVATAR_CAMERA_BACKGROUND_PRESETS.map(color => (
-                                <button
-                                  key={color}
-                                  type='button'
-                                  aria-label={`Set camera background to ${color}`}
-                                  aria-pressed={cameraBackground === color}
-                                  style={{ '--camera-preset': color } as CSSProperties}
-                                  onClick={() => onCameraBackgroundChange(color)}
-                                />
-                              ))}
-                            </div>
+                    </section>
+                    )
+                  : null}
+              </>
+              )
+            : (
+              <section
+                id={`avatar-controls-style-detail-${styleDetailPage}`}
+                className='avatar-controls__build-detail avatar-controls__style-detail'
+                aria-labelledby='avatar-controls-style-detail-title'
+              >
+                <header className='avatar-controls__build-detail-header'>
+                  <button
+                    type='button'
+                    aria-label={t('Back to Style overview')}
+                    title={t('Back to Style overview')}
+                    onClick={() => setStyleDetailPage(null)}
+                  >
+                    <svg viewBox='0 0 20 20' aria-hidden='true'>
+                      <path d='m12.5 4.5-5.5 5.5 5.5 5.5M7 10h8' />
+                    </svg>
+                  </button>
+                  <div>
+                    <strong id='avatar-controls-style-detail-title'>
+                      {t(styleDetailPage === 'palette' ? 'Palette' : 'Camera background')}
+                    </strong>
+                    <span>{t('Advanced options')}</span>
+                  </div>
+                </header>
+                <div className='avatar-controls__build-detail-body avatar-controls__style-detail-body'>
+                  {styleDetailPage === 'palette'
+                    ? (
+                      <>
+                        {editingEntityPart == null
+                          ? null
+                          : (
+                            <section className='avatar-controls__field-group' aria-label={t('Part material')}>
+                              <span className='avatar-controls__label'>{t('Part material')}</span>
+                              <div className='avatar-controls__entity-colors'>
+                                {([
+                                  ['baseColor', 'Base'],
+                                  ['highlightColor', 'Highlight'],
+                                  ['shadowColor', 'Shadow'],
+                                  ['foregroundColor', 'Face']
+                                ] as const).map(([key, label]) => (
+                                  <label key={key} className='avatar-controls__entity-color'>
+                                    <span>{t(label)}</span>
+                                    <input
+                                      type='color'
+                                      aria-label={t(label)}
+                                      value={editingEntityPart[key]}
+                                      onChange={event =>
+                                        onEntityPartChange(editingEntityPart.id, {
+                                          [key]: event.currentTarget.value
+                                        })}
+                                    />
+                                  </label>
+                                ))}
+                              </div>
+                            </section>
+                            )}
+                        <section className='avatar-controls__field-group' aria-label={t('Palette presets')}>
+                          {renderSeedFieldHeader('palette', 'Palette presets', AVATAR_SEED_FIELD.palette)}
+                          <div className='avatar-controls__swatches'>
+                            {AVATAR_PALETTES.map(renderPaletteSwatch)}
                           </div>
+                        </section>
+                        {showOverallStyleControls
+                          ? (
+                            <section className='avatar-controls__field-group' aria-label={t('Background')}>
+                              {renderSeedFieldHeader(
+                                'background',
+                                'Background',
+                                AVATAR_SEED_FIELD.backgroundStyle
+                              )}
+                              <div className='avatar-controls__segments'>
+                                {(['solid', 'gradient'] satisfies AvatarBackgroundStyle[]).map(style => (
+                                  <button
+                                    key={style}
+                                    className='avatar-controls__segment'
+                                    type='button'
+                                    aria-pressed={style === backgroundStyle}
+                                    onClick={() => onBackgroundStyleChange(style)}
+                                  >
+                                    <ControlIcon name={style} />
+                                    {t(style === 'solid' ? 'Solid' : 'Gradient')}
+                                  </button>
+                                ))}
+                              </div>
+                            </section>
+                            )
+                          : null}
+                      </>
+                      )
+                    : (
+                      <section className='avatar-controls__field-group' aria-label={t('Camera background')}>
+                        {renderSeedFieldHeader(
+                          'background',
+                          'Camera background',
+                          AVATAR_SEED_FIELD.cameraBackground
                         )}
-                    </div>
-                  </>
-                )
-                : null}
-            </>
-          )
+                        <div className='avatar-controls__segments'>
+                          <button
+                            className='avatar-controls__segment'
+                            type='button'
+                            aria-pressed={cameraBackground !== 'transparent'}
+                            onClick={() => onCameraBackgroundChange(lastCameraColorRef.current)}
+                          >
+                            <ControlIcon name='solid' />
+                            {t('Color')}
+                          </button>
+                          <button
+                            className='avatar-controls__segment'
+                            type='button'
+                            aria-pressed={cameraBackground === 'transparent'}
+                            onClick={() => onCameraBackgroundChange('transparent')}
+                          >
+                            <ControlIcon name='transparent' />
+                            {t('Transparent')}
+                          </button>
+                        </div>
+                        {cameraBackground === 'transparent'
+                          ? null
+                          : (
+                            <div className='avatar-controls__camera-background'>
+                              <label className='avatar-controls__color-input'>
+                                <input
+                                  type='color'
+                                  aria-label='Camera background color'
+                                  value={cameraBackground}
+                                  onChange={event => onCameraBackgroundChange(event.currentTarget.value)}
+                                />
+                                <output>{cameraBackground.toUpperCase()}</output>
+                              </label>
+                              <div className='avatar-controls__camera-presets' aria-label='Camera background presets'>
+                                {AVATAR_CAMERA_BACKGROUND_PRESETS.map(color => (
+                                  <button
+                                    key={color}
+                                    type='button'
+                                    aria-label={`Set camera background to ${color}`}
+                                    aria-pressed={cameraBackground === color}
+                                    style={{ '--camera-preset': color } as CSSProperties}
+                                    onClick={() => onCameraBackgroundChange(color)}
+                                  />
+                                ))}
+                              </div>
+                            </div>
+                            )}
+                      </section>
+                      )}
+                </div>
+              </section>
+              )
           : null}
 
-        {activeTab === 'body'
-          ? (
+        {panelTab === 'body'
+          ? side === 'left'
+            ? renderAvatarNodeTree()
+            : renderAvatarNodeInspector()
+          : null}
+
+        {panelTab === 'effects'
+          ? effectDetailPage == null
+            ? (
             <>
-              {entityPreset === 'custom' || editingEntityPart != null
+              {showOverallStyleControls
                 ? (
-                  <div className='avatar-controls__body-grid'>
-                    {AVATAR_BODY_SHAPES.map(shape => (
-                      <button
-                        key={shape}
-                        className='avatar-controls__body-option'
-                        type='button'
-                        aria-label={t(BODY_SHAPE_LABELS[shape])}
-                        aria-pressed={(editingEntityPart?.shape ?? bodyShape) === shape}
-                        title={t(BODY_SHAPE_LABELS[shape])}
-                        onClick={() =>
-                          editingEntityPart == null
-                            ? onBodyShapeChange(shape)
-                            : onEntityPartChange(editingEntityPart.id, { shape })}
-                      >
-                        <BodyShapeIcon shape={shape} />
-                      </button>
-                    ))}
+                  <div className='avatar-controls__field-group avatar-controls__effects-frame'>
+                    <span className='avatar-controls__label'>
+                      <ControlIcon name='camera' />
+                      {t('Camera frame')}
+                    </span>
+                    <GeometricShapePicker
+                      ariaLabel='Camera frame shape'
+                      options={CAMERA_FRAME_OPTIONS}
+                      value={cameraFrame}
+                      onChange={onCameraFrameChange}
+                    />
                   </div>
-                )
-                : null}
-              {editingEntityPart == null
-                ? bodyShape === 'ellipse'
-                  ? (
-                    <div className='avatar-controls__parameter-controls'>
-                      <ValueSlider
-                        ariaLabel='Body bottom taper'
-                        label='Bottom taper'
-                        min={AVATAR_ENTITY_RANGES.bottomTaper.min}
-                        max={AVATAR_ENTITY_RANGES.bottomTaper.max}
-                        suffix='%'
-                        value={bodyBottomTaper}
-                        onChange={onBodyBottomTaperChange}
-                      />
-                    </div>
                   )
-                  : null
-                : (
-                  <div className='avatar-controls__parameter-controls'>
-                    <NumberField
-                      ariaLabel='Part position X'
-                      label='Position X'
-                      value={editingEntityPart.x}
-                      onChange={x => onEntityPartChange(editingEntityPart.id, { x })}
-                    />
-                    <NumberField
-                      ariaLabel='Part position Y'
-                      label='Position Y'
-                      value={editingEntityPart.y}
-                      onChange={y => onEntityPartChange(editingEntityPart.id, { y })}
-                    />
-                    <NumberField
-                      ariaLabel='Part position Z'
-                      label='Position Z'
-                      value={editingEntityPart.z}
-                      onChange={z => onEntityPartChange(editingEntityPart.id, { z })}
-                    />
-                    <ValueSlider
-                      ariaLabel='Part width'
-                      label='Width'
-                      min={AVATAR_ENTITY_RANGES.scaleX.min * 100}
-                      max={AVATAR_ENTITY_RANGES.scaleX.max * 100}
-                      suffix='%'
-                      value={editingEntityPart.scaleX * 100}
-                      onChange={value => onEntityPartChange(editingEntityPart.id, { scaleX: value / 100 })}
-                    />
-                    <ValueSlider
-                      ariaLabel='Part height'
-                      label='Height'
-                      min={AVATAR_ENTITY_RANGES.scaleY.min * 100}
-                      max={AVATAR_ENTITY_RANGES.scaleY.max * 100}
-                      suffix='%'
-                      value={editingEntityPart.scaleY * 100}
-                      onChange={value => onEntityPartChange(editingEntityPart.id, { scaleY: value / 100 })}
-                    />
-                    <ValueSlider
-                      ariaLabel='Part depth'
-                      label='Depth'
-                      min={AVATAR_ENTITY_RANGES.scaleZ.min * 100}
-                      max={AVATAR_ENTITY_RANGES.scaleZ.max * 100}
-                      suffix='%'
-                      value={resolveAvatarEntityPartScaleZ(editingEntityPart) * 100}
-                      onChange={value => onEntityPartChange(editingEntityPart.id, { scaleZ: value / 100 })}
-                    />
-                    {editingEntityPart.shape === 'ellipse'
-                      ? (
-                        <ValueSlider
-                          ariaLabel='Part bottom taper'
-                          label='Bottom taper'
-                          min={AVATAR_ENTITY_RANGES.bottomTaper.min}
-                          max={AVATAR_ENTITY_RANGES.bottomTaper.max}
-                          suffix='%'
-                          value={editingEntityPart.bottomTaper ?? 0}
-                          onChange={bottomTaper => onEntityPartChange(editingEntityPart.id, { bottomTaper })}
-                        />
-                      )
-                      : null}
-                    <NumberField
-                      ariaLabel='Part rotation X'
-                      label='Rotation X'
-                      suffix='°'
-                      value={editingEntityPart.rotationX ?? 0}
-                      onChange={rotationX => onEntityPartChange(editingEntityPart.id, { rotationX })}
-                    />
-                    <NumberField
-                      ariaLabel='Part rotation Y'
-                      label='Rotation Y'
-                      suffix='°'
-                      value={editingEntityPart.rotationY ?? 0}
-                      onChange={rotationY => onEntityPartChange(editingEntityPart.id, { rotationY })}
-                    />
-                    <NumberField
-                      ariaLabel='Part rotation Z'
-                      label='Rotation Z'
-                      suffix='°'
-                      value={editingEntityPart.rotationZ ?? 0}
-                      onChange={rotationZ => onEntityPartChange(editingEntityPart.id, { rotationZ })}
-                    />
-                    {editingEntityPart.shape === 'cone' || editingEntityPart.shape === 'frustum' ||
-                        editingEntityPart.shape === 'half-cone'
-                      ? (
-                        <>
-                          <ValueSlider
-                            ariaLabel='Part cone roundness'
-                            label='Cone roundness'
-                            min={AVATAR_ENTITY_RANGES.roundness.min}
-                            max={AVATAR_ENTITY_RANGES.roundness.max}
-                            suffix='%'
-                            value={editingEntityPart.roundness ?? 24}
-                            onChange={roundness => onEntityPartChange(editingEntityPart.id, { roundness })}
-                          />
-                          <NumberField
-                            ariaLabel='Part cut direction'
-                            label='Cut direction'
-                            suffix='°'
-                            value={editingEntityPart.cutAngle ?? 0}
-                            onChange={cutAngle => onEntityPartChange(editingEntityPart.id, { cutAngle })}
-                          />
-                          <ToggleRow
-                            checked={editingEntityPart.hollow ?? false}
-                            icon='body'
-                            label='Hollow'
-                            onChange={() =>
-                              onEntityPartChange(editingEntityPart.id, {
-                                hollow: !(editingEntityPart.hollow ?? false)
-                              })}
-                          />
-                        </>
-                      )
-                      : null}
-                    {editingEntityPart.shape === 'trapezoid'
-                      ? (
-                        <ValueSlider
-                          ariaLabel='Part corner roundness'
-                          label='Corner roundness'
-                          min={AVATAR_ENTITY_RANGES.roundness.min}
-                          max={AVATAR_ENTITY_RANGES.roundness.max}
-                          suffix='%'
-                          value={editingEntityPart.roundness ?? 72}
-                          onChange={roundness => onEntityPartChange(editingEntityPart.id, { roundness })}
-                        />
-                      )
-                      : null}
-                  </div>
-                )}
+                : null}
+              <section className='avatar-controls__effects-group' aria-labelledby='avatar-controls-effects-appearance'>
+                <h3 id='avatar-controls-effects-appearance'>{t('Appearance')}</h3>
+                <div className='avatar-controls__effects-list'>
+                  {renderEffectOverviewItem(
+                    'pixel',
+                    pixelEffect.enabled,
+                    'pixel',
+                    () => onPixelEffectChange({ enabled: !pixelEffect.enabled })
+                  )}
+                  {renderEffectOverviewItem('light', showLight, 'light', onToggleLight)}
+                  {renderEffectOverviewItem('avatar-outline', showOutline, 'outline', onToggleOutline)}
+                </div>
+              </section>
+              <section className='avatar-controls__effects-group' aria-labelledby='avatar-controls-effects-shadows'>
+                <h3 id='avatar-controls-effects-shadows'>{t('Shadows')}</h3>
+                <div className='avatar-controls__effects-list'>
+                  {renderEffectOverviewItem('avatar-shadow', showAvatarShadow, 'shadow', onToggleAvatarShadow)}
+                  {renderEffectOverviewItem('face-shadow', showShadow, 'shadow', onToggleShadow)}
+                  {renderEffectOverviewItem('frame-shadow', showFrameShadow, 'shadow', onToggleFrameShadow)}
+                </div>
+              </section>
             </>
-          )
-          : null}
-
-        {activeTab === 'effects'
-          ? (
-            <>
-              <ToggleRow
-                checked={pixelEffect.enabled}
-                icon='pixel'
-                label='Pixel style'
-                onChange={() => onPixelEffectChange({ enabled: !pixelEffect.enabled })}
-              />
-              {pixelEffect.enabled
-                ? (
-                  <div className='avatar-controls__parameter-controls avatar-controls__pixel-controls'>
-                    <ValueSlider
-                      ariaLabel='Pixel size'
-                      label='Pixel size'
-                      min={AVATAR_PIXEL_EFFECT_RANGES.blockSize.min}
-                      max={AVATAR_PIXEL_EFFECT_RANGES.blockSize.max}
-                      suffix='px'
-                      value={pixelEffect.blockSize}
-                      onChange={blockSize => onPixelEffectChange({ blockSize })}
-                    />
-                    <div className='avatar-controls__pixel-control'>
-                      <span>{t('Sampling')}</span>
-                      <div
-                        className='avatar-controls__segments avatar-controls__pixel-sampling'
-                        role='radiogroup'
-                        aria-label={t('Pixel sampling')}
-                      >
-                        {([
-                          ['center', 'Center'],
-                          ['dominant', 'Dominant'],
-                          ['median', 'Median'],
-                          ['slic', 'SLIC']
-                        ] as const).map(([sampling, label]) => (
-                          <button
-                            key={sampling}
-                            className='avatar-controls__segment'
-                            type='button'
-                            role='radio'
-                            aria-checked={pixelEffect.sampling === sampling}
-                            aria-pressed={pixelEffect.sampling === sampling}
-                            onClick={() => onPixelEffectChange({ sampling })}
-                          >
-                            <PixelSamplingIcon sampling={sampling} />
-                            <span>{t(label)}</span>
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-                    <div className='avatar-controls__pixel-control'>
-                      <span>{t('Colors')}</span>
-                      <div
-                        className='avatar-controls__segments avatar-controls__pixel-palette'
-                        role='radiogroup'
-                        aria-label={t('Pixel color count')}
-                      >
-                        {AVATAR_PIXEL_EFFECT_RANGES.paletteSizes.map(paletteSize => (
-                          <button
-                            key={paletteSize}
-                            className='avatar-controls__segment'
-                            type='button'
-                            role='radio'
-                            aria-checked={pixelEffect.paletteSize === paletteSize}
-                            aria-pressed={pixelEffect.paletteSize === paletteSize}
-                            onClick={() => onPixelEffectChange({ paletteSize })}
-                          >
-                            {paletteSize}
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-                    <div className='avatar-controls__pixel-control'>
-                      <span>{t('Dithering')}</span>
-                      <div
-                        className='avatar-controls__segments'
-                        role='radiogroup'
-                        aria-label={t('Pixel dithering')}
-                      >
-                        {([
-                          ['none', 'Off'],
-                          ['ordered', 'Ordered']
-                        ] as const).map(([dithering, label]) => (
-                          <button
-                            key={dithering}
-                            className='avatar-controls__segment'
-                            type='button'
-                            role='radio'
-                            aria-checked={pixelEffect.dithering === dithering}
-                            aria-pressed={pixelEffect.dithering === dithering}
-                            onClick={() => onPixelEffectChange({ dithering })}
-                          >
-                            {t(label)}
-                          </button>
-                        ))}
-                      </div>
-                    </div>
+              )
+            : (
+              <section
+                id={`avatar-controls-effects-detail-${effectDetailPage}`}
+                className='avatar-controls__build-detail avatar-controls__effects-detail'
+                aria-labelledby='avatar-controls-effects-detail-title'
+              >
+                <header className='avatar-controls__build-detail-header avatar-controls__effects-detail-header'>
+                  <button
+                    type='button'
+                    aria-label={t('Back to Effects overview')}
+                    title={t('Back to Effects overview')}
+                    onClick={() => setEffectDetailPage(null)}
+                  >
+                    <svg viewBox='0 0 20 20' aria-hidden='true'>
+                      <path d='m12.5 4.5-5.5 5.5 5.5 5.5M7 10h8' />
+                    </svg>
+                  </button>
+                  <div>
+                    <strong id='avatar-controls-effects-detail-title'>
+                      {t(effectDetailLabels[effectDetailPage])}
+                    </strong>
                   </div>
-                )
-                : null}
-              <ToggleRow checked={showLight} icon='light' label='Light source' onChange={onToggleLight} />
-              {showLight
-                ? (
-                  <div className='avatar-controls__parameter-controls'>
-                    <ValueSlider
-                      ariaLabel='Light direction'
-                      label='Direction'
-                      min={AVATAR_LIGHTING_RANGES.azimuth.min}
-                      max={AVATAR_LIGHTING_RANGES.azimuth.max}
-                      suffix='°'
-                      value={lightAzimuth}
-                      onChange={onLightAzimuthChange}
-                    />
-                    <ValueSlider
-                      ariaLabel='Light angle'
-                      label='Angle'
-                      min={AVATAR_LIGHTING_RANGES.elevation.min}
-                      max={AVATAR_LIGHTING_RANGES.elevation.max}
-                      suffix='°'
-                      value={lightElevation}
-                      onChange={onLightElevationChange}
-                    />
-                    <div>
-                      <ValueSlider
-                        ariaLabel='Light distance'
-                        label='Distance'
-                        min={AVATAR_LIGHTING_RANGES.distance.min}
-                        max={AVATAR_LIGHTING_RANGES.distance.max}
-                        suffix='%'
-                        value={lightDistance}
-                        onChange={onLightDistanceChange}
-                      />
-                      <div className='avatar-controls__value-scale' aria-hidden='true'>
-                        <span>{t('Near')}</span>
-                        <span>{t('Far')}</span>
-                      </div>
-                    </div>
-                    <div>
-                      <ValueSlider
-                        ariaLabel='Surface grid density'
-                        label='Grid density'
-                        min={AVATAR_LIGHTING_RANGES.gridDensity.min}
-                        max={AVATAR_LIGHTING_RANGES.gridDensity.max}
-                        suffix='%'
-                        value={gridDensity}
-                        onChange={onGridDensityChange}
-                      />
-                      <div className='avatar-controls__value-scale' aria-hidden='true'>
-                        <span>{t('Low')}</span>
-                        <span>{t('High')}</span>
-                      </div>
-                    </div>
-                  </div>
-                )
-                : null}
-              <ToggleRow
-                checked={showAvatarShadow}
-                icon='shadow'
-                label='Avatar shadow'
-                onChange={onToggleAvatarShadow}
-              />
-              {showAvatarShadow
-                ? (
-                  <div className='avatar-controls__parameter-controls'>
-                    <label className='avatar-controls__color-control'>
-                      <span>{t('Color')}</span>
-                      <span>
-                        <input
-                          type='color'
-                          aria-label='Avatar shadow color'
-                          value={avatarShadowStyle.color ?? '#000000'}
-                          onChange={event => onAvatarShadowStyleChange({ color: event.currentTarget.value })}
-                        />
-                        <output>{(avatarShadowStyle.color ?? '#000000').toUpperCase()}</output>
-                      </span>
-                    </label>
-                    <ValueSlider
-                      ariaLabel='Avatar shadow direction'
-                      label='Direction'
-                      min={AVATAR_SHADOW_RANGES.avatar.direction.min}
-                      max={AVATAR_SHADOW_RANGES.avatar.direction.max}
-                      suffix='°'
-                      value={avatarShadowStyle.direction}
-                      onChange={direction => onAvatarShadowStyleChange({ direction })}
-                    />
-                    <ValueSlider
-                      ariaLabel='Avatar shadow distance'
-                      label='Distance'
-                      min={AVATAR_SHADOW_RANGES.avatar.distance.min}
-                      max={AVATAR_SHADOW_RANGES.avatar.distance.max}
-                      suffix='px'
-                      value={avatarShadowStyle.distance}
-                      onChange={distance => onAvatarShadowStyleChange({ distance })}
-                    />
-                    <ValueSlider
-                      ariaLabel='Avatar shadow softness'
-                      label='Softness'
-                      min={AVATAR_SHADOW_RANGES.avatar.softness.min}
-                      max={AVATAR_SHADOW_RANGES.avatar.softness.max}
-                      suffix='px'
-                      value={avatarShadowStyle.softness}
-                      onChange={softness => onAvatarShadowStyleChange({ softness })}
-                    />
-                    <ValueSlider
-                      ariaLabel='Avatar shadow opacity'
-                      label='Opacity'
-                      min={AVATAR_SHADOW_RANGES.avatar.opacity.min}
-                      max={AVATAR_SHADOW_RANGES.avatar.opacity.max}
-                      suffix='%'
-                      value={avatarShadowStyle.opacity}
-                      onChange={opacity => onAvatarShadowStyleChange({ opacity })}
-                    />
-                  </div>
-                )
-                : null}
-              <ToggleRow
-                checked={showOutline}
-                icon='outline'
-                label='Avatar outline'
-                onChange={onToggleOutline}
-              />
-              {showOutline
-                ? (
-                  <div className='avatar-controls__parameter-controls'>
-                    <label className='avatar-controls__color-control'>
-                      <span>{t('Color')}</span>
-                      <span>
-                        <input
-                          type='color'
-                          aria-label='Avatar outline color'
-                          value={avatarOutlineStyle.color}
-                          onChange={event => onAvatarOutlineStyleChange({ color: event.currentTarget.value })}
-                        />
-                        <output>{avatarOutlineStyle.color.toUpperCase()}</output>
-                      </span>
-                    </label>
-                    <ValueSlider
-                      ariaLabel='Avatar outline width'
-                      label='Width'
-                      min={AVATAR_OUTLINE_RANGES.width.min}
-                      max={AVATAR_OUTLINE_RANGES.width.max}
-                      suffix='px'
-                      value={avatarOutlineStyle.width}
-                      onChange={width => onAvatarOutlineStyleChange({ width })}
-                    />
-                    <ValueSlider
-                      ariaLabel='Avatar outline opacity'
-                      label='Opacity'
-                      min={AVATAR_OUTLINE_RANGES.opacity.min}
-                      max={AVATAR_OUTLINE_RANGES.opacity.max}
-                      suffix='%'
-                      value={avatarOutlineStyle.opacity}
-                      onChange={opacity => onAvatarOutlineStyleChange({ opacity })}
-                    />
-                  </div>
-                )
-                : null}
-              <ToggleRow checked={showShadow} icon='shadow' label='Face shadow' onChange={onToggleShadow} />
-              {showShadow
-                ? (
-                  <div className='avatar-controls__parameter-controls'>
-                    <ValueSlider
-                      ariaLabel='Face shadow direction'
-                      label='Direction'
-                      min={AVATAR_SHADOW_RANGES.face.direction.min}
-                      max={AVATAR_SHADOW_RANGES.face.direction.max}
-                      suffix='°'
-                      value={faceShadowStyle.direction}
-                      onChange={direction => onFaceShadowStyleChange({ direction })}
-                    />
-                    <ValueSlider
-                      ariaLabel='Face shadow distance'
-                      label='Distance'
-                      min={AVATAR_SHADOW_RANGES.face.distance.min}
-                      max={AVATAR_SHADOW_RANGES.face.distance.max}
-                      suffix='px'
-                      value={faceShadowStyle.distance}
-                      onChange={distance => onFaceShadowStyleChange({ distance })}
-                    />
-                    <ValueSlider
-                      ariaLabel='Face shadow softness'
-                      label='Softness'
-                      min={AVATAR_SHADOW_RANGES.face.softness.min}
-                      max={AVATAR_SHADOW_RANGES.face.softness.max}
-                      suffix='px'
-                      value={faceShadowStyle.softness}
-                      onChange={softness => onFaceShadowStyleChange({ softness })}
-                    />
-                    <ValueSlider
-                      ariaLabel='Face shadow opacity'
-                      label='Opacity'
-                      min={AVATAR_SHADOW_RANGES.face.opacity.min}
-                      max={AVATAR_SHADOW_RANGES.face.opacity.max}
-                      suffix='%'
-                      value={faceShadowStyle.opacity}
-                      onChange={opacity => onFaceShadowStyleChange({ opacity })}
-                    />
-                  </div>
-                )
-                : null}
-              <ToggleRow
-                checked={showFrameShadow}
-                icon='shadow'
-                label='Frame shadow'
-                onChange={onToggleFrameShadow}
-              />
-              {showFrameShadow
-                ? (
-                  <div className='avatar-controls__parameter-controls'>
-                    <ValueSlider
-                      ariaLabel='Frame shadow direction'
-                      label='Direction'
-                      min={AVATAR_SHADOW_RANGES.frame.direction.min}
-                      max={AVATAR_SHADOW_RANGES.frame.direction.max}
-                      suffix='°'
-                      value={frameShadowStyle.direction}
-                      onChange={direction => onFrameShadowStyleChange({ direction })}
-                    />
-                    <ValueSlider
-                      ariaLabel='Frame shadow distance'
-                      label='Distance'
-                      min={AVATAR_SHADOW_RANGES.frame.distance.min}
-                      max={AVATAR_SHADOW_RANGES.frame.distance.max}
-                      suffix='px'
-                      value={frameShadowStyle.distance}
-                      onChange={distance => onFrameShadowStyleChange({ distance })}
-                    />
-                    <ValueSlider
-                      ariaLabel='Frame shadow softness'
-                      label='Softness'
-                      min={AVATAR_SHADOW_RANGES.frame.softness.min}
-                      max={AVATAR_SHADOW_RANGES.frame.softness.max}
-                      suffix='px'
-                      value={frameShadowStyle.softness}
-                      onChange={softness => onFrameShadowStyleChange({ softness })}
-                    />
-                    <ValueSlider
-                      ariaLabel='Frame shadow opacity'
-                      label='Opacity'
-                      min={AVATAR_SHADOW_RANGES.frame.opacity.min}
-                      max={AVATAR_SHADOW_RANGES.frame.opacity.max}
-                      suffix='%'
-                      value={frameShadowStyle.opacity}
-                      onChange={opacity => onFrameShadowStyleChange({ opacity })}
-                    />
-                  </div>
-                )
-                : null}
-            </>
-          )
+                  <span className='avatar-controls__effects-detail-switch'>
+                    {effectDetailPage === 'pixel'
+                      ? renderEffectSwitch('pixel', pixelEffect.enabled, () => onPixelEffectChange({ enabled: !pixelEffect.enabled }))
+                      : effectDetailPage === 'light'
+                        ? renderEffectSwitch('light', showLight, onToggleLight)
+                        : effectDetailPage === 'avatar-shadow'
+                          ? renderEffectSwitch('avatar-shadow', showAvatarShadow, onToggleAvatarShadow)
+                          : effectDetailPage === 'avatar-outline'
+                            ? renderEffectSwitch('avatar-outline', showOutline, onToggleOutline)
+                            : effectDetailPage === 'face-shadow'
+                              ? renderEffectSwitch('face-shadow', showShadow, onToggleShadow)
+                              : renderEffectSwitch('frame-shadow', showFrameShadow, onToggleFrameShadow)}
+                  </span>
+                </header>
+                <div className='avatar-controls__build-detail-body'>
+                  {renderEffectDetailParameters(effectDetailPage) ?? (
+                    <p className='avatar-controls__effects-detail-empty'>
+                      {t('Enable this effect to adjust its settings.')}
+                    </p>
+                  )}
+                </div>
+              </section>
+              )
           : null}
       </div>
-      {presetBrowser == null
-        ? null
-        : (
-          <div
-            className='avatar-controls__preset-browser-backdrop'
-            role='presentation'
-            onPointerDown={event => {
-              if (event.target !== event.currentTarget) return
-              setPresetBrowser(null)
-            }}
-            onKeyDown={event => {
-              if (event.key !== 'Escape') return
-              event.stopPropagation()
-              setPresetBrowser(null)
-            }}
-          >
-            <section
-              className='avatar-controls__preset-browser'
-              role='dialog'
-              aria-labelledby='avatar-preset-browser-title'
-              aria-modal='true'
-            >
-              <div className='avatar-controls__preset-browser-header'>
-                <h2 id='avatar-preset-browser-title'>
-                  {t(presetBrowser === 'faces'
-                    ? 'Face presets'
-                    : presetBrowser === 'entities' ? 'Avatar templates' : 'Saved presets')}
-                </h2>
-                <button
-                  type='button'
-                  aria-label={t('Close')}
-                  title={t('Close')}
-                  onClick={() => setPresetBrowser(null)}
-                >
-                  <svg viewBox='0 0 20 20' aria-hidden='true'>
-                    <path d='m5 5 10 10m0-10L5 15' />
-                  </svg>
-                </button>
-              </div>
-              <label className='avatar-controls__preset-browser-search'>
-                <svg viewBox='0 0 20 20' aria-hidden='true'>
-                  <circle cx='8.5' cy='8.5' r='5.5' />
-                  <path d='m12.5 12.5 4 4' />
-                </svg>
-                <input
-                  ref={presetSearchRef}
-                  type='search'
-                  aria-label={t('Search presets')}
-                  placeholder={t('Search presets')}
-                  value={presetSearch}
-                  onChange={event => setPresetSearch(event.currentTarget.value)}
-                />
-              </label>
-              {searchedPresetCount === 0
-                ? <p className='avatar-controls__preset-browser-empty'>{t('No presets found')}</p>
-                : (
-                  <div
-                    className='avatar-controls__preset-browser-grid'
-                    role='group'
-                    aria-label={t(presetBrowser === 'faces'
-                      ? 'Face presets'
-                      : presetBrowser === 'entities' ? 'Avatar templates' : 'Saved presets')}
-                  >
-                    {presetBrowser === 'faces'
-                      ? searchedFacePresets.map(renderFacePresetButton)
-                      : presetBrowser === 'entities'
-                        ? searchedEntityPresetItems.map(item => renderSavedPresetItem(item, false))
-                        : searchedSavedPresetItems.map(item => renderSavedPresetItem(item))}
-                  </div>
-                )}
-            </section>
-          </div>
-        )}
-      {pendingPalette == null
+      {side !== 'right' || pendingPalette == null
         ? null
         : (
           <div
@@ -3831,6 +4808,14 @@ export function AvatarControls({
             </div>
           </div>
         )}
-    </aside>
+      </aside>
+    )
+  }
+
+  return (
+    <>
+      {renderControlsPanel(leftActiveTab, 'left')}
+      {renderControlsPanel(rightActiveTab, 'right')}
+    </>
   )
 }

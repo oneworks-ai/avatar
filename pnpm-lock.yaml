@@ -8,6 +8,9 @@ importers:
 
   .:
     dependencies:
+      '@material-symbols/svg-400':
+        specifier: 0.44.8
+        version: 0.44.8
       '@oneworks/avatar':
         specifier: link:packages/avatar
         version: link:packages/avatar
@@ -380,6 +383,9 @@ packages:
 
   '@jridgewell/trace-mapping@0.3.31':
     resolution: {integrity: sha512-zzNR+SdQSDJzc8joaeP8QQoCQr8NuYx2dIIytl1QeBEZHJ9uW6hebsrYgbz8hJwUQao3TWCMtmfV8Nu1twOLAw==}
+
+  '@material-symbols/svg-400@0.44.8':
+    resolution: {integrity: sha512-p4Lebev1M3UfRQug5rRV4Yci/j72+Pf4e3lZtyA0eLNAxUtYBiTlwMJHYHe8Pzw8QTU8KvZwULvRFxmO2rmWXA==}
 
   '@microsoft/api-extractor-model@7.33.11':
     resolution: {integrity: sha512-iDu1AtuRC2Z8XVs2SieZieVavF1FXPBX1C9pMexJh8Dx/Dd/3ZZ4nRQp/PU2Vk2rUHWuBz1wOyL4DcuhVnBXwg==}
@@ -1748,6 +1754,8 @@ snapshots:
     dependencies:
       '@jridgewell/resolve-uri': 3.1.2
       '@jridgewell/sourcemap-codec': 1.5.5
+
+  '@material-symbols/svg-400@0.44.8': {}
 
   '@microsoft/api-extractor-model@7.33.11':
     dependencies:

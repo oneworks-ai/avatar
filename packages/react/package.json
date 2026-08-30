@@ -1,6 +1,6 @@
 {
   "name": "@oneworks/avatar-react",
-  "version": "1.0.0-rc.7",
+  "version": "1.0.0-rc.8",
   "description": "React renderer and embeddable editor for OneWorks 3D Avatar",
   "type": "module",
   "license": "MIT",

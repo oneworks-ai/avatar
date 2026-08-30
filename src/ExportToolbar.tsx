@@ -58,10 +58,10 @@ export function ExportToolbar({
       <button
         className='avatar-export-toolbar__trigger'
         type='button'
-        aria-label='Export avatar'
+        aria-label={t('Export avatar')}
         aria-haspopup='menu'
         aria-expanded={open}
-        title='Export avatar'
+        title={t('Export avatar')}
         onClick={() => setOpen(value => !value)}
       >
         <svg className='avatar-export-toolbar__icon' viewBox='0 0 20 20' aria-hidden='true'>

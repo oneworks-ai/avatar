@@ -1,3 +1,5 @@
+@use './EditorMenu' as editor-menu;
+
 .avatar-export-toolbar {
   position: relative;
 
@@ -30,14 +32,8 @@
     z-index: 8;
     top: calc(100% + 8px);
     right: 0;
-    display: grid;
-    width: 196px;
+    @include editor-menu.surface;
     overflow: hidden;
-    border: 1px solid var(--border-color);
-    border-radius: 9px;
-    padding: 5px;
-    background: color-mix(in srgb, var(--bg-color) 94%, transparent);
-    box-shadow: 0 14px 34px color-mix(in srgb, black 24%, transparent);
     backdrop-filter: blur(18px) saturate(145%);
   }
 
@@ -113,9 +109,7 @@
   }
 
   &__menu-action {
-    width: 100%;
-    text-align: left;
-    cursor: pointer;
+    @include editor-menu.item;
 
     &:disabled {
       color: var(--placeholder-color);
