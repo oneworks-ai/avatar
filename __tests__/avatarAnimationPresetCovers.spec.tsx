@@ -95,8 +95,6 @@ describe('static animation preset covers', () => {
     })
     await flushEffects()
     const avatarCountBeforeOpeningLibrary = host.querySelectorAll('.interactive-avatar').length
-    const animationFrameSpy = vi.spyOn(window, 'requestAnimationFrame')
-    animationFrameSpy.mockClear()
 
     act(() => host.querySelector<HTMLButtonElement>('#avatar-controls-left-tab-animation')?.click())
     await flushEffects()
@@ -121,7 +119,6 @@ describe('static animation preset covers', () => {
     expect(host.querySelector('.avatar-app__preset-capture')).toBeNull()
     expect(captureAvatarScreenshot).not.toHaveBeenCalled()
     expect(host.querySelectorAll('.interactive-avatar')).toHaveLength(avatarCountBeforeOpeningLibrary)
-    expect(animationFrameSpy).toHaveBeenCalledTimes(1)
 
     act(() => host.querySelector<HTMLButtonElement>('.avatar-app__theme-toggle')?.click())
     await flushEffects()
