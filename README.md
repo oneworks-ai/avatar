@@ -8,6 +8,8 @@
   <img alt="OneWorks Avatar — a growing gallery of geometric 3D avatars and pixel styles" src=".github/assets/avatar-cover-light-en.jpg" width="1600">
 </picture>
 
+This cover automatically follows your system’s light or dark color scheme.
+
 Create, animate, and export a geometric 3D avatar directly in your browser.
 
 ## Quick start

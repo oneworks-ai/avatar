@@ -8,6 +8,8 @@
   <img alt="OneWorks Avatar——不断扩展的几何 3D 头像与像素风格" src=".github/assets/avatar-cover-light-zh-Hans.jpg" width="1600">
 </picture>
 
+此封面会自动跟随系统的浅色或深色配色方案。
+
 直接在浏览器中创建、制作动画并导出几何 3D 头像。
 
 ## 快速开始
