@@ -72,6 +72,29 @@ describe('OneWorks Avatar custom elements', () => {
     expect(customElements.get('oneworks-avatar-editor')).toBe(OneWorksAvatarEditorElement)
   })
 
+  it('normalizes custom-element attributes to safe public options', () => {
+    registerAvatarElements()
+    const avatar = document.createElement('oneworks-avatar')
+    const editor = document.createElement('oneworks-avatar-editor')
+    mounted.push(avatar, editor)
+    avatar.setAttribute('autoplay', '')
+    avatar.setAttribute('interactive', '')
+    avatar.setAttribute('theme', 'untrusted')
+    editor.setAttribute('locale', 'untrusted')
+    editor.setAttribute('theme', 'dark')
+    document.body.append(avatar, editor)
+
+    expect(mounts.createAvatar.mock.calls.at(-1)?.[1]).toEqual(expect.objectContaining({
+      autoplay: true,
+      interactive: true,
+      theme: 'system'
+    }))
+    expect(mounts.createAvatarEditor.mock.calls.at(-1)?.[1]).toEqual(expect.objectContaining({
+      locale: 'en',
+      theme: 'dark'
+    }))
+  })
+
   it('preserves runtime and editor definitions across disconnect and reconnect', () => {
     registerAvatarElements()
     const definition = {
