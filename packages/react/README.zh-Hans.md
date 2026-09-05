@@ -4,6 +4,41 @@
 
 OneWorks 3D Avatar 的 React 渲染组件与可嵌入完整编辑器。
 
+只展示头像时，使用独立的渲染入口及其完整样式：
+
+```tsx
+import { Avatar } from '@oneworks/avatar-react/renderer'
+import type { AvatarHandle } from '@oneworks/avatar-react/renderer'
+import '@oneworks/avatar-react/renderer.css'
+```
+
+渲染入口保留动画播放和 capture 能力，不引用编辑器、预设缩略图或编辑器样式。
+需要编辑器时，把组件和样式放在同一个动态加载边界：
+
+```tsx
+import { lazy, Suspense } from 'react'
+
+const LazyEditor = lazy(async () => {
+  const [editor] = await Promise.all([
+    import('@oneworks/avatar-react/editor'),
+    import('@oneworks/avatar-react/editor.css')
+  ])
+  return { default: editor.AvatarEditor }
+})
+
+// 仅在编辑器打开期间挂载。
+<Suspense fallback={<span>正在加载编辑器…</span>}>
+  <LazyEditor definition={avatar} />
+</Suspense>
+```
+
+`editor.css` 包含完整编辑器及渲染样式。Vite 可以把这些包入口编译成业务应用自己的
+chunks。包内预览图片使用带内容 hash 的独立文件与相对 URL；部署时保留消费端的完整
+构建产物。单独导入编辑器模块不会请求全部预览图片。`exports` 定义入口，动态 import
+决定加载时机。
+
+原有根入口、选择器、公开类型与 `style.css` 保持兼容：
+
 ```tsx
 import { Avatar, AvatarEditor } from '@oneworks/avatar-react'
 import '@oneworks/avatar-react/style.css'

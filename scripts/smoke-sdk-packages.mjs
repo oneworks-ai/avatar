@@ -3,6 +3,7 @@ import { mkdir, mkdtemp, readdir, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { checkReactPackageEntries } from './check-react-package-entries.mjs'
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 const temporaryRoot = await mkdtemp(path.join(tmpdir(), 'oneworks-avatar-sdk-'))
@@ -145,6 +146,10 @@ import { createApp } from 'vue'
 import { createDefaultAvatarDefinition } from '@oneworks/avatar'
 import type { AvatarAnimationLibrary } from '@oneworks/avatar'
 import { Avatar, AvatarEditor } from '@oneworks/avatar-react'
+import { Avatar as DisplayAvatar } from '@oneworks/avatar-react/renderer'
+import { AvatarEditor as EditorEntry } from '@oneworks/avatar-react/editor'
+import type { AvatarHandle } from '@oneworks/avatar-react/renderer'
+import type { AvatarEditorHandle } from '@oneworks/avatar-react/editor'
 import '@oneworks/avatar-react/style.css'
 import { createAvatar, createAvatarEditor } from '@oneworks/avatar-web'
 import { registerAvatarElements } from '@oneworks/avatar-web/elements'
@@ -153,6 +158,12 @@ import { OneWorksAvatar, OneWorksAvatarEditor } from '@oneworks/avatar-vue'
 import '@oneworks/avatar-vue/style.css'
 
 const definition = createDefaultAvatarDefinition()
+const rendererComponent: typeof Avatar = DisplayAvatar
+const editorComponent: typeof AvatarEditor = EditorEntry
+void rendererComponent
+void editorComponent
+void (null as unknown as AvatarHandle)
+void (null as unknown as AvatarEditorHandle)
 const animations: AvatarAnimationLibrary = {
   id: 'support',
   groups: {
@@ -205,6 +216,7 @@ editorElement.animationLibraries = [animations]
 
   run('pnpm', ['install'], consumerDirectory)
   run('pnpm', ['build'], consumerDirectory)
+  await checkReactPackageEntries(consumerDirectory)
   process.stdout.write('OneWorks Avatar SDK package smoke passed.\n')
 } finally {
   await rm(temporaryRoot, { force: true, recursive: true })

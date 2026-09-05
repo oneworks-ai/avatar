@@ -27,7 +27,7 @@ pnpm add @oneworks/avatar-web@rc   # Vanilla JS and opt-in elements
 - `@oneworks/avatar-vue`: `OneWorksAvatar`, full `OneWorksAvatarEditor`, exposed controllers, and emits.
 - `@oneworks/avatar-web`: `createAvatar`, `createAvatarEditor`, DOM events, and explicitly registered `<oneworks-avatar>` / `<oneworks-avatar-editor>` elements.
 
-Import styles from the selected adapter's `style.css` export.
+React applications on SDK `1.0.0-rc.9` or later can use the independent `renderer` / `renderer.css` and `editor` / `editor.css` exports. Verify the installed version exposes these paths before recommending them. Vue, Web, and older React integrations retain the adapter's `style.css` export.
 
 ## Define a 3D avatar and animations
 
@@ -71,8 +71,10 @@ A definition contains `scene` and may additionally carry a top-level `animations
 ## React
 
 ```tsx
-import { Avatar, AvatarEditor } from '@oneworks/avatar-react'
-import '@oneworks/avatar-react/style.css'
+import { Avatar } from '@oneworks/avatar-react/renderer'
+import '@oneworks/avatar-react/renderer.css'
+import { AvatarEditor } from '@oneworks/avatar-react/editor'
+import '@oneworks/avatar-react/editor.css'
 
 <Avatar
   definition={definition}
@@ -85,6 +87,27 @@ import '@oneworks/avatar-react/style.css'
   locale='zh-Hans'
 />
 ```
+
+When editing is optional, import only `renderer` and `renderer.css` initially. Load the editor and its CSS together at the interaction boundary:
+
+```tsx
+import { lazy, Suspense } from 'react'
+
+const LazyAvatarEditor = lazy(async () => {
+  const [module] = await Promise.all([
+    import('@oneworks/avatar-react/editor'),
+    import('@oneworks/avatar-react/editor.css')
+  ])
+  return { default: module.AvatarEditor }
+})
+
+// Mount this only when the user opens the editor.
+<Suspense fallback={<span>Loading editor…</span>}>
+  {editorOpen && <LazyAvatarEditor definition={definition} />}
+</Suspense>
+```
+
+The root React export remains compatible, but imports from it or its full `style.css` can retain editor dependencies. `exports` selects an independent entry; the application's dynamic `import()` determines when it loads. Keep emitted chunks and image assets together at deployment and preserve their relative URLs. Validate the installed package with a production Vite build and browser requests; a small source entry alone does not prove deferred loading.
 
 Use renderer refs for `play`, `pause`, `resume`, `seek`, `stop`, `capture`, `getDefinition`, and `setDefinition`. Use editor refs for `focus`, `getDefinition`, and `setDefinition`. React events are callback props.
 

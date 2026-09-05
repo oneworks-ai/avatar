@@ -343,7 +343,7 @@ const DeferredEntityPresetPreview = memo(function DeferredEntityPresetPreview({
     >
       {snapshot == null
         ? ready ? renderPreview() : null
-        : <img className='avatar-controls__entity-preset-icon' alt='' decoding='async' src={snapshot} />}
+        : <img className='avatar-controls__entity-preset-icon' alt='' decoding='async' loading={eager ? 'eager' : 'lazy'} src={snapshot} />}
     </span>
   )
 }, (previous, next) => (
@@ -1954,23 +1954,6 @@ export function AvatarControls({
   useEffect(() => {
     if (buildDetailPage === 'presets' && presetBrowser != null) presetSearchRef.current?.focus()
   }, [buildDetailPage, presetBrowser])
-
-  useEffect(() => {
-    if (lightAzimuth !== DEFAULT_AVATAR_PREVIEW_LIGHT.azimuth ||
-      lightElevation !== DEFAULT_AVATAR_PREVIEW_LIGHT.elevation) return
-    const preload = () => Object.values(AVATAR_ENTITY_PRESET_SNAPSHOT_URLS).forEach(source => {
-      const image = new Image()
-      image.decoding = 'async'
-      image.src = source
-    })
-    const idleWindow = window as AvatarPreviewIdleWindow
-    if (idleWindow.requestIdleCallback == null) {
-      const frame = window.requestAnimationFrame(preload)
-      return () => window.cancelAnimationFrame(frame)
-    }
-    const idle = idleWindow.requestIdleCallback(preload, { timeout: 600 })
-    return () => idleWindow.cancelIdleCallback?.(idle)
-  }, [lightAzimuth, lightElevation])
 
   const renderEntityPresetPreview = (
     preset: Exclude<AvatarEntityPreset, 'custom'>,

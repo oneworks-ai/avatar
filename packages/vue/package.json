@@ -1,6 +1,6 @@
 {
   "name": "@oneworks/avatar-vue",
-  "version": "1.0.0-rc.8",
+  "version": "1.0.0-rc.9",
   "description": "Vue renderer and embeddable editor for OneWorks 3D Avatar",
   "type": "module",
   "license": "MIT",

@@ -1,6 +1,6 @@
 {
   "name": "@oneworks/avatar-web",
-  "version": "1.0.0-rc.8",
+  "version": "1.0.0-rc.9",
   "description": "Vanilla JavaScript runtime, editor mounts, and Web Components for OneWorks 3D Avatar",
   "type": "module",
   "license": "MIT",

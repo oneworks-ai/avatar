@@ -4,6 +4,44 @@
 
 React renderer and embeddable full editor for OneWorks 3D Avatar.
 
+Display-only applications can select the renderer and its complete stylesheet:
+
+```tsx
+import { Avatar } from '@oneworks/avatar-react/renderer'
+import type { AvatarHandle } from '@oneworks/avatar-react/renderer'
+import '@oneworks/avatar-react/renderer.css'
+```
+
+The renderer entry includes animation playback and capture, without importing the
+editor, preset thumbnails, or editor styles. To load the editor only when its UI
+is opened, keep the module and its stylesheet behind the same dynamic boundary:
+
+```tsx
+import { lazy, Suspense } from 'react'
+
+const LazyEditor = lazy(async () => {
+  const [editor] = await Promise.all([
+    import('@oneworks/avatar-react/editor'),
+    import('@oneworks/avatar-react/editor.css')
+  ])
+  return { default: editor.AvatarEditor }
+})
+
+// Mount this boundary only while the editor is open.
+<Suspense fallback={<span>Loading editor…</span>}>
+  <LazyEditor definition={avatar} />
+</Suspense>
+```
+
+`editor.css` includes the full editor and renderer styles. Vite can bundle these
+package subpaths into an application's own chunks. The package ships preview
+images as relative, hashed asset files; deploy the complete consuming build so
+those URLs remain available. Merely importing the editor module does not fetch
+every preview image. Subpath exports select modules; dynamic imports determine
+when they are loaded.
+
+The existing root entry, selectors, public types, and `style.css` remain supported:
+
 ```tsx
 import { Avatar, AvatarEditor } from '@oneworks/avatar-react'
 import '@oneworks/avatar-react/style.css'
