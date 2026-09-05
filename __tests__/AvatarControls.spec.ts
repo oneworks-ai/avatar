@@ -405,6 +405,28 @@ describe('AvatarControls Seed authoring', () => {
     expect(browser?.querySelectorAll('[data-preview-static="true"]')).toHaveLength(reusedStatic.length + 1)
   })
 
+  it('does not fetch the entire preset catalog in background when the editor opens', () => {
+    const idleCallbacks: Array<() => void> = []
+    const frameCallbacks: FrameRequestCallback[] = []
+    const image = vi.fn(function () { return document.createElement('img') })
+    vi.stubGlobal('Image', image)
+    vi.stubGlobal('requestIdleCallback', vi.fn((callback: () => void) => idleCallbacks.push(callback)))
+    vi.stubGlobal('cancelIdleCallback', vi.fn())
+    vi.stubGlobal('requestAnimationFrame', vi.fn((callback: FrameRequestCallback) => frameCallbacks.push(callback)))
+    vi.stubGlobal('cancelAnimationFrame', vi.fn())
+    act(() => root.render(createElement(
+      AvatarLocaleProvider,
+      { initialLocale: 'en', persist: false },
+      createElement(AvatarControls, createProps())
+    )))
+    act(() => {
+      idleCallbacks.splice(0).forEach(callback => callback())
+      frameCallbacks.splice(0).forEach(callback => callback(0))
+    })
+    expect(image).not.toHaveBeenCalled()
+    expect(host.querySelectorAll('[data-preview-source="prebuilt"] img').length).toBeGreaterThan(0)
+  })
+
   it('opens built-in avatar templates from prebuilt SVG snapshots without modeling them first', () => {
     const props = createProps()
     act(() => root.render(createElement(
