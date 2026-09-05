@@ -1,7 +1,7 @@
 {
   "name": "@oneworks/avatar-assets",
   "type": "module",
-  "version": "1.0.0-rc.8",
+  "version": "1.0.0-rc.9",
   "packageManager": "pnpm@11.7.0",
   "private": true,
   "description": "OneWorks geometric 3D Avatar editor, runtime, and framework adapters",
