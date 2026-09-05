@@ -5,7 +5,8 @@
   "type": "module",
   "license": "MIT",
   "sideEffects": [
-    "./dist/*.css"
+    "./dist/*.css",
+    "./src/**/*.scss"
   ],
   "repository": {
     "type": "git",

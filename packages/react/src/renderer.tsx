@@ -729,4 +729,3 @@ export const Avatar = forwardRef<AvatarHandle, AvatarProps>(function Avatar({
     </div>
   )
 })
-
