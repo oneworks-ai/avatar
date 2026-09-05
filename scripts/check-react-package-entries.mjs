@@ -92,6 +92,7 @@ export async function loadEditor() {
   }
   const imageAssets = lazyOutput.filter(file => file.type === 'asset' && file.fileName.endsWith('.svg'))
   assert.ok(imageAssets.length > 0, 'Editor images were not emitted as relocatable assets')
+  assert.ok(imageAssets.some(file => /favicon-.*\.svg$/.test(file.fileName)), 'Editor project icon still depends on the host site root')
   for (const file of lazyOutput.filter(file => file.type === 'chunk')) {
     assert.ok(!hasEmbeddedSvg(file.code), 'Editor preview images were inlined into JavaScript')
     for (const reference of file.referencedFiles) assert.ok(files.has(reference), `Missing referenced asset: ${reference}`)

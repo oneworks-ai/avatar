@@ -1,4 +1,5 @@
 import './App.scss'
+import faviconUrl from '../public/favicon.svg?url'
 
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react'
 import type { CSSProperties, MutableRefObject, ReactNode } from 'react'
@@ -6076,7 +6077,7 @@ function App({
       title={t('Project')}
       onClick={() => setProjectSidebarOpen(open => !open)}
     >
-      <img src='/favicon.svg' alt='' />
+      <img src={faviconUrl} alt='' />
     </button>
   )
 
