@@ -93,3 +93,5 @@ preview URLs. The animation selector can be searched and dragged into a timeline
 or mutating the source animation.
 
 See the [Avatar Runtime guide](https://oneworks.cloud/docs/en/usage/avatar-runtime#react).
+
+For an implicit native entity (`scene.entity.parts: []`), the renderer resolves the native preset and its matching species palette through the editor-owned breed registry, including anatomical parts and projected markings. Explicit parts remain authoritative, and explicit decals override native/generated decals with the same ID. Camera, view, and face settings remain controlled by the supplied definition.

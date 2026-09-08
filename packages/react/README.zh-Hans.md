@@ -89,3 +89,5 @@ import { AvatarAnimationPicker, AvatarPresetPicker } from '@oneworks/avatar-reac
 支持搜索与拖入时间线，但不会持有或改写源动画数据。
 
 完整说明见 [Avatar Runtime 指南](https://oneworks.cloud/docs/usage/avatar-runtime#react)。
+
+原生实体使用 `scene.entity.parts: []` 时，渲染器通过编辑器维护的原生预设与品种注册表解析对应物种和配色，包括真实解剖部件与表面花纹。显式 parts 保持用户定义；显式 decals 覆盖同 ID 的原生或生成花纹。相机、朝向和表情仍由传入 definition 控制。

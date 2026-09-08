@@ -29,7 +29,7 @@ import type {
 
 import { InteractiveAvatar } from '../../../src/InteractiveAvatar'
 import type { AvatarViewState } from '../../../src/InteractiveAvatar'
-import { applyAvatarEntityPalette, createAvatarEntityParts } from '../../../src/avatarEntityPresets'
+import { resolveNativeAvatarPreset } from './native-preset'
 import { resolveAvatarFaceStyle } from '../../../src/avatarGeometry'
 import { renderAvatarPngBlob, renderAvatarSvgSource } from '../../../src/savedAvatarPresets'
 
@@ -647,14 +647,13 @@ export const Avatar = forwardRef<AvatarHandle, AvatarProps>(function Avatar({
   const authoredEntityParts = renderFrame.partTransforms == null
     ? scene.entity.parts
     : currentDefinition.scene.entity.parts
-  // Resolve implicit presets before both material selection and coat projection.
-  // Explicit scene parts retain their authored per-part material overrides.
-  const renderEntityParts = useMemo(
-    () => authoredEntityParts.length > 0 ? authoredEntityParts : applyAvatarEntityPalette(
-      createAvatarEntityParts(scene.entity.preset), getAvatarPalette(scene.appearance.paletteId)
-    ),
-    [authoredEntityParts, scene.entity.preset, scene.appearance.paletteId]
+  const nativePreset = useMemo(
+    () => resolveNativeAvatarPreset({ ...renderFrame.definition, scene: { ...scene,
+      entity: { ...scene.entity, parts: authoredEntityParts }
+    } }),
+    [authoredEntityParts, scene.entity.preset, scene.appearance.paletteId, scene.appearance.coatPattern, renderFrame.definition.metadata]
   )
+  const renderEntityParts = nativePreset.parts
   const palette = useMemo(
     () => resolveAvatarPaletteFromEntityParts(
       getAvatarPalette(scene.appearance.paletteId),
@@ -672,7 +671,9 @@ export const Avatar = forwardRef<AvatarHandle, AvatarProps>(function Avatar({
     })
     : []
   const explicitDecalIds = new Set(scene.decals.map(decal => decal.id))
+  const generatedDecalIds = new Set(generatedCoatDecals.map(decal => decal.id))
   const surfaceDecals = [
+    ...nativePreset.decals.filter(decal => !explicitDecalIds.has(decal.id) && !generatedDecalIds.has(decal.id)),
     ...generatedCoatDecals.filter(decal => !explicitDecalIds.has(decal.id)),
     ...scene.decals
   ]

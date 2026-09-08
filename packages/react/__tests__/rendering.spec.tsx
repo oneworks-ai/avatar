@@ -48,6 +48,7 @@ import { InteractiveAvatar } from '../../../src/InteractiveAvatar'
 import { resolveAvatarFaceStyle } from '../../../src/avatarGeometry'
 import { getAvatarAnimalBreedTemplate, resolveAvatarAnimalBreedTemplate } from '../../../src/avatarSpeciesBreeds'
 import { Avatar } from '../src'
+import { resolveNativeAvatarPreset } from '../src/native-preset'
 import type { AvatarHandle } from '../src'
 
 let host: HTMLDivElement
@@ -622,8 +623,7 @@ describe('OneWorks Avatar React rendering', () => {
     'applies the selected palette and projected coat to an implicit %s preset (%s)',
     (preset, paletteId) => {
       const definition = createDefaultAvatarDefinition()
-      const palette = getAvatarPalette(paletteId)
-      const parts = applyAvatarEntityPalette(createAvatarEntityParts(preset), palette)
+      const parts = resolveNativeAvatarPreset({ ...definition, scene: { ...definition.scene, entity: { preset, parts: [] }, appearance: { ...definition.scene.appearance, paletteId, coatPattern: { ...DEFAULT_AVATAR_COAT_PATTERN, enabled: true } } } }).parts
       const head = parts.find(part => part.face)!
       act(() => root.render(createElement(Avatar, {
         autoplay: false,
@@ -641,6 +641,53 @@ describe('OneWorks Avatar React rendering', () => {
       expect(host.querySelectorAll('[data-avatar-surface-decal^="coat-"]').length).toBeGreaterThan(0)
     }
   )
+
+  it.each([
+    ['duck', 'mallard-duck', 'bill', 'duck-bill-seam'],
+    ['penguin', 'emperor-penguin', 'beak', 'penguin-face-mask'],
+    ['fox', 'red-fox', null, 'fox-cheek-left']
+  ] as const)('restores complete native %s anatomy and markings with lighting off', (preset, paletteId, mouth, marking) => {
+    const definition = createDefaultAvatarDefinition()
+    act(() => root.render(createElement(Avatar, { autoplay: false, definition: {
+      ...definition, scene: { ...definition.scene,
+        entity: { preset, parts: [] },
+        appearance: { ...definition.scene.appearance, paletteId },
+        face: { ...definition.scene.face, mouthEnabled: false, noseEnabled: false },
+        lighting: { ...definition.scene.lighting, enabled: false },
+        view: { ...definition.scene.view, yaw: .2, pitch: -.1 }
+      }
+    } })))
+    if (mouth) {
+      expect(host.querySelector(`[data-avatar-entity-part="${mouth}"]`)).not.toBeNull()
+      expect(host.querySelector(`[data-avatar-surface-decal="${preset}-${mouth}-explicit-color-override"]`)).not.toBeNull()
+    }
+    expect(host.querySelector(`[data-avatar-surface-decal="${marking}"]`)).not.toBeNull()
+  })
+
+  it('changing the native bird breed replaces its authored markings and preserves explicit overrides', () => {
+    const base = createDefaultAvatarDefinition()
+    const definition = (paletteId: string) => ({ ...base, scene: { ...base.scene,
+      entity: { preset: 'penguin' as const, parts: [] },
+      appearance: { ...base.scene.appearance, paletteId }
+    } })
+    const emperor = resolveNativeAvatarPreset(definition('emperor-penguin'))
+    const other = resolveNativeAvatarPreset(definition('little-penguin'))
+    expect(emperor.decals).not.toEqual(other.decals)
+    const mask = emperor.decals.find(decal => decal.id === 'penguin-face-mask')!
+    const overridden = definition('emperor-penguin')
+    act(() => root.render(createElement(Avatar, { autoplay: false, definition: {
+      ...overridden, scene: { ...overridden.scene, decals: [{ ...mask, color: '#ab12cd' }] }
+    } })))
+    const rendered = host.querySelectorAll('[data-avatar-surface-decal="penguin-face-mask"]')
+    expect(rendered).toHaveLength(1)
+    expect(rendered[0]!.getAttribute('fill')).toBe('#ab12cd')
+    const authored = [{ ...emperor.parts[0]!, baseColor: '#123456' }]
+    const explicit = resolveNativeAvatarPreset({ ...base, scene: { ...base.scene,
+      entity: { preset: 'penguin', parts: authored }, appearance: { ...base.scene.appearance, paletteId: 'little-penguin' }
+    } })
+    expect(explicit.parts).toBe(authored)
+    expect(explicit.decals).toEqual([])
+  })
 
   it('derives procedural coat decals from the public definition', () => {
     const definition = createDefaultAvatarDefinition()
@@ -1090,7 +1137,7 @@ describe('OneWorks Avatar React rendering', () => {
       }
     ] as const) {
       const palette = applyAvatarPaletteToneJitter(getAvatarPalette(paletteId), 7)
-      const parts = applyAvatarEntityPalette(createAvatarEntityParts(preset), palette)
+      const parts = resolveNativeAvatarPreset({ ...definition, scene: { ...definition.scene, entity: { preset, parts: [] }, appearance: { ...definition.scene.appearance, paletteId, coatPattern: { ...DEFAULT_AVATAR_COAT_PATTERN, enabled: true } } } }).parts
       const head = parts.find(part => part.face)!
       const color = palette.coat!.patch
       const render = (yaw: number, pitch: number) => act(() => root.render(createElement(Avatar, {
