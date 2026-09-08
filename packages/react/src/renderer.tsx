@@ -661,22 +661,27 @@ export const Avatar = forwardRef<AvatarHandle, AvatarProps>(function Avatar({
     ),
     [renderEntityParts, scene.appearance.paletteId]
   )
-  const generatedCoatDecals = scene.appearance.coatPattern?.enabled
+  const coatPattern = scene.appearance.coatPattern
+  const coatKey = JSON.stringify(coatPattern)
+  const generatedCoatDecals = useMemo(() => coatPattern?.enabled
     ? resolveAvatarCoatPatternDecals({
       entityParts: renderEntityParts,
       entityPreset: scene.entity.preset,
       palette,
       paletteId: scene.appearance.paletteId,
-      pattern: scene.appearance.coatPattern
+      pattern: coatPattern
     })
-    : []
-  const explicitDecalIds = new Set(scene.decals.map(decal => decal.id))
-  const generatedDecalIds = new Set(generatedCoatDecals.map(decal => decal.id))
-  const surfaceDecals = [
-    ...nativePreset.decals.filter(decal => !explicitDecalIds.has(decal.id) && !generatedDecalIds.has(decal.id)),
-    ...generatedCoatDecals.filter(decal => !explicitDecalIds.has(decal.id)),
-    ...scene.decals
-  ]
+    : [], [renderEntityParts, scene.entity.preset, palette, scene.appearance.paletteId, coatKey])
+  const explicitDecalsKey = JSON.stringify(scene.decals)
+  const surfaceDecals = useMemo(() => {
+    const explicitDecalIds = new Set(scene.decals.map(decal => decal.id))
+    const generatedDecalIds = new Set(generatedCoatDecals.map(decal => decal.id))
+    return [
+      ...nativePreset.decals.filter(decal => !explicitDecalIds.has(decal.id) && !generatedDecalIds.has(decal.id)),
+      ...generatedCoatDecals.filter(decal => !explicitDecalIds.has(decal.id)),
+      ...scene.decals
+    ]
+  }, [nativePreset.decals, generatedCoatDecals, explicitDecalsKey])
   const resolvedTheme = theme === 'system' ? systemTheme : theme
   const frameShadowDirection = scene.camera.frameShadow.direction * Math.PI / 180
   const frameShadow = scene.camera.showFrameShadow

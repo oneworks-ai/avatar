@@ -13,7 +13,7 @@ import { AVATAR_ANIMAL_BREED_TEMPLATES, resolveAvatarAnimalBreedTemplate } from 
 
 /** Materialize the same native anatomy and markings used by the editor. Explicit
  * parts remain concrete authoring truth; no breed or material is inferred for them. */
-export function resolveNativeAvatarPreset(definition: AvatarDefinition) {
+function materializeNativeAvatarPreset(definition: AvatarDefinition) {
   const { scene } = definition
   if (scene.entity.parts.length > 0) return { parts: scene.entity.parts, decals: [] }
   const preset = scene.entity.preset
@@ -51,4 +51,23 @@ export function resolveNativeAvatarPreset(definition: AvatarDefinition) {
     }),
     decals: nativeScene?.surfaceDecals ?? []
   }
+}
+
+const nativePresetCache = new Map<string, ReturnType<typeof materializeNativeAvatarPreset>>()
+/** Animation frames often clone definitions. Their view/face changes do not
+ * change native anatomy, so retain stable renderer inputs across those frames. */
+export function resolveNativeAvatarPreset(definition: AvatarDefinition) {
+  if (definition.scene.entity.parts.length > 0) return materializeNativeAvatarPreset(definition)
+  const key = JSON.stringify([definition.scene.entity.preset, definition.scene.appearance.paletteId,
+    definition.metadata?.generation?.seed, definition.scene.appearance.coatPattern])
+  const existing = nativePresetCache.get(key)
+  if (existing) {
+    nativePresetCache.delete(key)
+    nativePresetCache.set(key, existing)
+    return existing
+  }
+  const resolved = materializeNativeAvatarPreset(definition)
+  nativePresetCache.set(key, resolved)
+  if (nativePresetCache.size > 128) nativePresetCache.delete(nativePresetCache.keys().next().value!)
+  return resolved
 }
