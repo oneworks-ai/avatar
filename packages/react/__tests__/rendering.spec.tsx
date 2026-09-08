@@ -618,6 +618,30 @@ describe('OneWorks Avatar React rendering', () => {
     expect(tapered).not.toBe(untapered)
   })
 
+  it.each([['cat', 'orange-tabby'], ['cat', 'siamese'], ['dog', 'shiba-inu'] ] as const)(
+    'applies the selected palette and projected coat to an implicit %s preset (%s)',
+    (preset, paletteId) => {
+      const definition = createDefaultAvatarDefinition()
+      const palette = getAvatarPalette(paletteId)
+      const parts = applyAvatarEntityPalette(createAvatarEntityParts(preset), palette)
+      const head = parts.find(part => part.face)!
+      act(() => root.render(createElement(Avatar, {
+        autoplay: false,
+        definition: { ...definition, scene: { ...definition.scene,
+          entity: { preset, parts: [] },
+          appearance: { ...definition.scene.appearance, paletteId,
+            coatPattern: { ...DEFAULT_AVATAR_COAT_PATTERN, enabled: true } },
+          lighting: { ...definition.scene.lighting, enabled: false },
+          view: { ...definition.scene.view, yaw: .2, pitch: -.1 }
+        } }
+      })))
+      const surface = host.querySelector(`[data-avatar-entity-part="${head.id}"]`)
+      expect(surface).not.toBeNull()
+      expect(surface!.querySelector(`[fill="${head.baseColor}"]`)).not.toBeNull()
+      expect(host.querySelectorAll('[data-avatar-surface-decal^="coat-"]').length).toBeGreaterThan(0)
+    }
+  )
+
   it('derives procedural coat decals from the public definition', () => {
     const definition = createDefaultAvatarDefinition()
     const badge = {

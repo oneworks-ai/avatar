@@ -29,6 +29,7 @@ import type {
 
 import { InteractiveAvatar } from '../../../src/InteractiveAvatar'
 import type { AvatarViewState } from '../../../src/InteractiveAvatar'
+import { applyAvatarEntityPalette, createAvatarEntityParts } from '../../../src/avatarEntityPresets'
 import { resolveAvatarFaceStyle } from '../../../src/avatarGeometry'
 import { renderAvatarPngBlob, renderAvatarSvgSource } from '../../../src/savedAvatarPresets'
 
@@ -643,9 +644,17 @@ export const Avatar = forwardRef<AvatarHandle, AvatarProps>(function Avatar({
   ])
 
   const scene = renderFrame.definition.scene
-  const renderEntityParts = renderFrame.partTransforms == null
+  const authoredEntityParts = renderFrame.partTransforms == null
     ? scene.entity.parts
     : currentDefinition.scene.entity.parts
+  // Resolve implicit presets before both material selection and coat projection.
+  // Explicit scene parts retain their authored per-part material overrides.
+  const renderEntityParts = useMemo(
+    () => authoredEntityParts.length > 0 ? authoredEntityParts : applyAvatarEntityPalette(
+      createAvatarEntityParts(scene.entity.preset), getAvatarPalette(scene.appearance.paletteId)
+    ),
+    [authoredEntityParts, scene.entity.preset, scene.appearance.paletteId]
+  )
   const palette = useMemo(
     () => resolveAvatarPaletteFromEntityParts(
       getAvatarPalette(scene.appearance.paletteId),
