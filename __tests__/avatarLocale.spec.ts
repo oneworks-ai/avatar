@@ -1,15 +1,17 @@
 import { describe, expect, it } from 'vitest'
 
-import { normalizeAvatarLocale, translateAvatarText } from '../src/avatarLocale'
+import { hasAvatarTranslation, normalizeAvatarLocale, translateAvatarText } from '../src/avatarLocale'
 import { AVATAR_FACE_PRESETS } from '../src/avatarFacePresets'
 import { AVATAR_ANIMAL_BREED_TEMPLATES } from '../src/avatarSpeciesBreeds'
 
 describe('avatar locale', () => {
-  it('normalizes supported English and Simplified Chinese locale variants', () => {
+  it('normalizes supported English, Simplified Chinese, and French locale variants', () => {
     expect(normalizeAvatarLocale('en')).toBe('en')
     expect(normalizeAvatarLocale('zh-CN')).toBe('zh-Hans')
     expect(normalizeAvatarLocale('zh-Hans')).toBe('zh-Hans')
-    expect(normalizeAvatarLocale('fr')).toBeNull()
+    expect(normalizeAvatarLocale('fr')).toBe('fr')
+    expect(normalizeAvatarLocale('fr-FR')).toBe('fr')
+    expect(normalizeAvatarLocale('de')).toBeNull()
   })
 
   it('translates known labels and preserves unknown text', () => {
@@ -88,6 +90,21 @@ describe('avatar locale', () => {
     expect(translateAvatarText('zh-Hans', 'Custom animation name')).toBe('Custom animation name')
   })
 
+  it('translates known labels to French and preserves unknown text', () => {
+    expect(translateAvatarText('fr', 'Effects')).toBe('Effets')
+    expect(translateAvatarText('fr', 'Download PNG')).toBe('Télécharger le PNG')
+    expect(translateAvatarText('fr', 'Transparent')).toBe('Transparent')
+    expect(translateAvatarText('fr', 'Bring your avatar to life')).toBe('Donnez vie à votre avatar')
+    expect(translateAvatarText('fr', 'Start creating')).toBe('Commencer à créer')
+    expect(translateAvatarText('fr', 'Dog')).toBe('Chien')
+    expect(translateAvatarText('fr', 'Fox')).toBe('Renard')
+    expect(translateAvatarText('fr', 'Fox types')).toBe('Types de renards')
+    expect(translateAvatarText('fr', 'Red Fox')).toBe('Renard roux')
+    expect(translateAvatarText('fr', 'Language')).toBe('Langue')
+    expect(translateAvatarText('fr', 'French')).toBe('Français')
+    expect(translateAvatarText('fr', 'Custom animation name')).toBe('Custom animation name')
+  })
+
   it('provides Simplified Chinese labels for every face preset', () => {
     for (const preset of AVATAR_FACE_PRESETS) {
       expect(translateAvatarText('zh-Hans', preset.label)).not.toBe(preset.label)
@@ -97,6 +114,18 @@ describe('avatar locale', () => {
   it('provides Simplified Chinese labels for every new animal breed', () => {
     for (const template of AVATAR_ANIMAL_BREED_TEMPLATES) {
       expect(translateAvatarText('zh-Hans', template.label)).not.toBe(template.label)
+    }
+  })
+
+  it('provides French labels for every face preset', () => {
+    for (const preset of AVATAR_FACE_PRESETS) {
+      expect(hasAvatarTranslation('fr', preset.label)).toBe(true)
+    }
+  })
+
+  it('provides French labels for every new animal breed', () => {
+    for (const template of AVATAR_ANIMAL_BREED_TEMPLATES) {
+      expect(hasAvatarTranslation('fr', template.label)).toBe(true)
     }
   })
 })

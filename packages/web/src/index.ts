@@ -72,7 +72,7 @@ export interface AvatarMountOptions {
 export interface AvatarEditorMountOptions {
   readonly animationLibraries?: readonly AvatarAnimationLibrary[]
   readonly definition?: AvatarDefinition
-  readonly locale?: 'en' | 'zh-Hans'
+  readonly locale?: 'en' | 'zh-Hans' | 'fr'
   readonly theme?: AvatarTheme
 }
 
