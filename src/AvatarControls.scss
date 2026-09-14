@@ -2975,7 +2975,12 @@
   .avatar-controls {
     position: static;
     height: auto;
-    margin-top: 0;
+    max-height: 54vh;
+    max-height: 54dvh;
+    margin: 0 8px 8px;
+    padding: 12px;
+    border-radius: 14px;
+    overflow: hidden;
 
     &__resize-handle {
       display: none;
@@ -2983,15 +2988,16 @@
 
     &__panel {
       overflow-x: hidden;
-      overflow-y: visible;
+      overflow-y: auto;
+      overscroll-behavior: contain;
+      -webkit-overflow-scrolling: touch;
     }
   }
 }
 
 @media (max-width: 520px) {
   .avatar-controls {
-    margin: 0 8px 8px;
-    padding: 12px;
+    padding: 10px;
 
     &__swatches { grid-template-columns: repeat(auto-fill, 42px); }
   }

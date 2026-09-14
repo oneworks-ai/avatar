@@ -1572,6 +1572,11 @@ export function AnimationPanel({
   }
   const startPanelResize = (event: PointerEvent<HTMLElement>) => {
     if (event.button !== 0) return
+    if (
+      typeof window !== 'undefined' &&
+      typeof window.matchMedia === 'function' &&
+      window.matchMedia('(max-width: 840px)').matches
+    ) return
     const target = event.target as Element
     const startedFromGrip = target.closest('.avatar-animation-panel__resize-grip') != null
     if (!startedFromGrip && target.closest('button, input, select, textarea, a, [role="menuitem"]') != null) return
