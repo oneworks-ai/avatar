@@ -1634,12 +1634,125 @@
 }
 .avatar-animation-sidebar__actions button .avatar-material-icon { width: 17px; height: 17px; }
 
-@media (max-width: 760px) {
-  .avatar-animation-panel { max-height: 72vh; margin: 0 8px 8px; }
-  .avatar-animation-panel__track-column { flex-basis: 124px; width: 124px !important; }
-  .avatar-animation-panel__track-header > strong { display: none; }
-  .avatar-animation-panel__zoom { display: none; }
-  .avatar-animation-panel__timecode { min-width: auto; }
+@media (max-width: 840px) {
+  .avatar-animation-panel {
+    min-height: 0;
+    max-height: 62vh;
+    max-height: 62dvh;
+    grid-template-rows: auto minmax(0, 1fr);
+    margin: 0 8px calc(8px + env(safe-area-inset-bottom, 0px));
+    border-radius: 14px;
+  }
+
+  .avatar-animation-panel__resize-grip { display: none; }
+
+  .avatar-animation-panel__transport {
+    height: auto;
+    min-height: 0;
+    max-height: none;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px 8px;
+    padding: 8px 10px;
+    cursor: default;
+    touch-action: auto;
+  }
+
+  .avatar-animation-panel__transport-primary,
+  .avatar-animation-panel__transport-secondary {
+    display: flex;
+    flex: 1 1 auto;
+    min-width: 0;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 6px;
+  }
+
+  .avatar-animation-panel__transport-secondary {
+    justify-content: flex-end;
+    margin-left: 0;
+  }
+
+  .avatar-animation-panel__transport button:not(.avatar-app__interaction-mode-option) {
+    height: 38px;
+  }
+
+  .avatar-animation-panel__play,
+  .avatar-animation-panel__close,
+  .avatar-animation-panel__save-project {
+    width: 38px !important;
+    height: 38px !important;
+  }
+
+  .avatar-animation-panel__more > button { width: 38px; }
+
+  .avatar-animation-panel__timecode {
+    min-width: auto;
+    height: 38px;
+    padding: 0 8px;
+  }
+
   .avatar-animation-panel__timecode span { display: none; }
-  .avatar-animation-sidebar__library { grid-template-columns: repeat(auto-fill, 32px); }
+
+  .avatar-animation-panel__speed {
+    height: 38px;
+
+    > button {
+      min-width: 30px;
+      height: 30px;
+      padding: 0 5px;
+    }
+  }
+
+  .avatar-animation-panel__zoom { display: none; }
+
+  .avatar-animation-panel__editor { min-height: 0; }
+
+  .avatar-animation-panel__track-column {
+    flex-basis: 108px;
+    width: 108px !important;
+  }
+
+  .avatar-animation-panel__track-header {
+    gap: 4px;
+    padding: 5px 6px;
+  }
+
+  .avatar-animation-panel__track-header > strong { display: none; }
+
+  .avatar-animation-panel__track-header > button,
+  .avatar-animation-panel__track-menu > summary {
+    width: 30px;
+    height: 30px;
+  }
+
+  .avatar-animation-panel__clip-keyframes > button {
+    width: 28px;
+    height: 28px;
+  }
+
+  .avatar-animation-panel__more-popover {
+    max-width: calc(100vw - 32px);
+    max-height: 46dvh;
+    overflow-y: auto;
+  }
+
+  .avatar-animation-sidebar__library {
+    grid-template-columns: repeat(auto-fill, 36px);
+    column-gap: 10px;
+  }
+
+  .avatar-animation-sidebar__asset,
+  .avatar-animation-sidebar__asset span,
+  .avatar-animation-sidebar__asset img,
+  .avatar-animation-sidebar__saved-asset {
+    width: 36px;
+    height: 36px;
+  }
+}
+
+@media (hover: none) {
+  .avatar-animation-panel__track-menu > summary { opacity: 1; }
+  .avatar-animation-panel__trim { opacity: .5; }
+  .avatar-animation-panel__clip[data-selected='true'] .avatar-animation-panel__trim { opacity: 1; }
 }

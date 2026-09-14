@@ -76,6 +76,8 @@ import type {
   AvatarOutlineStyle,
   AvatarViewState
 } from './InteractiveAvatar'
+import { AvatarMobileNav } from './AvatarMobileNav'
+import type { AvatarMobileSection } from './AvatarMobileNav'
 import { LanguageSwitcher } from './LanguageSwitcher'
 import { getAvatarEffectStylePreset } from './avatarEffectStylePresets'
 import { WorkspaceSidebar } from './WorkspaceSidebar'
@@ -1958,7 +1960,11 @@ function App({
   const [projectSaveState, setProjectSaveState] = useState<'error' | 'idle' | 'saved' | 'saving'>('idle')
   const [controlsCollapsed, setControlsCollapsed] = useState(initialConfig.controlsCollapsed)
   const [controlsWidth, setControlsWidth] = useState(DEFAULT_CONTROLS_WIDTH)
-  const [resourcesCollapsed, setResourcesCollapsed] = useState(false)
+  const [resourcesCollapsed, setResourcesCollapsed] = useState(() => (
+    typeof window !== 'undefined' &&
+    typeof window.matchMedia === 'function' &&
+    window.matchMedia('(max-width: 840px)').matches
+  ))
   const [resourcesWidth, setResourcesWidth] = useState(DEFAULT_RESOURCE_WIDTH)
   const [systemDark, setSystemDark] = useState(() => {
     return typeof window !== 'undefined' && window.matchMedia(SYSTEM_DARK_MEDIA_QUERY).matches
@@ -2114,6 +2120,11 @@ function App({
   const [keyframeCapturePending, setKeyframeCapturePending] = useState(false)
   const [interactionControlsDocked, setInteractionControlsDocked] = useState(false)
   const [stageNarrow, setStageNarrow] = useState(false)
+  const [isNarrowViewport, setIsNarrowViewport] = useState(() => (
+    typeof window !== 'undefined' &&
+    typeof window.matchMedia === 'function' &&
+    window.matchMedia('(max-width: 840px)').matches
+  ))
   const [animationThumbnailCapture, setAnimationThumbnailCapture] = useState<AnimationThumbnailCaptureRequest | null>(
     null
   )
@@ -2450,6 +2461,16 @@ function App({
       resizeObserver?.disconnect()
       window.removeEventListener('resize', updateStageWidthState)
     }
+  }, [])
+
+  useEffect(() => {
+    if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') return
+    const mediaQuery = window.matchMedia('(max-width: 840px)')
+    const handleChange = (event: MediaQueryListEvent) => setIsNarrowViewport(event.matches)
+    setIsNarrowViewport(mediaQuery.matches)
+    if (typeof mediaQuery.addEventListener !== 'function') return
+    mediaQuery.addEventListener('change', handleChange)
+    return () => mediaQuery.removeEventListener('change', handleChange)
   }, [])
 
   useEffect(() => {
@@ -3419,6 +3440,59 @@ function App({
   const openAnimationTimeline = () => {
     restoreAnimationTimelineCanvas()
     setAnimationOpen(true)
+  }
+
+  const closeAnimationTimeline = () => {
+    pauseAnimationTimeline()
+    setAnimationOpen(false)
+  }
+
+  const mobileNavActive = !embedded && isNarrowViewport
+
+  const mobileNavSection: AvatarMobileSection = (() => {
+    if (animationOpen) return 'animation'
+    if (!resourcesCollapsed) return 'build'
+    if (!controlsCollapsed) {
+      if (activeTab === 'style') return 'style'
+      if (activeTab === 'effects') return 'effects'
+      return 'body'
+    }
+    return 'preview'
+  })()
+
+  const selectMobileNavSection = (section: AvatarMobileSection) => {
+    if (section === mobileNavSection) {
+      setResourcesCollapsed(true)
+      setControlsCollapsed(true)
+      if (animationOpen) closeAnimationTimeline()
+      return
+    }
+    switch (section) {
+      case 'preview':
+        setResourcesCollapsed(true)
+        setControlsCollapsed(true)
+        if (animationOpen) closeAnimationTimeline()
+        break
+      case 'build':
+        setActiveTab('build')
+        setResourcesCollapsed(false)
+        setControlsCollapsed(true)
+        if (animationOpen) closeAnimationTimeline()
+        break
+      case 'body':
+      case 'style':
+      case 'effects':
+        setActiveTab(section)
+        setControlsCollapsed(false)
+        setResourcesCollapsed(true)
+        if (animationOpen) closeAnimationTimeline()
+        break
+      case 'animation':
+        setResourcesCollapsed(true)
+        setControlsCollapsed(true)
+        openAnimationTimeline()
+        break
+    }
   }
 
   const seekAnimationTimeline = (timeMs: number) => {
@@ -6271,6 +6345,7 @@ function App({
         className='avatar-app__workspace'
         data-animation-open={animationOpen}
         data-controls-collapsed={controlsCollapsed}
+        data-mobile-nav={mobileNavActive}
         data-resources-collapsed={resourcesCollapsed}
         style={{
           '--avatar-controls-width': `${controlsWidth}px`,
@@ -6314,7 +6389,7 @@ function App({
             ? (
               <div className='avatar-app__camera-tools'>
                 {resourcesCollapsed ? renderWorkspaceToggle() : null}
-                {resourcesCollapsed ? renderResourcesToggle() : null}
+                {resourcesCollapsed && !mobileNavActive ? renderResourcesToggle() : null}
                 {!stageNarrow || controlsCollapsed ? renderCameraToggle() : null}
               </div>
             )
@@ -6323,8 +6398,8 @@ function App({
             {!cameraMode && (!stageNarrow || controlsCollapsed)
               ? renderSavePreset()
               : null}
-            {controlsCollapsed ? renderGlobalHeaderActions() : null}
-            {controlsCollapsed
+            {controlsCollapsed || mobileNavActive ? renderGlobalHeaderActions() : null}
+            {controlsCollapsed && !mobileNavActive
               ? (
                 <button
                   className='avatar-app__controls-toggle'
@@ -6422,7 +6497,7 @@ function App({
               )}
             </AvatarAnimationFrameSubscriber>
           </div>
-          {animationOpen
+          {animationOpen || mobileNavActive
             ? null
             : (
               <button
@@ -7159,6 +7234,14 @@ function App({
                 pauseAnimationTimeline()
                 setAnimationOpen(false)
               }}
+            />
+          )
+          : null}
+        {mobileNavActive
+          ? (
+            <AvatarMobileNav
+              active={mobileNavSection}
+              onSelect={selectMobileNavSection}
             />
           )
           : null}
