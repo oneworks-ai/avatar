@@ -188,7 +188,7 @@ export const OneWorksAvatar = oneWorksAvatarComponent as typeof oneWorksAvatarCo
 const editorProps = {
   animationLibraries: { default: () => [], type: Array as PropType<readonly AvatarAnimationLibrary[]> },
   definition: { default: undefined, type: Object as PropType<AvatarDefinition | undefined> },
-  locale: { default: 'en', type: String as PropType<'en' | 'zh-Hans'> },
+  locale: { default: 'en', type: String as PropType<'en' | 'zh-Hans' | 'fr'> },
   theme: { default: 'system', type: String as PropType<AvatarTheme> }
 }
 

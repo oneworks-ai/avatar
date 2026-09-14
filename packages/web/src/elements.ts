@@ -223,7 +223,7 @@ export class OneWorksAvatarEditorElement extends HTMLElementBase {
     return {
       animationLibraries: this.#animationLibraries,
       definition: this.#definition,
-      locale: locale === 'zh-Hans' ? locale : 'en',
+      locale: locale === 'zh-Hans' || locale === 'fr' ? locale : 'en',
       theme: theme === 'dark' || theme === 'light' ? theme : 'system'
     }
   }

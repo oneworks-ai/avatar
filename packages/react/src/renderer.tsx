@@ -47,7 +47,7 @@ export type {
 } from '@oneworks/avatar'
 
 export type AvatarTheme = 'dark' | 'light' | 'system'
-export type AvatarLocale = 'en' | 'zh-Hans'
+export type AvatarLocale = 'en' | 'zh-Hans' | 'fr'
 export type AvatarCaptureOptions = {
   readonly background?: string | 'transparent'
   readonly format: 'png' | 'svg'
